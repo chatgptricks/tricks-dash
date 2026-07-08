@@ -1,0 +1,12 @@
+node_modules/
+dist/
+outputs/
+work/
+
+.DS_Store
+.env
+.env.*
+*.log
+
+coverage/
+.vite/
