@@ -102,12 +102,20 @@ function posterTheme(type) {
   return 'theme-carousel';
 }
 
+function canUseImageProxy() {
+  if (import.meta.env.DEV) return true;
+  if (typeof window === 'undefined') return false;
+  return window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+}
+
 function coverSources(post) {
   const sources = [];
-  if (post.coverFile) {
+  const useImageProxy = canUseImageProxy();
+
+  if (useImageProxy && post.coverFile) {
     sources.push(`/api/local-cover?path=${encodeURIComponent(post.coverFile)}`);
   }
-  if (post.permalink) {
+  if (useImageProxy && post.permalink) {
     const fallback = post.coverUrl ? `&fallback=${encodeURIComponent(post.coverUrl)}` : '';
     sources.push(`/api/cover?permalink=${encodeURIComponent(post.permalink)}${fallback}`);
   }
