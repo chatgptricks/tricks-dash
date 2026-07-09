@@ -108,12 +108,20 @@ function canUseImageProxy() {
   return window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 }
 
+function coverFileName(post) {
+  return String(post.coverFile || '').split(/[\\/]/).pop();
+}
+
 function coverSources(post) {
   const sources = [];
   const useImageProxy = canUseImageProxy();
+  const localCoverName = coverFileName(post);
 
   if (useImageProxy && post.coverFile) {
     sources.push(`/api/local-cover?path=${encodeURIComponent(post.coverFile)}`);
+  }
+  if (!useImageProxy && localCoverName) {
+    sources.push(`${import.meta.env.BASE_URL}covers/${encodeURIComponent(localCoverName)}`);
   }
   if (useImageProxy && post.permalink) {
     const fallback = post.coverUrl ? `&fallback=${encodeURIComponent(post.coverUrl)}` : '';
