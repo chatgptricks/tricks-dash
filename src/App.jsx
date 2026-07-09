@@ -40,6 +40,7 @@ const TYPE_LABELS = {
 };
 const PAGE_SIZE_OPTIONS = [24, 36, 60];
 const IG_HANDLE = 'chatgptricks';
+const STATIC_COVER_VERSION = '20260708b';
 
 const currencyFormatter = new Intl.NumberFormat('en-US');
 const compactFormatter = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 });
@@ -109,7 +110,12 @@ function canUseImageProxy() {
 }
 
 function coverFileName(post) {
-  return String(post.coverFile || '').split(/[\\/]/).pop();
+  const fileName = String(post.coverFile || '').split(/[\\/]/).pop();
+  if (fileName) return fileName;
+
+  const rank = String(post.rank || '').padStart(4, '0');
+  const date = post.postDate ? new Date(post.postDate).toISOString().slice(0, 10).replaceAll('-', '') : '';
+  return rank && date && post.shortcode ? `${rank}_${date}_${post.shortcode}.jpg` : '';
 }
 
 function coverSources(post) {
@@ -121,7 +127,8 @@ function coverSources(post) {
     sources.push(`/api/local-cover?path=${encodeURIComponent(post.coverFile)}`);
   }
   if (!useImageProxy && localCoverName) {
-    sources.push(`${import.meta.env.BASE_URL}covers/${encodeURIComponent(localCoverName)}`);
+    sources.push(`${import.meta.env.BASE_URL}covers/${encodeURIComponent(localCoverName)}?v=${STATIC_COVER_VERSION}`);
+    return sources;
   }
   if (useImageProxy && post.permalink) {
     const fallback = post.coverUrl ? `&fallback=${encodeURIComponent(post.coverUrl)}` : '';
