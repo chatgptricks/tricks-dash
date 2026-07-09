@@ -41,6 +41,8 @@ const TYPE_LABELS = {
 const PAGE_SIZE_OPTIONS = [24, 36, 60];
 const IG_HANDLE = 'chatgptricks';
 const STATIC_COVER_VERSION = '20260708b';
+const ACCESS_PASSWORD = 'sentient2026';
+const ACCESS_STORAGE_KEY = 'chatgptricks-archive-access';
 
 const currencyFormatter = new Intl.NumberFormat('en-US');
 const compactFormatter = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 });
@@ -96,6 +98,16 @@ function normalizePost(post) {
 }
 
 const NORMALIZED_POSTS = postsData.map(normalizePost);
+
+function readAccessState() {
+  if (typeof window === 'undefined') return false;
+
+  try {
+    return window.sessionStorage.getItem(ACCESS_STORAGE_KEY) === 'granted';
+  } catch {
+    return false;
+  }
+}
 
 function posterTheme(type) {
   if (typeLabel(type) === 'Video') return 'theme-video';
@@ -173,6 +185,9 @@ function calculateRanges(posts) {
 }
 
 function App() {
+  const [isUnlocked, setIsUnlocked] = useState(readAccessState);
+  const [password, setPassword] = useState('');
+  const [passwordError, setPasswordError] = useState('');
   const posts = NORMALIZED_POSTS;
   const summary = summaryData;
   const ranges = useMemo(() => calculateRanges(posts), [posts]);
@@ -276,6 +291,31 @@ function App() {
       setSelectedShortcode(shortcode);
     });
   }, []);
+
+  const unlockArchive = useCallback(
+    (event) => {
+      event.preventDefault();
+
+      if (password.trim() !== ACCESS_PASSWORD) {
+        setPasswordError('Wrong password.');
+        return;
+      }
+
+      try {
+        window.sessionStorage.setItem(ACCESS_STORAGE_KEY, 'granted');
+      } catch {
+        // Session persistence is optional; access still opens for this render.
+      }
+
+      setPasswordError('');
+      setIsUnlocked(true);
+    },
+    [password],
+  );
+
+  if (!isUnlocked) {
+    return <PasswordGate password={password} passwordError={passwordError} onChange={setPassword} onSubmit={unlockArchive} />;
+  }
 
   return (
     <div className="shell">
@@ -510,6 +550,40 @@ function App() {
         </aside>
       </main>
     </div>
+  );
+}
+
+function PasswordGate({ password, passwordError, onChange, onSubmit }) {
+  return (
+    <main className="password-shell">
+      <section className="password-card" aria-labelledby="password-title">
+        <div className="brand-mark password-mark">
+          <Sparkles size={22} />
+        </div>
+        <p className="eyebrow">Private archive</p>
+        <h1 id="password-title">ChatGPT Tricks Archive</h1>
+        <p className="password-copy">Enter the access password to view the post navigator.</p>
+
+        <form className="password-form" onSubmit={onSubmit}>
+          <label htmlFor="archive-password">Password</label>
+          <input
+            id="archive-password"
+            type="password"
+            value={password}
+            onChange={(event) => onChange(event.target.value)}
+            placeholder="Password"
+            autoComplete="current-password"
+            autoFocus
+          />
+          {passwordError ? (
+            <p className="password-error" role="alert">
+              {passwordError}
+            </p>
+          ) : null}
+          <button type="submit">Unlock archive</button>
+        </form>
+      </section>
+    </main>
   );
 }
 
