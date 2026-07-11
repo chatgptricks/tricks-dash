@@ -1554,6 +1554,53 @@ body {
   object-fit: contain;
 }
 
+.selected-post-link {
+  position: relative;
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+
+.selected-post-link .selected-post-media {
+  transition: filter 180ms ease;
+}
+
+.instagram-media-overlay {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 9px;
+  background: rgba(0, 0, 0, 0.72);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 800;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.selected-post-link:hover .selected-post-media,
+.selected-post-link:focus-visible .selected-post-media {
+  filter: brightness(0.8);
+}
+
+.selected-post-link:hover .instagram-media-overlay,
+.selected-post-link:focus-visible .instagram-media-overlay {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.selected-post-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
 .selected-post-copy {
   display: flex;
   justify-content: flex-start;
