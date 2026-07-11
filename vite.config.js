@@ -257,7 +257,7 @@ function serveLocalCovers() {
 }
 
 export default defineConfig({
-  base: isGitHubPages ? '/chatgptricks-archive/' : '/',
+  base: isGitHubPages ? '/tricks-dash/' : '/',
   plugins: [react(), serveLocalCovers(), serveInstagramCovers()],
   server: {
     host: '0.0.0.0',

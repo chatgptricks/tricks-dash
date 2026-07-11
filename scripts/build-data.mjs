@@ -1,14 +1,23 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import xlsx from 'xlsx';
+import { getPostCacheKey, normalizeOcrText, readOcrCache } from './ocr-utils.mjs';
 
 const workbookPath = process.env.WORKBOOK_PATH || '/Users/tbnalfaro/Downloads/chatgptricks_posts.xlsx';
 const outDir = path.resolve('src/data');
+const ocrCachePath = process.env.OCR_CACHE_PATH ? path.resolve(process.env.OCR_CACHE_PATH) : undefined;
 fs.mkdirSync(outDir, { recursive: true });
+
+if (!fs.existsSync(workbookPath)) {
+  throw new Error(
+    `Workbook not found at ${workbookPath}. Set WORKBOOK_PATH to the current .xlsx export before regenerating data.`,
+  );
+}
 
 const workbook = xlsx.readFile(workbookPath, { cellDates: true });
 const postsSheet = workbook.Sheets.Posts;
 const summarySheet = workbook.Sheets.Summary;
+const ocrCache = readOcrCache(ocrCachePath);
 
 const rows = xlsx.utils.sheet_to_json(postsSheet, { defval: null });
 const posts = rows.map((row) => {
@@ -17,7 +26,7 @@ const posts = rows.map((row) => {
   const caption = String(row.Caption ?? '').trim();
   const excerpt = caption.length > 180 ? `${caption.slice(0, 177)}…` : caption;
 
-  return {
+  const basePost = {
     rank: Number(row['#']),
     postDate: date,
     likes: Number(row.Likes ?? 0),
@@ -30,6 +39,17 @@ const posts = rows.map((row) => {
     excerpt,
     coverUrl: String(row['Cover URL'] ?? ''),
     coverFile: String(row['Cover File'] ?? ''),
+  };
+
+  const ocrEntry = ocrCache.items[getPostCacheKey(basePost)];
+  const ocrText = normalizeOcrText(ocrEntry?.ocrText);
+  if (!ocrText) return basePost;
+
+  return {
+    ...basePost,
+    ocrText,
+    ocrProvider: String(ocrEntry.provider ?? ''),
+    ocrUpdatedAt: String(ocrEntry.updatedAt ?? ''),
   };
 });
 
