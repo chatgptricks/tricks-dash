@@ -540,16 +540,6 @@ function App() {
                 </p>
               </section>
 
-              <section className="panel ocr-panel">
-                <div className="panel-header ocr-header">
-                  <div>
-                    <p className="section-label">Cover OCR</p>
-                    <h2>Text in image</h2>
-                  </div>
-                </div>
-                <p className="ocr-copy">{selected.ocrText || 'No OCR text is available for this cover.'}</p>
-              </section>
-
               <section className="panel stats-panel">
                 <Metric label="Likes" value={compactFormatter.format(selected.likes)} />
                 <Metric label="Comments" value={compactFormatter.format(selected.comments)} />

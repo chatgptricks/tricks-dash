@@ -1470,7 +1470,6 @@ body {
   grid-template-rows: minmax(0, 1fr) minmax(160px, 0.54fr) auto;
   grid-template-areas:
     "selected caption"
-    "selected ocr"
     "stats stats";
   gap: 10px;
   min-width: 0;
@@ -1792,32 +1791,6 @@ body {
   color: #ffffff;
 }
 
-.ocr-panel {
-  grid-area: ocr;
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  padding: 14px;
-  overflow: hidden;
-}
-
-.ocr-header {
-  margin-bottom: 8px;
-}
-
-.ocr-header h2 {
-  font-size: 16px;
-}
-
-.ocr-copy {
-  min-height: 0;
-  margin: 0;
-  overflow: auto;
-  color: #b6ffe9;
-  font-size: 13px;
-  line-height: 1.5;
-  white-space: pre-wrap;
-}
-
 @media (max-width: 1120px) {
   body {
     overflow: auto;
@@ -1872,11 +1845,10 @@ body {
     width: auto;
     height: min(76dvh, 760px);
     grid-template-columns: 1fr;
-    grid-template-rows: minmax(0, 1fr) minmax(110px, 0.34fr) minmax(110px, 0.34fr) auto;
+    grid-template-rows: minmax(0, 1fr) minmax(110px, 0.34fr) auto;
     grid-template-areas:
       "selected"
       "caption"
-      "ocr"
       "stats";
     transform: translateY(calc(100% + 28px));
   }
