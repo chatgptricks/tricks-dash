@@ -20,8 +20,6 @@ const localCoverFallbackDirs = [
   '/Users/tbnalfaro/Desktop/Codex Projects/10 Predict/Post DB/thumbs',
   '/Users/tbnalfaro/Desktop/Codex Projects/10 Predict/data/uploads/imported-history',
 ];
-const isGitHubPages = process.env.GITHUB_PAGES === 'true';
-
 function resolveLocalCoverPath(filePath) {
   if (filePath && existsSync(filePath)) return filePath;
 
@@ -257,7 +255,7 @@ function serveLocalCovers() {
 }
 
 export default defineConfig({
-  base: isGitHubPages ? '/tricks-dash/' : '/',
+  base: '/tricks-dash/',
   plugins: [react(), serveLocalCovers(), serveInstagramCovers()],
   server: {
     host: '0.0.0.0',
