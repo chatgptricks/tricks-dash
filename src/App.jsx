@@ -17,8 +17,6 @@ import {
   Sparkles,
   Video,
 } from 'lucide-react';
-import postsData from './data/posts.json';
-import summaryData from './data/summary.json';
 
 const TYPE_OPTIONS = ['All posts', 'Carousel', 'Video', 'Image'];
 const SORT_OPTIONS = [
@@ -40,9 +38,8 @@ const TYPE_LABELS = {
 };
 const PAGE_SIZE_OPTIONS = [24, 36, 60];
 const IG_HANDLE = 'chatgptricks';
-const STATIC_COVER_VERSION = '20260708b';
-const ACCESS_PASSWORD = 'sentient2026';
-const ACCESS_STORAGE_KEY = 'tricks-dash-access';
+const API_BASE = (import.meta.env.VITE_API_BASE || 'https://cortex-api-db2e.onrender.com').replace(/\/$/, '');
+const PREDICT_URL = 'https://chatgptricks.github.io/cortex/';
 
 const currencyFormatter = new Intl.NumberFormat('en-US');
 const compactFormatter = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 });
@@ -89,15 +86,15 @@ function normalizeSearchValue(value) {
 
 function normalizePost(post) {
   const caption = String(post.caption || '');
-  const postType = typeLabel(post.type);
+  const postType = typeLabel(String(post.type || 'Image'));
   const headline = extractHeadline(caption);
-  const timestamp = new Date(post.postDate).getTime();
+  const timestamp = new Date(post.postDate || 0).getTime();
 
   return {
     ...post,
     caption,
     headline,
-    isVideo: post.video === 'Yes',
+    isVideo: post.video === 'Yes' || postType === 'Video',
     postType,
     searchText: [caption, post.excerpt, post.ocrText, post.shortcode, post.permalink, post.type, postType]
       .map(normalizeSearchValue)
@@ -107,59 +104,15 @@ function normalizePost(post) {
   };
 }
 
-const NORMALIZED_POSTS = postsData.map(normalizePost);
-
-function readAccessState() {
-  if (typeof window === 'undefined') return false;
-
-  try {
-    return window.sessionStorage.getItem(ACCESS_STORAGE_KEY) === 'granted';
-  } catch {
-    return false;
-  }
-}
-
 function posterTheme(type) {
   if (typeLabel(type) === 'Video') return 'theme-video';
   if (typeLabel(type) === 'Image') return 'theme-image';
   return 'theme-carousel';
 }
 
-function canUseImageProxy() {
-  if (import.meta.env.DEV) return true;
-  if (typeof window === 'undefined') return false;
-  return window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-}
-
-function coverFileName(post) {
-  const fileName = String(post.coverFile || '').split(/[\\/]/).pop();
-  if (fileName) return fileName;
-
-  const rank = String(post.rank || '').padStart(4, '0');
-  const date = post.postDate ? new Date(post.postDate).toISOString().slice(0, 10).replaceAll('-', '') : '';
-  return rank && date && post.shortcode ? `${rank}_${date}_${post.shortcode}.jpg` : '';
-}
-
 function coverSources(post) {
-  const sources = [];
-  const useImageProxy = canUseImageProxy();
-  const localCoverName = coverFileName(post);
-
-  if (useImageProxy && post.coverFile) {
-    sources.push(`/api/local-cover?path=${encodeURIComponent(post.coverFile)}`);
-  }
-  if (!useImageProxy && localCoverName) {
-    sources.push(`${import.meta.env.BASE_URL}covers/${encodeURIComponent(localCoverName)}?v=${STATIC_COVER_VERSION}`);
-    return sources;
-  }
-  if (useImageProxy && post.permalink) {
-    const fallback = post.coverUrl ? `&fallback=${encodeURIComponent(post.coverUrl)}` : '';
-    sources.push(`/api/cover?permalink=${encodeURIComponent(post.permalink)}${fallback}`);
-  }
-  if (post.coverUrl) {
-    sources.push(post.coverUrl);
-  }
-  return sources;
+  if (!post.coverUrl) return [];
+  return [post.coverUrl.startsWith('http') ? post.coverUrl : `${API_BASE}${post.coverUrl}`];
 }
 
 function matchesSearch(post, query) {
@@ -169,6 +122,10 @@ function matchesSearch(post, query) {
 }
 
 function calculateRanges(posts) {
+  if (!posts.length) {
+    return { likesMin: 0, likesMax: 0, commentsMin: 0, commentsMax: 0, dateMin: '', dateMax: '' };
+  }
+
   let likesMin = Infinity;
   let likesMax = -Infinity;
   let commentsMin = Infinity;
@@ -196,12 +153,37 @@ function calculateRanges(posts) {
 }
 
 function App() {
-  const [isUnlocked, setIsUnlocked] = useState(readAccessState);
-  const [password, setPassword] = useState('');
-  const [passwordError, setPasswordError] = useState('');
-  const posts = NORMALIZED_POSTS;
-  const summary = summaryData;
+  const [dashboard, setDashboard] = useState({ posts: [], summary: {} });
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const posts = useMemo(() => dashboard.posts.map(normalizePost), [dashboard.posts]);
+  const summary = dashboard.summary;
   const ranges = useMemo(() => calculateRanges(posts), [posts]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function loadDashboard() {
+      try {
+        setLoading(true);
+        setLoadError('');
+        const response = await fetch(`${API_BASE}/api/tricks-dash/posts`, { signal: controller.signal });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data = await response.json();
+        if (!Array.isArray(data.posts)) throw new Error('The shared post database returned an invalid response.');
+        setDashboard({ posts: data.posts, summary: data.summary || {} });
+      } catch (error) {
+        if (error.name !== 'AbortError') {
+          setLoadError('Could not load the shared Post DB. Try again in a moment.');
+        }
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
+      }
+    }
+
+    loadDashboard();
+    return () => controller.abort();
+  }, []);
   const typeCounts = useMemo(() => {
     const counts = {};
     for (const post of posts) {
@@ -303,31 +285,6 @@ function App() {
     });
   }, []);
 
-  const unlockDash = useCallback(
-    (event) => {
-      event.preventDefault();
-
-      if (password.trim() !== ACCESS_PASSWORD) {
-        setPasswordError('Wrong password.');
-        return;
-      }
-
-      try {
-        window.sessionStorage.setItem(ACCESS_STORAGE_KEY, 'granted');
-      } catch {
-        // Session persistence is optional; access still opens for this render.
-      }
-
-      setPasswordError('');
-      setIsUnlocked(true);
-    },
-    [password],
-  );
-
-  if (!isUnlocked) {
-    return <PasswordGate password={password} passwordError={passwordError} onChange={setPassword} onSubmit={unlockDash} />;
-  }
-
   return (
     <div className="shell">
       <div className="backdrop" />
@@ -348,9 +305,14 @@ function App() {
               <Metric label="Posts" value={summary['Exported posts'] ?? posts.length} />
               <Metric label="Likes" value={compactFormatter.format(summary['Total likes'] ?? 0)} />
               <Metric label="Avg likes" value={compactFormatter.format(summary['Average likes'] ?? 0)} />
+              <a className="ghost-button predict-link" href={PREDICT_URL}>Open Predict</a>
             </div>
           </header>
 
+          {loading ? <section className="dash-state">Loading the shared Post DB...</section> : null}
+          {loadError ? <section className="dash-state dash-state-error">{loadError}</section> : null}
+
+          {!loading && !loadError ? <>
           <section className="filter-strip" aria-label="Dashboard filters">
             <div className="filter-row filter-row-primary">
               <label className="filter-unit filter-search">
@@ -516,9 +478,10 @@ function App() {
             </div>
           </div>
         </section>
+        </> : null}
         </section>
 
-        <aside className="right-rail">
+        {!loading && !loadError ? <aside className="right-rail">
           <section className="panel detail">
             {selected ? (
               <SelectedPost post={selected} onCopy={copyShortcode} />
@@ -558,43 +521,9 @@ function App() {
               </section>
             </>
           ) : null}
-        </aside>
+        </aside> : null}
       </main>
     </div>
-  );
-}
-
-function PasswordGate({ password, passwordError, onChange, onSubmit }) {
-  return (
-    <main className="password-shell">
-      <section className="password-card" aria-labelledby="password-title">
-        <div className="brand-mark password-mark">
-          <Sparkles size={22} />
-        </div>
-        <p className="eyebrow">Private dash</p>
-        <h1 id="password-title">Tricks Dash</h1>
-        <p className="password-copy">Enter the access password to view the post navigator.</p>
-
-        <form className="password-form" onSubmit={onSubmit}>
-          <label htmlFor="dash-password">Password</label>
-          <input
-            id="dash-password"
-            type="password"
-            value={password}
-            onChange={(event) => onChange(event.target.value)}
-            placeholder="Password"
-            autoComplete="current-password"
-            autoFocus
-          />
-          {passwordError ? (
-            <p className="password-error" role="alert">
-              {passwordError}
-            </p>
-          ) : null}
-          <button type="submit">Unlock dash</button>
-        </form>
-      </section>
-    </main>
   );
 }
 
