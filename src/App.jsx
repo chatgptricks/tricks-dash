@@ -320,7 +320,7 @@ function App() {
                   <Search size={14} />
                   Search
                 </span>
-                <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search posts" />
+                <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search captions and cover text" />
               </label>
 
               <div className="filter-unit filter-type">
