@@ -310,6 +310,10 @@ function App() {
     await navigator.clipboard.writeText(shortcode);
   }, []);
 
+  const copyCaption = useCallback(async (caption) => {
+    await navigator.clipboard.writeText(caption);
+  }, []);
+
   const selectPost = useCallback((shortcode) => {
     startTransition(() => {
       setSelectedShortcode(shortcode);
@@ -528,9 +532,8 @@ function App() {
                 <div className="panel-header caption-header">
                   <div>
                     <p className="section-label">Caption</p>
-                    <h2>{selected.shortcode}</h2>
                   </div>
-                  <button className="ghost-button" onClick={() => copyShortcode(selected.shortcode)}>
+                  <button className="ghost-button" onClick={() => copyCaption(selected.caption)}>
                     <Copy size={15} />
                     Copy
                   </button>
