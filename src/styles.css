@@ -1507,7 +1507,7 @@ body {
   grid-area: selected;
   display: block;
   padding: 0;
-  overflow: auto;
+  overflow: hidden;
 }
 
 .detail-header {
@@ -1515,22 +1515,13 @@ body {
 }
 
 .selected-post {
-  display: grid;
-  grid-template-rows: auto auto auto auto;
+  display: block;
   width: 100%;
   min-height: 0;
-  height: auto;
-  max-height: none;
+  height: 100%;
+  max-height: 100%;
   box-sizing: border-box;
-  overflow: visible;
-  align-content: start;
-}
-
-.selected-post > * {
-  width: 100%;
-  max-width: 100%;
-  min-width: 0;
-  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .selected-post-media {
@@ -1538,6 +1529,7 @@ body {
   display: block;
   width: 100%;
   max-width: 100%;
+  height: 100%;
   min-height: 0;
   aspect-ratio: auto;
   box-sizing: border-box;
@@ -1550,8 +1542,9 @@ body {
   display: block;
   width: 100%;
   max-width: 100%;
-  height: auto;
+  height: 100%;
   object-fit: contain;
+  object-position: center;
 }
 
 .selected-post-link {
@@ -1559,6 +1552,8 @@ body {
   display: block;
   color: inherit;
   text-decoration: none;
+  width: 100%;
+  height: 100%;
 }
 
 .selected-post-link .selected-post-media {
