@@ -3,9 +3,8 @@ import {
   ArrowUpDown,
   Bookmark,
   CalendarDays,
-  ChevronLeft,
-  ChevronRight,
   Copy,
+  ExternalLink,
   Filter,
   Heart,
   MessageCircle,
@@ -15,6 +14,7 @@ import {
   Send,
   SlidersHorizontal,
   Sparkles,
+  X,
   Video,
 } from 'lucide-react';
 
@@ -36,7 +36,7 @@ const TYPE_LABELS = {
   Video: 'Video',
   Image: 'Image',
 };
-const PAGE_SIZE_OPTIONS = [24, 36, 60];
+const POSTS_PER_BATCH = 60;
 const IG_HANDLE = 'chatgptricks';
 const API_BASE = (import.meta.env.VITE_API_BASE || 'https://cortex-api-db2e.onrender.com').replace(/\/$/, '');
 const PREDICT_URL = 'https://chatgptricks.github.io/cortex/';
@@ -88,7 +88,7 @@ function normalizePost(post) {
   const caption = String(post.caption || '');
   const postType = typeLabel(String(post.type || 'Image'));
   const headline = extractHeadline(caption);
-  const timestamp = new Date(post.postDate || 0).getTime();
+  const timestamp = post.postDate ? new Date(post.postDate).getTime() : Number.NaN;
 
   return {
     ...post,
@@ -138,8 +138,10 @@ function calculateRanges(posts) {
     likesMax = Math.max(likesMax, post.likes);
     commentsMin = Math.min(commentsMin, post.comments);
     commentsMax = Math.max(commentsMax, post.comments);
-    dateMin = Math.min(dateMin, post.timestamp);
-    dateMax = Math.max(dateMax, post.timestamp);
+    if (Number.isFinite(post.timestamp)) {
+      dateMin = Math.min(dateMin, post.timestamp);
+      dateMax = Math.max(dateMax, post.timestamp);
+    }
   }
 
   return {
@@ -147,9 +149,31 @@ function calculateRanges(posts) {
     likesMax,
     commentsMin,
     commentsMax,
-    dateMin: new Date(dateMin).toISOString().slice(0, 10),
-    dateMax: new Date(dateMax).toISOString().slice(0, 10),
+    dateMin: Number.isFinite(dateMin) ? new Date(dateMin).toISOString().slice(0, 10) : '',
+    dateMax: Number.isFinite(dateMax) ? new Date(dateMax).toISOString().slice(0, 10) : '',
   };
+}
+
+function formatInputDate(date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function buildDatePresets(ranges) {
+  if (!ranges.dateMin || !ranges.dateMax) return [{ value: 'all', label: 'All time', from: '', to: '' }];
+
+  const latest = new Date(`${ranges.dateMax}T12:00:00`);
+  const earliest = new Date(`${ranges.dateMin}T12:00:00`);
+  const presets = [
+    { value: 'all', label: 'All time', from: '', to: '' },
+    { value: 'latest-30', label: 'Latest 30 days', from: formatInputDate(new Date(latest.getTime() - 29 * 86400000)), to: ranges.dateMax },
+    { value: 'latest-90', label: 'Latest 90 days', from: formatInputDate(new Date(latest.getTime() - 89 * 86400000)), to: ranges.dateMax },
+  ];
+
+  for (let year = latest.getFullYear(); year >= earliest.getFullYear(); year -= 1) {
+    presets.push({ value: `year-${year}`, label: String(year), from: `${year}-01-01`, to: `${year}-12-31` });
+  }
+
+  return presets;
 }
 
 function App() {
@@ -159,6 +183,7 @@ function App() {
   const posts = useMemo(() => dashboard.posts.map(normalizePost), [dashboard.posts]);
   const summary = dashboard.summary;
   const ranges = useMemo(() => calculateRanges(posts), [posts]);
+  const datePresets = useMemo(() => buildDatePresets(ranges), [ranges]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -201,9 +226,10 @@ function App() {
   const [minComments, setMinComments] = useState(ranges.commentsMin);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
-  const [pageSize, setPageSize] = useState(24);
-  const [page, setPage] = useState(1);
+  const [datePreset, setDatePreset] = useState('all');
+  const [visibleCount, setVisibleCount] = useState(POSTS_PER_BATCH);
   const [selectedShortcode, setSelectedShortcode] = useState(posts[0]?.shortcode ?? '');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   const filtered = useMemo(() => {
     const minDate = dateFrom ? new Date(`${dateFrom}T00:00:00`).getTime() : null;
@@ -216,8 +242,8 @@ function App() {
       if (mediaFilter === 'static' && post.isVideo) continue;
       if (post.likes < minLikes) continue;
       if (post.comments < minComments) continue;
-      if (minDate && post.timestamp < minDate) continue;
-      if (maxDate && post.timestamp > maxDate) continue;
+      if (minDate && (!Number.isFinite(post.timestamp) || post.timestamp < minDate)) continue;
+      if (maxDate && (!Number.isFinite(post.timestamp) || post.timestamp > maxDate)) continue;
       if (!matchesSearch(post, deferredQuery)) continue;
       output.push(post);
     }
@@ -227,9 +253,9 @@ function App() {
         case 'comments-desc':
           return b.comments - a.comments || b.likes - a.likes;
         case 'newest':
-          return b.timestamp - a.timestamp;
+          return (b.timestamp || 0) - (a.timestamp || 0);
         case 'oldest':
-          return a.timestamp - b.timestamp;
+          return (a.timestamp || 0) - (b.timestamp || 0);
         case 'likes-desc':
         default:
           return b.likes - a.likes || b.comments - a.comments;
@@ -240,15 +266,12 @@ function App() {
   }, [posts, activeType, mediaFilter, minLikes, minComments, dateFrom, dateTo, deferredQuery, sortBy]);
 
   useEffect(() => {
-    setPage(1);
-  }, [deferredQuery, activeType, mediaFilter, minLikes, minComments, dateFrom, dateTo, sortBy, pageSize]);
+    setVisibleCount(POSTS_PER_BATCH);
+  }, [deferredQuery, activeType, mediaFilter, minLikes, minComments, dateFrom, dateTo, sortBy]);
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const safePage = Math.min(page, totalPages);
-  const pageStart = (safePage - 1) * pageSize;
-  const visible = useMemo(() => filtered.slice(pageStart, pageStart + pageSize), [filtered, pageStart, pageSize]);
-  const showingFrom = filtered.length ? pageStart + 1 : 0;
-  const showingTo = Math.min(pageStart + pageSize, filtered.length);
+  const visible = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount]);
+  const showingFrom = filtered.length ? 1 : 0;
+  const showingTo = visible.length;
 
   const selected = useMemo(() => {
     if (!filtered.length) return null;
@@ -271,9 +294,17 @@ function App() {
       setMinComments(ranges.commentsMin);
       setDateFrom('');
       setDateTo('');
-      setPageSize(24);
+      setDatePreset('all');
+      setVisibleCount(POSTS_PER_BATCH);
     });
   }, [ranges.commentsMin, ranges.likesMin]);
+
+  const applyDatePreset = useCallback((value) => {
+    const preset = datePresets.find((option) => option.value === value);
+    setDatePreset(value);
+    setDateFrom(preset?.from ?? '');
+    setDateTo(preset?.to ?? '');
+  }, [datePresets]);
 
   const copyShortcode = useCallback(async (shortcode) => {
     await navigator.clipboard.writeText(shortcode);
@@ -282,6 +313,7 @@ function App() {
   const selectPost = useCallback((shortcode) => {
     startTransition(() => {
       setSelectedShortcode(shortcode);
+      setIsSidebarOpen(true);
     });
   }, []);
 
@@ -368,8 +400,12 @@ function App() {
                   Date
                 </div>
                 <div className="inline-fields">
-                  <input type="date" aria-label="Date from" value={dateFrom} min={ranges.dateMin} max={ranges.dateMax} onChange={(e) => setDateFrom(e.target.value)} />
-                  <input type="date" aria-label="Date to" value={dateTo} min={ranges.dateMin} max={ranges.dateMax} onChange={(e) => setDateTo(e.target.value)} />
+                  <select aria-label="Date range" value={datePreset} onChange={(event) => applyDatePreset(event.target.value)}>
+                    {datePreset === 'custom' ? <option value="custom">Custom range</option> : null}
+                    {datePresets.map((preset) => <option key={preset.value} value={preset.value}>{preset.label}</option>)}
+                  </select>
+                  <input type="date" aria-label="Date from" value={dateFrom} min={ranges.dateMin} max={ranges.dateMax} onChange={(e) => { setDatePreset('custom'); setDateFrom(e.target.value); }} />
+                  <input type="date" aria-label="Date to" value={dateTo} min={ranges.dateMin} max={ranges.dateMax} onChange={(e) => { setDatePreset('custom'); setDateTo(e.target.value); }} />
                 </div>
               </div>
 
@@ -407,13 +443,6 @@ function App() {
                   {SORT_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>
                       {option.label}
-                    </option>
-                  ))}
-                </select>
-                <select aria-label="Page size" value={pageSize} onChange={(e) => startTransition(() => setPageSize(Number(e.target.value)))}>
-                  {PAGE_SIZE_OPTIONS.map((size) => (
-                    <option key={size} value={size}>
-                      {size}
                     </option>
                   ))}
                 </select>
@@ -465,26 +494,20 @@ function App() {
             <div className="pagination-copy">
               Showing {showingFrom}-{showingTo} of {filtered.length.toLocaleString()}
             </div>
-            <div className="pagination-controls">
-              <button className="ghost-button" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={safePage === 1}>
-                <ChevronLeft size={16} />
+            {visible.length < filtered.length ? (
+              <button className="ghost-button load-more-button" onClick={() => setVisibleCount((count) => count + POSTS_PER_BATCH)}>
+                Load 60 more
               </button>
-              <span>
-                Page {safePage} of {totalPages}
-              </span>
-              <button className="ghost-button" onClick={() => setPage((current) => Math.min(totalPages, current + 1))} disabled={safePage === totalPages}>
-                <ChevronRight size={16} />
-              </button>
-            </div>
+            ) : <span className="all-loaded">All matching posts loaded</span>}
           </div>
         </section>
         </> : null}
         </section>
 
-        {!loading && !loadError ? <aside className="right-rail">
+        {!loading && !loadError && isSidebarOpen ? <aside className="right-rail" aria-label="Selected post details">
           <section className="panel detail">
             {selected ? (
-              <SelectedPost post={selected} onCopy={copyShortcode} />
+              <SelectedPost post={selected} onCopy={copyShortcode} onClose={() => setIsSidebarOpen(false)} />
             ) : (
               <div className="empty-state">
                 <p>No posts match the current filters.</p>
@@ -536,7 +559,7 @@ function Metric({ label, value }) {
   );
 }
 
-const SelectedPost = memo(function SelectedPost({ post, onCopy }) {
+const SelectedPost = memo(function SelectedPost({ post, onCopy, onClose }) {
   return (
     <article className="selected-post">
       <div className="post-header selected-post-header">
@@ -551,8 +574,8 @@ const SelectedPost = memo(function SelectedPost({ post, onCopy }) {
             </span>
           </div>
         </div>
-        <button className="icon-button" aria-label="Post menu">
-          <MoreHorizontal size={16} />
+        <button className="icon-button" onClick={onClose} aria-label="Close post details">
+          <X size={16} />
         </button>
       </div>
 
@@ -587,6 +610,7 @@ const SelectedPost = memo(function SelectedPost({ post, onCopy }) {
           <Copy size={14} />
           Copy shortcode
         </button>
+        <InstagramLink post={post} />
       </div>
     </article>
   );
@@ -659,6 +683,7 @@ const PostCard = memo(function PostCard({ post, priority, selected, onSelect, on
         <div className="post-footer">
           <span>{compactFormatter.format(post.comments)} comments</span>
           <span>{formatDate(post.postDate)}</span>
+          <InstagramLink post={post} onClick={stopAction} compact />
           <button className="text-button" onClick={copyPost}>
             Copy code
           </button>
@@ -667,6 +692,23 @@ const PostCard = memo(function PostCard({ post, priority, selected, onSelect, on
     </article>
   );
 });
+
+function InstagramLink({ post, onClick, compact = false }) {
+  if (!post.permalink) return null;
+
+  return (
+    <a
+      className={compact ? 'instagram-link compact' : 'instagram-link'}
+      href={post.permalink}
+      target="_blank"
+      rel="noreferrer"
+      onClick={onClick}
+    >
+      <ExternalLink size={compact ? 12 : 14} />
+      Instagram
+    </a>
+  );
+}
 
 const CoverImage = memo(function CoverImage({ className, post, priority = false, children }) {
   const sources = useMemo(() => coverSources(post), [post]);
