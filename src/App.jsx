@@ -229,7 +229,7 @@ function App() {
   const [datePreset, setDatePreset] = useState('all');
   const [visibleCount, setVisibleCount] = useState(POSTS_PER_BATCH);
   const [selectedShortcode, setSelectedShortcode] = useState(posts[0]?.shortcode ?? '');
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const filtered = useMemo(() => {
     const minDate = dateFrom ? new Date(`${dateFrom}T00:00:00`).getTime() : null;
