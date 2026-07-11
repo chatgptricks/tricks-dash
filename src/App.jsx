@@ -511,7 +511,7 @@ function App() {
         >
           <section className="panel detail">
             {selected ? (
-              <SelectedPost post={selected} onCopy={copyShortcode} onClose={() => setIsSidebarOpen(false)} />
+              <SelectedPost post={selected} />
             ) : (
               <div className="empty-state">
                 <p>No posts match the current filters.</p>
@@ -563,7 +563,7 @@ function Metric({ label, value }) {
   );
 }
 
-const SelectedPost = memo(function SelectedPost({ post, onCopy, onClose }) {
+const SelectedPost = memo(function SelectedPost({ post }) {
   const preview = (
     <CoverImage className={`selected-post-media ${posterTheme(post.type)}`} post={post} priority>
       {post.isVideo ? (
@@ -577,22 +577,6 @@ const SelectedPost = memo(function SelectedPost({ post, onCopy, onClose }) {
 
   return (
     <article className="selected-post">
-      <div className="post-header selected-post-header">
-        <div className="post-user">
-          <div className="post-avatar" aria-hidden="true">
-            {IG_HANDLE.slice(0, 2).toUpperCase()}
-          </div>
-          <div className="post-user-copy">
-            <strong>{IG_HANDLE}</strong>
-            <span>
-              {formatDate(post.postDate)} · {post.postType}
-            </span>
-          </div>
-        </div>
-        <button className="icon-button" onClick={onClose} aria-label="Close post details">
-          <X size={16} />
-        </button>
-      </div>
 
       {post.permalink ? (
         <a
@@ -603,34 +587,8 @@ const SelectedPost = memo(function SelectedPost({ post, onCopy, onClose }) {
           aria-label={`Open ${post.shortcode} on Instagram`}
         >
           {preview}
-          <span className="instagram-media-overlay"><ExternalLink size={14} />Open on Instagram</span>
         </a>
       ) : preview}
-
-      <div className="post-actions selected-post-actions">
-        <div className="post-actions-left">
-          <button className="action-button" aria-label="Like">
-            <Heart size={20} />
-          </button>
-          <button className="action-button" aria-label="Comment">
-            <MessageCircle size={20} />
-          </button>
-          <button className="action-button" aria-label="Share">
-            <Send size={20} />
-          </button>
-        </div>
-        <button className="action-button" aria-label="Save">
-          <Bookmark size={20} />
-        </button>
-      </div>
-
-      <div className="selected-post-copy">
-        <button className="text-button" onClick={() => onCopy(post.shortcode)}>
-          <Copy size={14} />
-          Copy shortcode
-        </button>
-        <InstagramLink post={post} />
-      </div>
     </article>
   );
 });
