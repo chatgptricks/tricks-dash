@@ -1,6 +1,6 @@
-# ChatGPT Tricks Archive
+# Tricks Dash
 
-Interactive archive navigator for ChatGPT Tricks Instagram posts.
+Interactive dashboard for ChatGPT Tricks Instagram posts.
 
 ## Features
 
@@ -37,3 +37,39 @@ WORKBOOK_PATH="/path/to/chatgptricks_posts.xlsx" pnpm generate:data
 ```
 
 If `WORKBOOK_PATH` is omitted, the script uses `/Users/tbnalfaro/Downloads/chatgptricks_posts.xlsx`.
+
+## OCR For Cover Images
+
+The recommended implementation in this repo is Google Cloud Vision OCR at build time.
+
+Why this setup:
+
+- Strong OCR quality for image-based content.
+- Simple API-key based integration for a static-site workflow.
+- Cached results in `outputs/ocr-cache.json` so reruns only process new or changed covers.
+- OCR text is merged directly into `src/data/posts.json` and automatically added to the search index.
+
+### Configure
+
+Copy `.env.example` to `.env` and set:
+
+```bash
+GOOGLE_CLOUD_VISION_API_KEY=your_key_here
+```
+
+### Run OCR
+
+```bash
+pnpm ocr:covers
+```
+
+Useful overrides:
+
+```bash
+OCR_LIMIT=100 pnpm ocr:covers
+OCR_FORCE=1 pnpm ocr:covers
+OCR_GOOGLE_PRIMARY_FEATURE=TEXT_DETECTION pnpm ocr:covers
+OCR_GOOGLE_SECONDARY_FEATURE=DOCUMENT_TEXT_DETECTION pnpm ocr:covers
+```
+
+The OCR pass uses `TEXT_DETECTION` first and falls back to `DOCUMENT_TEXT_DETECTION` when the first result is too short.

@@ -42,7 +42,7 @@ const PAGE_SIZE_OPTIONS = [24, 36, 60];
 const IG_HANDLE = 'chatgptricks';
 const STATIC_COVER_VERSION = '20260708b';
 const ACCESS_PASSWORD = 'sentient2026';
-const ACCESS_STORAGE_KEY = 'chatgptricks-archive-access';
+const ACCESS_STORAGE_KEY = 'tricks-dash-access';
 
 const currencyFormatter = new Intl.NumberFormat('en-US');
 const compactFormatter = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 });
@@ -80,6 +80,13 @@ function extractHeadline(caption) {
   return words.slice(0, limit).join(' ');
 }
 
+function normalizeSearchValue(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function normalizePost(post) {
   const caption = String(post.caption || '');
   const postType = typeLabel(post.type);
@@ -92,7 +99,10 @@ function normalizePost(post) {
     headline,
     isVideo: post.video === 'Yes',
     postType,
-    searchText: [caption, post.excerpt, post.shortcode, post.permalink, post.type, postType].join(' ').toLowerCase(),
+    searchText: [caption, post.excerpt, post.ocrText, post.shortcode, post.permalink, post.type, postType]
+      .map(normalizeSearchValue)
+      .filter(Boolean)
+      .join(' '),
     timestamp,
   };
 }
@@ -153,8 +163,9 @@ function coverSources(post) {
 }
 
 function matchesSearch(post, query) {
-  if (!query) return true;
-  return post.searchText.includes(query.toLowerCase());
+  const normalizedQuery = normalizeSearchValue(query);
+  if (!normalizedQuery) return true;
+  return post.searchText.includes(normalizedQuery);
 }
 
 function calculateRanges(posts) {
@@ -292,7 +303,7 @@ function App() {
     });
   }, []);
 
-  const unlockArchive = useCallback(
+  const unlockDash = useCallback(
     (event) => {
       event.preventDefault();
 
@@ -314,7 +325,7 @@ function App() {
   );
 
   if (!isUnlocked) {
-    return <PasswordGate password={password} passwordError={passwordError} onChange={setPassword} onSubmit={unlockArchive} />;
+    return <PasswordGate password={password} passwordError={passwordError} onChange={setPassword} onSubmit={unlockDash} />;
   }
 
   return (
@@ -328,8 +339,8 @@ function App() {
                 <Sparkles size={18} />
               </div>
               <div>
-                <p className="eyebrow">Archive explorer</p>
-                <h1>ChatGPT Tricks Archive</h1>
+                <p className="eyebrow">Dash explorer</p>
+                <h1>Tricks Dash</h1>
               </div>
             </div>
 
@@ -340,7 +351,7 @@ function App() {
             </div>
           </header>
 
-          <section className="filter-strip" aria-label="Archive filters">
+          <section className="filter-strip" aria-label="Dashboard filters">
             <div className="filter-row filter-row-primary">
               <label className="filter-unit filter-search">
                 <span>
@@ -560,14 +571,14 @@ function PasswordGate({ password, passwordError, onChange, onSubmit }) {
         <div className="brand-mark password-mark">
           <Sparkles size={22} />
         </div>
-        <p className="eyebrow">Private archive</p>
-        <h1 id="password-title">ChatGPT Tricks Archive</h1>
+        <p className="eyebrow">Private dash</p>
+        <h1 id="password-title">Tricks Dash</h1>
         <p className="password-copy">Enter the access password to view the post navigator.</p>
 
         <form className="password-form" onSubmit={onSubmit}>
-          <label htmlFor="archive-password">Password</label>
+          <label htmlFor="dash-password">Password</label>
           <input
-            id="archive-password"
+            id="dash-password"
             type="password"
             value={password}
             onChange={(event) => onChange(event.target.value)}
@@ -580,7 +591,7 @@ function PasswordGate({ password, passwordError, onChange, onSubmit }) {
               {passwordError}
             </p>
           ) : null}
-          <button type="submit">Unlock archive</button>
+          <button type="submit">Unlock dash</button>
         </form>
       </section>
     </main>
