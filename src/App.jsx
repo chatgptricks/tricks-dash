@@ -574,6 +574,17 @@ function Metric({ label, value }) {
 }
 
 const SelectedPost = memo(function SelectedPost({ post, onCopy, onClose }) {
+  const preview = (
+    <CoverImage className={`selected-post-media ${posterTheme(post.type)}`} post={post} priority>
+      {post.isVideo ? (
+        <div className="media-badge">
+          <Video size={13} />
+          Video
+        </div>
+      ) : null}
+    </CoverImage>
+  );
+
   return (
     <article className="selected-post">
       <div className="post-header selected-post-header">
@@ -593,14 +604,18 @@ const SelectedPost = memo(function SelectedPost({ post, onCopy, onClose }) {
         </button>
       </div>
 
-      <CoverImage className={`selected-post-media ${posterTheme(post.type)}`} post={post} priority>
-        {post.isVideo ? (
-          <div className="media-badge">
-            <Video size={13} />
-            Video
-          </div>
-        ) : null}
-      </CoverImage>
+      {post.permalink ? (
+        <a
+          className="selected-post-link"
+          href={post.permalink}
+          target="_blank"
+          rel="noreferrer"
+          aria-label={`Open ${post.shortcode} on Instagram`}
+        >
+          {preview}
+          <span className="instagram-media-overlay"><ExternalLink size={14} />Open on Instagram</span>
+        </a>
+      ) : preview}
 
       <div className="post-actions selected-post-actions">
         <div className="post-actions-left">
