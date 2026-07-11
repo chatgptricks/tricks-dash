@@ -8,7 +8,7 @@ Interactive dashboard for ChatGPT Tricks Instagram posts.
 - Selected post rail with Instagram-style post preview.
 - Caption and stats panels for the selected post.
 - Search, type, media, date, engagement, sort, and page-size filters.
-- Local cover fallback plus Instagram cover proxy for post images.
+- Reads the canonical historical Post DB from Predict, including its stored cover images.
 
 ## Setup
 
@@ -25,18 +25,10 @@ pnpm build
 
 ## Data
 
-The app reads generated data from:
-
-- `src/data/posts.json`
-- `src/data/summary.json`
-
-To regenerate from the workbook:
-
-```bash
-WORKBOOK_PATH="/path/to/chatgptricks_posts.xlsx" pnpm generate:data
-```
-
-If `WORKBOOK_PATH` is omitted, the script uses `/Users/tbnalfaro/Downloads/chatgptricks_posts.xlsx`.
+The live dashboard reads the shared Post DB from Predict through
+`GET /api/tricks-dash/posts`. Set `VITE_API_BASE` to the Predict API URL when
+building for a different environment. The JSON generation scripts remain only
+as archival utilities and are not used by the dashboard.
 
 ## OCR For Cover Images
 

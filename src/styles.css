@@ -125,6 +125,27 @@ img {
   justify-content: flex-end;
 }
 
+.predict-link {
+  text-decoration: none;
+}
+
+.dash-state {
+  position: relative;
+  z-index: 1;
+  margin-top: 18px;
+  padding: 18px 22px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(8, 8, 8, 0.96);
+  color: var(--muted-strong);
+  font-weight: 700;
+}
+
+.dash-state-error {
+  color: #ffb6aa;
+  border-color: rgba(255, 122, 100, 0.36);
+}
+
 .metric {
   min-width: 118px;
   padding: 12px 14px;
