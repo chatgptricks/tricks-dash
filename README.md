@@ -30,6 +30,10 @@ The live dashboard reads the shared Post DB from Predict through
 building for a different environment. The JSON generation scripts remain only
 as archival utilities and are not used by the dashboard.
 
+Each post includes `ocrText`, sourced from Predict's normalized cover-image OCR
+(`hook_text`). The dashboard search indexes captions, metadata, and this cover
+text together.
+
 ## OCR For Cover Images
 
 The recommended implementation in this repo is Google Cloud Vision OCR at build time.
