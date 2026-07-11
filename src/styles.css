@@ -1519,10 +1519,11 @@ body {
   grid-template-rows: auto auto auto auto;
   width: 100%;
   min-height: 0;
-  height: 100%;
-  max-height: 100%;
+  height: auto;
+  max-height: none;
   box-sizing: border-box;
-  overflow: hidden;
+  overflow: visible;
+  align-content: start;
 }
 
 .selected-post > * {
@@ -1727,7 +1728,7 @@ body {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   align-items: stretch;
   gap: 8px;
-  padding: 8px;
+  padding: 6px;
   overflow: hidden;
 }
 
@@ -1735,17 +1736,18 @@ body {
   display: grid;
   align-content: center;
   min-width: 0;
-  padding: 16px 18px;
+  padding: 10px 12px;
   background: #101010;
 }
 
 .stats-panel .metric span {
-  margin-bottom: 7px;
-  font-size: 11px;
+  margin-bottom: 4px;
+  font-size: 10px;
 }
 
 .stats-panel .metric strong {
-  font-size: 20px;
+  font-size: 14px;
+  line-height: 1.08;
 }
 
 .caption-panel {
