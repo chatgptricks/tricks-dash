@@ -504,7 +504,11 @@ function App() {
         </> : null}
         </section>
 
-        {!loading && !loadError && isSidebarOpen ? <aside className="right-rail" aria-label="Selected post details">
+        {!loading && !loadError ? <aside
+          className={isSidebarOpen ? 'right-rail is-open' : 'right-rail'}
+          aria-label="Selected post details"
+          aria-hidden={!isSidebarOpen}
+        >
           <section className="panel detail">
             {selected ? (
               <SelectedPost post={selected} onCopy={copyShortcode} onClose={() => setIsSidebarOpen(false)} />
@@ -534,6 +538,16 @@ function App() {
                 <p>
                   <strong>{IG_HANDLE}</strong> {selected.caption}
                 </p>
+              </section>
+
+              <section className="panel ocr-panel">
+                <div className="panel-header ocr-header">
+                  <div>
+                    <p className="section-label">Cover OCR</p>
+                    <h2>Text in image</h2>
+                  </div>
+                </div>
+                <p className="ocr-copy">{selected.ocrText || 'No OCR text is available for this cover.'}</p>
               </section>
 
               <section className="panel stats-panel">

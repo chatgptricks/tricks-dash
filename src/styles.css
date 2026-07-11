@@ -1427,8 +1427,9 @@ body {
 }
 
 .gallery-grid {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 360px));
   align-items: start;
+  justify-content: space-between;
 }
 
 .pagination {
@@ -1465,15 +1466,16 @@ body {
   right: 18px;
   z-index: 20;
   display: grid;
-  grid-template-columns: minmax(190px, 0.92fr) minmax(205px, 1fr);
-  grid-template-rows: minmax(0, 1fr) minmax(150px, 0.34fr);
+  grid-template-columns: minmax(480px, 1.18fr) minmax(300px, 0.82fr);
+  grid-template-rows: minmax(0, 1fr) minmax(160px, 0.54fr) auto;
   grid-template-areas:
     "selected caption"
+    "selected ocr"
     "stats stats";
   gap: 10px;
   min-width: 0;
   min-height: 0;
-  width: min(540px, calc(100vw - 36px));
+  width: min(980px, calc(100vw - 36px));
   height: calc(100dvh - 36px);
   padding: 10px;
   border: 1px solid rgba(255, 255, 255, 0.14);
@@ -1481,6 +1483,17 @@ body {
   background: rgba(3, 3, 3, 0.94);
   box-shadow: 0 30px 90px rgba(0, 0, 0, 0.6);
   backdrop-filter: blur(18px);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(calc(100% + 28px));
+  transition: transform 320ms cubic-bezier(0.22, 1, 0.36, 1), opacity 180ms ease;
+  will-change: transform, opacity;
+}
+
+.right-rail.is-open {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0);
 }
 
 .right-rail .panel {
@@ -1732,6 +1745,32 @@ body {
   color: #ffffff;
 }
 
+.ocr-panel {
+  grid-area: ocr;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  padding: 14px;
+  overflow: hidden;
+}
+
+.ocr-header {
+  margin-bottom: 8px;
+}
+
+.ocr-header h2 {
+  font-size: 16px;
+}
+
+.ocr-copy {
+  min-height: 0;
+  margin: 0;
+  overflow: auto;
+  color: #b6ffe9;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
 @media (max-width: 1120px) {
   body {
     overflow: auto;
@@ -1786,15 +1825,18 @@ body {
     width: auto;
     height: min(76dvh, 760px);
     grid-template-columns: 1fr;
-    grid-template-rows: auto auto auto;
+    grid-template-rows: minmax(0, 1fr) minmax(110px, 0.34fr) minmax(110px, 0.34fr) auto;
     grid-template-areas:
       "selected"
       "caption"
+      "ocr"
       "stats";
+    transform: translateY(calc(100% + 28px));
   }
 
   .selected-post {
-    width: min(100%, 430px);
+    width: 100%;
+    max-width: none;
     height: auto;
   }
 
@@ -1833,13 +1875,14 @@ body {
   }
 
   .right-rail {
-    grid-template-rows: minmax(0, 1fr) minmax(130px, 0.36fr) auto;
+    grid-template-rows: minmax(0, 1fr) minmax(100px, 0.3fr) minmax(100px, 0.3fr) auto;
   }
 }
 
 @media (max-width: 1280px) {
   .gallery-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
+    justify-content: normal;
   }
 }
 
