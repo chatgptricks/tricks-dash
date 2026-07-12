@@ -13,10 +13,10 @@ import {
   Search,
   Send,
   SlidersHorizontal,
-  Sparkles,
   X,
   Video,
 } from 'lucide-react';
+import brandProfileImage from './assets/profile.jpg';
 
 const TYPE_OPTIONS = ['All posts', 'Carousel', 'Video', 'Image'];
 const SORT_OPTIONS = [
@@ -342,7 +342,7 @@ function App() {
           <header className="topbar">
             <div className="brand">
               <div className="brand-mark">
-                <Sparkles size={18} />
+                <img src={brandProfileImage} alt="" aria-hidden="true" />
               </div>
               <div>
                 <p className="eyebrow">Dash explorer</p>
@@ -678,7 +678,7 @@ const PostCard = memo(function PostCard({ post, priority, selected, onSelect, on
       <div className="post-header">
         <div className="post-user">
           <div className="post-avatar" aria-hidden="true">
-            {IG_HANDLE.slice(0, 2).toUpperCase()}
+            <img src={brandProfileImage} alt="" aria-hidden="true" />
           </div>
           <div className="post-user-copy">
             <strong>{IG_HANDLE}</strong>

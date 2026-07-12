@@ -102,10 +102,17 @@ img {
   place-items: center;
   width: 44px;
   height: 44px;
+  overflow: hidden;
   border-radius: 14px;
   background: linear-gradient(160deg, rgba(0, 172, 128, 0.98), rgba(0, 172, 128, 0.72));
   color: #02110b;
   box-shadow: 0 14px 28px rgba(0, 172, 128, 0.24);
+}
+
+.brand-mark img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .eyebrow,
@@ -453,11 +460,18 @@ img {
   display: grid;
   place-items: center;
   flex: 0 0 auto;
+  overflow: hidden;
   background: linear-gradient(160deg, rgba(0, 172, 128, 0.98), rgba(0, 172, 128, 0.58));
   color: #02110b;
   font-size: 0.72rem;
   font-weight: 900;
   letter-spacing: 0;
+}
+
+.post-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .post-user-copy {
