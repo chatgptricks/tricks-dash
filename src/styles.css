@@ -1567,41 +1567,46 @@ body {
 }
 
 .selected-post {
-  display: block;
+  display: grid;
+  place-items: center;
   width: 100%;
   min-height: 0;
   height: 100%;
   max-height: 100%;
   box-sizing: border-box;
   overflow: hidden;
+  padding: 12px;
 }
 
 .selected-post-media {
   position: relative;
   display: block;
-  width: 100%;
+  width: auto;
   max-width: 100%;
   height: 100%;
+  aspect-ratio: 3 / 4;
   min-height: 0;
-  aspect-ratio: auto;
   box-sizing: border-box;
   overflow: hidden;
   background: #000000;
+  border-radius: 8px;
 }
 
 .selected-post-media .cover-image {
-  position: static;
+  position: absolute;
+  inset: 0;
   display: block;
   width: 100%;
   max-width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: cover;
   object-position: center;
 }
 
 .selected-post-link {
   position: relative;
-  display: block;
+  display: grid;
+  place-items: center;
   color: inherit;
   text-decoration: none;
   width: 100%;
@@ -1914,7 +1919,7 @@ body {
   }
 
   .selected-post-media {
-    aspect-ratio: auto;
+    aspect-ratio: 3 / 4;
   }
 }
 
