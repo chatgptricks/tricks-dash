@@ -221,7 +221,7 @@ function App() {
   const deferredQuery = useDeferredValue(query);
   const [activeType, setActiveType] = useState('All posts');
   const [mediaFilter, setMediaFilter] = useState('all');
-  const [sortBy, setSortBy] = useState('likes-desc');
+  const [sortBy, setSortBy] = useState('newest');
   const [minLikes, setMinLikes] = useState(ranges.likesMin);
   const [minComments, setMinComments] = useState(ranges.commentsMin);
   const [dateFrom, setDateFrom] = useState('');
@@ -279,7 +279,7 @@ function App() {
     datePreset !== 'all' || Boolean(dateFrom) || Boolean(dateTo),
     minLikes > 0,
     minComments > 0,
-    sortBy !== 'likes-desc',
+    sortBy !== 'newest',
   ].filter(Boolean).length;
 
   const selected = useMemo(() => {
@@ -298,7 +298,7 @@ function App() {
     startTransition(() => {
       setActiveType('All posts');
       setMediaFilter('all');
-      setSortBy('likes-desc');
+      setSortBy('newest');
       setMinLikes(0);
       setMinComments(0);
       setDateFrom('');
