@@ -66,6 +66,17 @@ img {
   opacity: 0.55;
 }
 
+.sidebar-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 18;
+  border: 0;
+  padding: 0;
+  background: rgba(0, 0, 0, 0.22);
+  backdrop-filter: blur(1px);
+  cursor: pointer;
+}
+
 .topbar {
   position: relative;
   z-index: 1;
@@ -1495,6 +1506,33 @@ body {
   transform: translateX(0);
 }
 
+.rail-close-button {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  z-index: 2;
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  background: rgba(8, 8, 8, 0.94);
+  color: #f5f5f5;
+  box-shadow: var(--shadow);
+}
+
+.rail-close-button:hover {
+  border-color: rgba(0, 172, 128, 0.6);
+  color: #ffffff;
+}
+
+.rail-close-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .right-rail .panel {
   min-height: 0;
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -1848,6 +1886,11 @@ body {
       "caption"
       "stats";
     transform: translateY(calc(100% + 28px));
+  }
+
+  .rail-close-button {
+    top: 14px;
+    right: 14px;
   }
 
   .selected-post {

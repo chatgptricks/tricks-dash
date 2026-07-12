@@ -314,6 +314,10 @@ function App() {
     await navigator.clipboard.writeText(caption);
   }, []);
 
+  const closeSidebar = useCallback(() => {
+    setIsSidebarOpen(false);
+  }, []);
+
   const selectPost = useCallback((shortcode) => {
     startTransition(() => {
       setSelectedShortcode(shortcode);
@@ -508,11 +512,23 @@ function App() {
         </> : null}
         </section>
 
+        {isSidebarOpen ? <button
+          className="sidebar-backdrop"
+          type="button"
+          aria-label="Close selected post details"
+          onClick={closeSidebar}
+        /> : null}
+
         {!loading && !loadError ? <aside
           className={isSidebarOpen ? 'right-rail is-open' : 'right-rail'}
           aria-label="Selected post details"
           aria-hidden={!isSidebarOpen}
         >
+          {selected ? (
+            <button className="rail-close-button" type="button" aria-label="Close selected post details" onClick={closeSidebar}>
+              <X size={14} />
+            </button>
+          ) : null}
           <section className="panel detail">
             {selected ? (
               <SelectedPost post={selected} />
