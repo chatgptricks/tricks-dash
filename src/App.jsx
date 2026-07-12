@@ -272,6 +272,15 @@ function App() {
   const visible = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount]);
   const showingFrom = filtered.length ? 1 : 0;
   const showingTo = visible.length;
+  const activeFilterCount = [
+    Boolean(query.trim()),
+    activeType !== 'All posts',
+    mediaFilter !== 'all',
+    datePreset !== 'all' || Boolean(dateFrom) || Boolean(dateTo),
+    minLikes > 0,
+    minComments > 0,
+    sortBy !== 'likes-desc',
+  ].filter(Boolean).length;
 
   const selected = useMemo(() => {
     if (!filtered.length) return null;
@@ -290,14 +299,14 @@ function App() {
       setActiveType('All posts');
       setMediaFilter('all');
       setSortBy('likes-desc');
-      setMinLikes(ranges.likesMin);
-      setMinComments(ranges.commentsMin);
+      setMinLikes(0);
+      setMinComments(0);
       setDateFrom('');
       setDateTo('');
       setDatePreset('all');
       setVisibleCount(POSTS_PER_BATCH);
     });
-  }, [ranges.commentsMin, ranges.likesMin]);
+  }, []);
 
   const applyDatePreset = useCallback((value) => {
     const preset = datePresets.find((option) => option.value === value);
@@ -354,112 +363,148 @@ function App() {
 
           {!loading && !loadError ? <>
           <section className="filter-strip" aria-label="Dashboard filters">
-            <div className="filter-row filter-row-primary">
-              <label className="filter-unit filter-search">
-                <span>
-                  <Search size={14} />
-                  Search
+            <div className="filter-command-row">
+              <label className="filter-search-field">
+                <Search size={18} aria-hidden="true" />
+                <span className="filter-search-copy">
+                  <span>Search the post library</span>
+                  <input
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    placeholder="Search captions, topics, or text inside a cover..."
+                  />
                 </span>
-                <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search captions and cover text" />
+                {query ? (
+                  <button className="search-clear" type="button" aria-label="Clear search" onClick={() => setQuery('')}>
+                    <X size={15} />
+                  </button>
+                ) : <span className="search-scope">Includes cover text</span>}
               </label>
 
-              <div className="filter-unit filter-type">
-                <div className="filter-title">
-                  <Filter size={14} />
-                  Type
-                </div>
+              <div className="filter-result-summary" aria-live="polite">
+                <strong>{filtered.length.toLocaleString()}</strong>
+                <span>{filtered.length === 1 ? 'post found' : 'posts found'}</span>
+              </div>
+
+              <button
+                className={activeFilterCount ? 'filter-clear-all filter-clear-all-active' : 'filter-clear-all'}
+                type="button"
+                onClick={onReset}
+                disabled={!activeFilterCount}
+              >
+                <RotateCcw size={15} />
+                <span>Clear filters</span>
+                {activeFilterCount ? <b>{activeFilterCount}</b> : null}
+              </button>
+            </div>
+
+            <div className="filter-groups-row">
+              <fieldset className="filter-group-card filter-type">
+                <legend>
+                  <Filter size={13} />
+                  Content type
+                </legend>
                 <div className="chip-row">
                   {TYPE_OPTIONS.map((option) => (
                     <button
                       key={option}
+                      type="button"
                       className={option === activeType ? 'chip chip-active' : 'chip'}
                       onClick={() => startTransition(() => setActiveType(option))}
+                      aria-pressed={option === activeType}
                     >
                       {TYPE_LABELS[option] ?? option}
                       {option !== 'All posts' ? <span>{typeCounts[option] ?? 0}</span> : null}
                     </button>
                   ))}
                 </div>
-              </div>
+              </fieldset>
 
-              <div className="filter-unit filter-media">
-                <div className="filter-title">
-                  <Video size={14} />
-                  Media
-                </div>
+              <fieldset className="filter-group-card filter-media">
+                <legend>
+                  <Video size={13} />
+                  Asset
+                </legend>
                 <div className="chip-row compact-chips">
                   {MEDIA_OPTIONS.map((option) => (
                     <button
                       key={option.value}
+                      type="button"
                       className={option.value === mediaFilter ? 'chip chip-active' : 'chip'}
                       onClick={() => startTransition(() => setMediaFilter(option.value))}
+                      aria-pressed={option.value === mediaFilter}
                     >
                       {option.label}
                     </button>
                   ))}
                 </div>
-              </div>
-            </div>
+              </fieldset>
 
-            <div className="filter-row filter-row-secondary">
-              <div className="filter-unit filter-date">
-                <div className="filter-title">
-                  <CalendarDays size={14} />
-                  Date
-                </div>
-                <div className="inline-fields">
-                  <select aria-label="Date range" value={datePreset} onChange={(event) => applyDatePreset(event.target.value)}>
+              <fieldset className="filter-group-card filter-date">
+                <legend>
+                  <CalendarDays size={13} />
+                  Published
+                </legend>
+                <div className="date-fields">
+                  <label className="select-field">
+                    <span>Range</span>
+                    <select aria-label="Date range" value={datePreset} onChange={(event) => applyDatePreset(event.target.value)}>
                     {datePreset === 'custom' ? <option value="custom">Custom range</option> : null}
                     {datePresets.map((preset) => <option key={preset.value} value={preset.value}>{preset.label}</option>)}
-                  </select>
-                  <input type="date" aria-label="Date from" value={dateFrom} min={ranges.dateMin} max={ranges.dateMax} onChange={(e) => { setDatePreset('custom'); setDateFrom(e.target.value); }} />
-                  <input type="date" aria-label="Date to" value={dateTo} min={ranges.dateMin} max={ranges.dateMax} onChange={(e) => { setDatePreset('custom'); setDateTo(e.target.value); }} />
+                    </select>
+                  </label>
+                  <label className="date-field">
+                    <span>From</span>
+                    <input type="date" aria-label="Date from" value={dateFrom} min={ranges.dateMin} max={ranges.dateMax} onChange={(e) => { setDatePreset('custom'); setDateFrom(e.target.value); }} />
+                  </label>
+                  <label className="date-field">
+                    <span>To</span>
+                    <input type="date" aria-label="Date to" value={dateTo} min={ranges.dateMin} max={ranges.dateMax} onChange={(e) => { setDatePreset('custom'); setDateTo(e.target.value); }} />
+                  </label>
                 </div>
-              </div>
+              </fieldset>
 
-              <div className="filter-unit filter-engagement">
-                <div className="filter-title">
-                  <SlidersHorizontal size={14} />
-                  Engagement
-                </div>
+              <fieldset className="filter-group-card filter-engagement">
+                <legend>
+                  <SlidersHorizontal size={13} />
+                  Minimum engagement
+                </legend>
                 <label className="range-field compact-range">
-                  <span>{compactFormatter.format(minLikes)}+ likes</span>
+                  <span>Likes <strong>{compactFormatter.format(minLikes)}+</strong></span>
                   <input
                     type="range"
-                    min={ranges.likesMin}
+                    aria-label="Minimum likes"
+                    min={0}
                     max={ranges.likesMax}
                     value={minLikes}
-                    onChange={(e) => startTransition(() => setMinLikes(clampNumber(e.target.value, ranges.likesMin)))}
+                    onChange={(e) => startTransition(() => setMinLikes(clampNumber(e.target.value, 0)))}
                   />
                 </label>
-                <input
-                  aria-label="Minimum comments"
-                  placeholder="Comments"
-                  type="number"
-                  min={0}
-                  value={minComments}
-                  onChange={(e) => startTransition(() => setMinComments(clampNumber(e.target.value, ranges.commentsMin)))}
-                />
-              </div>
+                <label className="number-field">
+                  <span>Comments</span>
+                  <input
+                    aria-label="Minimum comments"
+                    type="number"
+                    min={0}
+                    value={minComments}
+                    onChange={(e) => startTransition(() => setMinComments(clampNumber(e.target.value, ranges.commentsMin)))}
+                  />
+                </label>
+              </fieldset>
 
-              <div className="filter-unit filter-sort">
-                <div className="filter-title">
-                  <ArrowUpDown size={14} />
-                  Sort
-                </div>
-                <select value={sortBy} onChange={(e) => startTransition(() => setSortBy(e.target.value))}>
+              <fieldset className="filter-group-card filter-sort">
+                <legend>
+                  <ArrowUpDown size={13} />
+                  Order
+                </legend>
+                <select aria-label="Sort posts" value={sortBy} onChange={(e) => startTransition(() => setSortBy(e.target.value))}>
                   {SORT_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>
                       {option.label}
                     </option>
                   ))}
                 </select>
-              </div>
-
-              <button className="ghost-button filter-reset" onClick={onReset}>
-                <RotateCcw size={15} />
-                Reset
-              </button>
+              </fieldset>
             </div>
           </section>
 
