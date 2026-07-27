@@ -9,6 +9,7 @@ import {
   Heart,
   MessageCircle,
   MoreHorizontal,
+  RefreshCw,
   RotateCcw,
   Search,
   Send,
@@ -180,35 +181,67 @@ function App() {
   const [dashboard, setDashboard] = useState({ posts: [], summary: {} });
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshNotice, setRefreshNotice] = useState(null);
   const posts = useMemo(() => dashboard.posts.map(normalizePost), [dashboard.posts]);
   const summary = dashboard.summary;
   const ranges = useMemo(() => calculateRanges(posts), [posts]);
   const datePresets = useMemo(() => buildDatePresets(ranges), [ranges]);
 
+  const loadDashboard = useCallback(async (signal) => {
+    try {
+      setLoading(true);
+      setLoadError('');
+      const response = await fetch(`${API_BASE}/api/tricks-dash/posts`, { signal });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json();
+      if (!Array.isArray(data.posts)) throw new Error('The shared post database returned an invalid response.');
+      setDashboard({ posts: data.posts, summary: data.summary || {} });
+    } catch (error) {
+      if (error.name !== 'AbortError') {
+        setLoadError('Could not load the shared Post DB. Try again in a moment.');
+      }
+    } finally {
+      if (!signal?.aborted) setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     const controller = new AbortController();
-
-    async function loadDashboard() {
-      try {
-        setLoading(true);
-        setLoadError('');
-        const response = await fetch(`${API_BASE}/api/tricks-dash/posts`, { signal: controller.signal });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const data = await response.json();
-        if (!Array.isArray(data.posts)) throw new Error('The shared post database returned an invalid response.');
-        setDashboard({ posts: data.posts, summary: data.summary || {} });
-      } catch (error) {
-        if (error.name !== 'AbortError') {
-          setLoadError('Could not load the shared Post DB. Try again in a moment.');
-        }
-      } finally {
-        if (!controller.signal.aborted) setLoading(false);
-      }
-    }
-
-    loadDashboard();
+    loadDashboard(controller.signal);
     return () => controller.abort();
-  }, []);
+  }, [loadDashboard]);
+
+  const handleRefresh = useCallback(async () => {
+    const password = window.prompt('Refresh password:');
+    if (!password) return;
+
+    setRefreshing(true);
+    setRefreshNotice(null);
+    try {
+      const response = await fetch(`${API_BASE}/api/tricks-dash/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ password }),
+      });
+      if (response.status === 401) {
+        setRefreshNotice({ type: 'error', text: 'Incorrect password.' });
+        return;
+      }
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json();
+      const added = data.added ?? 0;
+      setRefreshNotice({
+        type: 'success',
+        text: added > 0 ? `Added ${added} new post${added === 1 ? '' : 's'}.` : 'Already up to date.',
+      });
+      if (added > 0) await loadDashboard();
+    } catch (error) {
+      setRefreshNotice({ type: 'error', text: 'Refresh failed. Try again in a moment.' });
+    } finally {
+      setRefreshing(false);
+    }
+  }, [loadDashboard]);
   const typeCounts = useMemo(() => {
     const counts = {};
     for (const post of posts) {
@@ -354,8 +387,23 @@ function App() {
               <Metric label="Posts" value={summary['Exported posts'] ?? posts.length} />
               <Metric label="Likes" value={compactFormatter.format(summary['Total likes'] ?? 0)} />
               <Metric label="Avg likes" value={compactFormatter.format(summary['Average likes'] ?? 0)} />
+              <button
+                className="ghost-button refresh-button"
+                type="button"
+                onClick={handleRefresh}
+                disabled={refreshing}
+                title="Pull new Instagram posts into the shared Post DB"
+              >
+                <RefreshCw size={15} className={refreshing ? 'spin' : ''} />
+                {refreshing ? 'Refreshing…' : 'Refresh'}
+              </button>
               <a className="ghost-button predict-link" href={PREDICT_URL}>Open Predict</a>
             </div>
+            {refreshNotice ? (
+              <p className={`refresh-notice refresh-notice-${refreshNotice.type}`} role="status">
+                {refreshNotice.text}
+              </p>
+            ) : null}
           </header>
 
           {loading ? <section className="dash-state">Loading the shared Post DB...</section> : null}
