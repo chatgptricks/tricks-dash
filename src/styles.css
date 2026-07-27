@@ -2656,9 +2656,13 @@ body {
   gap: 24px;
 }
 
+.topbar {
+  flex-wrap: wrap;
+}
+
 .topbar-search {
   flex: 1 1 320px;
-  min-width: 240px;
+  min-width: 300px;
   max-width: 520px;
   min-height: 44px;
 }
