@@ -13,3 +13,4 @@ coverage/
 .vite/
 
 .traselveloreal-sync-state.json
+package-lock.json

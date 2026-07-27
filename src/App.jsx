@@ -138,7 +138,14 @@ function posterTheme(type) {
 
 function coverSources(post) {
   if (!post.coverUrl) return [];
-  return [post.coverUrl.startsWith('http') ? post.coverUrl : `${API_BASE}${post.coverUrl}`];
+  if (post.coverUrl.startsWith('http')) return [post.coverUrl];
+  // Locally-hosted static covers (e.g. traselveloreal reel covers bundled
+  // into public/) are served from this site's own base path, not the
+  // Predict API host.
+  if (post.coverUrl.startsWith('/traselveloreal-covers/')) {
+    return [`${import.meta.env.BASE_URL}${post.coverUrl.slice(1)}`];
+  }
+  return [`${API_BASE}${post.coverUrl}`];
 }
 
 function matchesSearch(post, query) {
@@ -438,13 +445,29 @@ function App() {
         <section className="left-pane">
           <header className="topbar">
             <div className="brand">
-              <div className="brand-mark">
-                <img src={brandProfileImage} alt="" aria-hidden="true" />
-              </div>
               <div>
                 <p className="eyebrow">Dash explorer</p>
                 <h1>Sentient Dash</h1>
               </div>
+
+              {!loading && !loadError ? (
+                <label className="filter-search-field topbar-search">
+                  <Search size={18} aria-hidden="true" />
+                  <span className="filter-search-copy">
+                    <span>Search the post library</span>
+                    <input
+                      value={query}
+                      onChange={(event) => setQuery(event.target.value)}
+                      placeholder="Search captions, topics, or text inside a cover..."
+                    />
+                  </span>
+                  {query ? (
+                    <button className="search-clear" type="button" aria-label="Clear search" onClick={() => setQuery('')}>
+                      <X size={15} />
+                    </button>
+                  ) : <span className="search-scope">Includes cover text</span>}
+                </label>
+              ) : null}
             </div>
 
             <div className="topbar-metrics">
@@ -480,23 +503,6 @@ function App() {
             aria-hidden={filtersHidden}
           >
             <div className="filter-groups-row">
-              <label className="filter-search-field">
-                <Search size={18} aria-hidden="true" />
-                <span className="filter-search-copy">
-                  <span>Search the post library</span>
-                  <input
-                    value={query}
-                    onChange={(event) => setQuery(event.target.value)}
-                    placeholder="Search captions, topics, or text inside a cover..."
-                  />
-                </span>
-                {query ? (
-                  <button className="search-clear" type="button" aria-label="Clear search" onClick={() => setQuery('')}>
-                    <X size={15} />
-                  </button>
-                ) : <span className="search-scope">Includes cover text</span>}
-              </label>
-
               <div className="filter-result-summary" aria-live="polite">
                 <strong>{filtered.length.toLocaleString()}</strong>
                 <span>{filtered.length === 1 ? 'post found' : 'posts found'}</span>
