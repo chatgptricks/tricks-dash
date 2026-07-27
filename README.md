@@ -1,6 +1,6 @@
-# Tricks Dash
+# Sentient Dash
 
-Interactive dashboard for ChatGPT Tricks Instagram posts.
+Interactive dashboard for Sentient Agency's Instagram posts (chatgptricks and traselveloreal).
 
 ## Features
 
@@ -37,7 +37,7 @@ text together.
 
 ## Second account: @traselveloreal
 
-@traselveloreal is a second Instagram account shown in Tricks Dash only. It is
+@traselveloreal is a second Instagram account shown in Sentient Dash only. It is
 **not** part of Predict's shared Post DB / API and must never be written into
 "10 Predict/Post DB" -- it's a standalone dataset for this dashboard.
 

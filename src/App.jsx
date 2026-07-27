@@ -19,7 +19,14 @@ import {
   Video,
 } from 'lucide-react';
 import brandProfileImage from './assets/profile.jpg';
+import chatgptricksProfileImage from './assets/chatgptricks-profile.jpg';
+import traselveloralProfileImage from './assets/traselveloreal-profile.jpg';
 import traselveloreloPosts from './data/traselveloreal-posts.json';
+
+const ACCOUNT_PROFILE_IMAGES = {
+  chatgptricks: chatgptricksProfileImage,
+  traselveloreal: traselveloralProfileImage,
+};
 
 const TYPE_OPTIONS = ['All posts', 'Carousel', 'Video', 'Image'];
 const ACCOUNT_OPTIONS = [
@@ -92,17 +99,28 @@ function normalizeSearchValue(value) {
     .trim();
 }
 
+function realShortcode(shortcode) {
+  // Legacy rows imported before shortcode tracking existed use a "post-<id>"
+  // placeholder instead of a real Instagram shortcode -- those can't produce
+  // a valid Instagram permalink.
+  return shortcode && !String(shortcode).startsWith('post-') ? shortcode : null;
+}
+
 function normalizePost(post) {
   const caption = String(post.caption || '');
   const postType = typeLabel(String(post.type || 'Image'));
   const headline = extractHeadline(caption);
   const timestamp = post.postDate ? new Date(post.postDate).getTime() : Number.NaN;
+  const isVideo = post.video === 'Yes' || postType === 'Video';
+  const shortcode = realShortcode(post.shortcode);
+  const permalink = post.permalink || (shortcode ? `https://www.instagram.com/${isVideo ? 'reel' : 'p'}/${shortcode}/` : '');
 
   return {
     ...post,
     caption,
     headline,
-    isVideo: post.video === 'Yes' || postType === 'Video',
+    permalink,
+    isVideo,
     postType,
     searchText: [caption, post.excerpt, post.ocrText, post.shortcode, post.permalink, post.type, postType]
       .map(normalizeSearchValue)
@@ -425,7 +443,7 @@ function App() {
               </div>
               <div>
                 <p className="eyebrow">Dash explorer</p>
-                <h1>Tricks Dash</h1>
+                <h1>Sentient Dash</h1>
               </div>
             </div>
 
@@ -461,7 +479,7 @@ function App() {
             aria-label="Dashboard filters"
             aria-hidden={filtersHidden}
           >
-            <div className="filter-command-row">
+            <div className="filter-groups-row">
               <label className="filter-search-field">
                 <Search size={18} aria-hidden="true" />
                 <span className="filter-search-copy">
@@ -484,19 +502,6 @@ function App() {
                 <span>{filtered.length === 1 ? 'post found' : 'posts found'}</span>
               </div>
 
-              <button
-                className={activeFilterCount ? 'filter-clear-all filter-clear-all-active' : 'filter-clear-all'}
-                type="button"
-                onClick={onReset}
-                disabled={!activeFilterCount}
-              >
-                <RotateCcw size={15} />
-                <span>Clear filters</span>
-                {activeFilterCount ? <b>{activeFilterCount}</b> : null}
-              </button>
-            </div>
-
-            <div className="filter-groups-row">
               <fieldset className="filter-group-card filter-account">
                 <legend>
                   <AtSign size={13} />
@@ -624,6 +629,17 @@ function App() {
                   ))}
                 </select>
               </fieldset>
+
+              <button
+                className={activeFilterCount ? 'filter-clear-all filter-clear-all-active' : 'filter-clear-all'}
+                type="button"
+                onClick={onReset}
+                disabled={!activeFilterCount}
+              >
+                <RotateCcw size={15} />
+                <span>Clear filters</span>
+                {activeFilterCount ? <b>{activeFilterCount}</b> : null}
+              </button>
             </div>
           </section>
 
@@ -797,11 +813,7 @@ const PostCard = memo(function PostCard({ post, priority, selected, onSelect, on
       <div className="post-header">
         <div className="post-user">
           <div className="post-avatar" aria-hidden="true">
-            {post.account === 'chatgptricks' || !post.account ? (
-              <img src={brandProfileImage} alt="" aria-hidden="true" />
-            ) : (
-              <span className="post-avatar-initials">{(post.account || '?').slice(0, 2).toUpperCase()}</span>
-            )}
+            <img src={ACCOUNT_PROFILE_IMAGES[post.account] || brandProfileImage} alt="" aria-hidden="true" />
           </div>
           <div className="post-user-copy">
             <strong>{post.account || IG_HANDLE}</strong>
