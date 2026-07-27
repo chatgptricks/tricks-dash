@@ -1477,9 +1477,10 @@ body {
 }
 
 .gallery-grid {
-  grid-template-columns: repeat(4, minmax(0, 360px));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   align-items: start;
-  justify-content: space-between;
+  justify-content: normal;
+  gap: 18px;
 }
 
 .pagination {
