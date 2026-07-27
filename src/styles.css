@@ -147,6 +147,31 @@ img {
   text-decoration: none;
 }
 
+.refresh-button .spin {
+  animation: refresh-spin 0.9s linear infinite;
+}
+
+@keyframes refresh-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.refresh-notice {
+  width: 100%;
+  margin: 8px 0 0;
+  text-align: right;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.refresh-notice-success {
+  color: #8fe3a8;
+}
+
+.refresh-notice-error {
+  color: #ffb6aa;
+}
+
 .dash-state {
   position: relative;
   z-index: 1;
