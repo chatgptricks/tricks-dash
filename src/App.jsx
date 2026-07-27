@@ -1,6 +1,7 @@
 import { memo, startTransition, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowUpDown,
+  AtSign,
   Bookmark,
   CalendarDays,
   Copy,
@@ -18,8 +19,14 @@ import {
   Video,
 } from 'lucide-react';
 import brandProfileImage from './assets/profile.jpg';
+import traselveloreloPosts from './data/traselveloreal-posts.json';
 
 const TYPE_OPTIONS = ['All posts', 'Carousel', 'Video', 'Image'];
+const ACCOUNT_OPTIONS = [
+  { value: 'both', label: 'Both accounts' },
+  { value: 'chatgptricks', label: 'chatgptricks' },
+  { value: 'traselveloreal', label: 'traselveloreal' },
+];
 const SORT_OPTIONS = [
   { value: 'likes-desc', label: 'Most liked' },
   { value: 'comments-desc', label: 'Most commented' },
@@ -196,7 +203,9 @@ function App() {
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
       if (!Array.isArray(data.posts)) throw new Error('The shared post database returned an invalid response.');
-      setDashboard({ posts: data.posts, summary: data.summary || {} });
+      const chatgptricksPosts = data.posts.map((post) => ({ ...post, account: post.account || 'chatgptricks' }));
+      // traselveloreal is a local-only dataset (not part of Predict's shared Post DB / API).
+      setDashboard({ posts: [...chatgptricksPosts, ...traselveloreloPosts], summary: data.summary || {} });
     } catch (error) {
       if (error.name !== 'AbortError') {
         setLoadError('Could not load the shared Post DB. Try again in a moment.');
@@ -250,8 +259,27 @@ function App() {
     return counts;
   }, [posts]);
 
+  const accountCounts = useMemo(() => {
+    const counts = {};
+    for (const post of posts) {
+      counts[post.account] = (counts[post.account] || 0) + 1;
+    }
+    return counts;
+  }, [posts]);
+
+  const combinedSummary = useMemo(() => {
+    const totalPosts = posts.length;
+    const totalLikes = posts.reduce((sum, post) => sum + (post.likes || 0), 0);
+    return {
+      totalPosts,
+      totalLikes,
+      averageLikes: totalPosts ? Math.round(totalLikes / totalPosts) : 0,
+    };
+  }, [posts]);
+
   const [query, setQuery] = useState('');
   const deferredQuery = useDeferredValue(query);
+  const [activeAccount, setActiveAccount] = useState('both');
   const [activeType, setActiveType] = useState('All posts');
   const [mediaFilter, setMediaFilter] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
@@ -285,6 +313,7 @@ function App() {
     const output = [];
 
     for (const post of posts) {
+      if (activeAccount !== 'both' && post.account !== activeAccount) continue;
       if (activeType !== 'All posts' && post.postType !== activeType) continue;
       if (mediaFilter === 'video' && !post.isVideo) continue;
       if (mediaFilter === 'static' && post.isVideo) continue;
@@ -311,17 +340,18 @@ function App() {
     });
 
     return output;
-  }, [posts, activeType, mediaFilter, minLikes, minComments, dateFrom, dateTo, deferredQuery, sortBy]);
+  }, [posts, activeAccount, activeType, mediaFilter, minLikes, minComments, dateFrom, dateTo, deferredQuery, sortBy]);
 
   useEffect(() => {
     setVisibleCount(POSTS_PER_BATCH);
-  }, [deferredQuery, activeType, mediaFilter, minLikes, minComments, dateFrom, dateTo, sortBy]);
+  }, [deferredQuery, activeAccount, activeType, mediaFilter, minLikes, minComments, dateFrom, dateTo, sortBy]);
 
   const visible = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount]);
   const showingFrom = filtered.length ? 1 : 0;
   const showingTo = visible.length;
   const activeFilterCount = [
     Boolean(query.trim()),
+    activeAccount !== 'both',
     activeType !== 'All posts',
     mediaFilter !== 'all',
     datePreset !== 'all' || Boolean(dateFrom) || Boolean(dateTo),
@@ -344,6 +374,7 @@ function App() {
   const onReset = useCallback(() => {
     setQuery('');
     startTransition(() => {
+      setActiveAccount('both');
       setActiveType('All posts');
       setMediaFilter('all');
       setSortBy('newest');
@@ -399,9 +430,9 @@ function App() {
             </div>
 
             <div className="topbar-metrics">
-              <Metric label="Posts" value={summary['Exported posts'] ?? posts.length} />
-              <Metric label="Likes" value={compactFormatter.format(summary['Total likes'] ?? 0)} />
-              <Metric label="Avg likes" value={compactFormatter.format(summary['Average likes'] ?? 0)} />
+              <Metric label="Posts" value={combinedSummary.totalPosts || summary['Exported posts'] || posts.length} />
+              <Metric label="Likes" value={compactFormatter.format(combinedSummary.totalLikes ?? summary['Total likes'] ?? 0)} />
+              <Metric label="Avg likes" value={compactFormatter.format(combinedSummary.averageLikes ?? summary['Average likes'] ?? 0)} />
               <button
                 className="ghost-button refresh-button"
                 type="button"
@@ -466,6 +497,27 @@ function App() {
             </div>
 
             <div className="filter-groups-row">
+              <fieldset className="filter-group-card filter-account">
+                <legend>
+                  <AtSign size={13} />
+                  Account
+                </legend>
+                <div className="chip-row compact-chips">
+                  {ACCOUNT_OPTIONS.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      className={option.value === activeAccount ? 'chip chip-active' : 'chip'}
+                      onClick={() => startTransition(() => setActiveAccount(option.value))}
+                      aria-pressed={option.value === activeAccount}
+                    >
+                      {option.label}
+                      {option.value !== 'both' ? <span>{accountCounts[option.value] ?? 0}</span> : null}
+                    </button>
+                  ))}
+                </div>
+              </fieldset>
+
               <fieldset className="filter-group-card filter-type">
                 <legend>
                   <Filter size={13} />
@@ -667,7 +719,7 @@ function App() {
                   </button>
                 </div>
                 <p>
-                  <strong>{IG_HANDLE}</strong> {selected.caption}
+                  <strong>{selected.account || IG_HANDLE}</strong> {selected.caption}
                 </p>
               </section>
 
@@ -745,10 +797,14 @@ const PostCard = memo(function PostCard({ post, priority, selected, onSelect, on
       <div className="post-header">
         <div className="post-user">
           <div className="post-avatar" aria-hidden="true">
-            <img src={brandProfileImage} alt="" aria-hidden="true" />
+            {post.account === 'chatgptricks' || !post.account ? (
+              <img src={brandProfileImage} alt="" aria-hidden="true" />
+            ) : (
+              <span className="post-avatar-initials">{(post.account || '?').slice(0, 2).toUpperCase()}</span>
+            )}
           </div>
           <div className="post-user-copy">
-            <strong>{IG_HANDLE}</strong>
+            <strong>{post.account || IG_HANDLE}</strong>
             <span>{formatDate(post.postDate)}</span>
           </div>
         </div>
@@ -786,7 +842,7 @@ const PostCard = memo(function PostCard({ post, priority, selected, onSelect, on
       <div className="post-copy">
         <div className="post-likes">{compactFormatter.format(post.likes)} likes</div>
         <p>
-          <strong>{IG_HANDLE}</strong> {post.headline || post.excerpt}
+          <strong>{post.account || IG_HANDLE}</strong> {post.headline || post.excerpt}
         </p>
         <div className="post-footer">
           <span>{compactFormatter.format(post.comments)} comments</span>
