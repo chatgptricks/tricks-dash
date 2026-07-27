@@ -8,8 +8,8 @@
   --text: #f5f5f5;
   --muted: #8a8a8a;
   --muted-strong: #b5b5b5;
-  --accent: #00ac80;
-  --accent-soft: rgba(0, 172, 128, 0.15);
+  --accent: #f5ff00;
+  --accent-soft: rgba(245, 255, 0, 0.15);
   --shadow: 0 26px 80px rgba(0, 0, 0, 0.34);
   --radius-xl: 8px;
   --radius-lg: 8px;
@@ -104,9 +104,9 @@ img {
   height: 44px;
   overflow: hidden;
   border-radius: 14px;
-  background: linear-gradient(160deg, rgba(0, 172, 128, 0.98), rgba(0, 172, 128, 0.72));
+  background: linear-gradient(160deg, rgba(245, 255, 0, 0.98), rgba(245, 255, 0, 0.72));
   color: #02110b;
-  box-shadow: 0 14px 28px rgba(0, 172, 128, 0.24);
+  box-shadow: 0 14px 28px rgba(245, 255, 0, 0.24);
 }
 
 .brand-mark img {
@@ -165,7 +165,7 @@ img {
 }
 
 .refresh-notice-success {
-  color: #8fe3a8;
+  color: #f3ff8f;
 }
 
 .refresh-notice-error {
@@ -359,9 +359,9 @@ img {
 }
 
 .chip-active {
-  background: rgba(0, 172, 128, 0.16);
-  border-color: rgba(0, 172, 128, 0.34);
-  color: #d5fff2;
+  background: rgba(245, 255, 0, 0.16);
+  border-color: rgba(245, 255, 0, 0.34);
+  color: #fffbd5;
 }
 
 .range-field input[type='range'] {
@@ -425,8 +425,8 @@ img {
 }
 
 .view-button.active {
-  background: rgba(0, 172, 128, 0.18);
-  box-shadow: 0 8px 18px rgba(0, 172, 128, 0.12);
+  background: rgba(245, 255, 0, 0.18);
+  box-shadow: 0 8px 18px rgba(245, 255, 0, 0.12);
   color: #fff;
 }
 
@@ -459,8 +459,8 @@ img {
 }
 
 .post-card.selected {
-  border-color: rgba(0, 172, 128, 0.56);
-  box-shadow: 0 18px 38px rgba(0, 172, 128, 0.16);
+  border-color: rgba(245, 255, 0, 0.56);
+  box-shadow: 0 18px 38px rgba(245, 255, 0, 0.16);
 }
 
 .post-header {
@@ -486,7 +486,7 @@ img {
   place-items: center;
   flex: 0 0 auto;
   overflow: hidden;
-  background: linear-gradient(160deg, rgba(0, 172, 128, 0.98), rgba(0, 172, 128, 0.58));
+  background: linear-gradient(160deg, rgba(245, 255, 0, 0.98), rgba(245, 255, 0, 0.58));
   color: #02110b;
   font-size: 0.72rem;
   font-weight: 900;
@@ -900,8 +900,8 @@ img {
   width: 42px;
   padding: 0;
   overflow: hidden;
-  border-color: rgba(0, 172, 128, 0.35);
-  background: rgba(0, 172, 128, 0.14);
+  border-color: rgba(245, 255, 0, 0.35);
+  background: rgba(245, 255, 0, 0.14);
   color: #ffffff;
 }
 
@@ -928,8 +928,8 @@ img {
 
 .filter-unit input:focus,
 .filter-unit select:focus {
-  border-color: rgba(0, 172, 128, 0.72);
-  box-shadow: 0 0 0 3px rgba(0, 172, 128, 0.12);
+  border-color: rgba(245, 255, 0, 0.72);
+  box-shadow: 0 0 0 3px rgba(245, 255, 0, 0.12);
 }
 
 .inline-fields {
@@ -996,8 +996,8 @@ img {
 }
 
 .chip-active {
-  background: rgba(0, 172, 128, 0.18);
-  border-color: rgba(0, 172, 128, 0.58);
+  background: rgba(245, 255, 0, 0.18);
+  border-color: rgba(245, 255, 0, 0.58);
   color: #ffffff;
 }
 
@@ -1055,8 +1055,8 @@ img {
 }
 
 .post-card.selected {
-  border-color: rgba(0, 172, 128, 0.8);
-  box-shadow: 0 0 0 1px rgba(0, 172, 128, 0.5), 0 16px 34px rgba(0, 172, 128, 0.14);
+  border-color: rgba(245, 255, 0, 0.8);
+  box-shadow: 0 0 0 1px rgba(245, 255, 0, 0.5), 0 16px 34px rgba(245, 255, 0, 0.14);
 }
 
 .post-media,
@@ -1564,7 +1564,7 @@ body {
 }
 
 .rail-close-button:hover {
-  border-color: rgba(0, 172, 128, 0.6);
+  border-color: rgba(245, 255, 0, 0.6);
   color: #ffffff;
 }
 
@@ -1693,18 +1693,18 @@ body {
   gap: 6px;
   min-height: 32px;
   padding: 0 11px;
-  border: 1px solid rgba(0, 172, 128, 0.42);
+  border: 1px solid rgba(245, 255, 0, 0.42);
   border-radius: 10px;
-  background: rgba(0, 172, 128, 0.12);
-  color: #b6ffe9;
+  background: rgba(245, 255, 0, 0.12);
+  color: #fff9b6;
   font-size: 12px;
   font-weight: 800;
   text-decoration: none;
 }
 
 .instagram-link:hover {
-  border-color: rgba(0, 172, 128, 0.8);
-  background: rgba(0, 172, 128, 0.22);
+  border-color: rgba(245, 255, 0, 0.8);
+  background: rgba(245, 255, 0, 0.22);
 }
 
 .instagram-link.compact {
@@ -2017,7 +2017,7 @@ body {
   padding: 24px;
   overflow: auto;
   background:
-    radial-gradient(circle at 50% 12%, rgba(0, 172, 128, 0.18), transparent 30%),
+    radial-gradient(circle at 50% 12%, rgba(245, 255, 0, 0.18), transparent 30%),
     linear-gradient(180deg, #020202 0%, #000000 100%);
 }
 
@@ -2040,7 +2040,7 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 18px;
   background: rgba(5, 5, 5, 0.92);
-  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.58), 0 0 52px rgba(0, 172, 128, 0.08);
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.58), 0 0 52px rgba(245, 255, 0, 0.08);
 }
 
 .password-mark {
@@ -2089,15 +2089,15 @@ body {
 }
 
 .password-form input:focus {
-  border-color: rgba(0, 172, 128, 0.78);
-  box-shadow: 0 0 0 4px rgba(0, 172, 128, 0.14);
+  border-color: rgba(245, 255, 0, 0.78);
+  box-shadow: 0 0 0 4px rgba(245, 255, 0, 0.14);
 }
 
 .password-form button {
   height: 48px;
-  border: 1px solid rgba(0, 172, 128, 0.72);
+  border: 1px solid rgba(245, 255, 0, 0.72);
   border-radius: 12px;
-  background: #00ac80;
+  background: #f5ff00;
   color: #00130e;
   font-weight: 900;
   cursor: pointer;
@@ -2149,9 +2149,9 @@ body {
 }
 
 .filter-search-field:focus-within {
-  border-color: rgba(0, 172, 128, 0.8);
+  border-color: rgba(245, 255, 0, 0.8);
   background: #0b0f0e;
-  box-shadow: 0 0 0 3px rgba(0, 172, 128, 0.12);
+  box-shadow: 0 0 0 3px rgba(245, 255, 0, 0.12);
 }
 
 .filter-search-copy {
@@ -2186,10 +2186,10 @@ body {
 
 .search-scope {
   padding: 5px 7px;
-  border: 1px solid rgba(0, 172, 128, 0.25);
+  border: 1px solid rgba(245, 255, 0, 0.25);
   border-radius: 999px;
-  background: rgba(0, 172, 128, 0.08);
-  color: rgba(168, 255, 231, 0.72);
+  background: rgba(245, 255, 0, 0.08);
+  color: rgba(255, 244, 168, 0.72);
   font-size: 9px;
   font-weight: 800;
   white-space: nowrap;
@@ -2258,15 +2258,15 @@ body {
 }
 
 .filter-clear-all-active {
-  border-color: rgba(0, 172, 128, 0.34);
-  background: rgba(0, 172, 128, 0.1);
-  color: #dffaf2;
+  border-color: rgba(245, 255, 0, 0.34);
+  background: rgba(245, 255, 0, 0.1);
+  color: #fffce0;
   cursor: pointer;
 }
 
 .filter-clear-all-active:hover {
-  border-color: rgba(0, 172, 128, 0.65);
-  background: rgba(0, 172, 128, 0.16);
+  border-color: rgba(245, 255, 0, 0.65);
+  background: rgba(245, 255, 0, 0.16);
 }
 
 .filter-clear-all b {
@@ -2325,8 +2325,8 @@ body {
 
 .filter-group-card input:focus,
 .filter-group-card select:focus {
-  border-color: rgba(0, 172, 128, 0.65);
-  box-shadow: 0 0 0 2px rgba(0, 172, 128, 0.1);
+  border-color: rgba(245, 255, 0, 0.65);
+  box-shadow: 0 0 0 2px rgba(245, 255, 0, 0.1);
 }
 
 .filter-group-card .chip-row {
@@ -2354,7 +2354,7 @@ body {
 }
 
 .filter-group-card .chip-active span {
-  color: rgba(223, 250, 242, 0.78);
+  color: rgba(255, 250, 223, 0.78);
 }
 
 .date-fields {
@@ -2406,7 +2406,7 @@ body {
 }
 
 .filter-engagement .compact-range strong {
-  color: #bbf8e8;
+  color: #fff4bb;
   font-size: 10px;
 }
 
@@ -2554,4 +2554,94 @@ body {
   margin-bottom: 0;
   border-width: 0;
   pointer-events: none;
+}
+
+/* Single-row filter bar: search, result count, every filter fieldset, and
+   the clear-all button all live in one flex row instead of a two-row grid
+   sized for a fixed column count. Flex-basis is content-driven (no more
+   oversized minmax fractions leaving dead space), and the row scrolls
+   horizontally rather than wrapping if the viewport is too narrow. */
+.filter-groups-row {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: 8px;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.28) transparent;
+}
+
+.filter-groups-row::-webkit-scrollbar {
+  height: 6px;
+}
+
+.filter-groups-row::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.filter-search-field {
+  flex: 1 1 230px;
+  min-width: 190px;
+  max-width: none;
+}
+
+.filter-result-summary {
+  flex: 0 0 auto;
+  min-width: 84px;
+}
+
+.filter-account {
+  flex: 0 0 auto;
+  min-width: 168px;
+  max-width: none;
+}
+
+.filter-type {
+  flex: 0 0 auto;
+  min-width: 220px;
+  max-width: none;
+}
+
+.filter-media {
+  flex: 0 0 auto;
+  min-width: 130px;
+  max-width: none;
+}
+
+.filter-date {
+  flex: 0 0 auto;
+  min-width: 230px;
+  max-width: none;
+}
+
+.filter-engagement {
+  flex: 0 0 auto;
+  min-width: 190px;
+  max-width: none;
+}
+
+.filter-sort {
+  flex: 0 0 auto;
+  min-width: 116px;
+  max-width: none;
+}
+
+.filter-clear-all {
+  flex: 0 0 auto;
+  align-self: center;
+}
+
+@media (max-width: 900px) {
+  .filter-search-field {
+    min-width: 170px;
+  }
+}
+
+/* Gallery card covers always render at a 4:3 box regardless of the source
+   image's native proportions (square, portrait, landscape, or reel). */
+.post-media {
+  aspect-ratio: 4 / 3;
 }
