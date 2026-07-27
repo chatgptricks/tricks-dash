@@ -1,4 +1,4 @@
-import { memo, startTransition, useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react';
+import { memo, startTransition, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowUpDown,
   Bookmark,
@@ -263,6 +263,21 @@ function App() {
   const [visibleCount, setVisibleCount] = useState(POSTS_PER_BATCH);
   const [selectedShortcode, setSelectedShortcode] = useState(posts[0]?.shortcode ?? '');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [filtersHidden, setFiltersHidden] = useState(false);
+  const lastScrollTopRef = useRef(0);
+
+  const handleResultsScroll = useCallback((event) => {
+    const top = event.currentTarget.scrollTop;
+    const delta = top - lastScrollTopRef.current;
+    if (top < 40) {
+      setFiltersHidden(false);
+    } else if (delta > 8) {
+      setFiltersHidden(true);
+    } else if (delta < -8) {
+      setFiltersHidden(false);
+    }
+    lastScrollTopRef.current = top;
+  }, []);
 
   const filtered = useMemo(() => {
     const minDate = dateFrom ? new Date(`${dateFrom}T00:00:00`).getTime() : null;
@@ -410,7 +425,11 @@ function App() {
           {loadError ? <section className="dash-state dash-state-error">{loadError}</section> : null}
 
           {!loading && !loadError ? <>
-          <section className="filter-strip" aria-label="Dashboard filters">
+          <section
+            className={filtersHidden ? 'filter-strip filter-strip-hidden' : 'filter-strip'}
+            aria-label="Dashboard filters"
+            aria-hidden={filtersHidden}
+          >
             <div className="filter-command-row">
               <label className="filter-search-field">
                 <Search size={18} aria-hidden="true" />
@@ -567,7 +586,7 @@ function App() {
             </div>
           </div>
 
-          <div className="results-scroll">
+          <div className="results-scroll" onScroll={handleResultsScroll}>
             {visible.length ? (
               <div className="gallery-grid">
                 {visible.map((post, index) => (
