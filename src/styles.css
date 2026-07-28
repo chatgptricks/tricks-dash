@@ -1275,7 +1275,12 @@ body {
 
 .left-pane {
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  /* topbar, group-tabs, filter-strip, then the results panel soaks up
+     whatever's left. group-tabs is a direct grid child (rendered as a
+     sibling of filter-strip inside the same fragment), so it needs its
+     own explicit track -- without one the results panel's flexible row
+     was the one that silently absorbed it, starving the gallery area. */
+  grid-template-rows: auto auto auto minmax(0, 1fr);
   gap: 10px;
   min-width: 0;
   min-height: 0;
