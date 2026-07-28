@@ -845,12 +845,7 @@ const SelectedPost = memo(function SelectedPost({ post }) {
 
   return (
     <article className={`selected-post${selectedEffects.className}`}>
-      {selectedEffects.showBorder ? (
-        <>
-          <span className="hot-border-glow" aria-hidden="true" />
-          <span className="hot-border" aria-hidden="true" />
-        </>
-      ) : null}
+      {selectedEffects.showBorder ? <span className="hot-border" aria-hidden="true" /> : null}
       {post.permalink ? (
         <a
           className="selected-post-link"
@@ -887,12 +882,7 @@ const PostCard = memo(function PostCard({ post, priority, selected, onSelect, on
 
   return (
     <article className={cardClassName} onClick={handleClick} onKeyDown={handleKeyDown} role="button" tabIndex={0} aria-pressed={selected}>
-      {effects.showBorder ? (
-        <>
-          <span className="hot-border-glow" aria-hidden="true" />
-          <span className="hot-border" aria-hidden="true" />
-        </>
-      ) : null}
+      {effects.showBorder ? <span className="hot-border" aria-hidden="true" /> : null}
       <div className="post-header">
         <div className="post-user">
           <div className="post-avatar" aria-hidden="true">
@@ -970,8 +960,13 @@ function InstagramLink({ post, onClick, compact = false }) {
   );
 }
 
+// Five escalating tiers matching the account thresholds worth calling out:
+// 1x (just qualifies), 2x, 3x, 5x, 8x. Every step up is visibly bigger,
+// brighter, and busier than the last.
 function hotTier(multiplier) {
   const value = Number.isFinite(multiplier) ? multiplier : 1;
+  if (value >= 8) return 5;
+  if (value >= 5) return 4;
   if (value >= 3) return 3;
   if (value >= 2) return 2;
   return 1;
@@ -980,19 +975,15 @@ function hotTier(multiplier) {
 // Card-level effects (beyond the badge itself), scaled to how far over the
 // per-hour threshold the post's first hour landed. Only ever applied while
 // the post is still pinned (i.e. still inside its active HOT window).
-// Every tier >=3x gets the animated glowing border (colors/speed/halo get
-// hotter per tier); >=5x additionally gets a slow glare sweep across the
-// cover image.
+// Tier 1 (1x) is badge-only; tiers 2-5 (2x/3x/5x/8x) each step up the
+// animated glowing border's color, speed, and halo strength.
 function hotEffects(post) {
   if (!post.isPinned) return { className: '', showBorder: false };
-  const multiplier = Number.isFinite(post.hotMultiplier) ? post.hotMultiplier : 1;
-  let tierClass = '';
-  if (multiplier >= 8) tierClass = 'post-card-inferno';
-  else if (multiplier >= 5) tierClass = 'post-card-blazing';
-  else if (multiplier >= 3) tierClass = 'post-card-fire';
+  const tier = hotTier(post.hotMultiplier);
+  const tierClass = tier >= 2 ? `post-card-tier-${tier}` : '';
   return {
     className: tierClass ? ` ${tierClass}` : '',
-    showBorder: Boolean(tierClass),
+    showBorder: tier >= 2,
   };
 }
 
@@ -1001,9 +992,14 @@ const HotBadge = memo(function HotBadge({ post, large = false }) {
   const hasRate = Number.isFinite(post.hotMultiplier);
   const label = hasRate ? `${post.hotMultiplier.toFixed(1)}x the rate threshold` : 'Went viral in its first hour';
 
+  // Cap rendered flame icons at 3 so tier 4/5 badges don't get comically
+  // wide -- the rest of the escalation (size, color, pulse speed) still
+  // comes through via the hot-tier-N class.
+  const flameCount = Math.min(tier, 3);
+
   return (
     <div className={`hot-badge hot-tier-${tier}${large ? ' hot-badge-large' : ''}`} title={label}>
-      {Array.from({ length: tier }).map((_, index) => (
+      {Array.from({ length: flameCount }).map((_, index) => (
         <Flame key={index} size={large ? 14 : 12} />
       ))}
       <span>HOT</span>
