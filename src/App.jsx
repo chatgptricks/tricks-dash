@@ -561,12 +561,11 @@ function App() {
                 type="button"
                 onClick={handleRefresh}
                 disabled={refreshing}
-                title="Pull new Instagram posts into the shared Post DB"
+                title={refreshing ? 'Refreshing…' : 'Pull new Instagram posts into the shared Post DB'}
+                aria-label="Refresh"
               >
                 <RefreshCw size={15} className={refreshing ? 'spin' : ''} />
-                {refreshing ? 'Refreshing…' : 'Refresh'}
               </button>
-              <a className="ghost-button predict-link" href={PREDICT_URL}>Open Predict</a>
             </div>
             {refreshNotice ? (
               <p className={`refresh-notice refresh-notice-${refreshNotice.type}`} role="status">
@@ -689,27 +688,29 @@ function App() {
                   <SlidersHorizontal size={13} />
                   Minimum engagement
                 </legend>
-                <label className="range-field compact-range">
-                  <span>Likes <strong>{compactFormatter.format(minLikes)}+</strong></span>
-                  <input
-                    type="range"
-                    aria-label="Minimum likes"
-                    min={0}
-                    max={ranges.likesMax}
-                    value={minLikes}
-                    onChange={(e) => startTransition(() => setMinLikes(clampNumber(e.target.value, 0)))}
-                  />
-                </label>
-                <label className="number-field">
-                  <span>Comments</span>
-                  <input
-                    aria-label="Minimum comments"
-                    type="number"
-                    min={0}
-                    value={minComments}
-                    onChange={(e) => startTransition(() => setMinComments(clampNumber(e.target.value, ranges.commentsMin)))}
-                  />
-                </label>
+                <div className="filter-engagement-inner">
+                  <label className="range-field compact-range">
+                    <span>Likes <strong>{compactFormatter.format(minLikes)}+</strong></span>
+                    <input
+                      type="range"
+                      aria-label="Minimum likes"
+                      min={0}
+                      max={ranges.likesMax}
+                      value={minLikes}
+                      onChange={(e) => startTransition(() => setMinLikes(clampNumber(e.target.value, 0)))}
+                    />
+                  </label>
+                  <label className="number-field">
+                    <span>Comments</span>
+                    <input
+                      aria-label="Minimum comments"
+                      type="number"
+                      min={0}
+                      value={minComments}
+                      onChange={(e) => startTransition(() => setMinComments(clampNumber(e.target.value, ranges.commentsMin)))}
+                    />
+                  </label>
+                </div>
               </fieldset>
 
               <fieldset className="filter-group-card filter-sort">
@@ -717,13 +718,15 @@ function App() {
                   <ArrowUpDown size={13} />
                   Order
                 </legend>
-                <select aria-label="Sort posts" value={sortBy} onChange={(e) => startTransition(() => setSortBy(e.target.value))}>
-                  {SORT_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
+                <div className="filter-sort-inner">
+                  <select aria-label="Sort posts" value={sortBy} onChange={(e) => startTransition(() => setSortBy(e.target.value))}>
+                    {SORT_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </fieldset>
 
               <button
