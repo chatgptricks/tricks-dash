@@ -2680,34 +2680,69 @@ body {
 }
 
 /* HOT posts: viral-in-the-first-hour badge (pinned to the top of the
-   gallery while the post is still inside its active refresh window). */
-.post-card {
-  position: relative;
-}
-
+   gallery while the post is still inside its active refresh window).
+   Lives inside the media container (same stacking context as the video
+   badge, top-right) so it never competes with card-header/sidebar layout
+   -- it's an overlay on the image, not a layout sibling. Placed top-left
+   so it never collides with the video badge (top-right) or the sidebar's
+   hover Instagram overlay (bottom-right). */
 .hot-badge {
   position: absolute;
-  top: 10px;
-  left: 10px;
-  z-index: 3;
+  top: 12px;
+  left: 12px;
+  z-index: 4;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 5px 10px 5px 8px;
+  gap: 3px;
+  padding: 5px 10px 5px 7px;
   border-radius: 999px;
   background: linear-gradient(135deg, #ff5a1f, #f5ff00);
   color: #0b0b0b;
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.06em;
-  box-shadow: 0 6px 18px rgba(255, 90, 31, 0.4);
+  box-shadow: 0 6px 16px rgba(255, 90, 31, 0.4);
   pointer-events: none;
+  max-width: calc(100% - 24px);
+}
+
+.hot-badge svg {
+  flex-shrink: 0;
+}
+
+/* Tier 1: base rate achieved (1x-2x threshold). */
+.hot-tier-1 {
+  transform: scale(1);
+}
+
+/* Tier 2: 2x-3x threshold -- bigger and brighter. */
+.hot-tier-2 {
+  padding: 6px 12px 6px 8px;
+  font-size: 12px;
+  box-shadow: 0 8px 22px rgba(255, 90, 31, 0.55);
+  transform: scale(1.08);
+}
+
+/* Tier 3: 3x+ threshold -- biggest, brightest, gently pulses. */
+.hot-tier-3 {
+  padding: 7px 14px 7px 9px;
+  font-size: 13px;
+  background: linear-gradient(135deg, #ff2d00, #ffe000);
+  box-shadow: 0 10px 28px rgba(255, 45, 0, 0.7);
+  transform: scale(1.16);
+  animation: hot-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes hot-pulse {
+  0%, 100% {
+    box-shadow: 0 10px 28px rgba(255, 45, 0, 0.7);
+  }
+  50% {
+    box-shadow: 0 10px 34px rgba(255, 45, 0, 0.95);
+  }
 }
 
 .hot-badge-large {
-  position: static;
-  align-self: flex-start;
-  margin-bottom: 10px;
-  font-size: 12px;
-  padding: 6px 12px 6px 10px;
+  top: 14px;
+  left: 14px;
 }

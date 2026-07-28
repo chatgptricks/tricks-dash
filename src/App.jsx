@@ -847,18 +847,12 @@ const SelectedPost = memo(function SelectedPost({ post }) {
           Video
         </div>
       ) : null}
+      {post.isPinned ? <HotBadge post={post} large /> : null}
     </CoverImage>
   );
 
   return (
     <article className="selected-post">
-      {post.isPinned ? (
-        <div className="hot-badge hot-badge-large" title="Went viral in its first hour">
-          <Flame size={14} />
-          HOT
-        </div>
-      ) : null}
-
       {post.permalink ? (
         <a
           className="selected-post-link"
@@ -892,12 +886,6 @@ const PostCard = memo(function PostCard({ post, priority, selected, onSelect, on
 
   return (
     <article className={selected ? 'post-card selected' : 'post-card'} onClick={handleClick} onKeyDown={handleKeyDown} role="button" tabIndex={0} aria-pressed={selected}>
-      {post.isPinned ? (
-        <div className="hot-badge" title="Went viral in its first hour">
-          <Flame size={13} />
-          HOT
-        </div>
-      ) : null}
       <div className="post-header">
         <div className="post-user">
           <div className="post-avatar" aria-hidden="true">
@@ -920,6 +908,7 @@ const PostCard = memo(function PostCard({ post, priority, selected, onSelect, on
             Video
           </div>
         ) : null}
+        {post.isPinned ? <HotBadge post={post} /> : null}
       </CoverImage>
 
       <div className="post-actions">
@@ -973,6 +962,27 @@ function InstagramLink({ post, onClick, compact = false }) {
     </a>
   );
 }
+
+function hotTier(multiplier) {
+  const value = Number.isFinite(multiplier) ? multiplier : 1;
+  if (value >= 3) return 3;
+  if (value >= 2) return 2;
+  return 1;
+}
+
+const HotBadge = memo(function HotBadge({ post, large = false }) {
+  const tier = hotTier(post.hotMultiplier);
+  const label = Number.isFinite(post.hotMultiplier) ? `${post.hotMultiplier.toFixed(1)}x the rate threshold` : 'Went viral in its first hour';
+
+  return (
+    <div className={`hot-badge hot-tier-${tier}${large ? ' hot-badge-large' : ''}`} title={label}>
+      {Array.from({ length: tier }).map((_, index) => (
+        <Flame key={index} size={large ? 14 : 12} />
+      ))}
+      <span>HOT</span>
+    </div>
+  );
+});
 
 const CoverImage = memo(function CoverImage({ className, post, priority = false, children }) {
   const sources = useMemo(() => coverSources(post), [post]);
