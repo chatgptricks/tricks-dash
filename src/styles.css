@@ -2678,3 +2678,36 @@ body {
     order: 3;
   }
 }
+
+/* HOT posts: viral-in-the-first-hour badge (pinned to the top of the
+   gallery while the post is still inside its active refresh window). */
+.post-card {
+  position: relative;
+}
+
+.hot-badge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px 5px 8px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #ff5a1f, #f5ff00);
+  color: #0b0b0b;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  box-shadow: 0 6px 18px rgba(255, 90, 31, 0.4);
+  pointer-events: none;
+}
+
+.hot-badge-large {
+  position: static;
+  align-self: flex-start;
+  margin-bottom: 10px;
+  font-size: 12px;
+  padding: 6px 12px 6px 10px;
+}
