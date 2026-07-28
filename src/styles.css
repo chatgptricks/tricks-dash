@@ -2756,70 +2756,112 @@ body {
 }
 
 /* Card-level effects for the hottest posts, layered on top of the badge.
-   Both .post-card and .selected-post already clip to their own rounded
-   rect via overflow:hidden, so the glow/glare pseudo-elements stay
-   contained -- only the outer box-shadow halo is meant to extend past
-   the card edge (box-shadow isn't clipped by overflow:hidden). Both need
-   an explicit positioned context for the inset:0 pseudo-elements to size
-   against the card itself rather than some further-out ancestor. */
+   Standard "animated glowing border" technique: a custom property for the
+   angle (so the browser can smoothly interpolate it), a conic-gradient
+   built from that angle, and a blurred duplicate underneath for the glow.
+   Animating the angle keeps the ring itself perfectly stable on the
+   rounded-rect border -- the earlier attempt rotated the whole masked
+   shape with transform, which visibly warped at the corners. */
+@property --hot-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
 .post-card,
 .selected-post {
   position: relative;
 }
 
-/* >=3x threshold: fire creeping up from the base of the card. */
-.post-card-fire {
-  border-color: rgba(255, 106, 0, 0.5) !important;
-  box-shadow: 0 0 0 1px rgba(255, 106, 0, 0.32), 0 16px 30px rgba(255, 90, 0, 0.24);
-}
-
-.post-card-fire::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  pointer-events: none;
-  border-radius: inherit;
-  background: linear-gradient(0deg, rgba(255, 90, 0, 0.32), rgba(255, 140, 0, 0.08) 40%, transparent 65%);
-  animation: hot-fire-flicker 1.7s ease-in-out infinite;
-}
-
-@keyframes hot-fire-flicker {
-  0%, 100% {
-    opacity: 0.6;
-  }
-  50% {
-    opacity: 1;
-  }
-}
-
-/* >=5x threshold: adds a rolling glare sweep + a pulsing outer light halo. */
-.post-card-blazing {
-  animation: hot-blazing-glow 2.2s ease-in-out infinite;
-}
-
-@keyframes hot-blazing-glow {
-  0%, 100% {
-    box-shadow: 0 0 0 1px rgba(255, 200, 0, 0.55), 0 0 30px rgba(255, 140, 0, 0.45), 0 18px 36px rgba(255, 90, 0, 0.3);
-  }
-  50% {
-    box-shadow: 0 0 0 1px rgba(255, 224, 60, 0.85), 0 0 54px rgba(255, 170, 0, 0.75), 0 22px 46px rgba(255, 120, 0, 0.48);
-  }
-}
-
-.post-card-blazing::before {
-  content: '';
+/* Crisp ring, masked down to a thin band via the padding + mask-composite
+   trick (kept inside the card since both containers clip via
+   overflow:hidden -- only the box-shadow halo below is allowed to extend
+   past the edge, since box-shadow isn't clipped by overflow:hidden). */
+.hot-border {
   position: absolute;
   inset: 0;
   z-index: 3;
   pointer-events: none;
   border-radius: inherit;
+  padding: 2.5px;
+  background: conic-gradient(from var(--hot-angle), var(--hot-c1), var(--hot-c2), var(--hot-c3), var(--hot-c4), var(--hot-c1));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: hot-spin var(--hot-speed, 5s) linear infinite;
+}
+
+/* Same gradient, blurred and see-through, radiating out from behind the
+   crisp ring for a soft glow. */
+.hot-border-glow {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  border-radius: inherit;
+  background: conic-gradient(from var(--hot-angle), var(--hot-c1), var(--hot-c2), var(--hot-c3), var(--hot-c4), var(--hot-c1));
+  filter: blur(16px);
+  opacity: 0.55;
+  animation: hot-spin var(--hot-speed, 5s) linear infinite;
+}
+
+@keyframes hot-spin {
+  to {
+    --hot-angle: 360deg;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hot-border,
+  .hot-border-glow {
+    animation: none;
+  }
+}
+
+/* Tier 1, >=3x: warm embers, gentle pace. */
+.post-card-fire {
+  --hot-c1: #ff6a00;
+  --hot-c2: #ffcf3d;
+  --hot-c3: #ff3d00;
+  --hot-c4: #ffb02e;
+  --hot-speed: 5.5s;
+  box-shadow: 0 14px 30px rgba(255, 90, 0, 0.2);
+}
+
+/* Tier 2, >=5x: brighter + a bit faster, adds a pulsing outer halo and a
+   slow glare sweep across the cover image. */
+.post-card-blazing {
+  --hot-c1: #ff4d00;
+  --hot-c2: #ffe14d;
+  --hot-c3: #ff1a00;
+  --hot-c4: #fff08a;
+  --hot-speed: 3.8s;
+  animation: hot-halo 2.4s ease-in-out infinite;
+}
+
+@keyframes hot-halo {
+  0%, 100% {
+    box-shadow: 0 0 22px rgba(255, 140, 0, 0.4), 0 18px 34px rgba(255, 90, 0, 0.26);
+  }
+  50% {
+    box-shadow: 0 0 42px rgba(255, 170, 0, 0.7), 0 22px 42px rgba(255, 110, 0, 0.38);
+  }
+}
+
+.post-card-blazing::before,
+.post-card-inferno::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  border-radius: inherit;
   background: linear-gradient(
     115deg,
     transparent 35%,
-    rgba(255, 255, 255, 0.45) 47%,
-    rgba(255, 255, 255, 0.8) 50%,
-    rgba(255, 255, 255, 0.45) 53%,
+    rgba(255, 255, 255, 0.4) 47%,
+    rgba(255, 255, 255, 0.72) 50%,
+    rgba(255, 255, 255, 0.4) 53%,
     transparent 65%
   );
   background-size: 250% 250%;
@@ -2839,27 +2881,124 @@ body {
   }
 }
 
-/* >=8x threshold: adds a moving fire ring chasing around the card border,
-   on top of the fire + blazing effects. A real element (not a third
-   pseudo-element -- ::before/::after are already spoken for by the fire
-   and blazing layers), absolutely positioned to cover the card and masked
-   down to just a thin ring via the padding + mask-composite technique. */
-.hot-inferno-ring {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  pointer-events: none;
-  border-radius: inherit;
-  padding: 3px;
-  background: conic-gradient(from 0deg, #fff45c, #ff8a00, #ff2d00, #ff8a00, #fff45c, #ff8a00, #ff2d00, #fff45c);
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  animation: hot-inferno-spin 2.2s linear infinite;
+/* Tier 3, >=8x: hottest colors, fastest spin, strongest halo. */
+.post-card-inferno {
+  --hot-c1: #ff2d00;
+  --hot-c2: #fff45c;
+  --hot-c3: #ff8a00;
+  --hot-c4: #ffffff;
+  --hot-speed: 2.4s;
+  animation: hot-halo-intense 1.7s ease-in-out infinite;
 }
 
-@keyframes hot-inferno-spin {
-  to {
-    transform: rotate(360deg);
+@keyframes hot-halo-intense {
+  0%, 100% {
+    box-shadow: 0 0 28px rgba(255, 60, 0, 0.5), 0 20px 40px rgba(255, 90, 0, 0.32);
   }
+  50% {
+    box-shadow: 0 0 56px rgba(255, 200, 0, 0.85), 0 26px 50px rgba(255, 120, 0, 0.46);
+  }
+}
+
+/* Title bar shrinks in lockstep with the filter strip's auto-hide, so
+   scrolling reclaims vertical space from both at once instead of leaving a
+   now-oversized header sitting above a hidden filter row. */
+.topbar {
+  transition: min-height 220ms ease, padding 220ms ease;
+}
+
+.brand-title {
+  overflow: hidden;
+  transition: max-height 220ms ease, opacity 160ms ease, margin 220ms ease;
+  max-height: 60px;
+}
+
+.eyebrow {
+  transition: max-height 200ms ease, opacity 160ms ease, margin-bottom 200ms ease;
+}
+
+.brand h1 {
+  transition: font-size 220ms ease;
+}
+
+.topbar-compact {
+  min-height: 0;
+  padding-top: 9px;
+  padding-bottom: 9px;
+}
+
+.topbar-compact .brand-title {
+  max-height: 26px;
+}
+
+.topbar-compact .eyebrow {
+  max-height: 0;
+  opacity: 0;
+  margin-bottom: 0;
+}
+
+.topbar-compact .brand h1 {
+  font-size: 19px;
+}
+
+.topbar-compact .topbar-search {
+  min-height: 34px;
+}
+
+.topbar-compact .topbar-search .filter-search-copy > span:first-child {
+  display: none;
+}
+
+.topbar-compact .metric {
+  padding: 6px 10px;
+  min-width: 68px;
+}
+
+.topbar-compact .metric span {
+  font-size: 0.58rem;
+}
+
+/* Filter bar polish pass: a touch more depth/separation between the strip
+   and the page behind it, and a livelier hover/active state per filter
+   card so the row reads less like a flat toolbar. */
+.filter-strip {
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.filter-group-card {
+  transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
+}
+
+.filter-group-card:hover,
+.filter-group-card:focus-within {
+  border-color: rgba(245, 255, 0, 0.28);
+  background: #0c0c0c;
+  box-shadow: 0 6px 16px rgba(245, 255, 0, 0.06);
+}
+
+.chip {
+  transition: border-color 140ms ease, color 140ms ease, background 140ms ease, transform 120ms ease;
+}
+
+.chip:hover {
+  transform: translateY(-1px);
+}
+
+.chip-active {
+  box-shadow: 0 4px 14px rgba(245, 255, 0, 0.18);
+}
+
+.filter-clear-all {
+  transition: border-color 140ms ease, color 140ms ease, transform 120ms ease;
+}
+
+.filter-clear-all-active:hover {
+  transform: translateY(-1px);
+  border-color: rgba(245, 255, 0, 0.4);
+}
+
+.metric strong {
+  white-space: nowrap;
 }

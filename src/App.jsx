@@ -513,9 +513,9 @@ function App() {
       <div className="backdrop" />
       <main className="app-layout">
         <section className="left-pane">
-          <header className="topbar">
+          <header className={filtersHidden ? 'topbar topbar-compact' : 'topbar'}>
             <div className="brand">
-              <div>
+              <div className="brand-title">
                 <p className="eyebrow">Dash explorer</p>
                 <h1>Sentient Dash</h1>
               </div>
@@ -541,7 +541,12 @@ function App() {
             </div>
 
             <div className="topbar-metrics">
-              <Metric label="Posts" value={combinedSummary.totalPosts || summary['Exported posts'] || posts.length} />
+              {!loading && !loadError ? (
+                <Metric
+                  label="Matching"
+                  value={`${filtered.length.toLocaleString()} / ${posts.length.toLocaleString()}`}
+                />
+              ) : null}
               <Metric label="Likes" value={compactFormatter.format(combinedSummary.totalLikes ?? summary['Total likes'] ?? 0)} />
               <Metric label="Avg likes" value={compactFormatter.format(combinedSummary.averageLikes ?? summary['Average likes'] ?? 0)} />
               <button
@@ -573,11 +578,6 @@ function App() {
             aria-hidden={filtersHidden}
           >
             <div className="filter-groups-row">
-              <div className="filter-result-summary" aria-live="polite">
-                <strong>{filtered.length.toLocaleString()}</strong>
-                <span>{filtered.length === 1 ? 'post found' : 'posts found'}</span>
-              </div>
-
               <fieldset className="filter-group-card filter-account">
                 <legend>
                   <AtSign size={13} />
@@ -720,16 +720,6 @@ function App() {
           </section>
 
           <section className="panel gallery">
-          <div className="panel-header gallery-header">
-            <div>
-              <p className="section-label">Results</p>
-              <h2>
-                {filtered.length.toLocaleString()} matching posts
-                <span>{posts.length.toLocaleString()} total</span>
-              </h2>
-            </div>
-          </div>
-
           <div className="results-scroll" onScroll={handleResultsScroll}>
             {visible.length ? (
               <div className="gallery-grid">
@@ -855,7 +845,12 @@ const SelectedPost = memo(function SelectedPost({ post }) {
 
   return (
     <article className={`selected-post${selectedEffects.className}`}>
-      {selectedEffects.inferno ? <span className="hot-inferno-ring" aria-hidden="true" /> : null}
+      {selectedEffects.showBorder ? (
+        <>
+          <span className="hot-border-glow" aria-hidden="true" />
+          <span className="hot-border" aria-hidden="true" />
+        </>
+      ) : null}
       {post.permalink ? (
         <a
           className="selected-post-link"
@@ -892,7 +887,12 @@ const PostCard = memo(function PostCard({ post, priority, selected, onSelect, on
 
   return (
     <article className={cardClassName} onClick={handleClick} onKeyDown={handleKeyDown} role="button" tabIndex={0} aria-pressed={selected}>
-      {effects.inferno ? <span className="hot-inferno-ring" aria-hidden="true" /> : null}
+      {effects.showBorder ? (
+        <>
+          <span className="hot-border-glow" aria-hidden="true" />
+          <span className="hot-border" aria-hidden="true" />
+        </>
+      ) : null}
       <div className="post-header">
         <div className="post-user">
           <div className="post-avatar" aria-hidden="true">
@@ -980,19 +980,19 @@ function hotTier(multiplier) {
 // Card-level effects (beyond the badge itself), scaled to how far over the
 // per-hour threshold the post's first hour landed. Only ever applied while
 // the post is still pinned (i.e. still inside its active HOT window).
-// Effects stack as the multiplier climbs: 3x adds a fire glow, 5x adds a
-// rolling glare + outer light halo on top of that, 8x adds a moving fire
-// ring around the card border on top of everything.
+// Every tier >=3x gets the animated glowing border (colors/speed/halo get
+// hotter per tier); >=5x additionally gets a slow glare sweep across the
+// cover image.
 function hotEffects(post) {
-  if (!post.isPinned) return { className: '', inferno: false };
+  if (!post.isPinned) return { className: '', showBorder: false };
   const multiplier = Number.isFinite(post.hotMultiplier) ? post.hotMultiplier : 1;
-  const classes = [];
-  if (multiplier >= 3) classes.push('post-card-fire');
-  if (multiplier >= 5) classes.push('post-card-blazing');
-  if (multiplier >= 8) classes.push('post-card-inferno');
+  let tierClass = '';
+  if (multiplier >= 8) tierClass = 'post-card-inferno';
+  else if (multiplier >= 5) tierClass = 'post-card-blazing';
+  else if (multiplier >= 3) tierClass = 'post-card-fire';
   return {
-    className: classes.length ? ` ${classes.join(' ')}` : '',
-    inferno: multiplier >= 8,
+    className: tierClass ? ` ${tierClass}` : '',
+    showBorder: Boolean(tierClass),
   };
 }
 
