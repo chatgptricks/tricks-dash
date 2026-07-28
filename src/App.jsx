@@ -851,8 +851,11 @@ const SelectedPost = memo(function SelectedPost({ post }) {
     </CoverImage>
   );
 
+  const selectedEffects = hotEffects(post);
+
   return (
-    <article className={`selected-post${cardEffectClass(post)}`}>
+    <article className={`selected-post${selectedEffects.className}`}>
+      {selectedEffects.inferno ? <span className="hot-inferno-ring" aria-hidden="true" /> : null}
       {post.permalink ? (
         <a
           className="selected-post-link"
@@ -884,10 +887,12 @@ const PostCard = memo(function PostCard({ post, priority, selected, onSelect, on
     onCopy(post.shortcode);
   };
 
-  const cardClassName = `post-card${selected ? ' selected' : ''}${cardEffectClass(post)}`;
+  const effects = hotEffects(post);
+  const cardClassName = `post-card${selected ? ' selected' : ''}${effects.className}`;
 
   return (
     <article className={cardClassName} onClick={handleClick} onKeyDown={handleKeyDown} role="button" tabIndex={0} aria-pressed={selected}>
+      {effects.inferno ? <span className="hot-inferno-ring" aria-hidden="true" /> : null}
       <div className="post-header">
         <div className="post-user">
           <div className="post-avatar" aria-hidden="true">
@@ -975,12 +980,20 @@ function hotTier(multiplier) {
 // Card-level effects (beyond the badge itself), scaled to how far over the
 // per-hour threshold the post's first hour landed. Only ever applied while
 // the post is still pinned (i.e. still inside its active HOT window).
-function cardEffectClass(post) {
-  if (!post.isPinned) return '';
+// Effects stack as the multiplier climbs: 3x adds a fire glow, 5x adds a
+// rolling glare + outer light halo on top of that, 8x adds a moving fire
+// ring around the card border on top of everything.
+function hotEffects(post) {
+  if (!post.isPinned) return { className: '', inferno: false };
   const multiplier = Number.isFinite(post.hotMultiplier) ? post.hotMultiplier : 1;
-  if (multiplier >= 5) return ' post-card-fire post-card-blazing';
-  if (multiplier >= 3) return ' post-card-fire';
-  return '';
+  const classes = [];
+  if (multiplier >= 3) classes.push('post-card-fire');
+  if (multiplier >= 5) classes.push('post-card-blazing');
+  if (multiplier >= 8) classes.push('post-card-inferno');
+  return {
+    className: classes.length ? ` ${classes.join(' ')}` : '',
+    inferno: multiplier >= 8,
+  };
 }
 
 const HotBadge = memo(function HotBadge({ post, large = false }) {
