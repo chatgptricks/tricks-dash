@@ -852,7 +852,7 @@ const SelectedPost = memo(function SelectedPost({ post }) {
   );
 
   return (
-    <article className="selected-post">
+    <article className={`selected-post${cardEffectClass(post)}`}>
       {post.permalink ? (
         <a
           className="selected-post-link"
@@ -884,8 +884,10 @@ const PostCard = memo(function PostCard({ post, priority, selected, onSelect, on
     onCopy(post.shortcode);
   };
 
+  const cardClassName = `post-card${selected ? ' selected' : ''}${cardEffectClass(post)}`;
+
   return (
-    <article className={selected ? 'post-card selected' : 'post-card'} onClick={handleClick} onKeyDown={handleKeyDown} role="button" tabIndex={0} aria-pressed={selected}>
+    <article className={cardClassName} onClick={handleClick} onKeyDown={handleKeyDown} role="button" tabIndex={0} aria-pressed={selected}>
       <div className="post-header">
         <div className="post-user">
           <div className="post-avatar" aria-hidden="true">
@@ -970,9 +972,21 @@ function hotTier(multiplier) {
   return 1;
 }
 
+// Card-level effects (beyond the badge itself), scaled to how far over the
+// per-hour threshold the post's first hour landed. Only ever applied while
+// the post is still pinned (i.e. still inside its active HOT window).
+function cardEffectClass(post) {
+  if (!post.isPinned) return '';
+  const multiplier = Number.isFinite(post.hotMultiplier) ? post.hotMultiplier : 1;
+  if (multiplier >= 5) return ' post-card-fire post-card-blazing';
+  if (multiplier >= 3) return ' post-card-fire';
+  return '';
+}
+
 const HotBadge = memo(function HotBadge({ post, large = false }) {
   const tier = hotTier(post.hotMultiplier);
-  const label = Number.isFinite(post.hotMultiplier) ? `${post.hotMultiplier.toFixed(1)}x the rate threshold` : 'Went viral in its first hour';
+  const hasRate = Number.isFinite(post.hotMultiplier);
+  const label = hasRate ? `${post.hotMultiplier.toFixed(1)}x the rate threshold` : 'Went viral in its first hour';
 
   return (
     <div className={`hot-badge hot-tier-${tier}${large ? ' hot-badge-large' : ''}`} title={label}>
@@ -980,6 +994,7 @@ const HotBadge = memo(function HotBadge({ post, large = false }) {
         <Flame key={index} size={large ? 14 : 12} />
       ))}
       <span>HOT</span>
+      {hasRate ? <b className="hot-badge-rate">{post.hotMultiplier.toFixed(1)}x</b> : null}
     </div>
   );
 });
