@@ -1439,6 +1439,7 @@ const SelectedPost = memo(function SelectedPost({ post }) {
 });
 
 const PostCard = memo(function PostCard({ post, priority, selected, onSelect, onCopy }) {
+  const [avatarFailed, setAvatarFailed] = useState(false);
   const handleClick = () => onSelect(post.shortcode);
   const handleKeyDown = (event) => {
     if (event.key === 'Enter' || event.key === ' ') {
@@ -1465,6 +1466,14 @@ const PostCard = memo(function PostCard({ post, priority, selected, onSelect, on
           <div className="post-avatar" aria-hidden="true">
             {ACCOUNT_PROFILE_IMAGES[post.account] ? (
               <img src={ACCOUNT_PROFILE_IMAGES[post.account]} alt="" aria-hidden="true" />
+            ) : post.account && !avatarFailed ? (
+              <img
+                src={`${API_BASE}/api/dashboard/avatar/${encodeURIComponent(post.account)}`}
+                alt=""
+                aria-hidden="true"
+                referrerPolicy="no-referrer"
+                onError={() => setAvatarFailed(true)}
+              />
             ) : (
               <span className="post-avatar-initials">{(post.account || '?').slice(0, 2).toUpperCase()}</span>
             )}
