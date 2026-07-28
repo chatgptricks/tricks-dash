@@ -22,7 +22,6 @@ import {
   X,
   Video,
 } from 'lucide-react';
-import brandProfileImage from './assets/profile.jpg';
 import chatgptricksProfileImage from './assets/chatgptricks-profile.jpg';
 import traselveloralProfileImage from './assets/traselveloreal-profile.jpg';
 
@@ -396,10 +395,13 @@ function App() {
 
     (async () => {
       try {
+        const params = { password, results_limit: '800' };
+        if (account.dateFrom) params.date_from = account.dateFrom;
+        if (account.dateTo) params.date_to = account.dateTo;
         const response = await fetch(`${API_BASE}/api/admin/accounts/${encodeURIComponent(account.handle)}/backfill`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams({ password, results_limit: '200' }),
+          body: new URLSearchParams(params),
         });
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {
@@ -1064,6 +1066,9 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
   const [label, setLabel] = useState('');
   const [group, setGroup] = useState('competitors');
   const [hotThreshold, setHotThreshold] = useState(600);
+  const [importScope, setImportScope] = useState('all'); // 'all' | 'range'
+  const [importFrom, setImportFrom] = useState('');
+  const [importTo, setImportTo] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [notice, setNotice] = useState('');
 
@@ -1110,6 +1115,10 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
       setNotice('Enter the Instagram handle first.');
       return;
     }
+    if (step === 1 && importScope === 'range' && !importFrom) {
+      setNotice('Pick at least a start date, or switch back to All posts.');
+      return;
+    }
     setNotice('');
     setStep((value) => Math.min(value + 1, WIZARD_STEPS.length - 1));
   };
@@ -1151,7 +1160,14 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
       // Created -- hand off to the parent, which closes this modal and
       // starts the backfill as a background task with this same password.
       onAccountCreated(
-        { handle: cleanHandle, label: label.trim() || cleanHandle, group, avatarUrl: preview?.profile_pic_url || null },
+        {
+          handle: cleanHandle,
+          label: label.trim() || cleanHandle,
+          group,
+          avatarUrl: preview?.profile_pic_url || null,
+          dateFrom: importScope === 'range' ? importFrom || null : null,
+          dateTo: importScope === 'range' ? importTo || null : null,
+        },
         password,
       );
     } catch (error) {
@@ -1245,6 +1261,43 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
                 onChange={(event) => setHotThreshold(clampNumber(event.target.value, 0))}
               />
             </label>
+            <div className="modal-field">
+              <span>Post history to import</span>
+              <div className="wizard-scope-toggle" role="radiogroup" aria-label="Post history to import">
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={importScope === 'all'}
+                  className={importScope === 'all' ? 'wizard-scope-option wizard-scope-option-active' : 'wizard-scope-option'}
+                  onClick={() => setImportScope('all')}
+                >
+                  All posts
+                </button>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={importScope === 'range'}
+                  className={importScope === 'range' ? 'wizard-scope-option wizard-scope-option-active' : 'wizard-scope-option'}
+                  onClick={() => setImportScope('range')}
+                >
+                  Date range
+                </button>
+              </div>
+            </div>
+            {importScope === 'range' ? (
+              <div className="wizard-scope-dates">
+                <label className="modal-field">
+                  <span>From</span>
+                  <input type="date" value={importFrom} onChange={(event) => setImportFrom(event.target.value)} />
+                </label>
+                <label className="modal-field">
+                  <span>To</span>
+                  <input type="date" value={importTo} onChange={(event) => setImportTo(event.target.value)} />
+                </label>
+              </div>
+            ) : (
+              <p className="wizard-hint">Imports up to the most recent 800 posts. Use a date range for a narrower, faster import.</p>
+            )}
           </div>
         ) : null}
 
@@ -1262,6 +1315,11 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
                 <p className="wizard-summary-handle">@{cleanHandle || 'handle'}</p>
                 <p className="wizard-summary-meta">
                   {ACCOUNT_GROUP_OPTIONS.find((option) => option.value === group)?.label} · HOT at {hotThreshold}+ likes/hr
+                </p>
+                <p className="wizard-summary-meta">
+                  {importScope === 'range'
+                    ? `Importing ${importFrom || '…'} to ${importTo || '…'}`
+                    : 'Importing up to 800 most recent posts'}
                 </p>
               </div>
             </div>
@@ -1405,7 +1463,11 @@ const PostCard = memo(function PostCard({ post, priority, selected, onSelect, on
       <div className="post-header">
         <div className="post-user">
           <div className="post-avatar" aria-hidden="true">
-            <img src={ACCOUNT_PROFILE_IMAGES[post.account] || brandProfileImage} alt="" aria-hidden="true" />
+            {ACCOUNT_PROFILE_IMAGES[post.account] ? (
+              <img src={ACCOUNT_PROFILE_IMAGES[post.account]} alt="" aria-hidden="true" />
+            ) : (
+              <span className="post-avatar-initials">{(post.account || '?').slice(0, 2).toUpperCase()}</span>
+            )}
           </div>
           <div className="post-user-copy">
             <strong>{post.account || IG_HANDLE}</strong>

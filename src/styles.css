@@ -514,6 +514,11 @@ img {
   object-fit: cover;
 }
 
+.post-avatar-initials {
+  font-size: 11px;
+  font-weight: 900;
+}
+
 .post-user-copy {
   min-width: 0;
 }
@@ -3580,6 +3585,43 @@ body {
   color: rgba(245, 245, 245, 0.45);
   font-size: 10.5px;
   line-height: 1.4;
+}
+
+/* Import-scope toggle (All posts vs Date range) on the wizard's Settings
+   step */
+.wizard-scope-toggle {
+  display: flex;
+  gap: 6px;
+}
+
+.wizard-scope-option {
+  flex: 1;
+  height: 34px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 7px;
+  background: #030303;
+  color: rgba(245, 245, 245, 0.6);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 140ms ease, background 140ms ease, color 140ms ease;
+}
+
+.wizard-scope-option:hover {
+  border-color: rgba(255, 255, 255, 0.22);
+  color: #fff;
+}
+
+.wizard-scope-option-active {
+  border-color: rgba(245, 255, 0, 0.55);
+  background: rgba(245, 255, 0, 0.12);
+  color: #fffce0;
+}
+
+.wizard-scope-dates {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
 }
 
 .wizard-actions {
