@@ -395,7 +395,7 @@ function App() {
 
     (async () => {
       try {
-        const params = { password, results_limit: '800' };
+        const params = { password, results_limit: '5000' };
         if (account.dateFrom) params.date_from = account.dateFrom;
         if (account.dateTo) params.date_to = account.dateTo;
         const response = await fetch(`${API_BASE}/api/admin/accounts/${encodeURIComponent(account.handle)}/backfill`, {
@@ -1296,7 +1296,7 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
                 </label>
               </div>
             ) : (
-              <p className="wizard-hint">Imports up to the most recent 800 posts. Use a date range for a narrower, faster import.</p>
+              <p className="wizard-hint">Imports the account's full post history. Use a date range for a narrower, faster import.</p>
             )}
           </div>
         ) : null}
@@ -1319,7 +1319,7 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
                 <p className="wizard-summary-meta">
                   {importScope === 'range'
                     ? `Importing ${importFrom || '…'} to ${importTo || '…'}`
-                    : 'Importing up to 800 most recent posts'}
+                    : 'Importing full post history'}
                 </p>
               </div>
             </div>
