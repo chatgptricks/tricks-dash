@@ -68,6 +68,28 @@ function clearState() {
   }
 }
 
+// Likes/comments refresh rule (mirrors the Predict backend's engagement
+// refresh for @chatgptricks): posts 10 days old or less get refreshed every
+// time this runs; posts 11-29 or 31+ days old are left alone; posts exactly
+// 30 days old get one final refresh.
+function isEligibleForLikesRefresh(postDateIso, nowMs) {
+  const publishedMs = new Date(postDateIso).getTime();
+  if (!Number.isFinite(publishedMs)) return false;
+  const ageDays = Math.floor((nowMs - publishedMs) / 86400000);
+  return ageDays <= 10 || ageDays === 30;
+}
+
+// Apify/Instagram sometimes reports a very low or hidden (-1) like count.
+// Any value of 3 or below is treated as unknown and floored to 500.
+function applyLikesFloor(raw) {
+  const n = Number.isFinite(raw) ? raw : -1;
+  return n > 3 ? n : 500;
+}
+
+function apifyDateFilter(date) {
+  return date.toISOString().replace(/\.\d{3}Z$/, 'Z');
+}
+
 function classifyType(item) {
   const t = item.type || '';
   const productType = item.productType || (t === 'Sidecar' ? 'carousel_container' : 'feed');
@@ -89,13 +111,16 @@ function parseTimestamp(ts) {
   return Number.isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
 }
 
-async function startRun(token, limit, maxTotalChargeUsd) {
+async function startRun(token, limit, maxTotalChargeUsd, windowDays) {
   const payload = {
     directUrls: [`https://www.instagram.com/${IG_HANDLE}/`],
     resultsType: 'posts',
     resultsLimit: limit,
     skipPinnedPosts: true,
   };
+  if (windowDays) {
+    payload.onlyPostsNewerThan = apifyDateFilter(new Date(Date.now() - windowDays * 86400000));
+  }
   // Apify silently caps a run's spend (e.g. ~$3) unless the caller sets
   // maxTotalChargeUsd explicitly -- without it, a full-history pull on a
   // large account aborts partway with "Reached max data limit" and no error.
@@ -186,14 +211,34 @@ function ingest(items) {
     .filter((it) => it.shortCode && !existingShortcodes.has(it.shortCode))
     .sort((a, b) => (a.timestamp || '').localeCompare(b.timestamp || ''));
 
-  console.log(`Existing: ${existingShortcodes.size}, new: ${newItems.length}`);
+  // Refresh likes/comments on existing posts that are eligible (<=10 days
+  // old, or exactly 30 days old) and present in this fetch.
+  const itemsByShortcode = new Map(items.filter((it) => it.shortCode).map((it) => [it.shortCode, it]));
+  const nowMs = Date.now();
+  let updatedCount = 0;
+  for (const row of existingRows) {
+    const shortcode = row['Shortcode'];
+    if (!shortcode) continue;
+    const item = itemsByShortcode.get(shortcode);
+    if (!item) continue;
+    if (!isEligibleForLikesRefresh(row['Post Date UTC'], nowMs)) continue;
+    const newLikes = applyLikesFloor(item.likesCount);
+    const newComments = Number.isFinite(item.commentsCount) && item.commentsCount >= 0 ? item.commentsCount : row.Comments;
+    if (row.Likes !== newLikes || row.Comments !== newComments) {
+      row.Likes = newLikes;
+      row.Comments = newComments;
+      updatedCount += 1;
+    }
+  }
+
+  console.log(`Existing: ${existingShortcodes.size}, new: ${newItems.length}, likes-refreshed: ${updatedCount}`);
 
   let nextRank = maxRank + 1;
   const addedRows = [];
   for (const it of newItems) {
     const postDt = parseTimestamp(it.timestamp);
     const { typeLabel, isVideo } = classifyType(it);
-    const likes = Number.isFinite(it.likesCount) && it.likesCount >= 0 ? it.likesCount : 0;
+    const likes = applyLikesFloor(it.likesCount);
     const comments = it.commentsCount || 0;
     const coverUrl = it.displayUrl || (Array.isArray(it.images) ? it.images[0] : '') || '';
     const permalink = it.url || `https://www.instagram.com/p/${it.shortCode}/`;
@@ -215,7 +260,7 @@ function ingest(items) {
     nextRank += 1;
   }
 
-  if (addedRows.length) {
+  if (addedRows.length || updatedCount) {
     const allRows = [...existingRows, ...addedRows];
     const newPostsWs = xlsx.utils.json_to_sheet(allRows, {
       header: ['#', 'Post Date UTC', 'Likes', 'Comments', 'Type', 'Video', 'Shortcode', 'Permalink', 'Caption', 'Owner Username', 'Media ID', 'Cover URL'],
@@ -246,7 +291,7 @@ function ingest(items) {
   ];
   wb.Sheets['Summary'] = xlsx.utils.aoa_to_sheet(summaryAoA);
 
-  if (addedRows.length || !fs.existsSync(XLSX_PATH)) {
+  if (addedRows.length || updatedCount || !fs.existsSync(XLSX_PATH)) {
     xlsx.writeFile(wb, XLSX_PATH);
     console.log(`Wrote ${XLSX_PATH}`);
   }
@@ -307,10 +352,25 @@ async function main() {
     const chargeIdx = args.indexOf('--max-charge-usd');
     const maxTotalChargeUsd = chargeIdx >= 0 ? Number(args[chargeIdx + 1]) : 25;
     await startRun(token, limit, maxTotalChargeUsd);
+  } else if (args.includes('--refresh')) {
+    // Lightweight combined refresh: only scrapes the last `--window-days`
+    // of posts to pick up new ones and refresh likes/comments on eligible
+    // existing ones (mirrors the Predict backend's engagement refresh).
+    // Async (start now, --poll to check status/ingest) since even a small
+    // window can take longer than a single short-lived shell call.
+    const windowIdx = args.indexOf('--window-days');
+    const windowDays = windowIdx >= 0 ? Number(args[windowIdx + 1]) : 35;
+    const limitIdx = args.indexOf('--limit');
+    const limit = limitIdx >= 0 ? Number(args[limitIdx + 1]) : 200;
+    const chargeIdx = args.indexOf('--max-charge-usd');
+    const maxTotalChargeUsd = chargeIdx >= 0 ? Number(args[chargeIdx + 1]) : 5;
+    await startRun(token, limit, maxTotalChargeUsd, windowDays);
   } else if (args.includes('--poll')) {
     await pollRun(token);
   } else {
-    console.error('Usage: sync-traselveloreal.mjs --start --limit N [--max-charge-usd N] | --poll | --from-cache <file>');
+    console.error(
+      'Usage: sync-traselveloreal.mjs --start --limit N [--max-charge-usd N] | --refresh [--window-days N] [--limit N] | --poll | --from-cache <file>',
+    );
     process.exit(1);
   }
 }

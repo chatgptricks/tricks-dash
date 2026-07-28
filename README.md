@@ -65,6 +65,22 @@ run, saves state to `.traselveloreal-sync-state.json`) and `--poll` (checks
 status; once `SUCCEEDED`, ingests the dataset, is idempotent on shortcode, and
 writes both the xlsx and the JSON files consumed by the app).
 
+For a cheaper, faster "refresh" that only looks at recent posts (adds any new
+ones and refreshes likes/comments on eligible existing ones), use:
+
+```bash
+APIFY_TOKEN=xxxx node scripts/sync-traselveloreal.mjs --refresh
+APIFY_TOKEN=xxxx node scripts/sync-traselveloreal.mjs --poll   # repeat until "Done"
+```
+
+This mirrors the Predict backend's engagement-refresh rule for @chatgptricks:
+posts 10 days old or less are refreshed every time; posts 11-29 or 31+ days
+old are left untouched; posts exactly 30 days old get one final refresh. Any
+scraped like count of 3 or below (including Apify's hidden/-1 sentinel) is
+floored to 500. Because there's no live backend for this account, this has to
+be run manually (or scheduled) and the site rebuilt/redeployed afterward --
+there's no "Refresh" button coverage for @traselveloreal in the dashboard UI.
+
 ## OCR For Cover Images
 
 The recommended implementation in this repo is Google Cloud Vision OCR at build time.
