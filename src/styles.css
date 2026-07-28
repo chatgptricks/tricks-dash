@@ -2711,26 +2711,42 @@ body {
 }
 
 /* Tier 1: base rate achieved (1x-2x threshold). */
+/* Five escalating badge tiers, 1x/2x/3x/5x/8x -- each visibly bigger,
+   brighter and busier than the last. */
 .hot-tier-1 {
   transform: scale(1);
 }
 
-/* Tier 2: 2x-3x threshold -- bigger and brighter. */
 .hot-tier-2 {
-  padding: 6px 12px 6px 8px;
-  font-size: 12px;
-  box-shadow: 0 8px 22px rgba(255, 90, 31, 0.55);
-  transform: scale(1.08);
+  padding: 6px 11px 6px 8px;
+  font-size: 11.5px;
+  box-shadow: 0 7px 18px rgba(255, 90, 31, 0.45);
+  transform: scale(1.05);
 }
 
-/* Tier 3: 3x+ threshold -- biggest, brightest, gently pulses. */
 .hot-tier-3 {
-  padding: 7px 14px 7px 9px;
-  font-size: 13px;
-  background: linear-gradient(135deg, #ff2d00, #ffe000);
-  box-shadow: 0 10px 28px rgba(255, 45, 0, 0.7);
+  padding: 6px 12px 6px 8px;
+  font-size: 12px;
+  box-shadow: 0 8px 22px rgba(255, 80, 20, 0.55);
+  transform: scale(1.1);
+}
+
+.hot-tier-4 {
+  padding: 7px 13px 7px 9px;
+  font-size: 12.5px;
+  background: linear-gradient(135deg, #ff3d00, #ffc400);
+  box-shadow: 0 10px 26px rgba(255, 60, 0, 0.65);
   transform: scale(1.16);
-  animation: hot-pulse 1.6s ease-in-out infinite;
+  animation: hot-pulse 1.9s ease-in-out infinite;
+}
+
+.hot-tier-5 {
+  padding: 8px 15px 8px 10px;
+  font-size: 13.5px;
+  background: linear-gradient(135deg, #ff2d00, #ffe000);
+  box-shadow: 0 12px 32px rgba(255, 45, 0, 0.8);
+  transform: scale(1.24);
+  animation: hot-pulse 1.3s ease-in-out infinite;
 }
 
 @keyframes hot-pulse {
@@ -2757,11 +2773,15 @@ body {
 
 /* Card-level effects for the hottest posts, layered on top of the badge.
    Standard "animated glowing border" technique: a custom property for the
-   angle (so the browser can smoothly interpolate it), a conic-gradient
-   built from that angle, and a blurred duplicate underneath for the glow.
-   Animating the angle keeps the ring itself perfectly stable on the
-   rounded-rect border -- the earlier attempt rotated the whole masked
-   shape with transform, which visibly warped at the corners. */
+   angle (so the browser can smoothly interpolate it) and a conic-gradient
+   built from that angle, masked down to a thin ring. Animating the angle
+   keeps the ring itself perfectly stable on the rounded-rect border --
+   rotating the whole masked shape with transform instead visibly warps at
+   the corners. IMPORTANT: no full-card blurred gradient layer here -- an
+   earlier version blurred an unmasked, inset:0 gradient, which just
+   washed the entire photo in fire colors instead of glowing at the edge.
+   Any "glow" beyond the ring itself comes from box-shadow, which paints
+   outside the card and never tints the content under it. */
 @property --hot-angle {
   syntax: '<angle>';
   initial-value: 0deg;
@@ -2773,36 +2793,18 @@ body {
   position: relative;
 }
 
-/* Crisp ring, masked down to a thin band via the padding + mask-composite
-   trick (kept inside the card since both containers clip via
-   overflow:hidden -- only the box-shadow halo below is allowed to extend
-   past the edge, since box-shadow isn't clipped by overflow:hidden). */
 .hot-border {
   position: absolute;
   inset: 0;
   z-index: 3;
   pointer-events: none;
   border-radius: inherit;
-  padding: 2.5px;
+  padding: 2px;
   background: conic-gradient(from var(--hot-angle), var(--hot-c1), var(--hot-c2), var(--hot-c3), var(--hot-c4), var(--hot-c1));
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
-  animation: hot-spin var(--hot-speed, 5s) linear infinite;
-}
-
-/* Same gradient, blurred and see-through, radiating out from behind the
-   crisp ring for a soft glow. */
-.hot-border-glow {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  pointer-events: none;
-  border-radius: inherit;
-  background: conic-gradient(from var(--hot-angle), var(--hot-c1), var(--hot-c2), var(--hot-c3), var(--hot-c4), var(--hot-c1));
-  filter: blur(16px);
-  opacity: 0.55;
-  animation: hot-spin var(--hot-speed, 5s) linear infinite;
+  animation: hot-spin var(--hot-speed, 8s) linear infinite;
 }
 
 @keyframes hot-spin {
@@ -2812,44 +2814,72 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .hot-border,
-  .hot-border-glow {
+  .hot-border {
     animation: none;
   }
 }
 
-/* Tier 1, >=3x: warm embers, gentle pace. */
-.post-card-fire {
+/* Five escalating tiers, 2x/3x/5x/8x (1x is badge-only, no card border).
+   Each step: warmer colors, faster ring, stronger outer halo. */
+.post-card-tier-2 {
+  --hot-c1: #ff8a3d;
+  --hot-c2: #ffd88a;
+  --hot-c3: #ff8a3d;
+  --hot-c4: #ffcf6b;
+  --hot-speed: 8s;
+  box-shadow: 0 10px 22px rgba(255, 138, 61, 0.14);
+}
+
+.post-card-tier-3 {
   --hot-c1: #ff6a00;
   --hot-c2: #ffcf3d;
   --hot-c3: #ff3d00;
   --hot-c4: #ffb02e;
   --hot-speed: 5.5s;
-  box-shadow: 0 14px 30px rgba(255, 90, 0, 0.2);
+  box-shadow: 0 14px 28px rgba(255, 90, 0, 0.2);
 }
 
-/* Tier 2, >=5x: brighter + a bit faster, adds a pulsing outer halo and a
-   slow glare sweep across the cover image. */
-.post-card-blazing {
+.post-card-tier-4 {
   --hot-c1: #ff4d00;
   --hot-c2: #ffe14d;
   --hot-c3: #ff1a00;
   --hot-c4: #fff08a;
   --hot-speed: 3.8s;
-  animation: hot-halo 2.4s ease-in-out infinite;
+  animation: hot-halo-4 2.4s ease-in-out infinite;
 }
 
-@keyframes hot-halo {
+@keyframes hot-halo-4 {
   0%, 100% {
-    box-shadow: 0 0 22px rgba(255, 140, 0, 0.4), 0 18px 34px rgba(255, 90, 0, 0.26);
+    box-shadow: 0 0 20px rgba(255, 140, 0, 0.35), 0 16px 30px rgba(255, 90, 0, 0.22);
   }
   50% {
-    box-shadow: 0 0 42px rgba(255, 170, 0, 0.7), 0 22px 42px rgba(255, 110, 0, 0.38);
+    box-shadow: 0 0 36px rgba(255, 170, 0, 0.6), 0 20px 38px rgba(255, 110, 0, 0.32);
   }
 }
 
-.post-card-blazing::before,
-.post-card-inferno::before {
+.post-card-tier-5 {
+  --hot-c1: #ff2d00;
+  --hot-c2: #fff45c;
+  --hot-c3: #ff8a00;
+  --hot-c4: #ffffff;
+  --hot-speed: 2.4s;
+  animation: hot-halo-5 1.7s ease-in-out infinite;
+}
+
+@keyframes hot-halo-5 {
+  0%, 100% {
+    box-shadow: 0 0 26px rgba(255, 60, 0, 0.45), 0 18px 36px rgba(255, 90, 0, 0.28);
+  }
+  50% {
+    box-shadow: 0 0 48px rgba(255, 200, 0, 0.75), 0 24px 44px rgba(255, 120, 0, 0.4);
+  }
+}
+
+/* Tier 4-5 also get a very subtle, slow diagonal sheen across the cover
+   image itself -- a thin band of light, not a color wash (it's pure white
+   at low opacity, blended with "overlay" so it only catches highlights). */
+.post-card-tier-4::before,
+.post-card-tier-5::before {
   content: '';
   position: absolute;
   inset: 0;
@@ -2858,15 +2888,15 @@ body {
   border-radius: inherit;
   background: linear-gradient(
     115deg,
-    transparent 35%,
-    rgba(255, 255, 255, 0.4) 47%,
-    rgba(255, 255, 255, 0.72) 50%,
-    rgba(255, 255, 255, 0.4) 53%,
-    transparent 65%
+    transparent 42%,
+    rgba(255, 255, 255, 0.22) 49%,
+    rgba(255, 255, 255, 0.4) 50%,
+    rgba(255, 255, 255, 0.22) 51%,
+    transparent 58%
   );
-  background-size: 250% 250%;
+  background-size: 260% 260%;
   mix-blend-mode: overlay;
-  animation: hot-glare-sweep 11s ease-in-out infinite;
+  animation: hot-glare-sweep 13s ease-in-out infinite;
 }
 
 @keyframes hot-glare-sweep {
@@ -2878,25 +2908,6 @@ body {
   }
   100% {
     background-position: -140% -140%;
-  }
-}
-
-/* Tier 3, >=8x: hottest colors, fastest spin, strongest halo. */
-.post-card-inferno {
-  --hot-c1: #ff2d00;
-  --hot-c2: #fff45c;
-  --hot-c3: #ff8a00;
-  --hot-c4: #ffffff;
-  --hot-speed: 2.4s;
-  animation: hot-halo-intense 1.7s ease-in-out infinite;
-}
-
-@keyframes hot-halo-intense {
-  0%, 100% {
-    box-shadow: 0 0 28px rgba(255, 60, 0, 0.5), 0 20px 40px rgba(255, 90, 0, 0.32);
-  }
-  50% {
-    box-shadow: 0 0 56px rgba(255, 200, 0, 0.85), 0 26px 50px rgba(255, 120, 0, 0.46);
   }
 }
 
