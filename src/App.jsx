@@ -4,6 +4,7 @@ import {
   AtSign,
   Bookmark,
   CalendarDays,
+  ChevronDown,
   Copy,
   ExternalLink,
   Filter,
@@ -11,6 +12,7 @@ import {
   Heart,
   MessageCircle,
   MoreHorizontal,
+  Plus,
   RefreshCw,
   RotateCcw,
   Search,
@@ -28,12 +30,16 @@ const ACCOUNT_PROFILE_IMAGES = {
   traselveloreal: traselveloralProfileImage,
 };
 
-const TYPE_OPTIONS = ['All posts', 'Carousel', 'Video', 'Image'];
-const ACCOUNT_OPTIONS = [
-  { value: 'both', label: 'Both accounts' },
-  { value: 'chatgptricks', label: 'chatgptricks' },
-  { value: 'traselveloreal', label: 'traselveloreal' },
+// All/Sentient/Competitors tabs -- accounts themselves come from the
+// backend's self-serve account registry (/api/dashboard/accounts), not a
+// hardcoded list, so adding a new account never requires a frontend change.
+const GROUP_TABS = [
+  { value: 'all', label: 'All' },
+  { value: 'sentient', label: 'Sentient' },
+  { value: 'competitors', label: 'Competitors' },
 ];
+
+const TYPE_OPTIONS = ['All posts', 'Carousel', 'Video', 'Image'];
 const SORT_OPTIONS = [
   { value: 'likes-desc', label: 'Most liked' },
   { value: 'comments-desc', label: 'Most commented' },
@@ -223,6 +229,7 @@ function buildDatePresets(ranges) {
 
 function App() {
   const [dashboard, setDashboard] = useState({ posts: [], summary: {} });
+  const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [refreshing, setRefreshing] = useState(false);
@@ -238,20 +245,19 @@ function App() {
         setLoading(true);
         setLoadError('');
       }
-      const [chatResponse, traselResponse] = await Promise.all([
-        fetch(`${API_BASE}/api/tricks-dash/posts`, { signal }),
-        fetch(`${API_BASE}/api/traselveloreal/posts`, { signal }),
+      const [postsResponse, accountsResponse] = await Promise.all([
+        fetch(`${API_BASE}/api/dashboard/posts`, { signal }),
+        fetch(`${API_BASE}/api/dashboard/accounts`, { signal }),
       ]);
-      if (!chatResponse.ok) throw new Error(`HTTP ${chatResponse.status}`);
-      if (!traselResponse.ok) throw new Error(`HTTP ${traselResponse.status}`);
-      const chatData = await chatResponse.json();
-      const traselData = await traselResponse.json();
-      if (!Array.isArray(chatData.posts) || !Array.isArray(traselData.posts)) {
+      if (!postsResponse.ok) throw new Error(`HTTP ${postsResponse.status}`);
+      if (!accountsResponse.ok) throw new Error(`HTTP ${accountsResponse.status}`);
+      const postsData = await postsResponse.json();
+      const accountsData = await accountsResponse.json();
+      if (!Array.isArray(postsData.posts) || !Array.isArray(accountsData.accounts)) {
         throw new Error('The shared post database returned an invalid response.');
       }
-      const chatgptricksPosts = chatData.posts.map((post) => ({ ...post, account: post.account || 'chatgptricks' }));
-      const traselveloralPosts = traselData.posts.map((post) => ({ ...post, account: post.account || 'traselveloreal' }));
-      setDashboard({ posts: [...chatgptricksPosts, ...traselveloralPosts], summary: chatData.summary || {} });
+      setDashboard({ posts: postsData.posts, summary: postsData.summary || {} });
+      setAccounts(accountsData.accounts);
     } catch (error) {
       if (error.name !== 'AbortError' && !silent) {
         setLoadError('Could not load the shared Post DB. Try again in a moment.');
@@ -279,22 +285,6 @@ function App() {
     return () => clearInterval(timer);
   }, [loadDashboard]);
 
-  const runRefresh = useCallback(async (path, password) => {
-    try {
-      const response = await fetch(`${API_BASE}${path}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ password }),
-      });
-      if (response.status === 401) return { ok: false, unauthorized: true };
-      if (!response.ok) return { ok: false, unauthorized: false };
-      const data = await response.json();
-      return { ok: true, data };
-    } catch {
-      return { ok: false, unauthorized: false };
-    }
-  }, []);
-
   const handleRefresh = useCallback(async () => {
     const password = window.prompt('Refresh password:');
     if (!password) return;
@@ -302,29 +292,29 @@ function App() {
     setRefreshing(true);
     setRefreshNotice(null);
     try {
-      const [chatResult, traselResult] = await Promise.all([
-        runRefresh('/api/tricks-dash/refresh', password),
-        runRefresh('/api/traselveloreal/refresh', password),
-      ]);
-
-      if (chatResult.unauthorized || traselResult.unauthorized) {
+      const response = await fetch(`${API_BASE}/api/dashboard/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ password }),
+      });
+      if (response.status === 401) {
         setRefreshNotice({ type: 'error', text: 'Incorrect password.' });
         return;
       }
-      if (!chatResult.ok && !traselResult.ok) {
+      if (!response.ok) {
         setRefreshNotice({ type: 'error', text: 'Refresh failed. Try again in a moment.' });
         return;
       }
+      const data = await response.json();
 
       let added = 0;
       let updated = 0;
       let hotMarked = 0;
-      for (const result of [chatResult, traselResult]) {
-        if (!result.ok) continue;
-        const data = result.data;
-        added += data?.short_term?.new_posts?.added ?? 0;
-        updated += (data?.short_term?.engagement?.updated ?? 0) + (data?.daily?.updated ?? 0);
-        hotMarked += data?.short_term?.engagement?.hot_marked ?? 0;
+      for (const result of Object.values(data || {})) {
+        if (!result || result.error) continue;
+        added += result?.short_term?.new_posts?.added ?? 0;
+        updated += (result?.short_term?.engagement?.updated ?? 0) + (result?.daily?.updated ?? 0);
+        hotMarked += result?.short_term?.engagement?.hot_marked ?? 0;
       }
 
       const parts = [];
@@ -341,7 +331,7 @@ function App() {
     } finally {
       setRefreshing(false);
     }
-  }, [loadDashboard, runRefresh]);
+  }, [loadDashboard]);
   const typeCounts = useMemo(() => {
     const counts = {};
     for (const post of posts) {
@@ -358,19 +348,34 @@ function App() {
     return counts;
   }, [posts]);
 
+  const [query, setQuery] = useState('');
+  const deferredQuery = useDeferredValue(query);
+  const [activeGroup, setActiveGroup] = useState('all');
+  const groupScopedPosts = useMemo(
+    () => (activeGroup === 'all' ? posts : posts.filter((post) => post.group === activeGroup)),
+    [posts, activeGroup],
+  );
   const combinedSummary = useMemo(() => {
-    const totalPosts = posts.length;
-    const totalLikes = posts.reduce((sum, post) => sum + (post.likes || 0), 0);
+    const totalPosts = groupScopedPosts.length;
+    const totalLikes = groupScopedPosts.reduce((sum, post) => sum + (post.likes || 0), 0);
     return {
       totalPosts,
       totalLikes,
       averageLikes: totalPosts ? Math.round(totalLikes / totalPosts) : 0,
     };
-  }, [posts]);
-
-  const [query, setQuery] = useState('');
-  const deferredQuery = useDeferredValue(query);
-  const [activeAccount, setActiveAccount] = useState('both');
+  }, [groupScopedPosts]);
+  const accountsInScope = useMemo(
+    () => (activeGroup === 'all' ? accounts : accounts.filter((account) => account.group === activeGroup)),
+    [accounts, activeGroup],
+  );
+  const [selectedAccounts, setSelectedAccounts] = useState(() => new Set());
+  const [showAddAccount, setShowAddAccount] = useState(false);
+  // Whenever the tab (or the account roster itself) changes, default back
+  // to "everything in this tab selected" rather than carrying over a
+  // narrower selection from a different tab's account list.
+  useEffect(() => {
+    setSelectedAccounts(new Set(accountsInScope.map((account) => account.handle)));
+  }, [activeGroup, accounts]); // eslint-disable-line react-hooks/exhaustive-deps
   const [activeType, setActiveType] = useState('All posts');
   const [mediaFilter, setMediaFilter] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
@@ -404,7 +409,8 @@ function App() {
     const output = [];
 
     for (const post of posts) {
-      if (activeAccount !== 'both' && post.account !== activeAccount) continue;
+      if (activeGroup !== 'all' && post.group !== activeGroup) continue;
+      if (!selectedAccounts.has(post.account)) continue;
       if (activeType !== 'All posts' && post.postType !== activeType) continue;
       if (mediaFilter === 'video' && !post.isVideo) continue;
       if (mediaFilter === 'static' && post.isVideo) continue;
@@ -435,18 +441,18 @@ function App() {
     });
 
     return output;
-  }, [posts, activeAccount, activeType, mediaFilter, minLikes, minComments, dateFrom, dateTo, deferredQuery, sortBy]);
+  }, [posts, activeGroup, selectedAccounts, activeType, mediaFilter, minLikes, minComments, dateFrom, dateTo, deferredQuery, sortBy]);
 
   useEffect(() => {
     setVisibleCount(POSTS_PER_BATCH);
-  }, [deferredQuery, activeAccount, activeType, mediaFilter, minLikes, minComments, dateFrom, dateTo, sortBy]);
+  }, [deferredQuery, activeGroup, selectedAccounts, activeType, mediaFilter, minLikes, minComments, dateFrom, dateTo, sortBy]);
 
   const visible = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount]);
   const showingFrom = filtered.length ? 1 : 0;
   const showingTo = visible.length;
   const activeFilterCount = [
     Boolean(query.trim()),
-    activeAccount !== 'both',
+    selectedAccounts.size < accountsInScope.length,
     activeType !== 'All posts',
     mediaFilter !== 'all',
     datePreset !== 'all' || Boolean(dateFrom) || Boolean(dateTo),
@@ -469,7 +475,7 @@ function App() {
   const onReset = useCallback(() => {
     setQuery('');
     startTransition(() => {
-      setActiveAccount('both');
+      setSelectedAccounts(new Set(accountsInScope.map((account) => account.handle)));
       setActiveType('All posts');
       setMediaFilter('all');
       setSortBy('newest');
@@ -480,7 +486,7 @@ function App() {
       setDatePreset('all');
       setVisibleCount(POSTS_PER_BATCH);
     });
-  }, []);
+  }, [accountsInScope]);
 
   const applyDatePreset = useCallback((value) => {
     const preset = datePresets.find((option) => option.value === value);
@@ -572,6 +578,21 @@ function App() {
           {loadError ? <section className="dash-state dash-state-error">{loadError}</section> : null}
 
           {!loading && !loadError ? <>
+          <div className="group-tabs" role="tablist" aria-label="Account group">
+            {GROUP_TABS.map((tab) => (
+              <button
+                key={tab.value}
+                type="button"
+                role="tab"
+                aria-selected={activeGroup === tab.value}
+                className={activeGroup === tab.value ? 'group-tab group-tab-active' : 'group-tab'}
+                onClick={() => startTransition(() => setActiveGroup(tab.value))}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
           <section
             className={filtersHidden ? 'filter-strip filter-strip-hidden' : 'filter-strip'}
             aria-label="Dashboard filters"
@@ -583,20 +604,13 @@ function App() {
                   <AtSign size={13} />
                   Account
                 </legend>
-                <div className="chip-row compact-chips">
-                  {ACCOUNT_OPTIONS.map((option) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      className={option.value === activeAccount ? 'chip chip-active' : 'chip'}
-                      onClick={() => startTransition(() => setActiveAccount(option.value))}
-                      aria-pressed={option.value === activeAccount}
-                    >
-                      {option.label}
-                      {option.value !== 'both' ? <span>{accountCounts[option.value] ?? 0}</span> : null}
-                    </button>
-                  ))}
-                </div>
+                <AccountMultiSelect
+                  accounts={accountsInScope}
+                  counts={accountCounts}
+                  selected={selectedAccounts}
+                  onChange={(next) => startTransition(() => setSelectedAccounts(next))}
+                  onAddAccount={() => setShowAddAccount(true)}
+                />
               </fieldset>
 
               <fieldset className="filter-group-card filter-type">
@@ -815,6 +829,16 @@ function App() {
           ) : null}
         </aside> : null}
       </main>
+
+      {showAddAccount ? (
+        <AddAccountModal
+          onClose={() => setShowAddAccount(false)}
+          onCreated={async () => {
+            setShowAddAccount(false);
+            await loadDashboard();
+          }}
+        />
+      ) : null}
     </div>
   );
 }
@@ -824,6 +848,224 @@ function Metric({ label, value }) {
     <div className="metric">
       <span>{label}</span>
       <strong>{value}</strong>
+    </div>
+  );
+}
+
+// Dropdown with a checkbox list of accounts, scoped to whichever tab
+// (All/Sentient/Competitors) is currently active. Adding a new account
+// (self-serve, via the "+ Add account" row at the bottom) never requires a
+// frontend change -- the list is entirely driven by /api/dashboard/accounts.
+function AccountMultiSelect({ accounts, counts, selected, onChange, onAddAccount }) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const handleClick = (event) => {
+      if (containerRef.current && !containerRef.current.contains(event.target)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [open]);
+
+  const allSelected = accounts.length > 0 && accounts.every((account) => selected.has(account.handle));
+  let label = 'No accounts yet';
+  if (accounts.length) {
+    if (allSelected) label = accounts.length === 1 ? accounts[0].label : `All accounts (${accounts.length})`;
+    else if (selected.size === 0) label = 'No accounts selected';
+    else if (selected.size === 1) {
+      const match = accounts.find((account) => selected.has(account.handle));
+      label = match?.label ?? `1 account`;
+    } else label = `${selected.size} of ${accounts.length} accounts`;
+  }
+
+  const toggle = (handle) => {
+    const next = new Set(selected);
+    if (next.has(handle)) next.delete(handle);
+    else next.add(handle);
+    onChange(next);
+  };
+
+  return (
+    <div className="account-multiselect" ref={containerRef}>
+      <button
+        type="button"
+        className="account-multiselect-trigger"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+      >
+        <span>{label}</span>
+        <ChevronDown size={14} className={open ? 'chevron chevron-open' : 'chevron'} />
+      </button>
+      {open ? (
+        <div className="account-multiselect-panel" role="listbox" aria-multiselectable="true">
+          <div className="account-multiselect-actions">
+            <button
+              type="button"
+              onClick={() => onChange(new Set(accounts.map((account) => account.handle)))}
+            >
+              Select all
+            </button>
+            <button type="button" onClick={() => onChange(new Set())}>
+              Clear
+            </button>
+          </div>
+          <div className="account-multiselect-list">
+            {accounts.map((account) => (
+              <label key={account.handle} className="account-multiselect-item">
+                <input
+                  type="checkbox"
+                  checked={selected.has(account.handle)}
+                  onChange={() => toggle(account.handle)}
+                />
+                <span>{account.label}</span>
+                <b>{counts[account.handle] ?? 0}</b>
+              </label>
+            ))}
+            {!accounts.length ? <p className="account-multiselect-empty">No accounts in this group yet.</p> : null}
+          </div>
+          {onAddAccount ? (
+            <button
+              type="button"
+              className="account-multiselect-add"
+              onClick={() => {
+                setOpen(false);
+                onAddAccount();
+              }}
+            >
+              <Plus size={13} />
+              Add account
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+const ACCOUNT_GROUP_OPTIONS = [
+  { value: 'sentient', label: 'Sentient' },
+  { value: 'competitors', label: 'Competitors' },
+];
+
+// Self-serve account creation: register a new IG handle, then kick off a
+// one-time history backfill so it shows up with real posts right away
+// instead of waiting for the next scheduled refresh to slowly discover them.
+function AddAccountModal({ onClose, onCreated }) {
+  const [password, setPassword] = useState('');
+  const [handle, setHandle] = useState('');
+  const [label, setLabel] = useState('');
+  const [group, setGroup] = useState('competitors');
+  const [hotThreshold, setHotThreshold] = useState(600);
+  const [status, setStatus] = useState(null);
+  const [notice, setNotice] = useState('');
+
+  const submit = async (event) => {
+    event.preventDefault();
+    const cleanHandle = handle.trim().replace(/^@/, '');
+    if (!password || !cleanHandle) return;
+
+    setStatus('submitting');
+    setNotice('');
+    try {
+      const createResponse = await fetch(`${API_BASE}/api/admin/accounts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          password,
+          handle: cleanHandle,
+          label: label.trim() || cleanHandle,
+          group,
+          hot_threshold: String(hotThreshold),
+        }),
+      });
+      if (createResponse.status === 401) {
+        setStatus(null);
+        setNotice('Incorrect password.');
+        return;
+      }
+      if (!createResponse.ok) {
+        const body = await createResponse.json().catch(() => ({}));
+        setStatus(null);
+        setNotice(body.detail || 'Could not create the account.');
+        return;
+      }
+
+      setStatus('backfilling');
+      await fetch(`${API_BASE}/api/admin/accounts/${encodeURIComponent(cleanHandle)}/backfill`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ password, results_limit: '200' }),
+      }).catch(() => null);
+
+      setStatus(null);
+      await onCreated();
+    } catch (error) {
+      setStatus(null);
+      setNotice('Something went wrong. Try again.');
+    }
+  };
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <form className="modal-card" onClick={(event) => event.stopPropagation()} onSubmit={submit}>
+        <div className="modal-header">
+          <h2>Add account</h2>
+          <button type="button" className="icon-button" onClick={onClose} aria-label="Close">
+            <X size={16} />
+          </button>
+        </div>
+
+        <label className="modal-field">
+          <span>Instagram handle</span>
+          <input value={handle} onChange={(event) => setHandle(event.target.value)} placeholder="e.g. natgeo" required />
+        </label>
+
+        <label className="modal-field">
+          <span>Display label (optional)</span>
+          <input value={label} onChange={(event) => setLabel(event.target.value)} placeholder="Defaults to the handle" />
+        </label>
+
+        <label className="modal-field">
+          <span>Group</span>
+          <select value={group} onChange={(event) => setGroup(event.target.value)}>
+            {ACCOUNT_GROUP_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="modal-field">
+          <span>HOT threshold (likes in the first hour)</span>
+          <input
+            type="number"
+            min={0}
+            value={hotThreshold}
+            onChange={(event) => setHotThreshold(clampNumber(event.target.value, 0))}
+          />
+        </label>
+
+        <label className="modal-field">
+          <span>Refresh password</span>
+          <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required />
+        </label>
+
+        {notice ? <p className="modal-notice">{notice}</p> : null}
+
+        <div className="modal-actions">
+          <button type="button" className="ghost-button" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="submit" className="ghost-button primary" disabled={status !== null}>
+            {status === 'submitting' ? 'Creating…' : status === 'backfilling' ? 'Importing history…' : 'Add account'}
+          </button>
+        </div>
+      </form>
     </div>
   );
 }
