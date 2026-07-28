@@ -371,6 +371,43 @@ function App() {
   );
   const [selectedAccounts, setSelectedAccounts] = useState(() => new Set());
   const [showAddAccount, setShowAddAccount] = useState(false);
+  const [backgroundTasks, setBackgroundTasks] = useState([]);
+
+  // Kicks off the (slow, Apify-bound) initial history import for a
+  // freshly-created account without blocking the UI -- tracked as a
+  // floating card in BackgroundTaskStack instead of a modal the user has
+  // to wait in front of.
+  const startBackgroundBackfill = useCallback((account, password) => {
+    const id = `${account.handle}-${Date.now()}`;
+    setBackgroundTasks((tasks) => [
+      ...tasks,
+      { id, handle: account.handle, label: account.label, group: account.group, phase: 'importing', startedAt: Date.now(), added: 0, error: null },
+    ]);
+
+    (async () => {
+      try {
+        const response = await fetch(`${API_BASE}/api/admin/accounts/${encodeURIComponent(account.handle)}/backfill`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({ password, results_limit: '200' }),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          setBackgroundTasks((tasks) => tasks.map((task) => (task.id === id ? { ...task, phase: 'error', error: data.detail || 'Import failed.' } : task)));
+          return;
+        }
+        setBackgroundTasks((tasks) => tasks.map((task) => (task.id === id ? { ...task, phase: 'done', added: data.added ?? 0 } : task)));
+        await loadDashboard(undefined, { silent: true });
+        setTimeout(() => setBackgroundTasks((tasks) => tasks.filter((task) => task.id !== id)), 8000);
+      } catch (error) {
+        setBackgroundTasks((tasks) => tasks.map((task) => (task.id === id ? { ...task, phase: 'error', error: 'Import failed. Try again in a moment.' } : task)));
+      }
+    })();
+  }, [loadDashboard]);
+
+  const dismissBackgroundTask = useCallback((id) => {
+    setBackgroundTasks((tasks) => tasks.filter((task) => task.id !== id));
+  }, []);
   // Whenever the tab (or the account roster itself) changes, default back
   // to "everything in this tab selected" rather than carrying over a
   // narrower selection from a different tab's account list.
@@ -840,14 +877,17 @@ function App() {
       </main>
 
       {showAddAccount ? (
-        <AddAccountModal
+        <AddAccountWizard
           onClose={() => setShowAddAccount(false)}
-          onCreated={async () => {
+          onAccountCreated={(account, password) => {
             setShowAddAccount(false);
-            await loadDashboard();
+            loadDashboard(undefined, { silent: true });
+            startBackgroundBackfill(account, password);
           }}
         />
       ) : null}
+
+      <BackgroundTaskStack tasks={backgroundTasks} onDismiss={dismissBackgroundTask} />
     </div>
   );
 }
@@ -997,24 +1037,47 @@ const ACCOUNT_GROUP_OPTIONS = [
   { value: 'competitors', label: 'Competitors' },
 ];
 
-// Self-serve account creation: register a new IG handle, then kick off a
-// one-time history backfill so it shows up with real posts right away
-// instead of waiting for the next scheduled refresh to slowly discover them.
-function AddAccountModal({ onClose, onCreated }) {
+const WIZARD_STEPS = ['Account', 'Settings', 'Confirm'];
+
+// Self-serve account creation, as a 3-step wizard. Creating the account is
+// fast (a single DB insert) so it stays in-modal with immediate validation
+// (e.g. a wrong password surfaces right here). The slow part -- pulling
+// initial post history from Apify, which can take a minute or more -- is
+// hard to make feel un-stuck inside a blocking form, so as soon as the
+// account is created this modal closes and the import continues as a
+// floating background task (see BackgroundTaskStack) that the rest of the
+// dashboard stays fully interactive around.
+function AddAccountWizard({ onClose, onAccountCreated }) {
+  const [step, setStep] = useState(0);
   const [password, setPassword] = useState('');
   const [handle, setHandle] = useState('');
   const [label, setLabel] = useState('');
   const [group, setGroup] = useState('competitors');
   const [hotThreshold, setHotThreshold] = useState(600);
-  const [status, setStatus] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
   const [notice, setNotice] = useState('');
+
+  const cleanHandle = handle.trim().replace(/^@/, '');
+  const canLeaveStep0 = cleanHandle.length > 0;
+
+  const goNext = () => {
+    if (step === 0 && !canLeaveStep0) {
+      setNotice('Enter the Instagram handle first.');
+      return;
+    }
+    setNotice('');
+    setStep((value) => Math.min(value + 1, WIZARD_STEPS.length - 1));
+  };
+  const goBack = () => {
+    setNotice('');
+    setStep((value) => Math.max(value - 1, 0));
+  };
 
   const submit = async (event) => {
     event.preventDefault();
-    const cleanHandle = handle.trim().replace(/^@/, '');
     if (!password || !cleanHandle) return;
 
-    setStatus('submitting');
+    setSubmitting(true);
     setNotice('');
     try {
       const createResponse = await fetch(`${API_BASE}/api/admin/accounts`, {
@@ -1029,35 +1092,29 @@ function AddAccountModal({ onClose, onCreated }) {
         }),
       });
       if (createResponse.status === 401) {
-        setStatus(null);
+        setSubmitting(false);
         setNotice('Incorrect password.');
         return;
       }
       if (!createResponse.ok) {
         const body = await createResponse.json().catch(() => ({}));
-        setStatus(null);
+        setSubmitting(false);
         setNotice(body.detail || 'Could not create the account.');
         return;
       }
 
-      setStatus('backfilling');
-      await fetch(`${API_BASE}/api/admin/accounts/${encodeURIComponent(cleanHandle)}/backfill`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ password, results_limit: '200' }),
-      }).catch(() => null);
-
-      setStatus(null);
-      await onCreated();
+      // Created -- hand off to the parent, which closes this modal and
+      // starts the backfill as a background task with this same password.
+      onAccountCreated({ handle: cleanHandle, label: label.trim() || cleanHandle, group }, password);
     } catch (error) {
-      setStatus(null);
+      setSubmitting(false);
       setNotice('Something went wrong. Try again.');
     }
   };
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <form className="modal-card" onClick={(event) => event.stopPropagation()} onSubmit={submit}>
+      <form className="modal-card wizard-card" onClick={(event) => event.stopPropagation()} onSubmit={submit}>
         <div className="modal-header">
           <h2>Add account</h2>
           <button type="button" className="icon-button" onClick={onClose} aria-label="Close">
@@ -1065,53 +1122,155 @@ function AddAccountModal({ onClose, onCreated }) {
           </button>
         </div>
 
-        <label className="modal-field">
-          <span>Instagram handle</span>
-          <input value={handle} onChange={(event) => setHandle(event.target.value)} placeholder="e.g. natgeo" required />
-        </label>
+        <div className="wizard-steps" role="list">
+          {WIZARD_STEPS.map((stepLabel, index) => (
+            <div
+              key={stepLabel}
+              role="listitem"
+              className={
+                index === step ? 'wizard-step wizard-step-active' : index < step ? 'wizard-step wizard-step-done' : 'wizard-step'
+              }
+            >
+              <span className="wizard-step-dot">{index < step ? '✓' : index + 1}</span>
+              <span className="wizard-step-label">{stepLabel}</span>
+            </div>
+          ))}
+        </div>
 
-        <label className="modal-field">
-          <span>Display label (optional)</span>
-          <input value={label} onChange={(event) => setLabel(event.target.value)} placeholder="Defaults to the handle" />
-        </label>
+        {step === 0 ? (
+          <div className="wizard-panel">
+            <label className="modal-field">
+              <span>Instagram handle</span>
+              <input
+                value={handle}
+                onChange={(event) => setHandle(event.target.value)}
+                placeholder="e.g. natgeo"
+                autoFocus
+                required
+              />
+            </label>
+            <label className="modal-field">
+              <span>Display label (optional)</span>
+              <input value={label} onChange={(event) => setLabel(event.target.value)} placeholder="Defaults to the handle" />
+            </label>
+          </div>
+        ) : null}
 
-        <label className="modal-field">
-          <span>Group</span>
-          <select value={group} onChange={(event) => setGroup(event.target.value)}>
-            {ACCOUNT_GROUP_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
+        {step === 1 ? (
+          <div className="wizard-panel">
+            <label className="modal-field">
+              <span>Group</span>
+              <select value={group} onChange={(event) => setGroup(event.target.value)}>
+                {ACCOUNT_GROUP_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="modal-field">
+              <span>HOT threshold (likes in the first hour)</span>
+              <input
+                type="number"
+                min={0}
+                value={hotThreshold}
+                onChange={(event) => setHotThreshold(clampNumber(event.target.value, 0))}
+              />
+            </label>
+          </div>
+        ) : null}
 
-        <label className="modal-field">
-          <span>HOT threshold (likes in the first hour)</span>
-          <input
-            type="number"
-            min={0}
-            value={hotThreshold}
-            onChange={(event) => setHotThreshold(clampNumber(event.target.value, 0))}
-          />
-        </label>
-
-        <label className="modal-field">
-          <span>Refresh password</span>
-          <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required />
-        </label>
+        {step === 2 ? (
+          <div className="wizard-panel">
+            <div className="wizard-summary">
+              <div className="wizard-summary-avatar" aria-hidden="true">
+                {(label.trim() || cleanHandle || '?').slice(0, 2).toUpperCase()}
+              </div>
+              <div>
+                <p className="wizard-summary-handle">@{cleanHandle || 'handle'}</p>
+                <p className="wizard-summary-meta">
+                  {ACCOUNT_GROUP_OPTIONS.find((option) => option.value === group)?.label} · HOT at {hotThreshold}+ likes/hr
+                </p>
+              </div>
+            </div>
+            <label className="modal-field">
+              <span>Refresh password</span>
+              <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required autoFocus />
+            </label>
+            <p className="wizard-hint">
+              Post history import runs in the background after this -- you can keep using the dashboard while it works.
+            </p>
+          </div>
+        ) : null}
 
         {notice ? <p className="modal-notice">{notice}</p> : null}
 
-        <div className="modal-actions">
-          <button type="button" className="ghost-button" onClick={onClose}>
-            Cancel
+        <div className="modal-actions wizard-actions">
+          <button type="button" className="ghost-button" onClick={step === 0 ? onClose : goBack}>
+            {step === 0 ? 'Cancel' : 'Back'}
           </button>
-          <button type="submit" className="ghost-button primary" disabled={status !== null}>
-            {status === 'submitting' ? 'Creating…' : status === 'backfilling' ? 'Importing history…' : 'Add account'}
-          </button>
+          {step < WIZARD_STEPS.length - 1 ? (
+            <button type="button" className="ghost-button primary" onClick={goNext}>
+              Next
+            </button>
+          ) : (
+            <button type="submit" className="ghost-button primary" disabled={submitting}>
+              {submitting ? 'Creating…' : 'Add account'}
+            </button>
+          )}
         </div>
       </form>
+    </div>
+  );
+}
+
+// Floating, non-blocking progress widget for in-flight account imports.
+// Rendered as a fixed stack in the corner so the rest of the dashboard
+// (tabs, filters, gallery) stays fully usable while an Apify backfill
+// (which can take a minute or more) runs. There's no true progress
+// percentage available from the backend for a single blocking import call,
+// so the bar is an indeterminate sweep with an elapsed timer for feedback.
+function BackgroundTaskStack({ tasks, onDismiss }) {
+  const [now, setNow] = useState(Date.now());
+  const hasActive = tasks.some((task) => task.phase === 'importing');
+
+  useEffect(() => {
+    if (!hasActive) return undefined;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [hasActive]);
+
+  if (!tasks.length) return null;
+
+  return (
+    <div className="bg-task-stack">
+      {tasks.map((task) => {
+        const elapsedSec = Math.max(0, Math.round((now - task.startedAt) / 1000));
+        const initials = (task.label || task.handle || '?').slice(0, 2).toUpperCase();
+        return (
+          <div key={task.id} className={`bg-task-card bg-task-${task.phase}`}>
+            <div className="bg-task-avatar" aria-hidden="true">
+              {initials}
+            </div>
+            <div className="bg-task-body">
+              <div className="bg-task-top">
+                <span className="bg-task-handle">@{task.handle}</span>
+                <button type="button" className="bg-task-dismiss" onClick={() => onDismiss(task.id)} aria-label="Dismiss">
+                  <X size={12} />
+                </button>
+              </div>
+              <p className="bg-task-status">
+                {task.phase === 'importing' ? `Importing post history… ${elapsedSec}s` : null}
+                {task.phase === 'done' ? `Imported ${task.added} post${task.added === 1 ? '' : 's'}` : null}
+                {task.phase === 'error' ? task.error || 'Import failed.' : null}
+              </p>
+              <div className="bg-task-progress">
+                <div className={`bg-task-progress-fill bg-task-progress-${task.phase}`} />
+              </div>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
