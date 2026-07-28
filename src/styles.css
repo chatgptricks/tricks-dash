@@ -2404,6 +2404,15 @@ body {
   gap: 6px;
 }
 
+/* .select-field carries a 14px margin-bottom from its other (non-compact)
+   usage elsewhere in the app. In this compact Published card that shrinks
+   the Range wrapper's stretched height versus its From/To siblings, so its
+   select ends up sitting higher than the date inputs instead of sharing
+   the same bottom floor. Zero it out here specifically. */
+.date-fields .select-field {
+  margin-bottom: 0;
+}
+
 .select-field,
 .date-field,
 .number-field {
