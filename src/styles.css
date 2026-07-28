@@ -2319,7 +2319,14 @@ body {
 .filter-group-card {
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  /* A <legend> is not a flex item inside a display:flex fieldset -- the UA
+     renders it specially, overlapping the top border, outside normal flex
+     layout. That leaves exactly one real flex child (the control wrapper),
+     and justify-content:space-between with a single item collapses to
+     flex-start (spec behavior), which is why controls were pinning to the
+     top instead of sharing a bottom "floor" with taller cards. flex-end
+     pushes that single child straight to the bottom instead. */
+  justify-content: flex-end;
   min-width: 0;
   min-height: 68px;
   margin: 0;
