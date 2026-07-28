@@ -393,6 +393,28 @@ function App() {
       },
     ]);
 
+    // Cache the real profile picture locally so it survives past the CDN
+    // URL's expiry (see /api/dashboard/avatar/{handle}). Runs independently
+    // of the backfill below -- a failure here shouldn't block the import,
+    // and we already have the picture URL from the wizard's own preview
+    // fetch, so this just downloads it once rather than hitting Apify again.
+    if (account.avatarUrl) {
+      (async () => {
+        try {
+          const response = await fetch(`${API_BASE}/api/admin/accounts/${encodeURIComponent(account.handle)}/avatar`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({ password, image_url: account.avatarUrl }),
+          });
+          if (response.ok) {
+            await loadDashboard(undefined, { silent: true });
+          }
+        } catch (error) {
+          // Non-critical -- the card just falls back to initials if this fails.
+        }
+      })();
+    }
+
     (async () => {
       try {
         const params = { password, results_limit: '5000' };
