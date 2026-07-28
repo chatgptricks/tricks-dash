@@ -7,6 +7,7 @@ import {
   Copy,
   ExternalLink,
   Filter,
+  Flame,
   Heart,
   MessageCircle,
   MoreHorizontal,
@@ -21,7 +22,6 @@ import {
 import brandProfileImage from './assets/profile.jpg';
 import chatgptricksProfileImage from './assets/chatgptricks-profile.jpg';
 import traselveloralProfileImage from './assets/traselveloreal-profile.jpg';
-import traselveloreloPosts from './data/traselveloreal-posts.json';
 
 const ACCOUNT_PROFILE_IMAGES = {
   chatgptricks: chatgptricksProfileImage,
@@ -55,6 +55,14 @@ const POSTS_PER_BATCH = 60;
 const IG_HANDLE = 'chatgptricks';
 const API_BASE = (import.meta.env.VITE_API_BASE || 'https://cortex-api-db2e.onrender.com').replace(/\/$/, '');
 const PREDICT_URL = 'https://chatgptricks.github.io/cortex/';
+// A post stays pinned to the top + shows the HOT badge only while it's
+// still inside the same window the daily engagement job keeps refreshing it
+// (<=10 days old) -- after that it reverts to normal sort position.
+const HOT_PIN_WINDOW_DAYS = 10;
+// Live data refresh cadence for an already-open tab (the backend refreshes
+// itself automatically every 30 min during its active window; this just
+// keeps an open dashboard in sync with that without a manual reload).
+const AUTO_POLL_MS = 3 * 60 * 1000;
 
 const currencyFormatter = new Intl.NumberFormat('en-US');
 const compactFormatter = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 });
@@ -114,6 +122,12 @@ function normalizePost(post) {
   const isVideo = post.video === 'Yes' || postType === 'Video';
   const shortcode = realShortcode(post.shortcode);
   const permalink = post.permalink || (shortcode ? `https://www.instagram.com/${isVideo ? 'reel' : 'p'}/${shortcode}/` : '');
+  const ageDays = Number.isFinite(timestamp) ? (Date.now() - timestamp) / 86400000 : Infinity;
+  // A post keeps its HOT flag forever once it earns it (permanent record),
+  // but only stays pinned to the top / shows the badge while still within
+  // the active refresh window.
+  const isHot = Boolean(post.isHot);
+  const isPinned = isHot && ageDays <= HOT_PIN_WINDOW_DAYS;
 
   return {
     ...post,
@@ -122,6 +136,8 @@ function normalizePost(post) {
     permalink,
     isVideo,
     postType,
+    isHot,
+    isPinned,
     searchText: [caption, post.excerpt, post.ocrText, post.shortcode, post.permalink, post.type, postType]
       .map(normalizeSearchValue)
       .filter(Boolean)
@@ -139,12 +155,8 @@ function posterTheme(type) {
 function coverSources(post) {
   if (!post.coverUrl) return [];
   if (post.coverUrl.startsWith('http')) return [post.coverUrl];
-  // Locally-hosted static covers (e.g. traselveloreal reel covers bundled
-  // into public/) are served from this site's own base path, not the
-  // Predict API host.
-  if (post.coverUrl.startsWith('/traselveloreal-covers/')) {
-    return [`${import.meta.env.BASE_URL}${post.coverUrl.slice(1)}`];
-  }
+  // Both accounts serve covers live from the Cortex backend now
+  // (/api/tricks-dash/covers/{id} and /api/traselveloreal/covers/{id}).
   return [`${API_BASE}${post.coverUrl}`];
 }
 
@@ -220,23 +232,32 @@ function App() {
   const ranges = useMemo(() => calculateRanges(posts), [posts]);
   const datePresets = useMemo(() => buildDatePresets(ranges), [ranges]);
 
-  const loadDashboard = useCallback(async (signal) => {
+  const loadDashboard = useCallback(async (signal, { silent = false } = {}) => {
     try {
-      setLoading(true);
-      setLoadError('');
-      const response = await fetch(`${API_BASE}/api/tricks-dash/posts`, { signal });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const data = await response.json();
-      if (!Array.isArray(data.posts)) throw new Error('The shared post database returned an invalid response.');
-      const chatgptricksPosts = data.posts.map((post) => ({ ...post, account: post.account || 'chatgptricks' }));
-      // traselveloreal is a local-only dataset (not part of Predict's shared Post DB / API).
-      setDashboard({ posts: [...chatgptricksPosts, ...traselveloreloPosts], summary: data.summary || {} });
+      if (!silent) {
+        setLoading(true);
+        setLoadError('');
+      }
+      const [chatResponse, traselResponse] = await Promise.all([
+        fetch(`${API_BASE}/api/tricks-dash/posts`, { signal }),
+        fetch(`${API_BASE}/api/traselveloreal/posts`, { signal }),
+      ]);
+      if (!chatResponse.ok) throw new Error(`HTTP ${chatResponse.status}`);
+      if (!traselResponse.ok) throw new Error(`HTTP ${traselResponse.status}`);
+      const chatData = await chatResponse.json();
+      const traselData = await traselResponse.json();
+      if (!Array.isArray(chatData.posts) || !Array.isArray(traselData.posts)) {
+        throw new Error('The shared post database returned an invalid response.');
+      }
+      const chatgptricksPosts = chatData.posts.map((post) => ({ ...post, account: post.account || 'chatgptricks' }));
+      const traselveloralPosts = traselData.posts.map((post) => ({ ...post, account: post.account || 'traselveloreal' }));
+      setDashboard({ posts: [...chatgptricksPosts, ...traselveloralPosts], summary: chatData.summary || {} });
     } catch (error) {
-      if (error.name !== 'AbortError') {
+      if (error.name !== 'AbortError' && !silent) {
         setLoadError('Could not load the shared Post DB. Try again in a moment.');
       }
     } finally {
-      if (!signal?.aborted) setLoading(false);
+      if (!signal?.aborted && !silent) setLoading(false);
     }
   }, []);
 
@@ -246,6 +267,34 @@ function App() {
     return () => controller.abort();
   }, [loadDashboard]);
 
+  // Both accounts now refresh themselves automatically on the backend
+  // (every 30 min during the active window). Poll quietly in the background
+  // so an already-open tab picks up new likes/HOT status without a manual
+  // reload, without disturbing the loading/error UI on each tick.
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const controller = new AbortController();
+      loadDashboard(controller.signal, { silent: true });
+    }, AUTO_POLL_MS);
+    return () => clearInterval(timer);
+  }, [loadDashboard]);
+
+  const runRefresh = useCallback(async (path, password) => {
+    try {
+      const response = await fetch(`${API_BASE}${path}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ password }),
+      });
+      if (response.status === 401) return { ok: false, unauthorized: true };
+      if (!response.ok) return { ok: false, unauthorized: false };
+      const data = await response.json();
+      return { ok: true, data };
+    } catch {
+      return { ok: false, unauthorized: false };
+    }
+  }, []);
+
   const handleRefresh = useCallback(async () => {
     const password = window.prompt('Refresh password:');
     if (!password) return;
@@ -253,29 +302,46 @@ function App() {
     setRefreshing(true);
     setRefreshNotice(null);
     try {
-      const response = await fetch(`${API_BASE}/api/tricks-dash/refresh`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ password }),
-      });
-      if (response.status === 401) {
+      const [chatResult, traselResult] = await Promise.all([
+        runRefresh('/api/tricks-dash/refresh', password),
+        runRefresh('/api/traselveloreal/refresh', password),
+      ]);
+
+      if (chatResult.unauthorized || traselResult.unauthorized) {
         setRefreshNotice({ type: 'error', text: 'Incorrect password.' });
         return;
       }
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const data = await response.json();
-      const added = data.added ?? 0;
+      if (!chatResult.ok && !traselResult.ok) {
+        setRefreshNotice({ type: 'error', text: 'Refresh failed. Try again in a moment.' });
+        return;
+      }
+
+      let added = 0;
+      let updated = 0;
+      let hotMarked = 0;
+      for (const result of [chatResult, traselResult]) {
+        if (!result.ok) continue;
+        const data = result.data;
+        added += data?.short_term?.new_posts?.added ?? 0;
+        updated += (data?.short_term?.engagement?.updated ?? 0) + (data?.daily?.updated ?? 0);
+        hotMarked += data?.short_term?.engagement?.hot_marked ?? 0;
+      }
+
+      const parts = [];
+      if (added > 0) parts.push(`${added} new post${added === 1 ? '' : 's'}`);
+      if (updated > 0) parts.push(`${updated} post${updated === 1 ? '' : 's'} refreshed`);
+      if (hotMarked > 0) parts.push(`${hotMarked} marked HOT`);
       setRefreshNotice({
         type: 'success',
-        text: added > 0 ? `Added ${added} new post${added === 1 ? '' : 's'}.` : 'Already up to date.',
+        text: parts.length ? `${parts.join(', ')}.` : 'Already up to date.',
       });
-      if (added > 0) await loadDashboard();
+      if (added > 0 || updated > 0) await loadDashboard();
     } catch (error) {
       setRefreshNotice({ type: 'error', text: 'Refresh failed. Try again in a moment.' });
     } finally {
       setRefreshing(false);
     }
-  }, [loadDashboard]);
+  }, [loadDashboard, runRefresh]);
   const typeCounts = useMemo(() => {
     const counts = {};
     for (const post of posts) {
@@ -351,6 +417,10 @@ function App() {
     }
 
     output.sort((a, b) => {
+      // HOT posts always float to the top, regardless of the active sort --
+      // ties within the pinned group (and the rest of the list) still fall
+      // back to whatever sort the viewer picked.
+      if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
       switch (sortBy) {
         case 'comments-desc':
           return b.comments - a.comments || b.likes - a.likes;
@@ -782,6 +852,12 @@ const SelectedPost = memo(function SelectedPost({ post }) {
 
   return (
     <article className="selected-post">
+      {post.isPinned ? (
+        <div className="hot-badge hot-badge-large" title="Went viral in its first hour">
+          <Flame size={14} />
+          HOT
+        </div>
+      ) : null}
 
       {post.permalink ? (
         <a
@@ -816,6 +892,12 @@ const PostCard = memo(function PostCard({ post, priority, selected, onSelect, on
 
   return (
     <article className={selected ? 'post-card selected' : 'post-card'} onClick={handleClick} onKeyDown={handleKeyDown} role="button" tabIndex={0} aria-pressed={selected}>
+      {post.isPinned ? (
+        <div className="hot-badge" title="Went viral in its first hour">
+          <Flame size={13} />
+          HOT
+        </div>
+      ) : null}
       <div className="post-header">
         <div className="post-user">
           <div className="post-avatar" aria-hidden="true">
