@@ -2631,7 +2631,7 @@ body {
 
 .filter-clear-all {
   flex: 0 0 auto;
-  align-self: center;
+  align-self: stretch;
 }
 
 @media (max-width: 900px) {
