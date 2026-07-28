@@ -2595,32 +2595,36 @@ body {
   min-width: 84px;
 }
 
+/* Fieldsets grow to soak up any leftover row width so the bar always
+   reaches the container's right edge instead of leaving it blank -- each
+   gets a growth weight roughly proportional to how much extra space suits
+   its content. Sort and Clear Filters stay fixed-width, simple controls. */
 .filter-account {
-  flex: 0 0 auto;
+  flex: 1 1 auto;
   min-width: 168px;
   max-width: none;
 }
 
 .filter-type {
-  flex: 0 0 auto;
+  flex: 1.2 1 auto;
   min-width: 220px;
   max-width: none;
 }
 
 .filter-media {
-  flex: 0 0 auto;
+  flex: 0.6 1 auto;
   min-width: 130px;
   max-width: none;
 }
 
 .filter-date {
-  flex: 0 0 auto;
+  flex: 1.4 1 auto;
   min-width: 230px;
   max-width: none;
 }
 
 .filter-engagement {
-  flex: 0 0 auto;
+  flex: 1 1 auto;
   min-width: 190px;
   max-width: none;
 }
