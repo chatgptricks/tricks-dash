@@ -2994,6 +2994,13 @@ body {
   font-size: 0.58rem;
 }
 
+/* Per explicit request: while scrolled/compact, keep only the (shrunk)
+   title and (shrunk) search bar visible -- hide the metrics/refresh/predict
+   cluster entirely rather than just shrinking it. */
+.topbar-compact .topbar-metrics {
+  display: none;
+}
+
 /* Filter bar polish pass: a touch more depth/separation between the strip
    and the page behind it, and a livelier hover/active state per filter
    card so the row reads less like a flat toolbar. */
@@ -3045,6 +3052,19 @@ body {
   display: flex;
   gap: 6px;
   margin: 0 0 10px;
+  overflow: hidden;
+  max-height: 46px;
+  opacity: 1;
+  transform: translateY(0);
+  transition: max-height 220ms ease, opacity 160ms ease, transform 220ms ease, margin 220ms ease;
+}
+
+.group-tabs-hidden {
+  max-height: 0;
+  opacity: 0;
+  margin: 0;
+  transform: translateY(-8px);
+  pointer-events: none;
 }
 
 .group-tab {
@@ -3124,12 +3144,15 @@ body {
   transform: rotate(180deg);
 }
 
+/* Portaled to document.body (see AccountMultiSelect) and positioned via
+   inline top/left/minWidth computed from the trigger's bounding rect --
+   .filter-strip needs overflow:hidden for its own collapse animation, so a
+   panel positioned relative to an ancestor inside it would get clipped. */
 .account-multiselect-panel {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  z-index: 30;
-  width: max(100%, 230px);
+  position: fixed;
+  z-index: 80;
+  width: max-content;
+  max-width: 280px;
   padding: 8px;
   border: 1px solid rgba(255, 255, 255, 0.13);
   border-radius: 10px;

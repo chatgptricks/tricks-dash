@@ -1,4 +1,5 @@
 import { memo, startTransition, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   ArrowUpDown,
   AtSign,
@@ -578,7 +579,12 @@ function App() {
           {loadError ? <section className="dash-state dash-state-error">{loadError}</section> : null}
 
           {!loading && !loadError ? <>
-          <div className="group-tabs" role="tablist" aria-label="Account group">
+          <div
+            className={filtersHidden ? 'group-tabs group-tabs-hidden' : 'group-tabs'}
+            role="tablist"
+            aria-label="Account group"
+            aria-hidden={filtersHidden}
+          >
             {GROUP_TABS.map((tab) => (
               <button
                 key={tab.value}
@@ -858,17 +864,45 @@ function Metric({ label, value }) {
 // frontend change -- the list is entirely driven by /api/dashboard/accounts.
 function AccountMultiSelect({ accounts, counts, selected, onChange, onAddAccount }) {
   const [open, setOpen] = useState(false);
+  const [panelRect, setPanelRect] = useState(null);
   const containerRef = useRef(null);
+  const panelRef = useRef(null);
 
   useEffect(() => {
     if (!open) return undefined;
     const handleClick = (event) => {
-      if (containerRef.current && !containerRef.current.contains(event.target)) {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(event.target) &&
+        panelRef.current &&
+        !panelRef.current.contains(event.target)
+      ) {
         setOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
+  }, [open]);
+
+  // The dropdown panel is portaled to document.body and positioned with
+  // fixed coordinates derived from the trigger's bounding rect -- the
+  // trigger sits inside .filter-strip, which needs overflow:hidden for its
+  // own collapse animation, so an absolutely-positioned panel would get
+  // clipped instead of floating over the gallery.
+  useEffect(() => {
+    if (!open) return undefined;
+    const updatePosition = () => {
+      if (!containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      setPanelRect({ top: rect.bottom + 6, left: rect.left, width: rect.width });
+    };
+    updatePosition();
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+    };
   }, [open]);
 
   const allSelected = accounts.length > 0 && accounts.every((account) => selected.has(account.handle));
@@ -900,48 +934,57 @@ function AccountMultiSelect({ accounts, counts, selected, onChange, onAddAccount
         <span>{label}</span>
         <ChevronDown size={14} className={open ? 'chevron chevron-open' : 'chevron'} />
       </button>
-      {open ? (
-        <div className="account-multiselect-panel" role="listbox" aria-multiselectable="true">
-          <div className="account-multiselect-actions">
-            <button
-              type="button"
-              onClick={() => onChange(new Set(accounts.map((account) => account.handle)))}
+      {open && panelRect
+        ? createPortal(
+            <div
+              className="account-multiselect-panel"
+              role="listbox"
+              aria-multiselectable="true"
+              ref={panelRef}
+              style={{ top: panelRect.top, left: panelRect.left, minWidth: panelRect.width }}
             >
-              Select all
-            </button>
-            <button type="button" onClick={() => onChange(new Set())}>
-              Clear
-            </button>
-          </div>
-          <div className="account-multiselect-list">
-            {accounts.map((account) => (
-              <label key={account.handle} className="account-multiselect-item">
-                <input
-                  type="checkbox"
-                  checked={selected.has(account.handle)}
-                  onChange={() => toggle(account.handle)}
-                />
-                <span>{account.label}</span>
-                <b>{counts[account.handle] ?? 0}</b>
-              </label>
-            ))}
-            {!accounts.length ? <p className="account-multiselect-empty">No accounts in this group yet.</p> : null}
-          </div>
-          {onAddAccount ? (
-            <button
-              type="button"
-              className="account-multiselect-add"
-              onClick={() => {
-                setOpen(false);
-                onAddAccount();
-              }}
-            >
-              <Plus size={13} />
-              Add account
-            </button>
-          ) : null}
-        </div>
-      ) : null}
+              <div className="account-multiselect-actions">
+                <button
+                  type="button"
+                  onClick={() => onChange(new Set(accounts.map((account) => account.handle)))}
+                >
+                  Select all
+                </button>
+                <button type="button" onClick={() => onChange(new Set())}>
+                  Clear
+                </button>
+              </div>
+              <div className="account-multiselect-list">
+                {accounts.map((account) => (
+                  <label key={account.handle} className="account-multiselect-item">
+                    <input
+                      type="checkbox"
+                      checked={selected.has(account.handle)}
+                      onChange={() => toggle(account.handle)}
+                    />
+                    <span>{account.label}</span>
+                    <b>{counts[account.handle] ?? 0}</b>
+                  </label>
+                ))}
+                {!accounts.length ? <p className="account-multiselect-empty">No accounts in this group yet.</p> : null}
+              </div>
+              {onAddAccount ? (
+                <button
+                  type="button"
+                  className="account-multiselect-add"
+                  onClick={() => {
+                    setOpen(false);
+                    onAddAccount();
+                  }}
+                >
+                  <Plus size={13} />
+                  Add account
+                </button>
+              ) : null}
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }
