@@ -381,7 +381,17 @@ function App() {
     const id = `${account.handle}-${Date.now()}`;
     setBackgroundTasks((tasks) => [
       ...tasks,
-      { id, handle: account.handle, label: account.label, group: account.group, phase: 'importing', startedAt: Date.now(), added: 0, error: null },
+      {
+        id,
+        handle: account.handle,
+        label: account.label,
+        group: account.group,
+        avatarUrl: account.avatarUrl || null,
+        phase: 'importing',
+        startedAt: Date.now(),
+        added: 0,
+        error: null,
+      },
     ]);
 
     (async () => {
@@ -1057,8 +1067,43 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
   const [submitting, setSubmitting] = useState(false);
   const [notice, setNotice] = useState('');
 
+  // Live profile-picture preview: a single lightweight Apify lookup fired
+  // a moment after the user stops typing the handle, so step 1 can show
+  // who they're actually about to add instead of just a blank field.
+  // Best-effort only -- a failed/unknown lookup never blocks the wizard,
+  // it just falls back to the initials placeholder used everywhere else.
+  const [preview, setPreview] = useState(null); // { profile_pic_url, full_name, followers_count } | null
+  const [previewStatus, setPreviewStatus] = useState('idle'); // idle | loading | error
+  const previewRequestRef = useRef(0);
+
   const cleanHandle = handle.trim().replace(/^@/, '');
   const canLeaveStep0 = cleanHandle.length > 0;
+
+  useEffect(() => {
+    setPreview(null);
+    if (cleanHandle.length < 2) {
+      setPreviewStatus('idle');
+      return undefined;
+    }
+    setPreviewStatus('loading');
+    const requestId = ++previewRequestRef.current;
+    const timer = setTimeout(async () => {
+      try {
+        const response = await fetch(`${API_BASE}/api/admin/accounts/preview?handle=${encodeURIComponent(cleanHandle)}`);
+        if (previewRequestRef.current !== requestId) return; // stale -- handle changed since this fired
+        if (!response.ok) {
+          setPreviewStatus('error');
+          return;
+        }
+        const data = await response.json();
+        setPreview(data);
+        setPreviewStatus('idle');
+      } catch (error) {
+        if (previewRequestRef.current === requestId) setPreviewStatus('error');
+      }
+    }, 700);
+    return () => clearTimeout(timer);
+  }, [cleanHandle]);
 
   const goNext = () => {
     if (step === 0 && !canLeaveStep0) {
@@ -1105,7 +1150,10 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
 
       // Created -- hand off to the parent, which closes this modal and
       // starts the backfill as a background task with this same password.
-      onAccountCreated({ handle: cleanHandle, label: label.trim() || cleanHandle, group }, password);
+      onAccountCreated(
+        { handle: cleanHandle, label: label.trim() || cleanHandle, group, avatarUrl: preview?.profile_pic_url || null },
+        password,
+      );
     } catch (error) {
       setSubmitting(false);
       setNotice('Something went wrong. Try again.');
@@ -1139,16 +1187,36 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
 
         {step === 0 ? (
           <div className="wizard-panel">
-            <label className="modal-field">
-              <span>Instagram handle</span>
-              <input
-                value={handle}
-                onChange={(event) => setHandle(event.target.value)}
-                placeholder="e.g. natgeo"
-                autoFocus
-                required
-              />
-            </label>
+            <div className="wizard-handle-row">
+              <div className={previewStatus === 'loading' ? 'wizard-preview-avatar wizard-preview-loading' : 'wizard-preview-avatar'}>
+                {preview?.profile_pic_url ? (
+                  <img src={preview.profile_pic_url} alt="" referrerPolicy="no-referrer" />
+                ) : previewStatus === 'loading' ? (
+                  <span className="wizard-preview-spinner" aria-hidden="true" />
+                ) : (
+                  <AtSign size={16} />
+                )}
+              </div>
+              <label className="modal-field wizard-handle-field">
+                <span>Instagram handle</span>
+                <input
+                  value={handle}
+                  onChange={(event) => setHandle(event.target.value)}
+                  placeholder="e.g. natgeo"
+                  autoFocus
+                  required
+                />
+              </label>
+            </div>
+            {preview ? (
+              <p className="wizard-preview-meta">
+                {preview.full_name || `@${preview.handle}`}
+                {typeof preview.followers_count === 'number' ? ` · ${compactFormatter.format(preview.followers_count)} followers` : ''}
+                {preview.private ? ' · Private' : ''}
+              </p>
+            ) : previewStatus === 'error' ? (
+              <p className="wizard-preview-meta wizard-preview-meta-error">Couldn't find that account -- double-check the handle.</p>
+            ) : null}
             <label className="modal-field">
               <span>Display label (optional)</span>
               <input value={label} onChange={(event) => setLabel(event.target.value)} placeholder="Defaults to the handle" />
@@ -1184,7 +1252,11 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
           <div className="wizard-panel">
             <div className="wizard-summary">
               <div className="wizard-summary-avatar" aria-hidden="true">
-                {(label.trim() || cleanHandle || '?').slice(0, 2).toUpperCase()}
+                {preview?.profile_pic_url ? (
+                  <img src={preview.profile_pic_url} alt="" referrerPolicy="no-referrer" />
+                ) : (
+                  (label.trim() || cleanHandle || '?').slice(0, 2).toUpperCase()
+                )}
               </div>
               <div>
                 <p className="wizard-summary-handle">@{cleanHandle || 'handle'}</p>
@@ -1250,7 +1322,7 @@ function BackgroundTaskStack({ tasks, onDismiss }) {
         return (
           <div key={task.id} className={`bg-task-card bg-task-${task.phase}`}>
             <div className="bg-task-avatar" aria-hidden="true">
-              {initials}
+              {task.avatarUrl ? <img src={task.avatarUrl} alt="" referrerPolicy="no-referrer" /> : initials}
             </div>
             <div className="bg-task-body">
               <div className="bg-task-top">
