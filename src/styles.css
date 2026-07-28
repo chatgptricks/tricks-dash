@@ -2875,10 +2875,32 @@ body {
   }
 }
 
-/* Tier 4-5 also get a very subtle, slow diagonal sheen across the cover
-   image itself -- a thin band of light, not a color wash (it's pure white
-   at low opacity, blended with "overlay" so it only catches highlights). */
-.post-card-tier-4::before,
+/* Tier 4-5 also get a diagonal sheen rolling across the cover image in a
+   single direction -- linear timing + a keyframe that never returns to its
+   start mid-cycle means it sweeps one way, then snaps back instantly to
+   restart, instead of ping-ponging back and forth. Pure white at low
+   opacity, blended with "overlay" so it only catches highlights, never a
+   color wash. Tier 4 is the more subtle of the two; tier 5 is more vivid. */
+.post-card-tier-4::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  border-radius: inherit;
+  background: linear-gradient(
+    115deg,
+    transparent 44%,
+    rgba(255, 255, 255, 0.12) 49%,
+    rgba(255, 255, 255, 0.22) 50%,
+    rgba(255, 255, 255, 0.12) 51%,
+    transparent 56%
+  );
+  background-size: 260% 260%;
+  mix-blend-mode: overlay;
+  animation: hot-glare-roll 13s linear infinite;
+}
+
 .post-card-tier-5::before {
   content: '';
   position: absolute;
@@ -2888,26 +2910,23 @@ body {
   border-radius: inherit;
   background: linear-gradient(
     115deg,
-    transparent 42%,
-    rgba(255, 255, 255, 0.22) 49%,
-    rgba(255, 255, 255, 0.4) 50%,
-    rgba(255, 255, 255, 0.22) 51%,
-    transparent 58%
+    transparent 38%,
+    rgba(255, 255, 255, 0.32) 48%,
+    rgba(255, 255, 255, 0.62) 50%,
+    rgba(255, 255, 255, 0.32) 52%,
+    transparent 62%
   );
   background-size: 260% 260%;
   mix-blend-mode: overlay;
-  animation: hot-glare-sweep 13s ease-in-out infinite;
+  animation: hot-glare-roll 8s linear infinite;
 }
 
-@keyframes hot-glare-sweep {
+@keyframes hot-glare-roll {
   0% {
-    background-position: -140% -140%;
-  }
-  50% {
-    background-position: 140% 140%;
+    background-position: -160% -160%;
   }
   100% {
-    background-position: -140% -140%;
+    background-position: 160% 160%;
   }
 }
 
