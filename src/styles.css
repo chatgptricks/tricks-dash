@@ -2243,14 +2243,16 @@ body {
   align-items: center;
   justify-content: center;
   gap: 7px;
-  min-width: 128px;
-  padding: 0 12px;
+  height: 40px;
+  min-width: 0;
+  padding: 0 14px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.025);
   color: rgba(245, 245, 245, 0.34);
   font-size: 11px;
   font-weight: 800;
+  white-space: nowrap;
 }
 
 .filter-clear-all:disabled {
@@ -2631,7 +2633,7 @@ body {
 
 .filter-clear-all {
   flex: 0 0 auto;
-  align-self: stretch;
+  align-self: center;
 }
 
 @media (max-width: 900px) {
