@@ -489,6 +489,18 @@ function App() {
     lastScrollTopRef.current = top;
   }, []);
 
+  // Switching tabs changes which accounts are in scope, but the effect that
+  // re-selects them runs *after* this render -- so for one pass the selection
+  // still holds only the previous tab's handles and nothing matches, flashing
+  // "0 results" (easy to misread as a broken date filter). Resolve the
+  // selection here instead: keep only in-scope handles, and treat an empty
+  // result as "everything in this tab".
+  const effectiveAccounts = useMemo(() => {
+    const inScope = accountsInScope.map((account) => account.handle);
+    const chosen = inScope.filter((handle) => selectedAccounts.has(handle));
+    return new Set(chosen.length ? chosen : inScope);
+  }, [accountsInScope, selectedAccounts]);
+
   const filtered = useMemo(() => {
     const minDate = dateFrom ? new Date(`${dateFrom}T00:00:00`).getTime() : null;
     const maxDate = dateTo ? new Date(`${dateTo}T23:59:59`).getTime() : null;
@@ -496,7 +508,7 @@ function App() {
 
     for (const post of posts) {
       if (activeGroup !== 'all' && post.group !== activeGroup) continue;
-      if (!selectedAccounts.has(post.account)) continue;
+      if (!effectiveAccounts.has(post.account)) continue;
       if (activeType !== 'All posts' && post.postType !== activeType) continue;
       if (mediaFilter === 'video' && !post.isVideo) continue;
       if (mediaFilter === 'static' && post.isVideo) continue;
@@ -527,7 +539,7 @@ function App() {
     });
 
     return output;
-  }, [posts, activeGroup, selectedAccounts, activeType, mediaFilter, minLikes, minComments, dateFrom, dateTo, deferredQuery, sortBy]);
+  }, [posts, activeGroup, effectiveAccounts, activeType, mediaFilter, minLikes, minComments, dateFrom, dateTo, deferredQuery, sortBy]);
 
   useEffect(() => {
     setVisibleCount(POSTS_PER_BATCH);
