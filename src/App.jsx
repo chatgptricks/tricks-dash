@@ -72,6 +72,16 @@ const AUTO_POLL_MS = 3 * 60 * 1000;
 
 const currencyFormatter = new Intl.NumberFormat('en-US');
 const compactFormatter = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 });
+
+// Instagram hides or under-reports the like count on some posts, and Apify
+// then returns null/0/1/2/3. Those aren't real engagement numbers, so showing
+// them (or the old 500 placeholder) would be misleading -- render a dash.
+const UNKNOWN_LIKES_MAX = 3;
+
+function formatLikes(value) {
+  if (value === null || value === undefined || Number(value) <= UNKNOWN_LIKES_MAX) return '—';
+  return compactFormatter.format(value);
+}
 const dateFormatter = new Intl.DateTimeFormat('en-US', {
   month: 'short',
   day: 'numeric',
@@ -185,8 +195,12 @@ function calculateRanges(posts) {
   let dateMax = -Infinity;
 
   for (const post of posts) {
-    likesMin = Math.min(likesMin, post.likes);
-    likesMax = Math.max(likesMax, post.likes);
+    // Posts with an unknown like count (null) must not drag the slider range
+    // down to 0 -- Math.min/max would coerce null to 0 and skew the filter.
+    if (post.likes !== null && post.likes !== undefined) {
+      likesMin = Math.min(likesMin, post.likes);
+      likesMax = Math.max(likesMax, post.likes);
+    }
     commentsMin = Math.min(commentsMin, post.comments);
     commentsMax = Math.max(commentsMax, post.comments);
     if (Number.isFinite(post.timestamp)) {
@@ -900,7 +914,7 @@ function App() {
               </section>
 
               <section className="panel stats-panel">
-                <Metric label="Likes" value={compactFormatter.format(selected.likes)} />
+                <Metric label="Likes" value={formatLikes(selected.likes)} />
                 <Metric label="Comments" value={compactFormatter.format(selected.comments)} />
                 <Metric label="Date" value={formatDate(selected.postDate)} />
                 <Metric label="Media" value={selected.video} />
@@ -1538,7 +1552,7 @@ const PostCard = memo(function PostCard({ post, priority, selected, onSelect, on
       </div>
 
       <div className="post-copy">
-        <div className="post-likes">{compactFormatter.format(post.likes)} likes</div>
+        <div className="post-likes">{formatLikes(post.likes)} likes</div>
         <p>
           <strong>{post.account || IG_HANDLE}</strong> {post.headline || post.excerpt}
         </p>
