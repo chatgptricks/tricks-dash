@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="es">
+<html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -33,7 +33,7 @@ a{color:inherit}
   font-size:11px;font-weight:700;text-decoration:none;cursor:pointer}
 .linkbtn:hover{border-color:rgba(245,255,0,.4);color:var(--text)}
 
-/* filtros */
+/* filters */
 .filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:8px;
   padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--panel);margin-bottom:14px}
 .f{display:flex;flex-direction:column;gap:5px;min-width:0}
@@ -55,20 +55,26 @@ a{color:inherit}
 .kpi strong{font-size:22px;font-weight:800;letter-spacing:-.02em}
 .kpi em{display:block;font-style:normal;color:var(--muted);font-size:10px;margin-top:3px}
 
-/* secciones */
+/* sections */
 section{border:1px solid var(--line);border-radius:12px;background:var(--panel);
   padding:16px 18px;margin-bottom:14px}
 section>h2{margin:0 0 4px;font-size:14px;font-weight:800;letter-spacing:-.01em}
 section>h2 .tag{margin-left:8px;padding:2px 7px;border-radius:999px;background:rgba(245,255,0,.12);
   color:var(--accent);font-size:9px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
 section>p.sub{margin:0 0 14px;color:var(--muted);font-size:11px;line-height:1.5}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
-@media(max-width:1000px){.grid2,.grid3{grid-template-columns:1fr}}
-.chartbox{position:relative;height:260px}
+/* minmax(0,1fr) and min-width:0 are not cosmetic here: a plain `1fr` resolves
+   its minimum to min-content, and the min-content of a <canvas> is its own
+   width. Chart.js widens the canvas -> the column grows -> Chart.js widens it
+   again. Infinite loop that hard-freezes the tab. */
+.grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.grid2>*,.grid3>*{min-width:0;overflow:hidden}
+@media(max-width:1000px){.grid2,.grid3{grid-template-columns:minmax(0,1fr)}}
+.chartbox{position:relative;height:260px;min-width:0;width:100%}
 .chartbox.tall{height:320px}
+.chartbox canvas{max-width:100%}
 
-/* tabla */
+/* table */
 table{width:100%;border-collapse:collapse;font-size:11.5px}
 th{text-align:right;padding:7px 8px;color:var(--muted);font-size:9px;font-weight:800;
   letter-spacing:.07em;text-transform:uppercase;border-bottom:1px solid var(--line);white-space:nowrap;cursor:pointer}
@@ -83,10 +89,11 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
 .pill.s{background:rgba(74,168,255,.15);color:#8fc9ff}
 .pill.c{background:rgba(255,107,53,.15);color:#ffa480}
 
-/* nubes de palabras / hashtags */
+/* word / hashtag clouds */
 .cloud{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .cloud span{padding:5px 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel-2);cursor:default}
 .cloud span b{color:var(--accent);font-weight:800;margin-left:5px;font-size:10px}
+.cloud-h{font-size:11px;color:var(--muted);margin:0 0 9px;text-transform:uppercase;letter-spacing:.08em}
 
 /* heatmap */
 .heat{display:grid;grid-template-columns:38px repeat(24,1fr);gap:2px;font-size:8px}
@@ -120,34 +127,34 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
 
   <div class="filters">
     <div class="f f-wide">
-      <label>Cuentas</label>
+      <label>Accounts</label>
       <div class="chips" id="accChips"></div>
     </div>
-    <div class="f"><label>Desde</label><input type="date" id="from"></div>
-    <div class="f"><label>Hasta</label><input type="date" id="to"></div>
-    <div class="f"><label>Periodo rápido</label>
+    <div class="f"><label>From</label><input type="date" id="from"></div>
+    <div class="f"><label>To</label><input type="date" id="to"></div>
+    <div class="f"><label>Quick range</label>
       <select id="preset">
-        <option value="">Todo</option>
-        <option value="30">Últimos 30 días</option>
-        <option value="90" selected>Últimos 90 días</option>
-        <option value="180">Últimos 6 meses</option>
-        <option value="365">Último año</option>
+        <option value="" selected>All time</option>
+        <option value="30">Last 30 days</option>
+        <option value="90">Last 90 days</option>
+        <option value="180">Last 6 months</option>
+        <option value="365">Last year</option>
       </select>
     </div>
-    <div class="f"><label>Formato</label>
-      <select id="ftype"><option value="">Todos</option><option>Video</option><option>Carousel</option><option>Image</option></select>
+    <div class="f"><label>Format</label>
+      <select id="ftype"><option value="">All</option><option>Video</option><option>Carousel</option><option>Image</option></select>
     </div>
-    <div class="f"><label>Métrica de ranking</label>
+    <div class="f"><label>Rank by</label>
       <select id="metric">
         <option value="l">Likes</option>
         <option value="v">Views</option>
-        <option value="c">Comentarios</option>
+        <option value="c">Comments</option>
         <option value="er">Engagement / view</option>
       </select>
     </div>
   </div>
 
-  <div id="app"><div class="loading">Cargando datos…</div></div>
+  <div id="app"><div class="loading">Loading data…</div></div>
 </div>
 
 <script>
@@ -155,19 +162,25 @@ const API = 'https://cortex-api-db2e.onrender.com';
 const $ = s => document.querySelector(s);
 const fmt = n => n===null||n===undefined||Number.isNaN(n) ? '—'
   : Math.abs(n)>=1e6 ? (n/1e6).toFixed(1)+'M'
-  : Math.abs(n)>=1e3 ? (n/1e3).toFixed(1)+'K' : Math.round(n).toLocaleString('es');
-const pct = n => (n===null||!isFinite(n)) ? '—' : n.toFixed(1)+'%';
+  : Math.abs(n)>=1e3 ? (n/1e3).toFixed(1)+'K' : Math.round(n).toLocaleString('en-US');
+const xf  = n => (n===null||n===undefined||!isFinite(n)) ? '—' : n.toFixed(2)+'×';
+const pct = n => (n===null||n===undefined||!isFinite(n)) ? '—' : n.toFixed(1)+'%';
 
 let RAW=[], ACCOUNTS=[], SEL=new Set(), CHARTS=[];
 
-// Chart.js defaults acordes al tema oscuro
+// Chart.js defaults matched to the dark theme
 Chart.defaults.color='#8a8a8a';
 Chart.defaults.font.family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,sans-serif";
 Chart.defaults.font.size=10;
 Chart.defaults.borderColor='rgba(255,255,255,.07)';
+Chart.defaults.resizeDelay=120; // damp resize bursts instead of recomputing per pixel
+
+// Math.max(...arr) with 11.5k arguments can blow the call stack; reduce can't.
+const maxOf=a=>a.reduce((m,x)=>x>m?x:m,-Infinity);
+const minOf=a=>a.reduce((m,x)=>x<m?x:m,Infinity);
 
 const PALETTE=['#f5ff00','#4aa8ff','#ff6b35','#35c759','#c77dff','#ff9f0a','#00d4c8','#ff5c8a','#9ad34a'];
-const colorFor = (name) => PALETTE[[...ACCOUNTS.map(a=>a.handle)].indexOf(name) % PALETTE.length] || '#888';
+const colorFor = name => PALETTE[ACCOUNTS.map(a=>a.handle).indexOf(name) % PALETTE.length] || '#888';
 
 function destroyCharts(){ CHARTS.forEach(c=>{try{c.destroy()}catch(e){}}); CHARTS=[]; }
 
@@ -184,12 +197,11 @@ async function boot(){
     ACCOUNTS = data.accounts;
     SEL = new Set(ACCOUNTS.map(a=>a.handle));
     buildChips();
-    applyPreset();
     ['from','to','ftype','metric'].forEach(id=>$('#'+id).addEventListener('change',render));
-    $('#preset').addEventListener('change',()=>{applyPreset();});
-    render();
+    $('#preset').addEventListener('change',applyPreset);
+    applyPreset();
   }catch(e){
-    $('#app').innerHTML = '<div class="empty">No se pudieron cargar los datos.<br><small>'+e.message+'</small></div>';
+    $('#app').innerHTML = '<div class="empty">Could not load the data.<br><small>'+e.message+'</small></div>';
   }
 }
 
@@ -198,9 +210,9 @@ function buildChips(){
   box.innerHTML='';
   const mk=(label,handler,on)=>{const s=document.createElement('span');s.className='chip'+(on?' on':'');
     s.textContent=label;s.onclick=handler;box.appendChild(s);return s;};
-  mk('Todas',()=>{SEL=new Set(ACCOUNTS.map(a=>a.handle));buildChips();render()},SEL.size===ACCOUNTS.length);
-  mk('Solo Sentient',()=>{SEL=new Set(ACCOUNTS.filter(a=>a.group==='sentient').map(a=>a.handle));buildChips();render()},false);
-  mk('Solo Competencia',()=>{SEL=new Set(ACCOUNTS.filter(a=>a.group==='competitors').map(a=>a.handle));buildChips();render()},false);
+  mk('All',()=>{SEL=new Set(ACCOUNTS.map(a=>a.handle));buildChips();render()},SEL.size===ACCOUNTS.length);
+  mk('Ours only',()=>{SEL=new Set(ACCOUNTS.filter(a=>a.group==='sentient').map(a=>a.handle));buildChips();render()},false);
+  mk('Competitors only',()=>{SEL=new Set(ACCOUNTS.filter(a=>a.group==='competitors').map(a=>a.handle));buildChips();render()},false);
   ACCOUNTS.forEach(a=>{
     const s=mk('@'+a.handle,()=>{SEL.has(a.handle)?SEL.delete(a.handle):SEL.add(a.handle);buildChips();render()},SEL.has(a.handle));
     if(SEL.has(a.handle)) s.style.borderColor=colorFor(a.handle)+'88';
@@ -211,9 +223,8 @@ function applyPreset(){
   const days=$('#preset').value;
   if(!days){ $('#from').value=''; $('#to').value=''; }
   else{
-    const to=new Date(); const from=new Date(Date.now()-days*864e5);
-    $('#to').value=to.toISOString().slice(0,10);
-    $('#from').value=from.toISOString().slice(0,10);
+    $('#to').value=new Date().toISOString().slice(0,10);
+    $('#from').value=new Date(Date.now()-days*864e5).toISOString().slice(0,10);
   }
   render();
 }
@@ -231,29 +242,61 @@ function filtered(){
   });
 }
 
-// ---- helpers de metrica ----
-const views = p => p.v ?? null;                       // solo videos
-const eng   = p => (p.l||0)+(p.c||0);
-const engPerView = p => (p.v && p.v>0) ? eng(p)/p.v*100 : null;
+/* ---------------- metric helpers ---------------- */
+const eng = p => (p.l||0)+(p.c||0);
 const avg = arr => arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : null;
 const med = arr => { if(!arr.length) return null; const s=[...arr].sort((a,b)=>a-b); const m=s.length>>1;
   return s.length%2 ? s[m] : (s[m-1]+s[m])/2; };
+const engPerView = p => (p.v && p.v>0) ? eng(p)/p.v*100 : null;
+
+// Aggregate ratio, not an average of ratios. Averaging per-post percentages
+// lets one video with 40 views and 300 likes contribute 750% and drag the mean
+// with it -- that's how accounts showed "1142% engagement", which is impossible.
+// Summing numerator and denominator separately weights each post by its reach.
+function aggEngPerView(list){
+  let e=0,v=0;
+  list.forEach(p=>{ if(p.v&&p.v>0){ e+=eng(p); v+=p.v; } });
+  return v>0 ? e/v*100 : null;
+}
+
+// Relative performance index: how many times a post performs versus what's
+// normal FOR ITS OWN ACCOUNT. Without this, any ranking mixes views (hundreds
+// of thousands) with likes (thousands), across accounts of wildly different
+// sizes, and ends up measuring "who has more followers" instead of "what
+// works". 1.0 = typical for that account; 2.0 = twice its usual.
+let BASE={};
+function computeBaselines(list){
+  const byAcc={};
+  list.forEach(p=>{ (byAcc[p.a]=byAcc[p.a]||[]).push(p); });
+  BASE={};
+  for(const a in byAcc){
+    BASE[a]={ v: med(byAcc[a].filter(p=>p.v>0).map(p=>p.v))||null,
+              l: med(byAcc[a].filter(p=>p.l>0).map(p=>p.l))||null };
+  }
+}
+function idx(p){
+  const b=BASE[p.a]; if(!b) return null;
+  if(p.v>0 && b.v) return p.v/b.v;
+  if(p.l>0 && b.l) return p.l/b.l;
+  return null;
+}
 
 function render(){
   destroyCharts();
   const P = filtered();
-  $('#scope').textContent = P.length.toLocaleString('es')+' posts · '+SEL.size+' cuentas';
-  if(!P.length){ $('#app').innerHTML='<div class="empty">Ningún post con estos filtros.</div>'; return; }
+  computeBaselines(P);
+  $('#scope').textContent = P.length.toLocaleString('en-US')+' posts · '+SEL.size+' accounts';
+  if(!P.length){ $('#app').innerHTML='<div class="empty">No posts match these filters.</div>'; return; }
 
   $('#app').innerHTML = `
     ${kpiBlock(P)}
-    ${sectionFormato()}
-    ${sectionCuentas()}
-    ${sectionTemas()}
-    ${sectionCuando()}
+    ${sectionFormat()}
+    ${sectionAccounts()}
+    ${sectionTopics()}
+    ${sectionTiming()}
     ${sectionTop(P)}
   `;
-  drawFormato(P); drawCuentas(P); drawTemas(P); drawCuando(P);
+  drawFormat(P); drawAccounts(P); drawTopics(P); drawTiming(P);
 }
 
 /* ---------------- KPIs ---------------- */
@@ -262,93 +305,90 @@ function kpiBlock(P){
   const totalLikes = P.reduce((s,p)=>s+(p.l||0),0);
   const totalViews = withV.reduce((s,p)=>s+p.v,0);
   const totalCom = P.reduce((s,p)=>s+(p.c||0),0);
-  const erv = avg(P.map(engPerView).filter(x=>x!=null));
-  const days = (Math.max(...P.map(p=>p.ts))-Math.min(...P.map(p=>p.ts)))/864e5 || 1;
+  const tss=P.map(p=>p.ts); const days=(maxOf(tss)-minOf(tss))/864e5 || 1;
   const hot = P.filter(p=>p.hot).length;
   return `<div class="kpis">
-    <div class="kpi"><b>Posts</b><strong>${fmt(P.length)}</strong><em>${(P.length/days).toFixed(1)} por día</em></div>
-    <div class="kpi"><b>Likes</b><strong>${fmt(totalLikes)}</strong><em>${fmt(totalLikes/P.length)} promedio</em></div>
-    <div class="kpi"><b>Views (video)</b><strong>${fmt(totalViews)}</strong><em>${withV.length} videos medidos</em></div>
-    <div class="kpi"><b>Comentarios</b><strong>${fmt(totalCom)}</strong><em>${fmt(totalCom/P.length)} promedio</em></div>
-    <div class="kpi"><b>Engagement / view</b><strong>${pct(erv)}</strong><em>likes+coments sobre views</em></div>
-    <div class="kpi"><b>Posts HOT</b><strong>${fmt(hot)}</strong><em>${pct(hot/P.length*100)} del total</em></div>
+    <div class="kpi"><b>Posts</b><strong>${fmt(P.length)}</strong><em>${(P.length/days).toFixed(1)} per day</em></div>
+    <div class="kpi"><b>Likes</b><strong>${fmt(totalLikes)}</strong><em>${fmt(totalLikes/P.length)} average</em></div>
+    <div class="kpi"><b>Views (video)</b><strong>${fmt(totalViews)}</strong><em>${withV.length} videos measured</em></div>
+    <div class="kpi"><b>Comments</b><strong>${fmt(totalCom)}</strong><em>${fmt(totalCom/P.length)} average</em></div>
+    <div class="kpi"><b>Engagement / view</b><strong>${pct(aggEngPerView(P))}</strong><em>aggregate, not a mean of %</em></div>
+    <div class="kpi"><b>HOT posts</b><strong>${fmt(hot)}</strong><em>${pct(hot/P.length*100)} of total</em></div>
   </div>`;
 }
 
-/* ---------------- 1. Formato ---------------- */
-function sectionFormato(){return `
+/* ---------------- 1. Format ---------------- */
+function sectionFormat(){return `
 <section>
-  <h2>Qué formato rinde más <span class="tag">producción</span></h2>
-  <p class="sub">Compara reels, carruseles e imágenes. Abajo: cuántas slides conviene en un carrusel y qué duración de reel rinde mejor.</p>
+  <h2>What format performs best <span class="tag">production</span></h2>
+  <p class="sub">Reels vs carousels vs images. Below: how many slides a carousel should have, and which reel length travels furthest.</p>
   <div class="grid3">
-    <div><div class="chartbox"><canvas id="cFormato"></canvas></div></div>
+    <div><div class="chartbox"><canvas id="cFormat"></canvas></div></div>
     <div><div class="chartbox"><canvas id="cSlides"></canvas></div></div>
     <div><div class="chartbox"><canvas id="cDur"></canvas></div></div>
   </div>
-  <div id="formatoNote"></div>
+  <div id="formatNote"></div>
 </section>`;}
 
-function drawFormato(P){
-  // por formato: promedio de likes y de views
-  const tipos=['Video','Carousel','Image'];
-  const stats=tipos.map(t=>{
+function drawFormat(P){
+  const types=['Video','Carousel','Image'];
+  const stats=types.map(t=>{
     const g=P.filter(p=>p.t===t);
-    return {t, n:g.length, likes:avg(g.map(p=>p.l||0))||0, views:avg(g.filter(p=>p.v!=null).map(p=>p.v))||0,
-      er:avg(g.map(engPerView).filter(x=>x!=null))};
+    return {t, n:g.length, likes:avg(g.map(p=>p.l||0))||0,
+      views:avg(g.filter(p=>p.v!=null).map(p=>p.v))||0};
   }).filter(s=>s.n>0);
 
-  CHARTS.push(new Chart($('#cFormato'),{type:'bar',
+  CHARTS.push(new Chart($('#cFormat'),{type:'bar',
     data:{labels:stats.map(s=>s.t+' ('+s.n+')'),
       datasets:[
-        {label:'Likes promedio',data:stats.map(s=>Math.round(s.likes)),backgroundColor:'#f5ff00cc',borderRadius:4},
-        {label:'Views promedio',data:stats.map(s=>Math.round(s.views)),backgroundColor:'#4aa8ffcc',borderRadius:4},
+        {label:'Avg likes',data:stats.map(s=>Math.round(s.likes)),backgroundColor:'#f5ff00cc',borderRadius:4},
+        {label:'Avg views',data:stats.map(s=>Math.round(s.views)),backgroundColor:'#4aa8ffcc',borderRadius:4},
       ]},
-    options:{maintainAspectRatio:false,plugins:{title:{display:true,text:'Rendimiento por formato',color:'#f5f5f5',font:{size:11,weight:'800'}},
+    options:{maintainAspectRatio:false,plugins:{title:{display:true,text:'Performance by format',color:'#f5f5f5',font:{size:11,weight:'800'}},
       legend:{labels:{boxWidth:9,boxHeight:9}}},scales:{y:{beginAtZero:true,ticks:{callback:v=>fmt(v)}}}}}));
 
-  // slides de carrusel
   const car=P.filter(p=>p.t==='Carousel'&&p.sl);
   const buckets={};
   car.forEach(p=>{const k=Math.min(p.sl,10);(buckets[k]=buckets[k]||[]).push(p.l||0)});
   const ks=Object.keys(buckets).map(Number).sort((a,b)=>a-b);
+  const bestSl=bestKey(buckets);
   CHARTS.push(new Chart($('#cSlides'),{type:'bar',
     data:{labels:ks.map(k=>k===10?'10+':k+''),
-      datasets:[{label:'Likes promedio',data:ks.map(k=>Math.round(avg(buckets[k]))),
-        backgroundColor:ks.map(k=>k===bestKey(buckets)?'#35c759cc':'#ffffff22'),borderRadius:4}]},
-    options:{maintainAspectRatio:false,plugins:{title:{display:true,text:'Slides por carrusel ('+car.length+' posts)',color:'#f5f5f5',font:{size:11,weight:'800'}},
+      datasets:[{label:'Avg likes',data:ks.map(k=>Math.round(avg(buckets[k]))),
+        backgroundColor:ks.map(k=>k===bestSl?'#35c759cc':'#ffffff22'),borderRadius:4}]},
+    options:{maintainAspectRatio:false,plugins:{title:{display:true,text:'Slides per carousel ('+car.length+' posts)',color:'#f5f5f5',font:{size:11,weight:'800'}},
       legend:{display:false},tooltip:{callbacks:{afterLabel:c=>buckets[ks[c.dataIndex]].length+' posts'}}},
-      scales:{y:{beginAtZero:true,ticks:{callback:v=>fmt(v)}},x:{title:{display:true,text:'cantidad de slides'}}}}}));
+      scales:{y:{beginAtZero:true,ticks:{callback:v=>fmt(v)}},x:{title:{display:true,text:'number of slides'}}}}}));
 
-  // duracion de reels
   const reels=P.filter(p=>p.dur);
   const db={}; const range=d=>d<15?'<15s':d<30?'15-30s':d<60?'30-60s':d<90?'60-90s':'90s+';
   reels.forEach(p=>{const k=range(p.dur);(db[k]=db[k]||[]).push(p.v ?? p.l ?? 0)});
   const order=['<15s','15-30s','30-60s','60-90s','90s+'].filter(k=>db[k]);
+  const bestDur=bestKey(db);
   CHARTS.push(new Chart($('#cDur'),{type:'bar',
-    data:{labels:order,datasets:[{label:'Views promedio',data:order.map(k=>Math.round(avg(db[k]))),
-      backgroundColor:order.map(k=>k===bestKey(db)?'#35c759cc':'#ffffff22'),borderRadius:4}]},
-    options:{maintainAspectRatio:false,plugins:{title:{display:true,text:'Duración de reel ('+reels.length+' videos)',color:'#f5f5f5',font:{size:11,weight:'800'}},
+    data:{labels:order,datasets:[{label:'Avg views',data:order.map(k=>Math.round(avg(db[k]))),
+      backgroundColor:order.map(k=>k===bestDur?'#35c759cc':'#ffffff22'),borderRadius:4}]},
+    options:{maintainAspectRatio:false,plugins:{title:{display:true,text:'Reel length ('+reels.length+' videos)',color:'#f5f5f5',font:{size:11,weight:'800'}},
       legend:{display:false},tooltip:{callbacks:{afterLabel:c=>db[order[c.dataIndex]].length+' videos'}}},
       scales:{y:{beginAtZero:true,ticks:{callback:v=>fmt(v)}}}}}));
 
-  // conclusion automatica
-  const bestSl=bestKey(buckets), bestDur=bestKey(db);
   const notes=[];
   if(stats.length>1){
     const top=[...stats].sort((a,b)=>b.likes-a.likes)[0];
-    notes.push(`El formato con más likes promedio es <b>${top.t}</b> (${fmt(top.likes)}).`);
+    notes.push(`Highest average likes: <b>${top.t}</b> (${fmt(top.likes)}).`);
   }
-  if(bestSl) notes.push(`Los carruseles de <b>${bestSl===10?'10+':bestSl} slides</b> promedian más likes (${buckets[bestSl].length} posts).`);
-  if(bestDur) notes.push(`Los reels de <b>${bestDur}</b> son los de mayor alcance (${db[bestDur].length} videos).`);
-  $('#formatoNote').innerHTML = notes.length?`<div class="note">${notes.join(' ')}</div>`:'';
+  if(bestSl!=null) notes.push(`Carousels with <b>${bestSl===10?'10+':bestSl} slides</b> average the most likes (${buckets[bestSl].length} posts).`);
+  if(bestDur) notes.push(`<b>${bestDur}</b> reels travel furthest (${db[bestDur].length} videos).`);
+  $('#formatNote').innerHTML = notes.length?`<div class="note">${notes.join(' ')}</div>`:'';
 }
+// Requires >=3 posts so a single lucky post can't crown a bucket.
 function bestKey(obj){let bk=null,bv=-1;for(const k in obj){const a=avg(obj[k]);if(obj[k].length>=3&&a>bv){bv=a;bk=isNaN(k)?k:Number(k)}}return bk;}
 
-/* ---------------- 2. Cuentas ---------------- */
-function sectionCuentas(){return `
+/* ---------------- 2. Accounts ---------------- */
+function sectionAccounts(){return `
 <section>
-  <h2>Comparar cuentas <span class="tag">competencia</span></h2>
-  <p class="sub">Cabeza a cabeza. El <b>engagement por view</b> es la columna más honesta: mide cuántos de los que vieron reaccionaron, sin premiar a quien simplemente tiene más alcance.</p>
+  <h2>Account comparison <span class="tag">competitors</span></h2>
+  <p class="sub">Head to head. <b>Engagement / view</b> is the most honest column: it measures how many of the people who saw actually reacted, without rewarding whoever simply has more reach. Click any header to sort.</p>
   <div class="grid2">
     <div><div class="chartbox tall"><canvas id="cAcc"></canvas></div></div>
     <div style="overflow:auto;max-height:320px"><table id="tAcc"></table></div>
@@ -357,67 +397,68 @@ function sectionCuentas(){return `
 </section>`;}
 
 let accSort={k:'likes',dir:-1};
-function drawCuentas(P){
+function drawAccounts(P){
   const rows=[...SEL].map(h=>{
     const g=P.filter(p=>p.a===h); if(!g.length) return null;
     const wv=g.filter(p=>p.v!=null);
-    const days=(Math.max(...g.map(p=>p.ts))-Math.min(...g.map(p=>p.ts)))/864e5||1;
+    const gts=g.map(p=>p.ts); const days=(maxOf(gts)-minOf(gts))/864e5||1;
     return {h, group:(ACCOUNTS.find(a=>a.handle===h)||{}).group, n:g.length,
       likes:avg(g.map(p=>p.l||0))||0, views:wv.length?avg(wv.map(p=>p.v)):null,
-      com:avg(g.map(p=>p.c||0))||0, er:avg(g.map(engPerView).filter(x=>x!=null)),
-      ritmo:g.length/days, hot:g.filter(p=>p.hot).length};
+      com:avg(g.map(p=>p.c||0))||0, er:aggEngPerView(g),
+      pace:g.length/days, hot:g.filter(p=>p.hot).length};
   }).filter(Boolean);
 
   rows.sort((a,b)=>((b[accSort.k]??-1)-(a[accSort.k]??-1))*(accSort.dir<0?1:-1));
-  const maxL=Math.max(...rows.map(r=>r.likes));
-  const cols=[['h','Cuenta'],['n','Posts'],['likes','Likes prom.'],['views','Views prom.'],
-              ['com','Coment.'],['er','Eng./view'],['ritmo','Posts/día'],['hot','HOT']];
+  const maxL=maxOf(rows.map(r=>r.likes))||1;
+  const cols=[['h','Account'],['n','Posts'],['likes','Avg likes'],['views','Avg views'],
+              ['com','Comments'],['er','Eng./view'],['pace','Posts/day'],['hot','HOT']];
   $('#tAcc').innerHTML =
     '<thead><tr>'+cols.map(([k,l])=>`<th data-k="${k}" class="${accSort.k===k?'sorted':''}">${l}</th>`).join('')+'</tr></thead>'+
     '<tbody>'+rows.map(r=>`<tr>
       <td>@${r.h}<div class="bar"><i style="width:${(r.likes/maxL*100).toFixed(0)}%;background:${colorFor(r.h)}"></i></div>
-        <span class="pill ${r.group==='sentient'?'s':'c'}" style="margin-top:4px">${r.group==='sentient'?'propia':'competencia'}</span></td>
+        <span class="pill ${r.group==='sentient'?'s':'c'}" style="margin-top:4px">${r.group==='sentient'?'ours':'competitor'}</span></td>
       <td>${fmt(r.n)}</td><td>${fmt(r.likes)}</td><td>${r.views==null?'—':fmt(r.views)}</td>
-      <td>${fmt(r.com)}</td><td>${pct(r.er)}</td><td>${r.ritmo.toFixed(1)}</td><td>${r.hot}</td></tr>`).join('')+'</tbody>';
+      <td>${fmt(r.com)}</td><td>${pct(r.er)}</td><td>${r.pace.toFixed(1)}</td><td>${r.hot}</td></tr>`).join('')+'</tbody>';
   $('#tAcc').querySelectorAll('th').forEach(th=>th.onclick=()=>{
-    const k=th.dataset.k; accSort = {k, dir: accSort.k===k?-accSort.dir:-1}; drawCuentas(P);});
+    const k=th.dataset.k; accSort={k, dir: accSort.k===k?-accSort.dir:-1}; drawAccounts(P);});
 
   CHARTS.push(new Chart($('#cAcc'),{type:'bubble',
-    data:{datasets:rows.filter(r=>r.views!=null).map(r=>({label:'@'+r.h,
-      data:[{x:r.views,y:r.er??0,r:Math.max(5,Math.min(26,Math.sqrt(r.n)*1.6))}],
+    data:{datasets:rows.filter(r=>r.views!=null&&r.er!=null).map(r=>({label:'@'+r.h,
+      data:[{x:r.views,y:r.er,r:Math.max(5,Math.min(26,Math.sqrt(r.n)*1.6))}],
       backgroundColor:colorFor(r.h)+'bb',borderColor:colorFor(r.h)}))},
     options:{maintainAspectRatio:false,plugins:{
-      title:{display:true,text:'Alcance vs calidad de engagement',color:'#f5f5f5',font:{size:11,weight:'800'}},
+      title:{display:true,text:'Reach vs engagement quality',color:'#f5f5f5',font:{size:11,weight:'800'}},
       legend:{labels:{boxWidth:8,boxHeight:8}},
       tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${fmt(c.raw.x)} views · ${c.raw.y.toFixed(1)}% eng.`}}},
-      scales:{x:{title:{display:true,text:'views promedio'},ticks:{callback:v=>fmt(v)}},
-              y:{title:{display:true,text:'engagement por view (%)'},beginAtZero:true}}}}));
+      scales:{x:{title:{display:true,text:'average views'},ticks:{callback:v=>fmt(v)}},
+              y:{title:{display:true,text:'engagement per view (%)'},beginAtZero:true}}}}));
 
   const best=[...rows].filter(r=>r.er!=null).sort((a,b)=>b.er-a.er)[0];
   const wide=[...rows].filter(r=>r.views!=null).sort((a,b)=>b.views-a.views)[0];
   const notes=[];
-  if(best) notes.push(`<b>@${best.h}</b> tiene el mejor engagement por view (${pct(best.er)}): de cada 100 que ven, ${best.er.toFixed(1)} reaccionan.`);
-  if(wide&&best&&wide.h!==best.h) notes.push(`<b>@${wide.h}</b> llega a más gente (${fmt(wide.views)} views prom.) pero convierte a ${pct(wide.er)} — más alcance no es más conexión.`);
+  if(best) notes.push(`<b>@${best.h}</b> has the best engagement per view (${pct(best.er)}): of every 100 people who watch, ${best.er.toFixed(1)} react.`);
+  if(wide&&best&&wide.h!==best.h) notes.push(`<b>@${wide.h}</b> reaches more people (${fmt(wide.views)} avg views) but converts at ${pct(wide.er)} — more reach isn't more connection.`);
   $('#accNote').innerHTML = notes.length?`<div class="note">${notes.join(' ')}</div>`:'';
 }
 
-/* ---------------- 3. Temas y lenguaje ---------------- */
-const STOP=new Set(('de la el en y a los las que con por para un una del al es se su lo como mas más este esta estos estas o u ni si no te tu mi sus le les ha han hay muy ya sin sobre entre cuando donde quien porque the of to and a in is it you that for on with as are was be this have from or an by not but what all we your can will just how new now get out are'.split(' ')));
-function sectionTemas(){return `
+/* ---------------- 3. Topics & language ---------------- */
+const STOP=new Set(('the of to and a in is it you that for on with as are was be this have from or an by not but what all we your can will just how new now get out has had who why when where which their there them then than more most some such only other into over after also back down out off up if do does did can could would should who whom whose'
+  +' de la el en y a los las que con por para un una del al es se su lo como mas más este esta estos estas o u ni si no te tu mi sus le les ha han hay muy ya sin sobre entre cuando donde quien porque').split(' '));
+function sectionTopics(){return `
 <section>
-  <h2>Temas y lenguaje que funcionan <span class="tag">contenido</span></h2>
-  <p class="sub">Extraído del texto de los covers (OCR) y de los hashtags. El tamaño es frecuencia; el número, el promedio de likes de los posts que la usan.</p>
+  <h2>Topics &amp; language that work <span class="tag">content</span></h2>
+  <p class="sub">Mined from cover text (OCR) and hashtags. Size is frequency; the number is the <b>relative index</b> — <b>1.00×</b> is normal performance, <b>2.00×</b> is twice the usual for that account.</p>
   <div class="grid2">
-    <div><h3 style="font-size:11px;color:var(--muted);margin:0 0 9px;text-transform:uppercase;letter-spacing:.08em">Palabras en covers</h3><div class="cloud" id="wordCloud"></div></div>
-    <div><h3 style="font-size:11px;color:var(--muted);margin:0 0 9px;text-transform:uppercase;letter-spacing:.08em">Hashtags</h3><div class="cloud" id="tagCloud"></div></div>
+    <div><h3 class="cloud-h">Words on covers</h3><div class="cloud" id="wordCloud"></div></div>
+    <div><h3 class="cloud-h">Hashtags</h3><div class="cloud" id="tagCloud"></div></div>
   </div>
-  <div id="temasNote"></div>
+  <div id="topicsNote"></div>
 </section>`;}
 
-function drawTemas(P){
+function drawTopics(P){
   const wordStats={}, tagStats={};
   P.forEach(p=>{
-    const metric = p.v ?? p.l ?? 0;
+    const metric = idx(p); if(metric==null) return;
     if(p.ocr){
       const seen=new Set();
       p.ocr.toLowerCase().replace(/[^a-záéíóúñü0-9\s]/gi,' ').split(/\s+/)
@@ -432,95 +473,103 @@ function drawTemas(P){
     .sort((a,b)=>b[1].length-a[1].length).slice(0,34);
 
   const paint=(el,items)=>{
-    if(!items.length){$(el).innerHTML='<span style="color:var(--muted)">Sin datos suficientes</span>';return;}
-    const max=Math.max(...items.map(([,v])=>v.length));
+    if(!items.length){$(el).innerHTML='<span style="color:var(--muted)">Not enough data</span>';return;}
+    const max=maxOf(items.map(([,v])=>v.length))||1;
     $(el).innerHTML=items.map(([w,v])=>{
       const sz=11+Math.round(v.length/max*9);
-      const a=avg(v);
-      return `<span style="font-size:${sz}px" title="${v.length} posts">${w}<b>${fmt(a)}</b></span>`;
+      return `<span style="font-size:${sz}px" title="${v.length} posts · performs at ${xf(avg(v))} its account's normal">${w}<b>${xf(avg(v))}</b></span>`;
     }).join('');
   };
-  const w=top(wordStats,4), t=top(tagStats,3);
-  paint('#wordCloud',w); paint('#tagCloud',t);
+  paint('#wordCloud',top(wordStats,4)); paint('#tagCloud',top(tagStats,3));
 
-  // la palabra con mejor rendimiento (no la mas frecuente)
+  // Best-performing words, not the most frequent ones.
   const perf=Object.entries(wordStats).filter(([,v])=>v.length>=6)
     .map(([k,v])=>({k,n:v.length,a:avg(v)})).sort((a,b)=>b.a-a.a).slice(0,3);
   const notes=[];
-  if(perf.length) notes.push(`Las palabras que más rinden: ${perf.map(p=>`<b>${p.k}</b> (${fmt(p.a)} prom., ${p.n} posts)`).join(', ')}.`);
+  if(perf.length) notes.push(`Top-performing words: ${perf.map(p=>`<b>${p.k}</b> (${xf(p.a)}, ${p.n} posts)`).join(', ')}.`);
   const audio=P.filter(p=>p.oa!=null);
   if(audio.length>8){
-    const orig=avg(audio.filter(p=>p.oa===1).map(p=>p.v??p.l??0));
-    const ext=avg(audio.filter(p=>p.oa===0).map(p=>p.v??p.l??0));
-    if(orig&&ext) notes.push(`Audio original promedia <b>${fmt(orig)}</b> vs <b>${fmt(ext)}</b> con audio de terceros.`);
+    const orig=avg(audio.filter(p=>p.oa===1).map(idx).filter(x=>x!=null));
+    const ext=avg(audio.filter(p=>p.oa===0).map(idx).filter(x=>x!=null));
+    if(orig&&ext) notes.push(`Original audio performs at <b>${xf(orig)}</b> vs <b>${xf(ext)}</b> for third-party audio.`);
   }
-  $('#temasNote').innerHTML = notes.length?`<div class="note">${notes.join(' ')}</div>`:'';
+  $('#topicsNote').innerHTML = notes.length?`<div class="note">${notes.join(' ')}</div>`:'';
 }
 
-/* ---------------- 4. Cuándo publicar ---------------- */
-function sectionCuando(){return `
+/* ---------------- 4. When to post ---------------- */
+function sectionTiming(){return `
 <section>
-  <h2>Cuándo publicar <span class="tag">timing</span></h2>
-  <p class="sub">Rendimiento promedio según el día y la hora de publicación (UTC). Más claro = mejor. Las celdas vacías son franjas donde nunca se publicó.</p>
+  <h2>When to post <span class="tag">timing</span></h2>
+  <p class="sub">Performance by publish day and hour (UTC), measured as a <b>relative index</b>: how many times a post performs versus what's normal for its own account, so a big account doesn't drown out a small one. Brighter = better.</p>
   <div id="heat"></div>
-  <div class="legend"><span>menos</span><i style="background:rgba(245,255,0,.12)"></i><i style="background:rgba(245,255,0,.35)"></i><i style="background:rgba(245,255,0,.6)"></i><i style="background:rgba(245,255,0,.9)"></i><span>más</span></div>
+  <div class="legend"><span>worse</span><i style="background:rgba(245,255,0,.12)"></i><i style="background:rgba(245,255,0,.35)"></i><i style="background:rgba(245,255,0,.6)"></i><i style="background:rgba(245,255,0,.9)"></i><span>better</span>
+    <span style="margin-left:14px"><i style="background:rgba(255,255,255,.07)"></i> too few posts</span>
+    <span style="margin-left:14px"><i style="background:rgba(255,255,255,.03)"></i> never posted</span></div>
   <div class="grid2" style="margin-top:16px">
     <div><div class="chartbox"><canvas id="cDow"></canvas></div></div>
     <div><div class="chartbox"><canvas id="cHour"></canvas></div></div>
   </div>
-  <div id="cuandoNote"></div>
+  <div id="timingNote"></div>
 </section>`;}
 
-const DOW=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
-function drawCuando(P){
+const DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+function drawTiming(P){
   const cell={}, byDow={}, byHour={};
   P.forEach(p=>{
     if(p.hour==null) return;
-    const m=p.v ?? p.l ?? 0;
+    const m=idx(p); if(m==null) return;
     (cell[p.dow+'-'+p.hour]=cell[p.dow+'-'+p.hour]||[]).push(m);
     (byDow[p.dow]=byDow[p.dow]||[]).push(m);
     (byHour[p.hour]=byHour[p.hour]||[]).push(m);
   });
-  const vals=Object.values(cell).filter(v=>v.length>=2).map(v=>avg(v));
-  const mx=vals.length?Math.max(...vals):1, mn=vals.length?Math.min(...vals):0;
+
+  // Percentile-rank colour scale rather than linear min-max: a single viral
+  // slot pushes the maximum so high that the other 167 cells collapse into the
+  // same indistinguishable black. Ranking restores real contrast.
+  const MIN_POSTS=2;
+  const ranked=Object.entries(cell).filter(([,v])=>v.length>=MIN_POSTS)
+    .map(([k,v])=>[k,avg(v)]).sort((a,b)=>a[1]-b[1]);
+  const rank={}; ranked.forEach(([k],i)=>{ rank[k]= ranked.length>1 ? i/(ranked.length-1) : .5; });
+
   let html='<div class="heat"><div class="lbl"></div>';
   for(let h=0;h<24;h++) html+=`<div class="hr">${h%3===0?h:''}</div>`;
   for(let d=0;d<7;d++){
     html+=`<div class="lbl">${DOW[d]}</div>`;
     for(let h=0;h<24;h++){
-      const v=cell[d+'-'+h];
-      if(!v){html+='<div class="cell" style="background:rgba(255,255,255,.03)"></div>';continue}
-      const a=avg(v); const k=mx>mn?(a-mn)/(mx-mn):.5;
-      html+=`<div class="cell" title="${DOW[d]} ${h}:00 · ${fmt(a)} prom · ${v.length} posts"
-        style="background:rgba(245,255,0,${(0.08+k*0.85).toFixed(2)})"></div>`;
+      const key=d+'-'+h, v=cell[key];
+      if(!v){ html+='<div class="cell" title="never posted" style="background:rgba(255,255,255,.03)"></div>'; continue; }
+      if(rank[key]===undefined){
+        html+=`<div class="cell" title="${DOW[d]} ${h}:00 · only ${v.length} post, not enough to conclude"
+          style="background:rgba(255,255,255,.07)"></div>`; continue; }
+      html+=`<div class="cell" title="${DOW[d]} ${h}:00 · ${xf(avg(v))} its normal · ${v.length} posts"
+        style="background:rgba(245,255,0,${(0.08+rank[key]*0.85).toFixed(2)})"></div>`;
     }
   }
-  html+='</div>';
-  $('#heat').innerHTML=html;
+  $('#heat').innerHTML=html+'</div>';
 
   const dk=[...Array(7).keys()].filter(d=>byDow[d]);
   CHARTS.push(new Chart($('#cDow'),{type:'bar',
-    data:{labels:dk.map(d=>DOW[d]),datasets:[{label:'Promedio',data:dk.map(d=>Math.round(avg(byDow[d]))),
+    data:{labels:dk.map(d=>DOW[d]),datasets:[{label:'Index',data:dk.map(d=>+avg(byDow[d]).toFixed(2)),
       backgroundColor:'#f5ff00aa',borderRadius:4}]},
-    options:{maintainAspectRatio:false,plugins:{title:{display:true,text:'Por día de semana',color:'#f5f5f5',font:{size:11,weight:'800'}},
+    options:{maintainAspectRatio:false,plugins:{title:{display:true,text:'By day of week (index)',color:'#f5f5f5',font:{size:11,weight:'800'}},
       legend:{display:false},tooltip:{callbacks:{afterLabel:c=>byDow[dk[c.dataIndex]].length+' posts'}}},
-      scales:{y:{beginAtZero:true,ticks:{callback:v=>fmt(v)}}}}}));
+      scales:{y:{beginAtZero:true,ticks:{callback:v=>v+'×'}}}}}));
 
   const hk=[...Array(24).keys()].filter(h=>byHour[h]);
   CHARTS.push(new Chart($('#cHour'),{type:'line',
-    data:{labels:hk.map(h=>h+'h'),datasets:[{label:'Promedio',data:hk.map(h=>Math.round(avg(byHour[h]))),
+    data:{labels:hk.map(h=>h+'h'),datasets:[{label:'Index',data:hk.map(h=>+avg(byHour[h]).toFixed(2)),
       borderColor:'#4aa8ff',backgroundColor:'#4aa8ff22',fill:true,tension:.35,pointRadius:2}]},
-    options:{maintainAspectRatio:false,plugins:{title:{display:true,text:'Por hora del día (UTC)',color:'#f5f5f5',font:{size:11,weight:'800'}},
+    options:{maintainAspectRatio:false,plugins:{title:{display:true,text:'By hour of day, UTC (index)',color:'#f5f5f5',font:{size:11,weight:'800'}},
       legend:{display:false},tooltip:{callbacks:{afterLabel:c=>byHour[hk[c.dataIndex]].length+' posts'}}},
-      scales:{y:{beginAtZero:true,ticks:{callback:v=>fmt(v)}}}}}));
+      scales:{y:{beginAtZero:true,ticks:{callback:v=>v+'×'}}}}}));
 
   const bd=Object.entries(byDow).filter(([,v])=>v.length>=5).sort((a,b)=>avg(b[1])-avg(a[1]))[0];
   const bh=Object.entries(byHour).filter(([,v])=>v.length>=5).sort((a,b)=>avg(b[1])-avg(a[1]))[0];
   const notes=[];
-  if(bd) notes.push(`El mejor día es <b>${DOW[bd[0]]}</b> (${fmt(avg(bd[1]))} prom., ${bd[1].length} posts).`);
-  if(bh) notes.push(`La mejor franja es alrededor de las <b>${bh[0]}:00 UTC</b> (${fmt(avg(bh[1]))} prom.).`);
-  notes.push(`<span style="color:var(--muted)">Ojo: son correlaciones sobre lo ya publicado, no una garantía — si nunca se publicó en una franja, no hay dato que lo respalde.</span>`);
-  $('#cuandoNote').innerHTML=`<div class="note">${notes.join(' ')}</div>`;
+  if(bd) notes.push(`Best day is <b>${DOW[bd[0]]}</b> (${xf(avg(bd[1]))} its normal, ${bd[1].length} posts).`);
+  if(bh) notes.push(`Best window is around <b>${bh[0]}:00 UTC</b> (${xf(avg(bh[1]))}).`);
+  notes.push(`<span style="color:var(--muted)">These are correlations over what was already published, not a guarantee — a slot nobody has ever posted in has no evidence behind it either way.</span>`);
+  $('#timingNote').innerHTML=`<div class="note">${notes.join(' ')}</div>`;
 }
 
 /* ---------------- 5. Top posts ---------------- */
@@ -528,13 +577,13 @@ function sectionTop(P){
   const m=$('#metric').value;
   const val=p=>m==='er'?engPerView(p):m==='v'?p.v:m==='c'?p.c:p.l;
   const rows=[...P].filter(p=>val(p)!=null).sort((a,b)=>val(b)-val(a)).slice(0,25);
-  const label={l:'Likes',v:'Views',c:'Comentarios',er:'Eng./view'}[m];
+  const label={l:'Likes',v:'Views',c:'Comments',er:'Eng./view'}[m];
   return `<section>
     <h2>Top 25 posts <span class="tag">${label}</span></h2>
-    <p class="sub">Cambiá la métrica de ranking en los filtros de arriba. Clic en una fila para abrir el post en Instagram.</p>
+    <p class="sub">Switch the ranking metric in the filters above. Click a row to open the post on Instagram.</p>
     <div style="overflow:auto;max-height:460px"><table>
-      <thead><tr><th>#</th><th style="text-align:left">Cuenta</th><th style="text-align:left">Texto del cover</th>
-        <th>Fecha</th><th>Formato</th><th>Likes</th><th>Views</th><th>Eng./view</th></tr></thead>
+      <thead><tr><th>#</th><th style="text-align:left">Account</th><th style="text-align:left">Cover text</th>
+        <th>Date</th><th>Format</th><th>Likes</th><th>Views</th><th>Eng./view</th></tr></thead>
       <tbody>${rows.map((p,i)=>`<tr style="cursor:pointer" onclick="window.open('${p.u||'#'}','_blank')">
         <td style="text-align:left;color:var(--muted)">${i+1}</td>
         <td style="text-align:left"><span style="color:${colorFor(p.a)}">@${p.a}</span></td>
