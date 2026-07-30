@@ -157,6 +157,10 @@ function normalizePost(post) {
 
   return {
     ...post,
+    // Accounts repost each other, so a shortcode alone is not unique across the
+    // dataset (~21 collisions today). Everything that identifies a post -- React
+    // keys, selection, the sidebar lookup -- uses this instead.
+    postKey: `${post.account || ''}:${shortcode || post.rank || ''}`,
     caption,
     headline,
     permalink,
@@ -489,7 +493,7 @@ function App() {
   const [dateTo, setDateTo] = useState('');
   const [datePreset, setDatePreset] = useState('all');
   const [visibleCount, setVisibleCount] = useState(POSTS_PER_BATCH);
-  const [selectedShortcode, setSelectedShortcode] = useState(posts[0]?.shortcode ?? '');
+  const [selectedKey, setSelectedKey] = useState('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [filtersHidden, setFiltersHidden] = useState(false);
   const lastScrollTopRef = useRef(0);
@@ -588,14 +592,14 @@ function App() {
 
   const selected = useMemo(() => {
     if (!filtered.length) return null;
-    return filtered.find((post) => post.shortcode === selectedShortcode) ?? filtered[0];
-  }, [filtered, selectedShortcode]);
+    return filtered.find((post) => post.postKey === selectedKey) ?? filtered[0];
+  }, [filtered, selectedKey]);
 
   useEffect(() => {
-    if (selected?.shortcode && selectedShortcode !== selected.shortcode) {
-      setSelectedShortcode(selected.shortcode);
+    if (selected?.postKey && selectedKey !== selected.postKey) {
+      setSelectedKey(selected.postKey);
     }
-  }, [selected, selectedShortcode]);
+  }, [selected, selectedKey]);
 
   const onReset = useCallback(() => {
     setQuery('');
@@ -632,9 +636,9 @@ function App() {
     setIsSidebarOpen(false);
   }, []);
 
-  const selectPost = useCallback((shortcode) => {
+  const selectPost = useCallback((postKey) => {
     startTransition(() => {
-      setSelectedShortcode(shortcode);
+      setSelectedKey(postKey);
       setIsSidebarOpen(true);
     });
   }, []);
@@ -871,10 +875,14 @@ function App() {
               <div className="gallery-grid">
                 {visible.map((post, index) => (
                   <PostCard
-                    key={post.shortcode}
+                    // Keyed by account+shortcode, not shortcode alone: accounts
+                    // repost each other, so ~21 shortcodes exist under two
+                    // accounts. Duplicate React keys make reordering undefined
+                    // and those cards got stuck at the top of every sort.
+                    key={post.postKey}
                     post={post}
                     priority={index < 6}
-                    selected={selected?.shortcode === post.shortcode}
+                    selected={selected?.postKey === post.postKey}
                     onSelect={selectPost}
                     onCopy={copyShortcode}
                   />
@@ -1785,11 +1793,11 @@ const SelectedPost = memo(function SelectedPost({ post }) {
 
 const PostCard = memo(function PostCard({ post, priority, selected, onSelect, onCopy }) {
   const [avatarFailed, setAvatarFailed] = useState(false);
-  const handleClick = () => onSelect(post.shortcode);
+  const handleClick = () => onSelect(post.postKey);
   const handleKeyDown = (event) => {
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
-      onSelect(post.shortcode);
+      onSelect(post.postKey);
     }
   };
   const stopAction = (event) => {
