@@ -68,10 +68,11 @@ const POSTS_PER_BATCH = 60;
 const IG_HANDLE = 'chatgptricks';
 const API_BASE = (import.meta.env.VITE_API_BASE || 'https://cortex-api-db2e.onrender.com').replace(/\/$/, '');
 const PREDICT_URL = 'https://chatgptricks.github.io/cortex/';
-// A post stays pinned to the top + shows the HOT badge only while it's
-// still inside the same window the daily engagement job keeps refreshing it
-// (<=10 days old) -- after that it reverts to normal sort position.
-const HOT_PIN_WINDOW_DAYS = 10;
+// How long a HOT post keeps showing its badge: the same window the daily
+// engagement job keeps refreshing it (<=10 days). Purely cosmetic now -- HOT
+// posts are never reordered, they just sit in their natural position with the
+// badge on. Surfacing them is the HOT tab's job.
+const HOT_BADGE_WINDOW_DAYS = 10;
 // Live data refresh cadence for an already-open tab (the backend refreshes
 // itself automatically every 30 min during its active window; this just
 // keeps an open dashboard in sync with that without a manual reload).
@@ -146,13 +147,12 @@ function normalizePost(post) {
   const shortcode = realShortcode(post.shortcode);
   const permalink = post.permalink || (shortcode ? `https://www.instagram.com/${isVideo ? 'reel' : 'p'}/${shortcode}/` : '');
   const ageDays = Number.isFinite(timestamp) ? (Date.now() - timestamp) / 86400000 : Infinity;
-  // A post keeps its HOT flag forever once it earns it (permanent record),
-  // but only stays pinned to the top / shows the badge while still within
-  // the active refresh window.
+  // A post keeps its HOT flag forever once it earns it (permanent record); the
+  // badge only shows while it's still inside the active refresh window.
   const isHot = Boolean(post.isHot);
-  const isPinned = isHot && ageDays <= HOT_PIN_WINDOW_DAYS;
+  const showsHotBadge = isHot && ageDays <= HOT_BADGE_WINDOW_DAYS;
   // The HOT tab is a short-lived "what's breaking out right now" view, so it
-  // uses a much tighter window than the badge/pin does.
+  // uses a much tighter window than the badge does.
   const isHotRecent = isHot && ageDays <= HOT_TAB_WINDOW_HOURS / 24;
 
   return {
@@ -163,7 +163,7 @@ function normalizePost(post) {
     isVideo,
     postType,
     isHot,
-    isPinned,
+    showsHotBadge,
     isHotRecent,
     searchText: [caption, post.excerpt, post.ocrText, post.shortcode, post.permalink, post.type, postType]
       .map(normalizeSearchValue)
@@ -541,19 +541,17 @@ function App() {
     }
 
     output.sort((a, b) => {
-      // In the HOT tab everything is already HOT, so pinning is meaningless --
-      // rank by how hard each post beat its own account's threshold instead,
-      // which is the only fair way to compare across accounts with very
-      // different baselines.
+      // The HOT tab ranks by how hard each post beat its own account's
+      // threshold -- the only fair comparison across accounts whose baselines
+      // differ by an order of magnitude.
       if (activeGroup === 'hot') {
         const diff = (b.hotMultiplier || 0) - (a.hotMultiplier || 0);
         if (diff) return diff;
         return (b.timestamp || 0) - (a.timestamp || 0);
       }
-      // HOT posts always float to the top, regardless of the active sort --
-      // ties within the pinned group (and the rest of the list) still fall
-      // back to whatever sort the viewer picked.
-      if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
+      // Everywhere else HOT posts are NOT floated to the top: they sit in their
+      // natural position for the chosen sort and filters, and are identified by
+      // the badge alone. The dedicated HOT tab is where they get surfaced.
       switch (sortBy) {
         case 'comments-desc':
           return b.comments - a.comments || b.likes - a.likes;
@@ -1761,7 +1759,7 @@ const SelectedPost = memo(function SelectedPost({ post }) {
           Video
         </div>
       ) : null}
-      {post.isPinned ? <HotBadge post={post} large /> : null}
+      {post.showsHotBadge ? <HotBadge post={post} large /> : null}
     </CoverImage>
   );
 
@@ -1842,7 +1840,7 @@ const PostCard = memo(function PostCard({ post, priority, selected, onSelect, on
             Video
           </div>
         ) : null}
-        {post.isPinned ? <HotBadge post={post} /> : null}
+        {post.showsHotBadge ? <HotBadge post={post} /> : null}
       </CoverImage>
 
       <div className="post-actions">
@@ -1915,7 +1913,7 @@ function hotTier(multiplier) {
 // Tier 1 (1x) is badge-only; tiers 2-5 (2x/3x/5x/8x) each step up the
 // animated glowing border's color, speed, and halo strength.
 function hotEffects(post) {
-  if (!post.isPinned) return { className: '', showBorder: false };
+  if (!post.showsHotBadge) return { className: '', showBorder: false };
   const tier = hotTier(post.hotMultiplier);
   const tierClass = tier >= 2 ? `post-card-tier-${tier}` : '';
   return {
