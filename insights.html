@@ -447,7 +447,7 @@ const STOP=new Set(('the of to and a in is it you that for on with as are was be
 function sectionTopics(){return `
 <section>
   <h2>Topics &amp; language that work <span class="tag">content</span></h2>
-  <p class="sub">Mined from cover text (OCR) and hashtags. Size is frequency; the number is the <b>relative index</b> — <b>1.00×</b> is normal performance, <b>2.00×</b> is twice the usual for that account.</p>
+  <p class="sub">Mined from cover text (OCR) and hashtags. Size is frequency; the number is the <b>median relative index</b> — <b>1.00×</b> is normal performance, <b>2.00×</b> is twice the usual for that account. Median, not mean: one viral post would otherwise make a word look 900× better than it is.</p>
   <div class="grid2">
     <div><h3 class="cloud-h">Words on covers</h3><div class="cloud" id="wordCloud"></div></div>
     <div><h3 class="cloud-h">Hashtags</h3><div class="cloud" id="tagCloud"></div></div>
@@ -477,20 +477,21 @@ function drawTopics(P){
     const max=maxOf(items.map(([,v])=>v.length))||1;
     $(el).innerHTML=items.map(([w,v])=>{
       const sz=11+Math.round(v.length/max*9);
-      return `<span style="font-size:${sz}px" title="${v.length} posts · performs at ${xf(avg(v))} its account's normal">${w}<b>${xf(avg(v))}</b></span>`;
+      const m=med(v);
+      return `<span style="font-size:${sz}px" title="${v.length} posts · median ${xf(m)} its account's normal">${w}<b>${xf(m)}</b></span>`;
     }).join('');
   };
   paint('#wordCloud',top(wordStats,4)); paint('#tagCloud',top(tagStats,3));
 
   // Best-performing words, not the most frequent ones.
   const perf=Object.entries(wordStats).filter(([,v])=>v.length>=6)
-    .map(([k,v])=>({k,n:v.length,a:avg(v)})).sort((a,b)=>b.a-a.a).slice(0,3);
+    .map(([k,v])=>({k,n:v.length,a:med(v)})).sort((a,b)=>b.a-a.a).slice(0,3);
   const notes=[];
-  if(perf.length) notes.push(`Top-performing words: ${perf.map(p=>`<b>${p.k}</b> (${xf(p.a)}, ${p.n} posts)`).join(', ')}.`);
+  if(perf.length) notes.push(`Top-performing words (by median): ${perf.map(p=>`<b>${p.k}</b> (${xf(p.a)}, ${p.n} posts)`).join(', ')}.`);
   const audio=P.filter(p=>p.oa!=null);
   if(audio.length>8){
-    const orig=avg(audio.filter(p=>p.oa===1).map(idx).filter(x=>x!=null));
-    const ext=avg(audio.filter(p=>p.oa===0).map(idx).filter(x=>x!=null));
+    const orig=med(audio.filter(p=>p.oa===1).map(idx).filter(x=>x!=null));
+    const ext=med(audio.filter(p=>p.oa===0).map(idx).filter(x=>x!=null));
     if(orig&&ext) notes.push(`Original audio performs at <b>${xf(orig)}</b> vs <b>${xf(ext)}</b> for third-party audio.`);
   }
   $('#topicsNote').innerHTML = notes.length?`<div class="note">${notes.join(' ')}</div>`:'';
@@ -500,7 +501,7 @@ function drawTopics(P){
 function sectionTiming(){return `
 <section>
   <h2>When to post <span class="tag">timing</span></h2>
-  <p class="sub">Performance by publish day and hour (UTC), measured as a <b>relative index</b>: how many times a post performs versus what's normal for its own account, so a big account doesn't drown out a small one. Brighter = better.</p>
+  <p class="sub">Performance by publish day and hour (UTC), measured as the <b>median relative index</b>: how many times a typical post in that slot performs versus what's normal for its own account, so neither a big account nor one viral post drowns out the signal. Brighter = better.</p>
   <div id="heat"></div>
   <div class="legend"><span>worse</span><i style="background:rgba(245,255,0,.12)"></i><i style="background:rgba(245,255,0,.35)"></i><i style="background:rgba(245,255,0,.6)"></i><i style="background:rgba(245,255,0,.9)"></i><span>better</span>
     <span style="margin-left:14px"><i style="background:rgba(255,255,255,.07)"></i> too few posts</span>
@@ -528,7 +529,7 @@ function drawTiming(P){
   // same indistinguishable black. Ranking restores real contrast.
   const MIN_POSTS=2;
   const ranked=Object.entries(cell).filter(([,v])=>v.length>=MIN_POSTS)
-    .map(([k,v])=>[k,avg(v)]).sort((a,b)=>a[1]-b[1]);
+    .map(([k,v])=>[k,med(v)]).sort((a,b)=>a[1]-b[1]);
   const rank={}; ranked.forEach(([k],i)=>{ rank[k]= ranked.length>1 ? i/(ranked.length-1) : .5; });
 
   let html='<div class="heat"><div class="lbl"></div>';
@@ -541,7 +542,7 @@ function drawTiming(P){
       if(rank[key]===undefined){
         html+=`<div class="cell" title="${DOW[d]} ${h}:00 · only ${v.length} post, not enough to conclude"
           style="background:rgba(255,255,255,.07)"></div>`; continue; }
-      html+=`<div class="cell" title="${DOW[d]} ${h}:00 · ${xf(avg(v))} its normal · ${v.length} posts"
+      html+=`<div class="cell" title="${DOW[d]} ${h}:00 · median ${xf(med(v))} its normal · ${v.length} posts"
         style="background:rgba(245,255,0,${(0.08+rank[key]*0.85).toFixed(2)})"></div>`;
     }
   }
@@ -549,7 +550,7 @@ function drawTiming(P){
 
   const dk=[...Array(7).keys()].filter(d=>byDow[d]);
   CHARTS.push(new Chart($('#cDow'),{type:'bar',
-    data:{labels:dk.map(d=>DOW[d]),datasets:[{label:'Index',data:dk.map(d=>+avg(byDow[d]).toFixed(2)),
+    data:{labels:dk.map(d=>DOW[d]),datasets:[{label:'Median index',data:dk.map(d=>+med(byDow[d]).toFixed(2)),
       backgroundColor:'#f5ff00aa',borderRadius:4}]},
     options:{maintainAspectRatio:false,plugins:{title:{display:true,text:'By day of week (index)',color:'#f5f5f5',font:{size:11,weight:'800'}},
       legend:{display:false},tooltip:{callbacks:{afterLabel:c=>byDow[dk[c.dataIndex]].length+' posts'}}},
@@ -557,17 +558,17 @@ function drawTiming(P){
 
   const hk=[...Array(24).keys()].filter(h=>byHour[h]);
   CHARTS.push(new Chart($('#cHour'),{type:'line',
-    data:{labels:hk.map(h=>h+'h'),datasets:[{label:'Index',data:hk.map(h=>+avg(byHour[h]).toFixed(2)),
+    data:{labels:hk.map(h=>h+'h'),datasets:[{label:'Median index',data:hk.map(h=>+med(byHour[h]).toFixed(2)),
       borderColor:'#4aa8ff',backgroundColor:'#4aa8ff22',fill:true,tension:.35,pointRadius:2}]},
     options:{maintainAspectRatio:false,plugins:{title:{display:true,text:'By hour of day, UTC (index)',color:'#f5f5f5',font:{size:11,weight:'800'}},
       legend:{display:false},tooltip:{callbacks:{afterLabel:c=>byHour[hk[c.dataIndex]].length+' posts'}}},
       scales:{y:{beginAtZero:true,ticks:{callback:v=>v+'×'}}}}}));
 
-  const bd=Object.entries(byDow).filter(([,v])=>v.length>=5).sort((a,b)=>avg(b[1])-avg(a[1]))[0];
-  const bh=Object.entries(byHour).filter(([,v])=>v.length>=5).sort((a,b)=>avg(b[1])-avg(a[1]))[0];
+  const bd=Object.entries(byDow).filter(([,v])=>v.length>=5).sort((a,b)=>med(b[1])-med(a[1]))[0];
+  const bh=Object.entries(byHour).filter(([,v])=>v.length>=5).sort((a,b)=>med(b[1])-med(a[1]))[0];
   const notes=[];
-  if(bd) notes.push(`Best day is <b>${DOW[bd[0]]}</b> (${xf(avg(bd[1]))} its normal, ${bd[1].length} posts).`);
-  if(bh) notes.push(`Best window is around <b>${bh[0]}:00 UTC</b> (${xf(avg(bh[1]))}).`);
+  if(bd) notes.push(`Best day is <b>${DOW[bd[0]]}</b> (${xf(med(bd[1]))} its normal, ${bd[1].length} posts).`);
+  if(bh) notes.push(`Best window is around <b>${bh[0]}:00 UTC</b> (${xf(med(bh[1]))}).`);
   notes.push(`<span style="color:var(--muted)">These are correlations over what was already published, not a guarantee — a slot nobody has ever posted in has no evidence behind it either way.</span>`);
   $('#timingNote').innerHTML=`<div class="note">${notes.join(' ')}</div>`;
 }
