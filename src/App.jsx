@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import {
   ArrowUpDown,
   AtSign,
+  BarChart3,
   Bookmark,
   CalendarDays,
   ChevronDown,
@@ -684,6 +685,14 @@ function App() {
               ) : null}
               <Metric label="Likes" value={compactFormatter.format(combinedSummary.totalLikes ?? summary['Total likes'] ?? 0)} />
               <Metric label="Avg likes" value={compactFormatter.format(combinedSummary.averageLikes ?? summary['Average likes'] ?? 0)} />
+              <a
+                className="ghost-button refresh-button"
+                href={`${import.meta.env.BASE_URL}insights.html`}
+                title="Insights — análisis agregado de todas las cuentas"
+                aria-label="Insights"
+              >
+                <BarChart3 size={15} />
+              </a>
               <button
                 className="ghost-button refresh-button"
                 type="button"
