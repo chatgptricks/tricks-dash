@@ -62,11 +62,17 @@ section>h2{margin:0 0 4px;font-size:14px;font-weight:800;letter-spacing:-.01em}
 section>h2 .tag{margin-left:8px;padding:2px 7px;border-radius:999px;background:rgba(245,255,0,.12);
   color:var(--accent);font-size:9px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
 section>p.sub{margin:0 0 14px;color:var(--muted);font-size:11px;line-height:1.5}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
-@media(max-width:1000px){.grid2,.grid3{grid-template-columns:1fr}}
-.chartbox{position:relative;height:260px}
+/* minmax(0,1fr) y min-width:0 no son cosmética: un `1fr` normal resuelve su
+   mínimo a min-content, y el min-content de un <canvas> es su propio ancho.
+   Chart.js ensancha el canvas -> la columna crece -> Chart.js lo vuelve a
+   ensanchar. Bucle infinito que congela la pestaña por completo. */
+.grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.grid2>*,.grid3>*{min-width:0;overflow:hidden}
+@media(max-width:1000px){.grid2,.grid3{grid-template-columns:minmax(0,1fr)}}
+.chartbox{position:relative;height:260px;min-width:0;width:100%}
 .chartbox.tall{height:320px}
+.chartbox canvas{max-width:100%}
 
 /* tabla */
 table{width:100%;border-collapse:collapse;font-size:11.5px}
@@ -165,6 +171,12 @@ Chart.defaults.color='#8a8a8a';
 Chart.defaults.font.family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,sans-serif";
 Chart.defaults.font.size=10;
 Chart.defaults.borderColor='rgba(255,255,255,.07)';
+// Amortigua ráfagas de resize en vez de recalcular en cada píxel.
+Chart.defaults.resizeDelay=120;
+
+// Math.max(...arr) con 11.5k argumentos puede reventar el stack; reduce no.
+const maxOf=a=>a.reduce((m,x)=>x>m?x:m,-Infinity);
+const minOf=a=>a.reduce((m,x)=>x<m?x:m,Infinity);
 
 const PALETTE=['#f5ff00','#4aa8ff','#ff6b35','#35c759','#c77dff','#ff9f0a','#00d4c8','#ff5c8a','#9ad34a'];
 const colorFor = (name) => PALETTE[[...ACCOUNTS.map(a=>a.handle)].indexOf(name) % PALETTE.length] || '#888';
@@ -263,7 +275,7 @@ function kpiBlock(P){
   const totalViews = withV.reduce((s,p)=>s+p.v,0);
   const totalCom = P.reduce((s,p)=>s+(p.c||0),0);
   const erv = avg(P.map(engPerView).filter(x=>x!=null));
-  const days = (Math.max(...P.map(p=>p.ts))-Math.min(...P.map(p=>p.ts)))/864e5 || 1;
+  const tss=P.map(p=>p.ts); const days=(maxOf(tss)-minOf(tss))/864e5 || 1;
   const hot = P.filter(p=>p.hot).length;
   return `<div class="kpis">
     <div class="kpi"><b>Posts</b><strong>${fmt(P.length)}</strong><em>${(P.length/days).toFixed(1)} por día</em></div>
@@ -361,7 +373,7 @@ function drawCuentas(P){
   const rows=[...SEL].map(h=>{
     const g=P.filter(p=>p.a===h); if(!g.length) return null;
     const wv=g.filter(p=>p.v!=null);
-    const days=(Math.max(...g.map(p=>p.ts))-Math.min(...g.map(p=>p.ts)))/864e5||1;
+    const gts=g.map(p=>p.ts); const days=(maxOf(gts)-minOf(gts))/864e5||1;
     return {h, group:(ACCOUNTS.find(a=>a.handle===h)||{}).group, n:g.length,
       likes:avg(g.map(p=>p.l||0))||0, views:wv.length?avg(wv.map(p=>p.v)):null,
       com:avg(g.map(p=>p.c||0))||0, er:avg(g.map(engPerView).filter(x=>x!=null)),
@@ -369,7 +381,7 @@ function drawCuentas(P){
   }).filter(Boolean);
 
   rows.sort((a,b)=>((b[accSort.k]??-1)-(a[accSort.k]??-1))*(accSort.dir<0?1:-1));
-  const maxL=Math.max(...rows.map(r=>r.likes));
+  const maxL=maxOf(rows.map(r=>r.likes))||1;
   const cols=[['h','Cuenta'],['n','Posts'],['likes','Likes prom.'],['views','Views prom.'],
               ['com','Coment.'],['er','Eng./view'],['ritmo','Posts/día'],['hot','HOT']];
   $('#tAcc').innerHTML =
@@ -433,7 +445,7 @@ function drawTemas(P){
 
   const paint=(el,items)=>{
     if(!items.length){$(el).innerHTML='<span style="color:var(--muted)">Sin datos suficientes</span>';return;}
-    const max=Math.max(...items.map(([,v])=>v.length));
+    const max=maxOf(items.map(([,v])=>v.length))||1;
     $(el).innerHTML=items.map(([w,v])=>{
       const sz=11+Math.round(v.length/max*9);
       const a=avg(v);
@@ -482,7 +494,7 @@ function drawCuando(P){
     (byHour[p.hour]=byHour[p.hour]||[]).push(m);
   });
   const vals=Object.values(cell).filter(v=>v.length>=2).map(v=>avg(v));
-  const mx=vals.length?Math.max(...vals):1, mn=vals.length?Math.min(...vals):0;
+  const mx=vals.length?maxOf(vals):1, mn=vals.length?minOf(vals):0;
   let html='<div class="heat"><div class="lbl"></div>';
   for(let h=0;h<24;h++) html+=`<div class="hr">${h%3===0?h:''}</div>`;
   for(let d=0;d<7;d++){
