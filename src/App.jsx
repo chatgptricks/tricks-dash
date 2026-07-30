@@ -18,6 +18,7 @@ import {
   RotateCcw,
   Search,
   Send,
+  Settings,
   SlidersHorizontal,
   X,
   Video,
@@ -37,7 +38,13 @@ const GROUP_TABS = [
   { value: 'all', label: 'All' },
   { value: 'sentient', label: 'Sentient' },
   { value: 'competitors', label: 'Competitors' },
+  { value: 'hot', label: 'HOT' },
 ];
+
+// The HOT tab only surfaces posts that broke out in the last 2 days -- it's a
+// "what's happening now" view, deliberately shorter-lived than the 10-day
+// badge/pin window so it doesn't fill up with last week's winners.
+const HOT_TAB_WINDOW_HOURS = 48;
 
 const TYPE_OPTIONS = ['All posts', 'Carousel', 'Video', 'Image'];
 const SORT_OPTIONS = [
@@ -144,6 +151,9 @@ function normalizePost(post) {
   // the active refresh window.
   const isHot = Boolean(post.isHot);
   const isPinned = isHot && ageDays <= HOT_PIN_WINDOW_DAYS;
+  // The HOT tab is a short-lived "what's breaking out right now" view, so it
+  // uses a much tighter window than the badge/pin does.
+  const isHotRecent = isHot && ageDays <= HOT_TAB_WINDOW_HOURS / 24;
 
   return {
     ...post,
@@ -154,6 +164,7 @@ function normalizePost(post) {
     postType,
     isHot,
     isPinned,
+    isHotRecent,
     searchText: [caption, post.excerpt, post.ocrText, post.shortcode, post.permalink, post.type, postType]
       .map(normalizeSearchValue)
       .filter(Boolean)
@@ -299,8 +310,9 @@ function App() {
     return () => clearInterval(timer);
   }, [loadDashboard]);
 
-  const handleRefresh = useCallback(async () => {
-    const password = window.prompt('Refresh password:');
+  // Takes the password as an argument now: the Settings panel already holds it
+  // in memory for the session, so it no longer needs a window.prompt.
+  const handleRefresh = useCallback(async (password) => {
     if (!password) return;
 
     setRefreshing(true);
@@ -379,11 +391,17 @@ function App() {
     };
   }, [groupScopedPosts]);
   const accountsInScope = useMemo(
-    () => (activeGroup === 'all' ? accounts : accounts.filter((account) => account.group === activeGroup)),
+    // 'hot' isn't a group -- it's a cross-account view, so every account stays
+    // in scope and only the HOT-recency filter narrows the results.
+    () =>
+      activeGroup === 'all' || activeGroup === 'hot'
+        ? accounts
+        : accounts.filter((account) => account.group === activeGroup),
     [accounts, activeGroup],
   );
   const [selectedAccounts, setSelectedAccounts] = useState(() => new Set());
   const [showAddAccount, setShowAddAccount] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [backgroundTasks, setBackgroundTasks] = useState([]);
 
   // Kicks off the (slow, Apify-bound) initial history import for a
@@ -507,7 +525,9 @@ function App() {
     const output = [];
 
     for (const post of posts) {
-      if (activeGroup !== 'all' && post.group !== activeGroup) continue;
+      if (activeGroup === 'hot') {
+        if (!post.isHotRecent) continue;
+      } else if (activeGroup !== 'all' && post.group !== activeGroup) continue;
       if (!effectiveAccounts.has(post.account)) continue;
       if (activeType !== 'All posts' && post.postType !== activeType) continue;
       if (mediaFilter === 'video' && !post.isVideo) continue;
@@ -521,6 +541,15 @@ function App() {
     }
 
     output.sort((a, b) => {
+      // In the HOT tab everything is already HOT, so pinning is meaningless --
+      // rank by how hard each post beat its own account's threshold instead,
+      // which is the only fair way to compare across accounts with very
+      // different baselines.
+      if (activeGroup === 'hot') {
+        const diff = (b.hotMultiplier || 0) - (a.hotMultiplier || 0);
+        if (diff) return diff;
+        return (b.timestamp || 0) - (a.timestamp || 0);
+      }
       // HOT posts always float to the top, regardless of the active sort --
       // ties within the pinned group (and the rest of the list) still fall
       // back to whatever sort the viewer picked.
@@ -656,12 +685,11 @@ function App() {
               <button
                 className="ghost-button refresh-button"
                 type="button"
-                onClick={handleRefresh}
-                disabled={refreshing}
-                title={refreshing ? 'Refreshing…' : 'Pull new Instagram posts into the shared Post DB'}
-                aria-label="Refresh"
+                onClick={() => setShowSettings(true)}
+                title="Settings — thresholds, history import, refresh"
+                aria-label="Settings"
               >
-                <RefreshCw size={15} className={refreshing ? 'spin' : ''} />
+                <Settings size={15} className={refreshing ? 'spin' : ''} />
               </button>
             </div>
             {refreshNotice ? (
@@ -947,6 +975,17 @@ function App() {
         />
       ) : null}
 
+      {showSettings ? (
+        <SettingsPanel
+          accounts={accounts}
+          onClose={() => setShowSettings(false)}
+          onRefresh={handleRefresh}
+          refreshing={refreshing}
+          refreshNotice={refreshNotice}
+          onAccountsChanged={() => loadDashboard(undefined, { silent: true })}
+        />
+      ) : null}
+
       <BackgroundTaskStack tasks={backgroundTasks} onDismiss={dismissBackgroundTask} />
     </div>
   );
@@ -1107,6 +1146,266 @@ const WIZARD_STEPS = ['Account', 'Settings', 'Confirm'];
 // account is created this modal closes and the import continues as a
 // floating background task (see BackgroundTaskStack) that the rest of the
 // dashboard stays fully interactive around.
+// Admin panel: HOT thresholds, pulling older history, and the manual refresh.
+// The password is asked for once when the panel opens and kept only in this
+// component's state -- never written to localStorage, so closing the panel or
+// reloading the page discards it.
+function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice, onAccountsChanged }) {
+  const [password, setPassword] = useState('');
+  const [unlocked, setUnlocked] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const [notice, setNotice] = useState('');
+  const [thresholds, setThresholds] = useState({});
+  const [savingHandle, setSavingHandle] = useState('');
+  const [importFrom, setImportFrom] = useState({});
+  const [importing, setImporting] = useState('');
+  const [importNotice, setImportNotice] = useState({});
+
+  useEffect(() => {
+    const next = {};
+    for (const account of accounts) next[account.handle] = String(account.hot_threshold ?? '');
+    setThresholds(next);
+  }, [accounts]);
+
+  // Validated by attempting the cheapest password-gated write we have: a
+  // no-op settings update on the first account. Avoids inventing a dedicated
+  // auth endpoint just for this panel.
+  const unlock = async (event) => {
+    event.preventDefault();
+    if (!password || !accounts.length) return;
+    setChecking(true);
+    setNotice('');
+    try {
+      const account = accounts[0];
+      const response = await fetch(`${API_BASE}/api/admin/accounts/${encodeURIComponent(account.handle)}/settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ password, hot_threshold: String(account.hot_threshold) }),
+      });
+      if (response.status === 401) {
+        setNotice('Contraseña incorrecta.');
+        return;
+      }
+      if (!response.ok) {
+        setNotice('No se pudo validar. Intentá de nuevo.');
+        return;
+      }
+      setUnlocked(true);
+    } catch (error) {
+      setNotice('Error de red. Intentá de nuevo.');
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  const saveThreshold = async (handle) => {
+    const raw = thresholds[handle];
+    const value = Number.parseInt(raw, 10);
+    if (!Number.isFinite(value) || value < 1) {
+      setNotice(`Umbral inválido para @${handle}.`);
+      return;
+    }
+    setSavingHandle(handle);
+    setNotice('');
+    try {
+      const response = await fetch(`${API_BASE}/api/admin/accounts/${encodeURIComponent(handle)}/settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ password, hot_threshold: String(value) }),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        setNotice(body.detail || `No se pudo guardar @${handle}.`);
+        return;
+      }
+      setNotice(`@${handle} actualizado a ${value}/hr.`);
+      onAccountsChanged?.();
+    } catch (error) {
+      setNotice('Error de red al guardar.');
+    } finally {
+      setSavingHandle('');
+    }
+  };
+
+  const runImport = async (handle) => {
+    const from = importFrom[handle];
+    if (!from) {
+      setImportNotice((prev) => ({ ...prev, [handle]: 'Elegí una fecha.' }));
+      return;
+    }
+    setImporting(handle);
+    setImportNotice((prev) => ({ ...prev, [handle]: 'Iniciando…' }));
+    try {
+      const response = await fetch(`${API_BASE}/api/admin/accounts/${encodeURIComponent(handle)}/backfill`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ password, date_from: from, results_limit: '2000' }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setImportNotice((prev) => ({ ...prev, [handle]: body.detail || 'Falló la extracción.' }));
+        return;
+      }
+      setImportNotice((prev) => ({
+        ...prev,
+        [handle]: `Listo: ${body.added ?? 0} posts nuevos.`,
+      }));
+      onAccountsChanged?.();
+    } catch (error) {
+      // A long scrape routinely outlives the browser's patience; the server
+      // keeps going, so say so instead of reporting a false failure.
+      setImportNotice((prev) => ({
+        ...prev,
+        [handle]: 'Sigue corriendo en el servidor. Los posts van a aparecer solos.',
+      }));
+    } finally {
+      setImporting('');
+    }
+  };
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal-card settings-card" onClick={(event) => event.stopPropagation()}>
+        <div className="modal-header">
+          <h2>Settings</h2>
+          <button type="button" className="icon-button" onClick={onClose} aria-label="Cerrar">
+            <X size={16} />
+          </button>
+        </div>
+
+        {!unlocked ? (
+          <form className="settings-lock" onSubmit={unlock}>
+            <p className="wizard-hint">
+              Ingresá la contraseña de refresh para cambiar umbrales, extraer historial o refrescar.
+            </p>
+            <label className="modal-field">
+              <span>Contraseña</span>
+              <input
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                autoFocus
+                required
+              />
+            </label>
+            {notice ? <p className="settings-notice">{notice}</p> : null}
+            <div className="modal-actions">
+              <button type="submit" className="primary-button" disabled={checking || !password}>
+                {checking ? 'Validando…' : 'Desbloquear'}
+              </button>
+            </div>
+          </form>
+        ) : (
+          <div className="settings-body">
+            <section className="settings-section">
+              <div className="settings-section-head">
+                <h3>Refrescar ahora</h3>
+                <button
+                  type="button"
+                  className="ghost-button settings-refresh"
+                  onClick={() => onRefresh(password)}
+                  disabled={refreshing}
+                >
+                  <RefreshCw size={14} className={refreshing ? 'spin' : ''} />
+                  <span>{refreshing ? 'Refrescando…' : 'Refrescar'}</span>
+                </button>
+              </div>
+              <p className="wizard-hint">
+                Corre el ciclo de engagement para todas las cuentas. Normalmente se hace solo cada hora.
+              </p>
+              {refreshNotice ? (
+                <p className={refreshNotice.type === 'error' ? 'settings-notice-error' : 'settings-notice'}>
+                  {refreshNotice.text}
+                </p>
+              ) : null}
+            </section>
+
+            <section className="settings-section">
+              <h3>Umbral HOT por cuenta</h3>
+              <p className="wizard-hint">
+                Likes por hora que un post necesita en su primera hora para marcarse HOT. Cada cuenta tiene su
+                propia escala.
+              </p>
+              <div className="settings-table">
+                {accounts.map((account) => (
+                  <div className="settings-row" key={account.handle}>
+                    <div className="settings-row-account">
+                      <strong>@{account.handle}</strong>
+                      <span>{account.group}</span>
+                    </div>
+                    <div className="settings-row-controls">
+                      <input
+                        type="number"
+                        min={1}
+                        value={thresholds[account.handle] ?? ''}
+                        onChange={(event) =>
+                          setThresholds((prev) => ({ ...prev, [account.handle]: event.target.value }))
+                        }
+                        aria-label={`Umbral para ${account.handle}`}
+                      />
+                      <span className="settings-unit">/hr</span>
+                      <button
+                        type="button"
+                        className="ghost-button"
+                        onClick={() => saveThreshold(account.handle)}
+                        disabled={
+                          savingHandle === account.handle ||
+                          String(thresholds[account.handle]) === String(account.hot_threshold)
+                        }
+                      >
+                        {savingHandle === account.handle ? '…' : 'Guardar'}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {notice ? <p className="settings-notice">{notice}</p> : null}
+            </section>
+
+            <section className="settings-section">
+              <h3>Extraer historial más antiguo</h3>
+              <p className="wizard-hint">
+                Trae posts desde la fecha elegida hacia adelante. Los que ya existen se ignoran, así que no se
+                duplica nada. Ojo: cada extracción consume créditos de Apify.
+              </p>
+              <div className="settings-table">
+                {accounts.map((account) => (
+                  <div className="settings-row" key={account.handle}>
+                    <div className="settings-row-account">
+                      <strong>@{account.handle}</strong>
+                      {importNotice[account.handle] ? (
+                        <span className="settings-import-notice">{importNotice[account.handle]}</span>
+                      ) : null}
+                    </div>
+                    <div className="settings-row-controls">
+                      <input
+                        type="date"
+                        value={importFrom[account.handle] ?? ''}
+                        onChange={(event) =>
+                          setImportFrom((prev) => ({ ...prev, [account.handle]: event.target.value }))
+                        }
+                        aria-label={`Extraer desde para ${account.handle}`}
+                      />
+                      <button
+                        type="button"
+                        className="ghost-button"
+                        onClick={() => runImport(account.handle)}
+                        disabled={importing === account.handle}
+                      >
+                        {importing === account.handle ? '…' : 'Extraer'}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function AddAccountWizard({ onClose, onAccountCreated }) {
   const [step, setStep] = useState(0);
   const [password, setPassword] = useState('');
