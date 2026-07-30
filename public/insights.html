@@ -1,0 +1,552 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sentient Insights</title>
+<link rel="icon" href="./favicon.svg" />
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+:root{
+  color-scheme:dark;
+  --bg:#000; --panel:#0b0b0b; --panel-2:#101010; --line:rgba(255,255,255,.09);
+  --text:#f5f5f5; --muted:#8a8a8a; --muted-2:#b5b5b5; --accent:#f5ff00;
+  --good:#35c759; --warn:#ff9f0a; --hot:#ff6b35; --cool:#4aa8ff;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,sans-serif;
+  font-size:13px;-webkit-font-smoothing:antialiased}
+a{color:inherit}
+.wrap{max-width:1560px;margin:0 auto;padding:18px 22px 80px}
+
+/* topbar */
+.top{display:flex;align-items:center;justify-content:space-between;gap:18px;
+  padding:14px 18px;border:1px solid var(--line);border-radius:12px;background:var(--panel);margin-bottom:14px}
+.brand small{display:block;color:var(--muted);font-size:9px;font-weight:800;
+  letter-spacing:.16em;text-transform:uppercase;margin-bottom:3px}
+.brand h1{margin:0;font-size:23px;font-weight:800;letter-spacing:-.02em}
+.brand h1 span{color:var(--accent)}
+.top-actions{display:flex;gap:8px;align-items:center}
+.linkbtn{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 13px;
+  border:1px solid var(--line);border-radius:8px;background:var(--panel-2);color:var(--muted-2);
+  font-size:11px;font-weight:700;text-decoration:none;cursor:pointer}
+.linkbtn:hover{border-color:rgba(245,255,0,.4);color:var(--text)}
+
+/* filtros */
+.filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:8px;
+  padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--panel);margin-bottom:14px}
+.f{display:flex;flex-direction:column;gap:5px;min-width:0}
+.f>label{color:var(--muted);font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+.f select,.f input{height:32px;padding:0 9px;border:1px solid var(--line);border-radius:7px;
+  background:rgba(255,255,255,.04);color:var(--text);font-size:12px;outline:none;width:100%}
+.f select:focus,.f input:focus{border-color:rgba(245,255,0,.6)}
+.chips{display:flex;flex-wrap:wrap;gap:5px}
+.chip{padding:5px 10px;border:1px solid var(--line);border-radius:999px;background:var(--panel-2);
+  color:var(--muted-2);font-size:10px;font-weight:700;cursor:pointer;user-select:none}
+.chip.on{border-color:rgba(245,255,0,.55);background:rgba(245,255,0,.12);color:#fffce0}
+.f-wide{grid-column:1/-1}
+
+/* kpis */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:16px}
+.kpi{padding:13px 15px;border:1px solid var(--line);border-radius:11px;background:var(--panel)}
+.kpi b{display:block;color:var(--muted);font-size:9px;font-weight:800;letter-spacing:.1em;
+  text-transform:uppercase;margin-bottom:6px}
+.kpi strong{font-size:22px;font-weight:800;letter-spacing:-.02em}
+.kpi em{display:block;font-style:normal;color:var(--muted);font-size:10px;margin-top:3px}
+
+/* secciones */
+section{border:1px solid var(--line);border-radius:12px;background:var(--panel);
+  padding:16px 18px;margin-bottom:14px}
+section>h2{margin:0 0 4px;font-size:14px;font-weight:800;letter-spacing:-.01em}
+section>h2 .tag{margin-left:8px;padding:2px 7px;border-radius:999px;background:rgba(245,255,0,.12);
+  color:var(--accent);font-size:9px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
+section>p.sub{margin:0 0 14px;color:var(--muted);font-size:11px;line-height:1.5}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+@media(max-width:1000px){.grid2,.grid3{grid-template-columns:1fr}}
+.chartbox{position:relative;height:260px}
+.chartbox.tall{height:320px}
+
+/* tabla */
+table{width:100%;border-collapse:collapse;font-size:11.5px}
+th{text-align:right;padding:7px 8px;color:var(--muted);font-size:9px;font-weight:800;
+  letter-spacing:.07em;text-transform:uppercase;border-bottom:1px solid var(--line);white-space:nowrap;cursor:pointer}
+th:first-child{text-align:left}
+th.sorted{color:var(--accent)}
+td{text-align:right;padding:8px;border-bottom:1px solid rgba(255,255,255,.045);white-space:nowrap}
+td:first-child{text-align:left;font-weight:700}
+tbody tr:hover{background:rgba(255,255,255,.03)}
+.bar{position:relative;height:5px;border-radius:3px;background:rgba(255,255,255,.07);margin-top:4px;overflow:hidden}
+.bar i{position:absolute;inset:0 auto 0 0;background:var(--accent);border-radius:3px}
+.pill{display:inline-block;padding:2px 7px;border-radius:999px;font-size:9px;font-weight:800}
+.pill.s{background:rgba(74,168,255,.15);color:#8fc9ff}
+.pill.c{background:rgba(255,107,53,.15);color:#ffa480}
+
+/* nubes de palabras / hashtags */
+.cloud{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.cloud span{padding:5px 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel-2);cursor:default}
+.cloud span b{color:var(--accent);font-weight:800;margin-left:5px;font-size:10px}
+
+/* heatmap */
+.heat{display:grid;grid-template-columns:38px repeat(24,1fr);gap:2px;font-size:8px}
+.heat div{border-radius:2px}
+.heat .lbl{color:var(--muted);font-weight:700;display:flex;align-items:center;justify-content:flex-end;
+  padding-right:5px;font-size:9px}
+.heat .hr{color:var(--muted);text-align:center;font-size:8px}
+.cell{aspect-ratio:1;position:relative}
+.legend{display:flex;align-items:center;gap:7px;margin-top:10px;color:var(--muted);font-size:10px}
+.legend i{width:15px;height:9px;border-radius:2px;display:inline-block}
+
+.empty{padding:26px;text-align:center;color:var(--muted);font-size:12px}
+.loading{padding:60px;text-align:center;color:var(--muted)}
+.note{margin-top:10px;padding:9px 11px;border-left:2px solid rgba(245,255,0,.4);
+  background:rgba(245,255,0,.04);color:var(--muted-2);font-size:11px;line-height:1.55;border-radius:0 6px 6px 0}
+.note b{color:var(--text)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div class="brand">
+      <small>Sentient</small>
+      <h1>Insights<span>.</span></h1>
+    </div>
+    <div class="top-actions">
+      <span id="scope" style="color:var(--muted);font-size:11px"></span>
+      <a class="linkbtn" href="./index.html">← Dashboard</a>
+    </div>
+  </div>
+
+  <div class="filters">
+    <div class="f f-wide">
+      <label>Cuentas</label>
+      <div class="chips" id="accChips"></div>
+    </div>
+    <div class="f"><label>Desde</label><input type="date" id="from"></div>
+    <div class="f"><label>Hasta</label><input type="date" id="to"></div>
+    <div class="f"><label>Periodo rápido</label>
+      <select id="preset">
+        <option value="">Todo</option>
+        <option value="30">Últimos 30 días</option>
+        <option value="90" selected>Últimos 90 días</option>
+        <option value="180">Últimos 6 meses</option>
+        <option value="365">Último año</option>
+      </select>
+    </div>
+    <div class="f"><label>Formato</label>
+      <select id="ftype"><option value="">Todos</option><option>Video</option><option>Carousel</option><option>Image</option></select>
+    </div>
+    <div class="f"><label>Métrica de ranking</label>
+      <select id="metric">
+        <option value="l">Likes</option>
+        <option value="v">Views</option>
+        <option value="c">Comentarios</option>
+        <option value="er">Engagement / view</option>
+      </select>
+    </div>
+  </div>
+
+  <div id="app"><div class="loading">Cargando datos…</div></div>
+</div>
+
+<script>
+const API = 'https://cortex-api-db2e.onrender.com';
+const $ = s => document.querySelector(s);
+const fmt = n => n===null||n===undefined||Number.isNaN(n) ? '—'
+  : Math.abs(n)>=1e6 ? (n/1e6).toFixed(1)+'M'
+  : Math.abs(n)>=1e3 ? (n/1e3).toFixed(1)+'K' : Math.round(n).toLocaleString('es');
+const pct = n => (n===null||!isFinite(n)) ? '—' : n.toFixed(1)+'%';
+
+let RAW=[], ACCOUNTS=[], SEL=new Set(), CHARTS=[];
+
+// Chart.js defaults acordes al tema oscuro
+Chart.defaults.color='#8a8a8a';
+Chart.defaults.font.family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,sans-serif";
+Chart.defaults.font.size=10;
+Chart.defaults.borderColor='rgba(255,255,255,.07)';
+
+const PALETTE=['#f5ff00','#4aa8ff','#ff6b35','#35c759','#c77dff','#ff9f0a','#00d4c8','#ff5c8a','#9ad34a'];
+const colorFor = (name) => PALETTE[[...ACCOUNTS.map(a=>a.handle)].indexOf(name) % PALETTE.length] || '#888';
+
+function destroyCharts(){ CHARTS.forEach(c=>{try{c.destroy()}catch(e){}}); CHARTS=[]; }
+
+async function boot(){
+  try{
+    const r = await fetch(API+'/api/insights/posts');
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const data = await r.json();
+    RAW = data.posts.map(p=>{
+      const t = p.d ? new Date(p.d).getTime() : NaN;
+      const dt = new Date(t);
+      return {...p, ts:t, hour:isNaN(t)?null:dt.getUTCHours(), dow:isNaN(t)?null:dt.getUTCDay()};
+    }).filter(p=>!isNaN(p.ts));
+    ACCOUNTS = data.accounts;
+    SEL = new Set(ACCOUNTS.map(a=>a.handle));
+    buildChips();
+    applyPreset();
+    ['from','to','ftype','metric'].forEach(id=>$('#'+id).addEventListener('change',render));
+    $('#preset').addEventListener('change',()=>{applyPreset();});
+    render();
+  }catch(e){
+    $('#app').innerHTML = '<div class="empty">No se pudieron cargar los datos.<br><small>'+e.message+'</small></div>';
+  }
+}
+
+function buildChips(){
+  const box = $('#accChips');
+  box.innerHTML='';
+  const mk=(label,handler,on)=>{const s=document.createElement('span');s.className='chip'+(on?' on':'');
+    s.textContent=label;s.onclick=handler;box.appendChild(s);return s;};
+  mk('Todas',()=>{SEL=new Set(ACCOUNTS.map(a=>a.handle));buildChips();render()},SEL.size===ACCOUNTS.length);
+  mk('Solo Sentient',()=>{SEL=new Set(ACCOUNTS.filter(a=>a.group==='sentient').map(a=>a.handle));buildChips();render()},false);
+  mk('Solo Competencia',()=>{SEL=new Set(ACCOUNTS.filter(a=>a.group==='competitors').map(a=>a.handle));buildChips();render()},false);
+  ACCOUNTS.forEach(a=>{
+    const s=mk('@'+a.handle,()=>{SEL.has(a.handle)?SEL.delete(a.handle):SEL.add(a.handle);buildChips();render()},SEL.has(a.handle));
+    if(SEL.has(a.handle)) s.style.borderColor=colorFor(a.handle)+'88';
+  });
+}
+
+function applyPreset(){
+  const days=$('#preset').value;
+  if(!days){ $('#from').value=''; $('#to').value=''; }
+  else{
+    const to=new Date(); const from=new Date(Date.now()-days*864e5);
+    $('#to').value=to.toISOString().slice(0,10);
+    $('#from').value=from.toISOString().slice(0,10);
+  }
+  render();
+}
+
+function filtered(){
+  const f=$('#from').value?new Date($('#from').value+'T00:00:00').getTime():null;
+  const t=$('#to').value?new Date($('#to').value+'T23:59:59').getTime():null;
+  const ty=$('#ftype').value;
+  return RAW.filter(p=>{
+    if(!SEL.has(p.a)) return false;
+    if(f&&p.ts<f) return false;
+    if(t&&p.ts>t) return false;
+    if(ty&&p.t!==ty) return false;
+    return true;
+  });
+}
+
+// ---- helpers de metrica ----
+const views = p => p.v ?? null;                       // solo videos
+const eng   = p => (p.l||0)+(p.c||0);
+const engPerView = p => (p.v && p.v>0) ? eng(p)/p.v*100 : null;
+const avg = arr => arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : null;
+const med = arr => { if(!arr.length) return null; const s=[...arr].sort((a,b)=>a-b); const m=s.length>>1;
+  return s.length%2 ? s[m] : (s[m-1]+s[m])/2; };
+
+function render(){
+  destroyCharts();
+  const P = filtered();
+  $('#scope').textContent = P.length.toLocaleString('es')+' posts · '+SEL.size+' cuentas';
+  if(!P.length){ $('#app').innerHTML='<div class="empty">Ningún post con estos filtros.</div>'; return; }
+
+  $('#app').innerHTML = `
+    ${kpiBlock(P)}
+    ${sectionFormato()}
+    ${sectionCuentas()}
+    ${sectionTemas()}
+    ${sectionCuando()}
+    ${sectionTop(P)}
+  `;
+  drawFormato(P); drawCuentas(P); drawTemas(P); drawCuando(P);
+}
+
+/* ---------------- KPIs ---------------- */
+function kpiBlock(P){
+  const withV = P.filter(p=>p.v!=null);
+  const totalLikes = P.reduce((s,p)=>s+(p.l||0),0);
+  const totalViews = withV.reduce((s,p)=>s+p.v,0);
+  const totalCom = P.reduce((s,p)=>s+(p.c||0),0);
+  const erv = avg(P.map(engPerView).filter(x=>x!=null));
+  const days = (Math.max(...P.map(p=>p.ts))-Math.min(...P.map(p=>p.ts)))/864e5 || 1;
+  const hot = P.filter(p=>p.hot).length;
+  return `<div class="kpis">
+    <div class="kpi"><b>Posts</b><strong>${fmt(P.length)}</strong><em>${(P.length/days).toFixed(1)} por día</em></div>
+    <div class="kpi"><b>Likes</b><strong>${fmt(totalLikes)}</strong><em>${fmt(totalLikes/P.length)} promedio</em></div>
+    <div class="kpi"><b>Views (video)</b><strong>${fmt(totalViews)}</strong><em>${withV.length} videos medidos</em></div>
+    <div class="kpi"><b>Comentarios</b><strong>${fmt(totalCom)}</strong><em>${fmt(totalCom/P.length)} promedio</em></div>
+    <div class="kpi"><b>Engagement / view</b><strong>${pct(erv)}</strong><em>likes+coments sobre views</em></div>
+    <div class="kpi"><b>Posts HOT</b><strong>${fmt(hot)}</strong><em>${pct(hot/P.length*100)} del total</em></div>
+  </div>`;
+}
+
+/* ---------------- 1. Formato ---------------- */
+function sectionFormato(){return `
+<section>
+  <h2>Qué formato rinde más <span class="tag">producción</span></h2>
+  <p class="sub">Compara reels, carruseles e imágenes. Abajo: cuántas slides conviene en un carrusel y qué duración de reel rinde mejor.</p>
+  <div class="grid3">
+    <div><div class="chartbox"><canvas id="cFormato"></canvas></div></div>
+    <div><div class="chartbox"><canvas id="cSlides"></canvas></div></div>
+    <div><div class="chartbox"><canvas id="cDur"></canvas></div></div>
+  </div>
+  <div id="formatoNote"></div>
+</section>`;}
+
+function drawFormato(P){
+  // por formato: promedio de likes y de views
+  const tipos=['Video','Carousel','Image'];
+  const stats=tipos.map(t=>{
+    const g=P.filter(p=>p.t===t);
+    return {t, n:g.length, likes:avg(g.map(p=>p.l||0))||0, views:avg(g.filter(p=>p.v!=null).map(p=>p.v))||0,
+      er:avg(g.map(engPerView).filter(x=>x!=null))};
+  }).filter(s=>s.n>0);
+
+  CHARTS.push(new Chart($('#cFormato'),{type:'bar',
+    data:{labels:stats.map(s=>s.t+' ('+s.n+')'),
+      datasets:[
+        {label:'Likes promedio',data:stats.map(s=>Math.round(s.likes)),backgroundColor:'#f5ff00cc',borderRadius:4},
+        {label:'Views promedio',data:stats.map(s=>Math.round(s.views)),backgroundColor:'#4aa8ffcc',borderRadius:4},
+      ]},
+    options:{maintainAspectRatio:false,plugins:{title:{display:true,text:'Rendimiento por formato',color:'#f5f5f5',font:{size:11,weight:'800'}},
+      legend:{labels:{boxWidth:9,boxHeight:9}}},scales:{y:{beginAtZero:true,ticks:{callback:v=>fmt(v)}}}}}));
+
+  // slides de carrusel
+  const car=P.filter(p=>p.t==='Carousel'&&p.sl);
+  const buckets={};
+  car.forEach(p=>{const k=Math.min(p.sl,10);(buckets[k]=buckets[k]||[]).push(p.l||0)});
+  const ks=Object.keys(buckets).map(Number).sort((a,b)=>a-b);
+  CHARTS.push(new Chart($('#cSlides'),{type:'bar',
+    data:{labels:ks.map(k=>k===10?'10+':k+''),
+      datasets:[{label:'Likes promedio',data:ks.map(k=>Math.round(avg(buckets[k]))),
+        backgroundColor:ks.map(k=>k===bestKey(buckets)?'#35c759cc':'#ffffff22'),borderRadius:4}]},
+    options:{maintainAspectRatio:false,plugins:{title:{display:true,text:'Slides por carrusel ('+car.length+' posts)',color:'#f5f5f5',font:{size:11,weight:'800'}},
+      legend:{display:false},tooltip:{callbacks:{afterLabel:c=>buckets[ks[c.dataIndex]].length+' posts'}}},
+      scales:{y:{beginAtZero:true,ticks:{callback:v=>fmt(v)}},x:{title:{display:true,text:'cantidad de slides'}}}}}));
+
+  // duracion de reels
+  const reels=P.filter(p=>p.dur);
+  const db={}; const range=d=>d<15?'<15s':d<30?'15-30s':d<60?'30-60s':d<90?'60-90s':'90s+';
+  reels.forEach(p=>{const k=range(p.dur);(db[k]=db[k]||[]).push(p.v ?? p.l ?? 0)});
+  const order=['<15s','15-30s','30-60s','60-90s','90s+'].filter(k=>db[k]);
+  CHARTS.push(new Chart($('#cDur'),{type:'bar',
+    data:{labels:order,datasets:[{label:'Views promedio',data:order.map(k=>Math.round(avg(db[k]))),
+      backgroundColor:order.map(k=>k===bestKey(db)?'#35c759cc':'#ffffff22'),borderRadius:4}]},
+    options:{maintainAspectRatio:false,plugins:{title:{display:true,text:'Duración de reel ('+reels.length+' videos)',color:'#f5f5f5',font:{size:11,weight:'800'}},
+      legend:{display:false},tooltip:{callbacks:{afterLabel:c=>db[order[c.dataIndex]].length+' videos'}}},
+      scales:{y:{beginAtZero:true,ticks:{callback:v=>fmt(v)}}}}}));
+
+  // conclusion automatica
+  const bestSl=bestKey(buckets), bestDur=bestKey(db);
+  const notes=[];
+  if(stats.length>1){
+    const top=[...stats].sort((a,b)=>b.likes-a.likes)[0];
+    notes.push(`El formato con más likes promedio es <b>${top.t}</b> (${fmt(top.likes)}).`);
+  }
+  if(bestSl) notes.push(`Los carruseles de <b>${bestSl===10?'10+':bestSl} slides</b> promedian más likes (${buckets[bestSl].length} posts).`);
+  if(bestDur) notes.push(`Los reels de <b>${bestDur}</b> son los de mayor alcance (${db[bestDur].length} videos).`);
+  $('#formatoNote').innerHTML = notes.length?`<div class="note">${notes.join(' ')}</div>`:'';
+}
+function bestKey(obj){let bk=null,bv=-1;for(const k in obj){const a=avg(obj[k]);if(obj[k].length>=3&&a>bv){bv=a;bk=isNaN(k)?k:Number(k)}}return bk;}
+
+/* ---------------- 2. Cuentas ---------------- */
+function sectionCuentas(){return `
+<section>
+  <h2>Comparar cuentas <span class="tag">competencia</span></h2>
+  <p class="sub">Cabeza a cabeza. El <b>engagement por view</b> es la columna más honesta: mide cuántos de los que vieron reaccionaron, sin premiar a quien simplemente tiene más alcance.</p>
+  <div class="grid2">
+    <div><div class="chartbox tall"><canvas id="cAcc"></canvas></div></div>
+    <div style="overflow:auto;max-height:320px"><table id="tAcc"></table></div>
+  </div>
+  <div id="accNote"></div>
+</section>`;}
+
+let accSort={k:'likes',dir:-1};
+function drawCuentas(P){
+  const rows=[...SEL].map(h=>{
+    const g=P.filter(p=>p.a===h); if(!g.length) return null;
+    const wv=g.filter(p=>p.v!=null);
+    const days=(Math.max(...g.map(p=>p.ts))-Math.min(...g.map(p=>p.ts)))/864e5||1;
+    return {h, group:(ACCOUNTS.find(a=>a.handle===h)||{}).group, n:g.length,
+      likes:avg(g.map(p=>p.l||0))||0, views:wv.length?avg(wv.map(p=>p.v)):null,
+      com:avg(g.map(p=>p.c||0))||0, er:avg(g.map(engPerView).filter(x=>x!=null)),
+      ritmo:g.length/days, hot:g.filter(p=>p.hot).length};
+  }).filter(Boolean);
+
+  rows.sort((a,b)=>((b[accSort.k]??-1)-(a[accSort.k]??-1))*(accSort.dir<0?1:-1));
+  const maxL=Math.max(...rows.map(r=>r.likes));
+  const cols=[['h','Cuenta'],['n','Posts'],['likes','Likes prom.'],['views','Views prom.'],
+              ['com','Coment.'],['er','Eng./view'],['ritmo','Posts/día'],['hot','HOT']];
+  $('#tAcc').innerHTML =
+    '<thead><tr>'+cols.map(([k,l])=>`<th data-k="${k}" class="${accSort.k===k?'sorted':''}">${l}</th>`).join('')+'</tr></thead>'+
+    '<tbody>'+rows.map(r=>`<tr>
+      <td>@${r.h}<div class="bar"><i style="width:${(r.likes/maxL*100).toFixed(0)}%;background:${colorFor(r.h)}"></i></div>
+        <span class="pill ${r.group==='sentient'?'s':'c'}" style="margin-top:4px">${r.group==='sentient'?'propia':'competencia'}</span></td>
+      <td>${fmt(r.n)}</td><td>${fmt(r.likes)}</td><td>${r.views==null?'—':fmt(r.views)}</td>
+      <td>${fmt(r.com)}</td><td>${pct(r.er)}</td><td>${r.ritmo.toFixed(1)}</td><td>${r.hot}</td></tr>`).join('')+'</tbody>';
+  $('#tAcc').querySelectorAll('th').forEach(th=>th.onclick=()=>{
+    const k=th.dataset.k; accSort = {k, dir: accSort.k===k?-accSort.dir:-1}; drawCuentas(P);});
+
+  CHARTS.push(new Chart($('#cAcc'),{type:'bubble',
+    data:{datasets:rows.filter(r=>r.views!=null).map(r=>({label:'@'+r.h,
+      data:[{x:r.views,y:r.er??0,r:Math.max(5,Math.min(26,Math.sqrt(r.n)*1.6))}],
+      backgroundColor:colorFor(r.h)+'bb',borderColor:colorFor(r.h)}))},
+    options:{maintainAspectRatio:false,plugins:{
+      title:{display:true,text:'Alcance vs calidad de engagement',color:'#f5f5f5',font:{size:11,weight:'800'}},
+      legend:{labels:{boxWidth:8,boxHeight:8}},
+      tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${fmt(c.raw.x)} views · ${c.raw.y.toFixed(1)}% eng.`}}},
+      scales:{x:{title:{display:true,text:'views promedio'},ticks:{callback:v=>fmt(v)}},
+              y:{title:{display:true,text:'engagement por view (%)'},beginAtZero:true}}}}));
+
+  const best=[...rows].filter(r=>r.er!=null).sort((a,b)=>b.er-a.er)[0];
+  const wide=[...rows].filter(r=>r.views!=null).sort((a,b)=>b.views-a.views)[0];
+  const notes=[];
+  if(best) notes.push(`<b>@${best.h}</b> tiene el mejor engagement por view (${pct(best.er)}): de cada 100 que ven, ${best.er.toFixed(1)} reaccionan.`);
+  if(wide&&best&&wide.h!==best.h) notes.push(`<b>@${wide.h}</b> llega a más gente (${fmt(wide.views)} views prom.) pero convierte a ${pct(wide.er)} — más alcance no es más conexión.`);
+  $('#accNote').innerHTML = notes.length?`<div class="note">${notes.join(' ')}</div>`:'';
+}
+
+/* ---------------- 3. Temas y lenguaje ---------------- */
+const STOP=new Set(('de la el en y a los las que con por para un una del al es se su lo como mas más este esta estos estas o u ni si no te tu mi sus le les ha han hay muy ya sin sobre entre cuando donde quien porque the of to and a in is it you that for on with as are was be this have from or an by not but what all we your can will just how new now get out are'.split(' ')));
+function sectionTemas(){return `
+<section>
+  <h2>Temas y lenguaje que funcionan <span class="tag">contenido</span></h2>
+  <p class="sub">Extraído del texto de los covers (OCR) y de los hashtags. El tamaño es frecuencia; el número, el promedio de likes de los posts que la usan.</p>
+  <div class="grid2">
+    <div><h3 style="font-size:11px;color:var(--muted);margin:0 0 9px;text-transform:uppercase;letter-spacing:.08em">Palabras en covers</h3><div class="cloud" id="wordCloud"></div></div>
+    <div><h3 style="font-size:11px;color:var(--muted);margin:0 0 9px;text-transform:uppercase;letter-spacing:.08em">Hashtags</h3><div class="cloud" id="tagCloud"></div></div>
+  </div>
+  <div id="temasNote"></div>
+</section>`;}
+
+function drawTemas(P){
+  const wordStats={}, tagStats={};
+  P.forEach(p=>{
+    const metric = p.v ?? p.l ?? 0;
+    if(p.ocr){
+      const seen=new Set();
+      p.ocr.toLowerCase().replace(/[^a-záéíóúñü0-9\s]/gi,' ').split(/\s+/)
+        .filter(w=>w.length>3&&!STOP.has(w)&&!/^\d+$/.test(w))
+        .forEach(w=>{ if(seen.has(w))return; seen.add(w);
+          (wordStats[w]=wordStats[w]||[]).push(metric); });
+    }
+    if(p.h) p.h.split(',').map(s=>s.trim().toLowerCase()).filter(Boolean)
+      .forEach(t=>{(tagStats[t]=tagStats[t]||[]).push(metric)});
+  });
+  const top=(o,min)=>Object.entries(o).filter(([,v])=>v.length>=min)
+    .sort((a,b)=>b[1].length-a[1].length).slice(0,34);
+
+  const paint=(el,items)=>{
+    if(!items.length){$(el).innerHTML='<span style="color:var(--muted)">Sin datos suficientes</span>';return;}
+    const max=Math.max(...items.map(([,v])=>v.length));
+    $(el).innerHTML=items.map(([w,v])=>{
+      const sz=11+Math.round(v.length/max*9);
+      const a=avg(v);
+      return `<span style="font-size:${sz}px" title="${v.length} posts">${w}<b>${fmt(a)}</b></span>`;
+    }).join('');
+  };
+  const w=top(wordStats,4), t=top(tagStats,3);
+  paint('#wordCloud',w); paint('#tagCloud',t);
+
+  // la palabra con mejor rendimiento (no la mas frecuente)
+  const perf=Object.entries(wordStats).filter(([,v])=>v.length>=6)
+    .map(([k,v])=>({k,n:v.length,a:avg(v)})).sort((a,b)=>b.a-a.a).slice(0,3);
+  const notes=[];
+  if(perf.length) notes.push(`Las palabras que más rinden: ${perf.map(p=>`<b>${p.k}</b> (${fmt(p.a)} prom., ${p.n} posts)`).join(', ')}.`);
+  const audio=P.filter(p=>p.oa!=null);
+  if(audio.length>8){
+    const orig=avg(audio.filter(p=>p.oa===1).map(p=>p.v??p.l??0));
+    const ext=avg(audio.filter(p=>p.oa===0).map(p=>p.v??p.l??0));
+    if(orig&&ext) notes.push(`Audio original promedia <b>${fmt(orig)}</b> vs <b>${fmt(ext)}</b> con audio de terceros.`);
+  }
+  $('#temasNote').innerHTML = notes.length?`<div class="note">${notes.join(' ')}</div>`:'';
+}
+
+/* ---------------- 4. Cuándo publicar ---------------- */
+function sectionCuando(){return `
+<section>
+  <h2>Cuándo publicar <span class="tag">timing</span></h2>
+  <p class="sub">Rendimiento promedio según el día y la hora de publicación (UTC). Más claro = mejor. Las celdas vacías son franjas donde nunca se publicó.</p>
+  <div id="heat"></div>
+  <div class="legend"><span>menos</span><i style="background:rgba(245,255,0,.12)"></i><i style="background:rgba(245,255,0,.35)"></i><i style="background:rgba(245,255,0,.6)"></i><i style="background:rgba(245,255,0,.9)"></i><span>más</span></div>
+  <div class="grid2" style="margin-top:16px">
+    <div><div class="chartbox"><canvas id="cDow"></canvas></div></div>
+    <div><div class="chartbox"><canvas id="cHour"></canvas></div></div>
+  </div>
+  <div id="cuandoNote"></div>
+</section>`;}
+
+const DOW=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+function drawCuando(P){
+  const cell={}, byDow={}, byHour={};
+  P.forEach(p=>{
+    if(p.hour==null) return;
+    const m=p.v ?? p.l ?? 0;
+    (cell[p.dow+'-'+p.hour]=cell[p.dow+'-'+p.hour]||[]).push(m);
+    (byDow[p.dow]=byDow[p.dow]||[]).push(m);
+    (byHour[p.hour]=byHour[p.hour]||[]).push(m);
+  });
+  const vals=Object.values(cell).filter(v=>v.length>=2).map(v=>avg(v));
+  const mx=vals.length?Math.max(...vals):1, mn=vals.length?Math.min(...vals):0;
+  let html='<div class="heat"><div class="lbl"></div>';
+  for(let h=0;h<24;h++) html+=`<div class="hr">${h%3===0?h:''}</div>`;
+  for(let d=0;d<7;d++){
+    html+=`<div class="lbl">${DOW[d]}</div>`;
+    for(let h=0;h<24;h++){
+      const v=cell[d+'-'+h];
+      if(!v){html+='<div class="cell" style="background:rgba(255,255,255,.03)"></div>';continue}
+      const a=avg(v); const k=mx>mn?(a-mn)/(mx-mn):.5;
+      html+=`<div class="cell" title="${DOW[d]} ${h}:00 · ${fmt(a)} prom · ${v.length} posts"
+        style="background:rgba(245,255,0,${(0.08+k*0.85).toFixed(2)})"></div>`;
+    }
+  }
+  html+='</div>';
+  $('#heat').innerHTML=html;
+
+  const dk=[...Array(7).keys()].filter(d=>byDow[d]);
+  CHARTS.push(new Chart($('#cDow'),{type:'bar',
+    data:{labels:dk.map(d=>DOW[d]),datasets:[{label:'Promedio',data:dk.map(d=>Math.round(avg(byDow[d]))),
+      backgroundColor:'#f5ff00aa',borderRadius:4}]},
+    options:{maintainAspectRatio:false,plugins:{title:{display:true,text:'Por día de semana',color:'#f5f5f5',font:{size:11,weight:'800'}},
+      legend:{display:false},tooltip:{callbacks:{afterLabel:c=>byDow[dk[c.dataIndex]].length+' posts'}}},
+      scales:{y:{beginAtZero:true,ticks:{callback:v=>fmt(v)}}}}}));
+
+  const hk=[...Array(24).keys()].filter(h=>byHour[h]);
+  CHARTS.push(new Chart($('#cHour'),{type:'line',
+    data:{labels:hk.map(h=>h+'h'),datasets:[{label:'Promedio',data:hk.map(h=>Math.round(avg(byHour[h]))),
+      borderColor:'#4aa8ff',backgroundColor:'#4aa8ff22',fill:true,tension:.35,pointRadius:2}]},
+    options:{maintainAspectRatio:false,plugins:{title:{display:true,text:'Por hora del día (UTC)',color:'#f5f5f5',font:{size:11,weight:'800'}},
+      legend:{display:false},tooltip:{callbacks:{afterLabel:c=>byHour[hk[c.dataIndex]].length+' posts'}}},
+      scales:{y:{beginAtZero:true,ticks:{callback:v=>fmt(v)}}}}}));
+
+  const bd=Object.entries(byDow).filter(([,v])=>v.length>=5).sort((a,b)=>avg(b[1])-avg(a[1]))[0];
+  const bh=Object.entries(byHour).filter(([,v])=>v.length>=5).sort((a,b)=>avg(b[1])-avg(a[1]))[0];
+  const notes=[];
+  if(bd) notes.push(`El mejor día es <b>${DOW[bd[0]]}</b> (${fmt(avg(bd[1]))} prom., ${bd[1].length} posts).`);
+  if(bh) notes.push(`La mejor franja es alrededor de las <b>${bh[0]}:00 UTC</b> (${fmt(avg(bh[1]))} prom.).`);
+  notes.push(`<span style="color:var(--muted)">Ojo: son correlaciones sobre lo ya publicado, no una garantía — si nunca se publicó en una franja, no hay dato que lo respalde.</span>`);
+  $('#cuandoNote').innerHTML=`<div class="note">${notes.join(' ')}</div>`;
+}
+
+/* ---------------- 5. Top posts ---------------- */
+function sectionTop(P){
+  const m=$('#metric').value;
+  const val=p=>m==='er'?engPerView(p):m==='v'?p.v:m==='c'?p.c:p.l;
+  const rows=[...P].filter(p=>val(p)!=null).sort((a,b)=>val(b)-val(a)).slice(0,25);
+  const label={l:'Likes',v:'Views',c:'Comentarios',er:'Eng./view'}[m];
+  return `<section>
+    <h2>Top 25 posts <span class="tag">${label}</span></h2>
+    <p class="sub">Cambiá la métrica de ranking en los filtros de arriba. Clic en una fila para abrir el post en Instagram.</p>
+    <div style="overflow:auto;max-height:460px"><table>
+      <thead><tr><th>#</th><th style="text-align:left">Cuenta</th><th style="text-align:left">Texto del cover</th>
+        <th>Fecha</th><th>Formato</th><th>Likes</th><th>Views</th><th>Eng./view</th></tr></thead>
+      <tbody>${rows.map((p,i)=>`<tr style="cursor:pointer" onclick="window.open('${p.u||'#'}','_blank')">
+        <td style="text-align:left;color:var(--muted)">${i+1}</td>
+        <td style="text-align:left"><span style="color:${colorFor(p.a)}">@${p.a}</span></td>
+        <td style="text-align:left;max-width:340px;overflow:hidden;text-overflow:ellipsis;color:var(--muted-2)">${(p.ocr||'—').slice(0,90)}</td>
+        <td>${new Date(p.ts).toISOString().slice(0,10)}</td>
+        <td>${p.pt==='clips'?'Reel':p.t}</td>
+        <td>${fmt(p.l)}</td><td>${p.v==null?'—':fmt(p.v)}</td><td>${pct(engPerView(p))}</td></tr>`).join('')}</tbody>
+    </table></div>
+  </section>`;
+}
+
+boot();
+</script>
+</body>
+</html>
