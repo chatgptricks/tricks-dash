@@ -69,11 +69,12 @@ const POSTS_PER_BATCH = 60;
 const IG_HANDLE = 'chatgptricks';
 const API_BASE = (import.meta.env.VITE_API_BASE || 'https://cortex-api-db2e.onrender.com').replace(/\/$/, '');
 const PREDICT_URL = 'https://chatgptricks.github.io/cortex/';
-// How long a HOT post keeps showing its badge: the same window the daily
-// engagement job keeps refreshing it (<=10 days). Purely cosmetic now -- HOT
-// posts are never reordered, they just sit in their natural position with the
-// badge on. Surfacing them is the HOT tab's job.
-const HOT_BADGE_WINDOW_DAYS = 10;
+// How long a HOT post keeps showing its badge. Deliberately the SAME window as
+// the HOT tab: a badge that outlived the tab meant a post could look hot in the
+// grid while being absent from the place you go to find hot posts. HOT is a
+// "right now" signal -- past 48h it's just a good post, and the numbers say so
+// on their own.
+const HOT_BADGE_WINDOW_HOURS = HOT_TAB_WINDOW_HOURS;
 // Live data refresh cadence for an already-open tab (the backend refreshes
 // itself automatically every 30 min during its active window; this just
 // keeps an open dashboard in sync with that without a manual reload).
@@ -151,9 +152,8 @@ function normalizePost(post) {
   // A post keeps its HOT flag forever once it earns it (permanent record); the
   // badge only shows while it's still inside the active refresh window.
   const isHot = Boolean(post.isHot);
-  const showsHotBadge = isHot && ageDays <= HOT_BADGE_WINDOW_DAYS;
-  // The HOT tab is a short-lived "what's breaking out right now" view, so it
-  // uses a much tighter window than the badge does.
+  const showsHotBadge = isHot && ageDays <= HOT_BADGE_WINDOW_HOURS / 24;
+  // The HOT tab uses the same window, so badge and tab can never disagree.
   const isHotRecent = isHot && ageDays <= HOT_TAB_WINDOW_HOURS / 24;
 
   return {
