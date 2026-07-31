@@ -121,6 +121,7 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
     </div>
     <div class="top-actions">
       <span id="scope" style="color:var(--muted);font-size:11px"></span>
+      <button class="linkbtn" id="shareBtn" title="Copy a link to this exact view">Copy link</button>
       <a class="linkbtn" href="./index.html">← Dashboard</a>
     </div>
   </div>
@@ -168,6 +169,40 @@ const pct = n => (n===null||n===undefined||!isFinite(n)) ? '—' : n.toFixed(1)+
 
 let RAW=[], ACCOUNTS=[], SEL=new Set(), CHARTS=[];
 
+// ---------------------------------------------------------------------------
+// URL state -- same contract as the dashboard: the query string is the only
+// place this lives, so a reload restores the view and a copied link reproduces
+// it exactly for someone else. Defaults are omitted so a plain view keeps a
+// plain URL. Accounts are only written when the selection is a real subset.
+// ---------------------------------------------------------------------------
+const URL_DEFAULTS = {acc:'', from:'', to:'', preset:'', ftype:'', metric:'l'};
+
+function readUrl(){
+  const p = new URLSearchParams(location.search);
+  const out = {...URL_DEFAULTS};
+  for(const k in URL_DEFAULTS){ const v=p.get(k); if(v!==null) out[k]=v; }
+  return out;
+}
+
+function writeUrl(){
+  const all = ACCOUNTS.map(a=>a.handle);
+  const isAll = all.length>0 && SEL.size===all.length && all.every(h=>SEL.has(h));
+  const state = {
+    acc: isAll ? '' : [...SEL].join(','),
+    from: $('#from').value, to: $('#to').value,
+    preset: $('#preset').value, ftype: $('#ftype').value, metric: $('#metric').value,
+  };
+  const p = new URLSearchParams();
+  for(const k in URL_DEFAULTS){
+    const v = state[k];
+    if(v===undefined||v===null||v===''||String(v)===String(URL_DEFAULTS[k])) continue;
+    p.set(k, v);
+  }
+  const qs = p.toString();
+  // replaceState: filters change constantly, pushing each would break Back.
+  history.replaceState(null, '', location.pathname + (qs ? '?'+qs : ''));
+}
+
 // Chart.js defaults matched to the dark theme
 Chart.defaults.color='#8a8a8a';
 Chart.defaults.font.family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,sans-serif";
@@ -195,11 +230,27 @@ async function boot(){
       return {...p, ts:t, hour:isNaN(t)?null:dt.getUTCHours(), dow:isNaN(t)?null:dt.getUTCDay()};
     }).filter(p=>!isNaN(p.ts));
     ACCOUNTS = data.accounts;
-    SEL = new Set(ACCOUNTS.map(a=>a.handle));
+
+    // The URL wins over the defaults, and only over accounts that still exist
+    // (a shared link can outlive an account being removed).
+    const u = readUrl();
+    const known = new Set(ACCOUNTS.map(a=>a.handle));
+    const wanted = u.acc.split(',').map(h=>h.trim()).filter(h=>known.has(h));
+    SEL = wanted.length ? new Set(wanted) : new Set(known);
+    $('#from').value = u.from;
+    $('#to').value = u.to;
+    $('#preset').value = u.preset;
+    $('#ftype').value = u.ftype;
+    $('#metric').value = u.metric;
+
     buildChips();
     ['from','to','ftype','metric'].forEach(id=>$('#'+id).addEventListener('change',render));
     $('#preset').addEventListener('change',applyPreset);
-    applyPreset();
+    $('#shareBtn').addEventListener('click',shareLink);
+    // A preset in the URL already came with its own from/to, so re-running
+    // applyPreset would recompute them off today's date and quietly shift the
+    // window a shared link was pointing at.
+    render();
   }catch(e){
     $('#app').innerHTML = '<div class="empty">Could not load the data.<br><small>'+e.message+'</small></div>';
   }
@@ -227,6 +278,16 @@ function applyPreset(){
     $('#from').value=new Date(Date.now()-days*864e5).toISOString().slice(0,10);
   }
   render();
+}
+
+async function shareLink(){
+  const btn=$('#shareBtn');
+  try{
+    await navigator.clipboard.writeText(location.href);
+    btn.textContent='Copied'; setTimeout(()=>{btn.textContent='Copy link'},1600);
+  }catch(e){
+    prompt('Copy this link:', location.href);
+  }
 }
 
 function filtered(){
@@ -283,6 +344,7 @@ function idx(p){
 
 function render(){
   destroyCharts();
+  writeUrl();
   const P = filtered();
   computeBaselines(P);
   $('#scope').textContent = P.length.toLocaleString('en-US')+' posts · '+SEL.size+' accounts';
