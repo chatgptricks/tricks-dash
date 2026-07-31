@@ -42,10 +42,10 @@ const GROUP_TABS = [
   { value: 'hot', label: 'HOT' },
 ];
 
-// The HOT tab only surfaces posts that broke out in the last 2 days -- it's a
-// "what's happening now" view, deliberately shorter-lived than the 10-day
-// badge/pin window so it doesn't fill up with last week's winners.
-const HOT_TAB_WINDOW_HOURS = 48;
+// Single source of truth for how long a post counts as HOT, in both the tab and
+// the badge. 30h rather than 48h: two days still felt stale in practice -- the
+// window covers a post's first full day plus the following morning, then lets go.
+const HOT_TAB_WINDOW_HOURS = 30;
 
 const TYPE_OPTIONS = ['All posts', 'Carousel', 'Video', 'Image'];
 const SORT_OPTIONS = [
@@ -72,8 +72,8 @@ const PREDICT_URL = 'https://chatgptricks.github.io/cortex/';
 // How long a HOT post keeps showing its badge. Deliberately the SAME window as
 // the HOT tab: a badge that outlived the tab meant a post could look hot in the
 // grid while being absent from the place you go to find hot posts. HOT is a
-// "right now" signal -- past 48h it's just a good post, and the numbers say so
-// on their own.
+// "right now" signal -- past the window it's just a good post, and the numbers
+// say so on their own.
 const HOT_BADGE_WINDOW_HOURS = HOT_TAB_WINDOW_HOURS;
 // Live data refresh cadence for an already-open tab (the backend refreshes
 // itself automatically every 30 min during its active window; this just
