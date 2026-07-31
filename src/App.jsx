@@ -606,17 +606,25 @@ function App() {
       type: activeType,
       media: mediaFilter,
       sort: sortBy,
-      likes: minLikes === ranges.likesMin ? '' : minLikes,
-      comments: minComments === ranges.commentsMin ? '' : minComments,
+      // <= not ===: ranges.likesMin is 0 before posts load and the real
+      // minimum afterwards, so an untouched slider stops matching it mid-load
+      // and would write a meaningless likes=0 into every URL.
+      likes: minLikes <= ranges.likesMin ? '' : minLikes,
+      comments: minComments <= ranges.commentsMin ? '' : minComments,
       from: dateFrom,
       to: dateTo,
       range: datePreset,
-      post: selectedKey,
+      // Only when the sidebar is actually open. `selected` falls back to the
+      // first result so the preview pane always has something to show, and an
+      // effect writes that back into selectedKey -- meaning selectedKey is set
+      // even when nobody opened anything. Sharing that would pin a stranger's
+      // link to whichever post happened to sort first.
+      post: isSidebarOpen ? selectedKey : '',
     });
   }, [
     query, activeGroup, selectedAccounts, accountsInScope, activeType, mediaFilter,
     sortBy, minLikes, minComments, dateFrom, dateTo, datePreset, selectedKey,
-    ranges.likesMin, ranges.commentsMin,
+    isSidebarOpen, ranges.likesMin, ranges.commentsMin,
   ]);
 
   const handleResultsScroll = useCallback((event) => {
