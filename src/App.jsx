@@ -5,6 +5,7 @@ import {
   AtSign,
   BarChart3,
   Bookmark,
+  Check,
   CalendarDays,
   ChevronDown,
   Copy,
@@ -12,6 +13,7 @@ import {
   Filter,
   Flame,
   Heart,
+  Link2,
   MessageCircle,
   MoreHorizontal,
   Plus,
@@ -46,6 +48,62 @@ const GROUP_TABS = [
 // the badge. 30h rather than 48h: two days still felt stale in practice -- the
 // window covers a post's first full day plus the following morning, then lets go.
 const HOT_TAB_WINDOW_HOURS = 30;
+
+// ---------------------------------------------------------------------------
+// URL state
+//
+// The whole filter state lives in the query string and nowhere else. That gives
+// reload-persistence and shareable links from the same mechanism: a reload just
+// re-reads the URL, and a copied URL reproduces the exact view for anyone else.
+// Deliberately NOT mirrored into localStorage -- a link with no params has to
+// mean "clean view" for every person who opens it, otherwise a shared link
+// silently shows the recipient their own saved filters instead of yours.
+//
+// Defaults are omitted from the URL, so the common case stays a bare path and
+// only the parts you actually changed show up.
+// ---------------------------------------------------------------------------
+const URL_DEFAULTS = {
+  q: '',
+  tab: 'all',
+  acc: '',
+  type: 'All posts',
+  media: 'all',
+  sort: 'newest',
+  likes: '',
+  comments: '',
+  from: '',
+  to: '',
+  range: 'all',
+  post: '',
+};
+
+function readUrlState() {
+  if (typeof window === 'undefined') return { ...URL_DEFAULTS };
+  const params = new URLSearchParams(window.location.search);
+  const state = { ...URL_DEFAULTS };
+  for (const key of Object.keys(URL_DEFAULTS)) {
+    const value = params.get(key);
+    if (value !== null) state[key] = value;
+  }
+  return state;
+}
+
+function writeUrlState(state) {
+  if (typeof window === 'undefined') return;
+  const params = new URLSearchParams();
+  for (const [key, fallback] of Object.entries(URL_DEFAULTS)) {
+    const value = state[key];
+    if (value === undefined || value === null) continue;
+    const text = String(value);
+    if (text === '' || text === String(fallback)) continue;
+    params.set(key, text);
+  }
+  const search = params.toString();
+  const next = `${window.location.pathname}${search ? `?${search}` : ''}`;
+  // replaceState, not pushState: filters change on every keystroke and slider
+  // tick, and pushing each one would make the back button useless.
+  window.history.replaceState(null, '', next);
+}
 
 const TYPE_OPTIONS = ['All posts', 'Carousel', 'Video', 'Image'];
 const SORT_OPTIONS = [
@@ -379,9 +437,12 @@ function App() {
     return counts;
   }, [posts]);
 
-  const [query, setQuery] = useState('');
+  // Read once, at mount: the URL is the source of truth for the initial view,
+  // and from then on the app writes to it rather than reading back.
+  const initialUrl = useRef(readUrlState()).current;
+  const [query, setQuery] = useState(initialUrl.q);
   const deferredQuery = useDeferredValue(query);
-  const [activeGroup, setActiveGroup] = useState('all');
+  const [activeGroup, setActiveGroup] = useState(initialUrl.tab);
   const groupScopedPosts = useMemo(
     () => (activeGroup === 'all' ? posts : posts.filter((post) => post.group === activeGroup)),
     [posts, activeGroup],
@@ -482,22 +543,81 @@ function App() {
   // Whenever the tab (or the account roster itself) changes, default back
   // to "everything in this tab selected" rather than carrying over a
   // narrower selection from a different tab's account list.
+  //
+  // Exception: the very first run after accounts load, when the URL named a
+  // specific set. This effect fires on mount too, so without the guard it would
+  // immediately overwrite a shared link's account selection with "all".
+  const urlAccountsPending = useRef(Boolean(initialUrl.acc));
   useEffect(() => {
+    if (!accounts.length) return;
+    if (urlAccountsPending.current) {
+      urlAccountsPending.current = false;
+      const inScope = new Set(accountsInScope.map((account) => account.handle));
+      const fromUrl = initialUrl.acc.split(',').map((h) => h.trim()).filter((h) => inScope.has(h));
+      if (fromUrl.length) {
+        setSelectedAccounts(new Set(fromUrl));
+        return;
+      }
+    }
     setSelectedAccounts(new Set(accountsInScope.map((account) => account.handle)));
   }, [activeGroup, accounts]); // eslint-disable-line react-hooks/exhaustive-deps
-  const [activeType, setActiveType] = useState('All posts');
-  const [mediaFilter, setMediaFilter] = useState('all');
-  const [sortBy, setSortBy] = useState('newest');
-  const [minLikes, setMinLikes] = useState(ranges.likesMin);
-  const [minComments, setMinComments] = useState(ranges.commentsMin);
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
-  const [datePreset, setDatePreset] = useState('all');
+  const [activeType, setActiveType] = useState(initialUrl.type);
+  const [mediaFilter, setMediaFilter] = useState(initialUrl.media);
+  const [sortBy, setSortBy] = useState(initialUrl.sort);
+  const [minLikes, setMinLikes] = useState(initialUrl.likes === '' ? ranges.likesMin : Number(initialUrl.likes));
+  const [minComments, setMinComments] = useState(initialUrl.comments === '' ? ranges.commentsMin : Number(initialUrl.comments));
+  const [dateFrom, setDateFrom] = useState(initialUrl.from);
+  const [dateTo, setDateTo] = useState(initialUrl.to);
+  const [datePreset, setDatePreset] = useState(initialUrl.range);
   const [visibleCount, setVisibleCount] = useState(POSTS_PER_BATCH);
-  const [selectedKey, setSelectedKey] = useState('');
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [selectedKey, setSelectedKey] = useState(initialUrl.post);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(Boolean(initialUrl.post));
   const [filtersHidden, setFiltersHidden] = useState(false);
   const lastScrollTopRef = useRef(0);
+  const [shareCopied, setShareCopied] = useState(false);
+
+  // The URL is already up to date by the time this runs (the effect below keeps
+  // it in sync), so copying it is just reading location.href.
+  const copyShareLink = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 1600);
+    } catch {
+      // Clipboard is blocked outside a secure context or without permission;
+      // select the URL instead so the person can copy it by hand.
+      window.prompt('Copy this link:', window.location.href);
+    }
+  }, []);
+
+  // Mirror the filter state into the URL. Only the account selection needs
+  // special handling: "all accounts in this tab" is the default, so writing the
+  // full list every time would bloat every URL with something that carries no
+  // information. It's only recorded when it's actually a narrower subset.
+  useEffect(() => {
+    const inScope = accountsInScope.map((account) => account.handle);
+    const isEveryAccount =
+      inScope.length > 0 && inScope.every((handle) => selectedAccounts.has(handle))
+      && selectedAccounts.size === inScope.length;
+    writeUrlState({
+      q: query,
+      tab: activeGroup,
+      acc: isEveryAccount ? '' : [...selectedAccounts].join(','),
+      type: activeType,
+      media: mediaFilter,
+      sort: sortBy,
+      likes: minLikes === ranges.likesMin ? '' : minLikes,
+      comments: minComments === ranges.commentsMin ? '' : minComments,
+      from: dateFrom,
+      to: dateTo,
+      range: datePreset,
+      post: selectedKey,
+    });
+  }, [
+    query, activeGroup, selectedAccounts, accountsInScope, activeType, mediaFilter,
+    sortBy, minLikes, minComments, dateFrom, dateTo, datePreset, selectedKey,
+    ranges.likesMin, ranges.commentsMin,
+  ]);
 
   const handleResultsScroll = useCallback((event) => {
     const top = event.currentTarget.scrollTop;
@@ -685,6 +805,15 @@ function App() {
               ) : null}
               <Metric label="Likes" value={compactFormatter.format(combinedSummary.totalLikes ?? summary['Total likes'] ?? 0)} />
               <Metric label="Avg likes" value={compactFormatter.format(combinedSummary.averageLikes ?? summary['Average likes'] ?? 0)} />
+              <button
+                className="ghost-button refresh-button"
+                type="button"
+                onClick={copyShareLink}
+                title="Copy a link to this exact view"
+                aria-label="Copy link to this view"
+              >
+                {shareCopied ? <Check size={15} /> : <Link2 size={15} />}
+              </button>
               <a
                 className="ghost-button refresh-button"
                 href={`${import.meta.env.BASE_URL}insights.html`}
