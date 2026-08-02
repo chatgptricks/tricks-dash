@@ -2829,6 +2829,14 @@ body {
   opacity: 0.85;
 }
 
+.hot-badge-age {
+  padding-left: 5px;
+  margin-left: 2px;
+  border-left: 1px solid rgba(11, 11, 11, 0.35);
+  font-weight: 700;
+  opacity: 0.7;
+}
+
 /* Card-level effects for the hottest posts, layered on top of the badge.
    Standard "animated glowing border" technique: a custom property for the
    angle (so the browser can smoothly interpolate it) and a conic-gradient
