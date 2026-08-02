@@ -153,11 +153,28 @@ function formatLikes(value) {
 const dateFormatter = new Intl.DateTimeFormat('en-US', {
   month: 'short',
   day: 'numeric',
-  year: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
 });
 
 function formatDate(iso) {
   return dateFormatter.format(new Date(iso));
+}
+
+// Compact "how long ago" for the HOT pill -- shares the badge's own timestamp
+// rather than re-fetching, so it's consistent with everything else computed
+// at normalize time and refreshes on the same AUTO_POLL_MS cadence as the rest
+// of the dashboard.
+function formatElapsed(timestampMs) {
+  if (!Number.isFinite(timestampMs)) return null;
+  const diffMs = Date.now() - timestampMs;
+  if (diffMs < 0) return null;
+  const minutes = Math.floor(diffMs / 60000);
+  if (minutes < 60) return `${Math.max(minutes, 1)}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.floor(hours / 24);
+  return `${days}d`;
 }
 
 function typeLabel(value) {
@@ -2079,7 +2096,13 @@ function hotEffects(post) {
 const HotBadge = memo(function HotBadge({ post, large = false }) {
   const tier = hotTier(post.hotMultiplier);
   const hasRate = Number.isFinite(post.hotMultiplier);
-  const label = hasRate ? `${post.hotMultiplier.toFixed(1)}x the rate threshold` : 'Went viral in its first hour';
+  const age = formatElapsed(post.timestamp);
+  const label = [
+    hasRate ? `${post.hotMultiplier.toFixed(1)}x the rate threshold` : 'Went viral in its first hour',
+    age ? `posted ${age} ago` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
 
   // Cap rendered flame icons at 3 so tier 4/5 badges don't get comically
   // wide -- the rest of the escalation (size, color, pulse speed) still
@@ -2093,6 +2116,7 @@ const HotBadge = memo(function HotBadge({ post, large = false }) {
       ))}
       <span>HOT</span>
       {hasRate ? <b className="hot-badge-rate">{post.hotMultiplier.toFixed(1)}x</b> : null}
+      {age ? <b className="hot-badge-age">{age}</b> : null}
     </div>
   );
 });
