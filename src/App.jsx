@@ -19,6 +19,7 @@ import {
   MessageCircle,
   MessageSquare,
   MoreHorizontal,
+  Music2,
   Plus,
   Power,
   RefreshCw,
@@ -1133,6 +1134,20 @@ function App() {
                 <p>
                   <strong>{selected.account || IG_HANDLE}</strong> {selected.caption}
                 </p>
+                {selected.musicSong ? (
+                  <p className="song-line">
+                    <Music2 size={14} />
+                    <span>
+                      {selected.musicSong}
+                      {selected.musicArtist ? ` — ${selected.musicArtist}` : ''}
+                    </span>
+                  </p>
+                ) : selected.usesOriginalAudio ? (
+                  <p className="song-line">
+                    <Music2 size={14} />
+                    <span>Original audio</span>
+                  </p>
+                ) : null}
               </section>
 
               <section className="panel stats-panel">
