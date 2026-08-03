@@ -1856,7 +1856,9 @@ body {
 .caption-panel {
   grid-area: caption;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  /* header / caption text (scrolls internally, takes remaining space) / song
+     line (auto-height, only rendered when the post has music data). */
+  grid-template-rows: auto minmax(0, 1fr) auto;
   padding: 14px;
   overflow: hidden;
 }
@@ -1894,6 +1896,31 @@ body {
 
 .caption-panel strong {
   color: #ffffff;
+}
+
+.caption-panel .song-line {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  overflow: visible;
+  color: rgba(245, 245, 245, 0.7);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: normal;
+}
+
+.caption-panel .song-line svg {
+  flex-shrink: 0;
+  color: var(--accent);
+}
+
+.caption-panel .song-line span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 @media (max-width: 1120px) {
