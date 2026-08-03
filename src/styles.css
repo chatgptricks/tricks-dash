@@ -1917,6 +1917,21 @@ body {
   font-size: 12px;
   font-weight: 700;
   white-space: normal;
+  text-decoration: none;
+}
+
+/* Only <a> renders when we have Instagram's audio_id (see SongLine) -- older
+   rows without one fall back to a plain, non-interactive <p>. */
+.caption-panel a.song-line {
+  cursor: pointer;
+}
+
+.caption-panel a.song-line:hover {
+  color: #ffffff;
+}
+
+.caption-panel a.song-line:hover svg {
+  color: #fffce0;
 }
 
 .caption-panel .song-line svg {

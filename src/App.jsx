@@ -1135,18 +1135,12 @@ function App() {
                   <strong>{selected.account || IG_HANDLE}</strong> {selected.caption}
                 </p>
                 {selected.musicSong ? (
-                  <p className="song-line">
-                    <Music2 size={14} />
-                    <span>
-                      {selected.musicSong}
-                      {selected.musicArtist ? ` — ${selected.musicArtist}` : ''}
-                    </span>
-                  </p>
+                  <SongLine url={selected.musicUrl}>
+                    {selected.musicSong}
+                    {selected.musicArtist ? ` — ${selected.musicArtist}` : ''}
+                  </SongLine>
                 ) : selected.usesOriginalAudio ? (
-                  <p className="song-line">
-                    <Music2 size={14} />
-                    <span>Original audio</span>
-                  </p>
+                  <SongLine url={selected.musicUrl}>Original audio</SongLine>
                 ) : null}
               </section>
 
@@ -1185,6 +1179,26 @@ function App() {
 
       <BackgroundTaskStack tasks={backgroundTasks} onDismiss={dismissBackgroundTask} />
     </div>
+  );
+}
+
+// Not a Spotify/Apple Music link -- Apify only gives us Instagram's own
+// audio_id, which resolves to that sound's page on Instagram (every reel that
+// used the exact same clip). Renders as a link when we have that id, plain
+// text otherwise (older rows scraped before audio_id was captured).
+function SongLine({ url, children }) {
+  const content = (
+    <>
+      <Music2 size={14} />
+      <span>{children}</span>
+    </>
+  );
+  return url ? (
+    <a className="song-line" href={url} target="_blank" rel="noreferrer" title="Open this sound on Instagram">
+      {content}
+    </a>
+  ) : (
+    <p className="song-line">{content}</p>
   );
 }
 
