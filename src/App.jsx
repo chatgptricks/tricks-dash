@@ -12,13 +12,18 @@ import {
   ExternalLink,
   Filter,
   Flame,
+  HardDrive,
   Heart,
+  ImagePlus,
   Link2,
   MessageCircle,
+  MessageSquare,
   MoreHorizontal,
   Plus,
+  Power,
   RefreshCw,
   RotateCcw,
+  ScanText,
   Search,
   Send,
   Settings,
@@ -565,6 +570,14 @@ function App() {
   // specific set. This effect fires on mount too, so without the guard it would
   // immediately overwrite a shared link's account selection with "all".
   const urlAccountsPending = useRef(Boolean(initialUrl.acc));
+  // A stable key of *which handles exist*, not the accounts array itself.
+  // loadDashboard() re-fetches every 3 minutes (AUTO_POLL_MS) and each poll
+  // produces a brand-new array reference even when nothing actually changed,
+  // so depending on `accounts` directly made this effect re-fire on every
+  // silent poll and silently reset any manual account-selection filter back
+  // to "everything in this tab" -- the account roster only really changes
+  // when one is added/removed/reactivated, so key off that instead.
+  const accountsKey = useMemo(() => accounts.map((account) => account.handle).sort().join(','), [accounts]);
   useEffect(() => {
     if (!accounts.length) return;
     if (urlAccountsPending.current) {
@@ -577,7 +590,7 @@ function App() {
       }
     }
     setSelectedAccounts(new Set(accountsInScope.map((account) => account.handle)));
-  }, [activeGroup, accounts]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeGroup, accountsKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const [activeType, setActiveType] = useState(initialUrl.type);
   const [mediaFilter, setMediaFilter] = useState(initialUrl.media);
   const [sortBy, setSortBy] = useState(initialUrl.sort);
@@ -1324,17 +1337,98 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
   const [unlocked, setUnlocked] = useState(false);
   const [checking, setChecking] = useState(false);
   const [notice, setNotice] = useState('');
-  const [thresholds, setThresholds] = useState({});
+  const [tab, setTab] = useState('accounts'); // 'accounts' | 'system'
+
+  // The prop is /api/dashboard/accounts (active-only, public). This panel
+  // needs inactive accounts too (to show/reactivate them), so once unlocked
+  // it re-fetches the full admin roster and works off that instead.
+  const [roster, setRoster] = useState(accounts);
+  const [edits, setEdits] = useState({});
   const [savingHandle, setSavingHandle] = useState('');
+  const [avatarHandle, setAvatarHandle] = useState('');
+  const [lifecycleHandle, setLifecycleHandle] = useState('');
   const [importFrom, setImportFrom] = useState({});
   const [importing, setImporting] = useState('');
   const [importNotice, setImportNotice] = useState({});
 
+  // System tab
+  const [disk, setDisk] = useState(null);
+  const [slackStatus, setSlackStatus] = useState(null);
+  const [slackSending, setSlackSending] = useState(false);
+  const [slackNotice, setSlackNotice] = useState('');
+  const [apifyRuns, setApifyRuns] = useState([]);
+  const [apifyLoading, setApifyLoading] = useState(false);
+  const [ocrStatus, setOcrStatus] = useState(null);
+  const [ocrStarting, setOcrStarting] = useState(false);
+
+  const loadRoster = useCallback(async () => {
+    try {
+      const response = await fetch(`${API_BASE}/api/admin/accounts`);
+      const body = await response.json().catch(() => ({}));
+      if (Array.isArray(body.accounts)) setRoster(body.accounts);
+    } catch (error) {
+      // Keep whatever roster we already had rather than blanking the panel.
+    }
+  }, []);
+
+  const loadSystemStatus = useCallback(async () => {
+    try {
+      const [diskRes, slackRes, ocrRes] = await Promise.all([
+        fetch(`${API_BASE}/api/admin/disk-status`),
+        fetch(`${API_BASE}/api/admin/slack-status`),
+        fetch(`${API_BASE}/api/admin/ocr/status`),
+      ]);
+      if (diskRes.ok) setDisk(await diskRes.json());
+      if (slackRes.ok) setSlackStatus(await slackRes.json());
+      if (ocrRes.ok) setOcrStatus(await ocrRes.json());
+    } catch (error) {
+      // Read-only diagnostics -- fail quietly, sections just stay on "Loading…".
+    }
+  }, []);
+
+  const loadApifyRuns = useCallback(async () => {
+    if (!password) return;
+    setApifyLoading(true);
+    try {
+      const response = await fetch(`${API_BASE}/api/admin/apify/runs?password=${encodeURIComponent(password)}&limit=10`);
+      const body = await response.json().catch(() => ({}));
+      if (Array.isArray(body.runs)) setApifyRuns(body.runs);
+    } catch (error) {
+      // ignore
+    } finally {
+      setApifyLoading(false);
+    }
+  }, [password]);
+
   useEffect(() => {
     const next = {};
-    for (const account of accounts) next[account.handle] = String(account.hot_threshold ?? '');
-    setThresholds(next);
-  }, [accounts]);
+    for (const account of roster) {
+      next[account.handle] = {
+        label: account.label || '',
+        group: account.group,
+        hot_threshold: String(account.hot_threshold ?? ''),
+      };
+    }
+    setEdits(next);
+  }, [roster]);
+
+  useEffect(() => {
+    if (!unlocked) return;
+    loadRoster();
+    loadSystemStatus();
+  }, [unlocked, loadRoster, loadSystemStatus]);
+
+  useEffect(() => {
+    if (unlocked && tab === 'system') loadApifyRuns();
+  }, [unlocked, tab, loadApifyRuns]);
+
+  // While a sweep is running, poll so the "done" count moves without a manual
+  // refresh -- same pattern as the background-task polling used elsewhere.
+  useEffect(() => {
+    if (!unlocked || !ocrStatus?.running) return;
+    const timer = setInterval(loadSystemStatus, 4000);
+    return () => clearInterval(timer);
+  }, [unlocked, ocrStatus?.running, loadSystemStatus]);
 
   // Validated by attempting the cheapest password-gated write we have: a
   // no-op settings update on the first account. Avoids inventing a dedicated
@@ -1352,58 +1446,126 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
         body: new URLSearchParams({ password, hot_threshold: String(account.hot_threshold) }),
       });
       if (response.status === 401) {
-        setNotice('Contraseña incorrecta.');
+        setNotice('Incorrect password.');
         return;
       }
       if (!response.ok) {
-        setNotice('No se pudo validar. Intentá de nuevo.');
+        setNotice('Could not validate. Try again.');
         return;
       }
       setUnlocked(true);
     } catch (error) {
-      setNotice('Error de red. Intentá de nuevo.');
+      setNotice('Network error. Try again.');
     } finally {
       setChecking(false);
     }
   };
 
-  const saveThreshold = async (handle) => {
-    const raw = thresholds[handle];
-    const value = Number.parseInt(raw, 10);
+  const isDirty = (account) => {
+    const edit = edits[account.handle];
+    if (!edit) return false;
+    return (
+      edit.label !== (account.label || '') ||
+      edit.group !== account.group ||
+      String(edit.hot_threshold) !== String(account.hot_threshold ?? '')
+    );
+  };
+
+  const saveAccount = async (account) => {
+    const edit = edits[account.handle];
+    if (!edit) return;
+    const value = Number.parseInt(edit.hot_threshold, 10);
     if (!Number.isFinite(value) || value < 1) {
-      setNotice(`Umbral inválido para @${handle}.`);
+      setNotice(`Invalid threshold for @${account.handle}.`);
       return;
     }
-    setSavingHandle(handle);
+    setSavingHandle(account.handle);
     setNotice('');
     try {
-      const response = await fetch(`${API_BASE}/api/admin/accounts/${encodeURIComponent(handle)}/settings`, {
+      const params = new URLSearchParams({ password, hot_threshold: String(value), group: edit.group });
+      // Backend ignores a blank label rather than clearing it, so only send
+      // one when it actually has content.
+      if (edit.label.trim()) params.set('label', edit.label.trim());
+      const response = await fetch(`${API_BASE}/api/admin/accounts/${encodeURIComponent(account.handle)}/settings`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ password, hot_threshold: String(value) }),
+        body: params,
       });
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
-        setNotice(body.detail || `No se pudo guardar @${handle}.`);
+        setNotice(body.detail || `Could not save @${account.handle}.`);
         return;
       }
-      setNotice(`@${handle} actualizado a ${value}/hr.`);
+      setNotice(`@${account.handle} updated.`);
+      await loadRoster();
       onAccountsChanged?.();
     } catch (error) {
-      setNotice('Error de red al guardar.');
+      setNotice('Network error while saving.');
     } finally {
       setSavingHandle('');
+    }
+  };
+
+  const refreshAvatar = async (handle) => {
+    setAvatarHandle(handle);
+    setNotice('');
+    try {
+      const response = await fetch(`${API_BASE}/api/admin/accounts/${encodeURIComponent(handle)}/avatar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ password }),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        setNotice(body.detail || `Could not refresh the avatar for @${handle}.`);
+        return;
+      }
+      setNotice(`Avatar refreshed for @${handle}.`);
+      await loadRoster();
+      onAccountsChanged?.();
+    } catch (error) {
+      setNotice('Network error refreshing the avatar.');
+    } finally {
+      setAvatarHandle('');
+    }
+  };
+
+  const toggleActive = async (account) => {
+    const endpoint = account.is_active ? 'deactivate' : 'activate';
+    setLifecycleHandle(account.handle);
+    setNotice('');
+    try {
+      const response = await fetch(
+        `${API_BASE}/api/admin/accounts/${encodeURIComponent(account.handle)}/${endpoint}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({ password }),
+        },
+      );
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        setNotice(body.detail || `Could not update @${account.handle}.`);
+        return;
+      }
+      setNotice(account.is_active ? `@${account.handle} deactivated.` : `@${account.handle} reactivated.`);
+      await loadRoster();
+      onAccountsChanged?.();
+    } catch (error) {
+      setNotice('Network error.');
+    } finally {
+      setLifecycleHandle('');
     }
   };
 
   const runImport = async (handle) => {
     const from = importFrom[handle];
     if (!from) {
-      setImportNotice((prev) => ({ ...prev, [handle]: 'Elegí una fecha.' }));
+      setImportNotice((prev) => ({ ...prev, [handle]: 'Pick a date.' }));
       return;
     }
     setImporting(handle);
-    setImportNotice((prev) => ({ ...prev, [handle]: 'Iniciando…' }));
+    setImportNotice((prev) => ({ ...prev, [handle]: 'Starting…' }));
     try {
       const response = await fetch(`${API_BASE}/api/admin/accounts/${encodeURIComponent(handle)}/backfill`, {
         method: 'POST',
@@ -1412,12 +1574,12 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) {
-        setImportNotice((prev) => ({ ...prev, [handle]: body.detail || 'Falló la extracción.' }));
+        setImportNotice((prev) => ({ ...prev, [handle]: body.detail || 'Extraction failed.' }));
         return;
       }
       setImportNotice((prev) => ({
         ...prev,
-        [handle]: `Listo: ${body.added ?? 0} posts nuevos.`,
+        [handle]: `Done: ${body.added ?? 0} new posts.`,
       }));
       onAccountsChanged?.();
     } catch (error) {
@@ -1425,19 +1587,66 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
       // keeps going, so say so instead of reporting a false failure.
       setImportNotice((prev) => ({
         ...prev,
-        [handle]: 'Sigue corriendo en el servidor. Los posts van a aparecer solos.',
+        [handle]: 'Still running on the server. New posts will show up on their own.',
       }));
     } finally {
       setImporting('');
     }
   };
 
+  const sendSlackTest = async () => {
+    setSlackSending(true);
+    setSlackNotice('');
+    try {
+      const response = await fetch(`${API_BASE}/api/admin/slack-test`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ password }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setSlackNotice(body.detail || 'Could not send the test alert.');
+        return;
+      }
+      setSlackNotice(body.sent ? 'Test alert sent -- check Slack.' : 'Slack accepted the request but did not confirm delivery.');
+    } catch (error) {
+      setSlackNotice('Network error.');
+    } finally {
+      setSlackSending(false);
+    }
+  };
+
+  const startOcrSweep = async () => {
+    setOcrStarting(true);
+    setNotice('');
+    try {
+      const response = await fetch(`${API_BASE}/api/admin/ocr/start`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ password }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setNotice(body.detail || 'Could not start the OCR sweep.');
+        return;
+      }
+      await loadSystemStatus();
+    } catch (error) {
+      setNotice('Network error starting the OCR sweep.');
+    } finally {
+      setOcrStarting(false);
+    }
+  };
+
+  const activeRoster = roster.filter((account) => account.is_active !== false);
+  const inactiveRoster = roster.filter((account) => account.is_active === false);
+
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal-card settings-card" onClick={(event) => event.stopPropagation()}>
         <div className="modal-header">
-          <h2>Settings</h2>
-          <button type="button" className="icon-button" onClick={onClose} aria-label="Cerrar">
+          <h2>Admin panel</h2>
+          <button type="button" className="icon-button" onClick={onClose} aria-label="Close">
             <X size={16} />
           </button>
         </div>
@@ -1445,10 +1654,10 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
         {!unlocked ? (
           <form className="settings-lock" onSubmit={unlock}>
             <p className="wizard-hint">
-              Ingresá la contraseña de refresh para cambiar umbrales, extraer historial o refrescar.
+              Enter the refresh password to manage accounts, run diagnostics, or trigger a refresh.
             </p>
             <label className="modal-field">
-              <span>Contraseña</span>
+              <span>Password</span>
               <input
                 type="password"
                 value={password}
@@ -1460,114 +1669,325 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
             {notice ? <p className="settings-notice">{notice}</p> : null}
             <div className="modal-actions">
               <button type="submit" className="primary-button" disabled={checking || !password}>
-                {checking ? 'Validando…' : 'Desbloquear'}
+                {checking ? 'Checking…' : 'Unlock'}
               </button>
             </div>
           </form>
         ) : (
           <div className="settings-body">
-            <section className="settings-section">
-              <div className="settings-section-head">
-                <h3>Refrescar ahora</h3>
-                <button
-                  type="button"
-                  className="ghost-button settings-refresh"
-                  onClick={() => onRefresh(password)}
-                  disabled={refreshing}
-                >
-                  <RefreshCw size={14} className={refreshing ? 'spin' : ''} />
-                  <span>{refreshing ? 'Refrescando…' : 'Refrescar'}</span>
-                </button>
-              </div>
-              <p className="wizard-hint">
-                Corre el ciclo de engagement para todas las cuentas. Normalmente se hace solo cada hora.
-              </p>
-              {refreshNotice ? (
-                <p className={refreshNotice.type === 'error' ? 'settings-notice-error' : 'settings-notice'}>
-                  {refreshNotice.text}
-                </p>
-              ) : null}
-            </section>
+            <div className="settings-tabs" role="tablist">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={tab === 'accounts'}
+                className={tab === 'accounts' ? 'settings-tab settings-tab-active' : 'settings-tab'}
+                onClick={() => setTab('accounts')}
+              >
+                Accounts
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={tab === 'system'}
+                className={tab === 'system' ? 'settings-tab settings-tab-active' : 'settings-tab'}
+                onClick={() => setTab('system')}
+              >
+                System
+              </button>
+            </div>
 
-            <section className="settings-section">
-              <h3>Umbral HOT por cuenta</h3>
-              <p className="wizard-hint">
-                Likes por hora que un post necesita en su primera hora para marcarse HOT. Cada cuenta tiene su
-                propia escala.
-              </p>
-              <div className="settings-table">
-                {accounts.map((account) => (
-                  <div className="settings-row" key={account.handle}>
-                    <div className="settings-row-account">
-                      <strong>@{account.handle}</strong>
-                      <span>{account.group}</span>
-                    </div>
-                    <div className="settings-row-controls">
-                      <input
-                        type="number"
-                        min={1}
-                        value={thresholds[account.handle] ?? ''}
-                        onChange={(event) =>
-                          setThresholds((prev) => ({ ...prev, [account.handle]: event.target.value }))
-                        }
-                        aria-label={`Umbral para ${account.handle}`}
-                      />
-                      <span className="settings-unit">/hr</span>
-                      <button
-                        type="button"
-                        className="ghost-button"
-                        onClick={() => saveThreshold(account.handle)}
-                        disabled={
-                          savingHandle === account.handle ||
-                          String(thresholds[account.handle]) === String(account.hot_threshold)
-                        }
-                      >
-                        {savingHandle === account.handle ? '…' : 'Guardar'}
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              {notice ? <p className="settings-notice">{notice}</p> : null}
-            </section>
+            {notice ? <p className="settings-notice">{notice}</p> : null}
 
-            <section className="settings-section">
-              <h3>Extraer historial más antiguo</h3>
-              <p className="wizard-hint">
-                Trae posts desde la fecha elegida hacia adelante. Los que ya existen se ignoran, así que no se
-                duplica nada. Ojo: cada extracción consume créditos de Apify.
-              </p>
-              <div className="settings-table">
-                {accounts.map((account) => (
-                  <div className="settings-row" key={account.handle}>
-                    <div className="settings-row-account">
-                      <strong>@{account.handle}</strong>
-                      {importNotice[account.handle] ? (
-                        <span className="settings-import-notice">{importNotice[account.handle]}</span>
-                      ) : null}
-                    </div>
-                    <div className="settings-row-controls">
-                      <input
-                        type="date"
-                        value={importFrom[account.handle] ?? ''}
-                        onChange={(event) =>
-                          setImportFrom((prev) => ({ ...prev, [account.handle]: event.target.value }))
-                        }
-                        aria-label={`Extraer desde para ${account.handle}`}
-                      />
-                      <button
-                        type="button"
-                        className="ghost-button"
-                        onClick={() => runImport(account.handle)}
-                        disabled={importing === account.handle}
-                      >
-                        {importing === account.handle ? '…' : 'Extraer'}
-                      </button>
-                    </div>
+            {tab === 'accounts' ? (
+              <>
+                <section className="settings-section">
+                  <h3>Manage accounts</h3>
+                  <p className="wizard-hint">
+                    Category, display label, HOT threshold and profile picture -- all editable per account. Changes
+                    are picked up by the public dashboard on its next load.
+                  </p>
+                  <div className="account-manage-list">
+                    {activeRoster.map((account) => {
+                      const edit = edits[account.handle] || { label: '', group: account.group, hot_threshold: '' };
+                      return (
+                        <div className="account-manage-card" key={account.handle}>
+                          <div className="account-manage-top">
+                            <div className="account-manage-avatar" aria-hidden="true">
+                              {ACCOUNT_PROFILE_IMAGES[account.handle] ? (
+                                <img src={ACCOUNT_PROFILE_IMAGES[account.handle]} alt="" />
+                              ) : account.has_avatar ? (
+                                <img
+                                  src={`${API_BASE}/api/dashboard/avatar/${encodeURIComponent(account.handle)}`}
+                                  alt=""
+                                  referrerPolicy="no-referrer"
+                                />
+                              ) : (
+                                <span>{account.handle.slice(0, 2).toUpperCase()}</span>
+                              )}
+                            </div>
+                            <div className="account-manage-id">
+                              <strong>@{account.handle}</strong>
+                              {account.is_canonical ? <span className="status-pill status-pill-canonical">Canonical</span> : null}
+                            </div>
+                          </div>
+
+                          <div className="account-manage-fields">
+                            <label className="account-manage-field">
+                              <span>Label</span>
+                              <input
+                                type="text"
+                                value={edit.label}
+                                placeholder={account.handle}
+                                onChange={(event) =>
+                                  setEdits((prev) => ({
+                                    ...prev,
+                                    [account.handle]: { ...prev[account.handle], label: event.target.value },
+                                  }))
+                                }
+                              />
+                            </label>
+                            <label className="account-manage-field">
+                              <span>Category</span>
+                              <select
+                                value={edit.group}
+                                onChange={(event) =>
+                                  setEdits((prev) => ({
+                                    ...prev,
+                                    [account.handle]: { ...prev[account.handle], group: event.target.value },
+                                  }))
+                                }
+                              >
+                                {ACCOUNT_GROUP_OPTIONS.map((option) => (
+                                  <option key={option.value} value={option.value}>
+                                    {option.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <label className="account-manage-field account-manage-field-narrow">
+                              <span>HOT /hr</span>
+                              <input
+                                type="number"
+                                min={1}
+                                value={edit.hot_threshold}
+                                onChange={(event) =>
+                                  setEdits((prev) => ({
+                                    ...prev,
+                                    [account.handle]: { ...prev[account.handle], hot_threshold: event.target.value },
+                                  }))
+                                }
+                              />
+                            </label>
+                            <button
+                              type="button"
+                              className="ghost-button primary"
+                              onClick={() => saveAccount(account)}
+                              disabled={savingHandle === account.handle || !isDirty(account)}
+                            >
+                              {savingHandle === account.handle ? '…' : 'Save'}
+                            </button>
+                          </div>
+
+                          <div className="account-manage-actions">
+                            <button
+                              type="button"
+                              className="ghost-button"
+                              onClick={() => refreshAvatar(account.handle)}
+                              disabled={avatarHandle === account.handle}
+                            >
+                              <ImagePlus size={13} />
+                              {avatarHandle === account.handle ? 'Refreshing…' : 'Refresh avatar'}
+                            </button>
+                            <button
+                              type="button"
+                              className="ghost-button ghost-button-danger"
+                              onClick={() => toggleActive(account)}
+                              disabled={lifecycleHandle === account.handle || account.is_canonical}
+                              title={account.is_canonical ? 'The canonical account cannot be deactivated.' : undefined}
+                            >
+                              <Power size={13} />
+                              {lifecycleHandle === account.handle ? '…' : 'Deactivate'}
+                            </button>
+                            <div className="account-manage-import">
+                              <input
+                                type="date"
+                                value={importFrom[account.handle] ?? ''}
+                                onChange={(event) =>
+                                  setImportFrom((prev) => ({ ...prev, [account.handle]: event.target.value }))
+                                }
+                                aria-label={`Extract from for ${account.handle}`}
+                              />
+                              <button
+                                type="button"
+                                className="ghost-button"
+                                onClick={() => runImport(account.handle)}
+                                disabled={importing === account.handle}
+                              >
+                                {importing === account.handle ? '…' : 'Extract history'}
+                              </button>
+                            </div>
+                          </div>
+                          {importNotice[account.handle] ? (
+                            <p className="settings-import-notice">{importNotice[account.handle]}</p>
+                          ) : null}
+                        </div>
+                      );
+                    })}
                   </div>
-                ))}
-              </div>
-            </section>
+                </section>
+
+                {inactiveRoster.length ? (
+                  <section className="settings-section">
+                    <h3>Inactive accounts</h3>
+                    <p className="wizard-hint">
+                      Hidden from the public dashboard and skipped by the scheduler. Post history is untouched --
+                      reactivating brings everything straight back.
+                    </p>
+                    <div className="settings-table">
+                      {inactiveRoster.map((account) => (
+                        <div className="settings-row" key={account.handle}>
+                          <div className="settings-row-account">
+                            <strong>@{account.handle}</strong>
+                            <span>{account.group}</span>
+                          </div>
+                          <div className="settings-row-controls">
+                            <button
+                              type="button"
+                              className="ghost-button"
+                              onClick={() => toggleActive(account)}
+                              disabled={lifecycleHandle === account.handle}
+                            >
+                              <Power size={13} />
+                              {lifecycleHandle === account.handle ? '…' : 'Reactivate'}
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                ) : null}
+              </>
+            ) : (
+              <>
+                <section className="settings-section">
+                  <div className="settings-section-head">
+                    <h3>Refresh now</h3>
+                    <button
+                      type="button"
+                      className="ghost-button settings-refresh"
+                      onClick={() => onRefresh(password)}
+                      disabled={refreshing}
+                    >
+                      <RefreshCw size={14} className={refreshing ? 'spin' : ''} />
+                      <span>{refreshing ? 'Refreshing…' : 'Refresh'}</span>
+                    </button>
+                  </div>
+                  <p className="wizard-hint">
+                    Runs the engagement cycle for every account. Normally happens on its own every 30 minutes.
+                  </p>
+                  {refreshNotice ? (
+                    <p className={refreshNotice.type === 'error' ? 'settings-notice-error' : 'settings-notice'}>
+                      {refreshNotice.text}
+                    </p>
+                  ) : null}
+                </section>
+
+                <section className="settings-section">
+                  <div className="settings-section-head">
+                    <h3>
+                      <HardDrive size={13} /> Disk usage
+                    </h3>
+                  </div>
+                  {disk ? (
+                    <>
+                      <div className="disk-bar">
+                        <div
+                          className="disk-bar-fill"
+                          style={{
+                            width: `${Math.min(disk.pct_used, 100)}%`,
+                            background: disk.pct_used >= 85 ? '#ff4d4d' : disk.pct_used >= 70 ? '#ffb020' : '#23a047',
+                          }}
+                        />
+                      </div>
+                      <p className="wizard-hint">
+                        {disk.pct_used}% used -- {disk.used_mb.toLocaleString()} MB / {disk.total_mb.toLocaleString()} MB
+                        ({disk.free_mb.toLocaleString()} MB free)
+                      </p>
+                    </>
+                  ) : (
+                    <p className="wizard-hint">Loading…</p>
+                  )}
+                </section>
+
+                <section className="settings-section">
+                  <h3>
+                    <MessageSquare size={13} /> Slack alerts
+                  </h3>
+                  <p className="wizard-hint">
+                    {slackStatus
+                      ? slackStatus.configured
+                        ? `Configured -- alerting for: ${slackStatus.alert_groups}`
+                        : 'No Slack webhook configured on the server.'
+                      : 'Loading…'}
+                  </p>
+                  <div className="settings-section-head">
+                    <button
+                      type="button"
+                      className="ghost-button"
+                      onClick={sendSlackTest}
+                      disabled={slackSending || !slackStatus?.configured}
+                    >
+                      {slackSending ? 'Sending…' : 'Send test alert'}
+                    </button>
+                  </div>
+                  {slackNotice ? <p className="settings-notice">{slackNotice}</p> : null}
+                </section>
+
+                <section className="settings-section">
+                  <h3>Recent Apify runs</h3>
+                  <div className="settings-table">
+                    {apifyLoading ? <p className="wizard-hint">Loading…</p> : null}
+                    {apifyRuns.map((run) => (
+                      <div className="settings-row" key={run.id}>
+                        <div className="settings-row-account">
+                          <strong>{run.status}</strong>
+                          <span>{run.startedAt ? new Date(run.startedAt).toLocaleString() : '—'}</span>
+                        </div>
+                        <div className="settings-row-controls">
+                          <span className="settings-unit">
+                            {typeof run.usd === 'number' ? `$${run.usd.toFixed(2)}` : '—'}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                    {!apifyLoading && !apifyRuns.length ? <p className="wizard-hint">No runs found.</p> : null}
+                  </div>
+                </section>
+
+                <section className="settings-section">
+                  <div className="settings-section-head">
+                    <h3>
+                      <ScanText size={13} /> Cover OCR sweep
+                    </h3>
+                  </div>
+                  <p className="wizard-hint">
+                    {ocrStatus
+                      ? `${ocrStatus.remaining.toLocaleString()} covers still need OCR (${ocrStatus.with_text_total.toLocaleString()} already have text).`
+                      : 'Loading…'}
+                  </p>
+                  <div className="settings-section-head">
+                    <button
+                      type="button"
+                      className="ghost-button"
+                      onClick={startOcrSweep}
+                      disabled={ocrStarting || Boolean(ocrStatus?.running)}
+                    >
+                      {ocrStatus?.running ? `Running… (${ocrStatus.done} done)` : 'Run OCR sweep'}
+                    </button>
+                  </div>
+                </section>
+              </>
+            )}
           </div>
         )}
       </div>
@@ -1693,7 +2113,11 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
   };
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
+    // No backdrop-click-to-close here on purpose: this is a 3-step form the
+    // user may have spent a minute filling in, and a stray click just outside
+    // the card (easy to do -- it's a large modal) used to discard all of it
+    // silently. Closing now requires the explicit X button.
+    <div className="modal-backdrop">
       <form className="modal-card wizard-card" onClick={(event) => event.stopPropagation()} onSubmit={submit}>
         <div className="modal-header">
           <h2>Add account</h2>

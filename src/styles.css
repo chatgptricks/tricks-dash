@@ -3824,7 +3824,7 @@ body {
    body scrolls so the header/close button stay reachable with many accounts.
    --------------------------------------------------------------------------- */
 .settings-card {
-  width: min(720px, 94vw);
+  width: min(860px, 95vw);
   max-height: 88vh;
   display: flex;
   flex-direction: column;
@@ -3997,6 +3997,219 @@ body {
   .settings-row-controls input {
     flex: 1 1 auto;
     width: auto;
+  }
+}
+
+/* Admin panel: Accounts / System tab switch. */
+.settings-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  background: #080808;
+  width: fit-content;
+}
+
+.settings-tab {
+  height: 30px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: rgba(245, 245, 245, 0.55);
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.settings-tab-active {
+  background: rgba(245, 255, 0, 0.12);
+  color: #fffce0;
+}
+
+.settings-section h3 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* One editable card per active account: avatar/handle up top, then the
+   label/category/threshold row, then the action row (avatar refresh,
+   activate toggle, history import). Stacked rather than the old single-line
+   .settings-row because there's simply too many controls to fit one row. */
+.account-manage-list {
+  display: grid;
+  gap: 10px;
+}
+
+.account-manage-card {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 10px;
+  background: #080808;
+}
+
+.account-manage-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.account-manage-avatar {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 11px;
+  font-weight: 800;
+  color: rgba(245, 245, 245, 0.6);
+}
+
+.account-manage-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.account-manage-id {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.account-manage-id strong {
+  color: #f5f5f5;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.status-pill {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.status-pill-canonical {
+  background: rgba(245, 255, 0, 0.14);
+  color: #fffce0;
+}
+
+.account-manage-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 8px;
+}
+
+.account-manage-field {
+  display: grid;
+  gap: 4px;
+  flex: 1 1 140px;
+}
+
+.account-manage-field-narrow {
+  flex: 0 0 90px;
+}
+
+.account-manage-field span {
+  color: rgba(245, 245, 245, 0.45);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.account-manage-field input,
+.account-manage-field select {
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #fff;
+  font-size: 12px;
+  box-sizing: border-box;
+}
+
+.account-manage-field input:focus,
+.account-manage-field select:focus {
+  border-color: rgba(245, 255, 0, 0.65);
+  box-shadow: 0 0 0 2px rgba(245, 255, 0, 0.1);
+  outline: none;
+}
+
+.account-manage-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.account-manage-actions .ghost-button {
+  height: 30px;
+  padding: 0 11px;
+  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.account-manage-import {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-left: auto;
+}
+
+.account-manage-import input {
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #fff;
+  font-size: 11px;
+  box-sizing: border-box;
+}
+
+.ghost-button-danger:hover:not(:disabled) {
+  border-color: rgba(255, 90, 90, 0.5);
+  color: #ff9a9a;
+}
+
+.disk-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+  overflow: hidden;
+}
+
+.disk-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+@media (max-width: 620px) {
+  .account-manage-import {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .account-manage-import input {
+    flex: 1 1 auto;
   }
 }
 
