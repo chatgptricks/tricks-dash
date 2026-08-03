@@ -1851,6 +1851,13 @@ body {
 .stats-panel .metric strong {
   font-size: 14px;
   line-height: 1.08;
+  /* Overrides the global ".metric strong { white-space: nowrap }" rule --
+     that one-liner rule is fine for short values like like-counts, but the
+     Date metric now carries a time ("Aug 3, 1:20 PM") that doesn't fit one
+     line in this 4-column grid and was spilling past the card edge instead
+     of wrapping. */
+  white-space: normal;
+  overflow-wrap: break-word;
 }
 
 .caption-panel {
