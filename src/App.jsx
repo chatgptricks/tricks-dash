@@ -251,7 +251,17 @@ function normalizePost(post) {
     isHot,
     showsHotBadge,
     isHotRecent,
-    searchText: [caption, post.excerpt, post.ocrText, post.shortcode, post.permalink, post.type, postType]
+    searchText: [
+      caption,
+      post.excerpt,
+      post.ocrText,
+      post.shortcode,
+      post.permalink,
+      post.type,
+      postType,
+      post.musicSong,
+      post.musicArtist,
+    ]
       .map(normalizeSearchValue)
       .filter(Boolean)
       .join(' '),
@@ -823,14 +833,14 @@ function App() {
                     <input
                       value={query}
                       onChange={(event) => setQuery(event.target.value)}
-                      placeholder="Search captions, topics, or text inside a cover..."
+                      placeholder="Search captions, topics, songs, or text inside a cover..."
                     />
                   </span>
                   {query ? (
                     <button className="search-clear" type="button" aria-label="Clear search" onClick={() => setQuery('')}>
                       <X size={15} />
                     </button>
-                  ) : <span className="search-scope">Includes cover text</span>}
+                  ) : <span className="search-scope">Includes cover text &amp; songs</span>}
                 </label>
               ) : null}
             </div>
