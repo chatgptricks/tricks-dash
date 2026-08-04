@@ -156,6 +156,29 @@ function formatLikes(value) {
   if (value === null || value === undefined || Number(value) <= UNKNOWN_LIKES_MAX) return '—';
   return compactFormatter.format(value);
 }
+
+// A plain linear slider from 0 to the dataset's max likes was nearly
+// unusable: one viral post with millions of likes stretches the whole track
+// across a range where every meaningful value (1k, 5k, 10k...) is crammed
+// into the first couple of pixels. Fixed stops instead -- the slider's own
+// value is an index into this list, not a like count.
+const LIKES_STOPS = [0, 1000, 2000, 5000, 10000, 50000, 100000];
+
+// Maps an arbitrary likes count (e.g. from an older shared URL) to its
+// closest stop, so the slider always lands on one of the fixed positions
+// instead of silently clamping or erroring on a value that isn't in the list.
+function likesStopIndex(value) {
+  let closest = 0;
+  let bestDiff = Infinity;
+  LIKES_STOPS.forEach((stop, index) => {
+    const diff = Math.abs(stop - value);
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      closest = index;
+    }
+  });
+  return closest;
+}
 const dateFormatter = new Intl.DateTimeFormat('en-US', {
   month: 'short',
   day: 'numeric',
@@ -330,13 +353,43 @@ function formatInputDate(date) {
   return date.toISOString().slice(0, 10);
 }
 
+// dateFrom/dateTo hold either a plain "YYYY-MM-DD" (custom picks and the
+// day-based presets) or a full ISO datetime (the rolling 24h/3d/7d presets,
+// which need an exact hour rather than a whole-day boundary). Detect which by
+// whether a "T" is already present rather than tracking it separately.
+function parseDateBound(value, endOfDay) {
+  if (!value) return null;
+  if (value.includes('T')) return new Date(value).getTime();
+  return new Date(`${value}T${endOfDay ? '23:59:59' : '00:00:00'}`).getTime();
+}
+
+// "Last 24 hours" / "3 days" / "7 days" are anchored to the real current
+// time, not the dataset's latest post -- so they keep sliding forward as new
+// posts land instead of freezing at whatever was newest when the page
+// happened to load. They carry a full ISO datetime (not just a date) so the
+// filter can cut off at an exact hour: rounding out to whole calendar days
+// (like the day-based presets below do) barely matters over 30-90 days, but
+// would nearly double a 24-hour window.
+function rollingSince(hours) {
+  return new Date(Date.now() - hours * 3600000).toISOString();
+}
+
 function buildDatePresets(ranges) {
-  if (!ranges.dateMin || !ranges.dateMax) return [{ value: 'all', label: 'All time', from: '', to: '' }];
+  const rollingPresets = [
+    { value: '24h', label: 'Last 24 hours', from: rollingSince(24), to: '' },
+    { value: '3d', label: 'Last 3 days', from: rollingSince(72), to: '' },
+    { value: '7d', label: 'Last 7 days', from: rollingSince(168), to: '' },
+  ];
+
+  if (!ranges.dateMin || !ranges.dateMax) {
+    return [{ value: 'all', label: 'All time', from: '', to: '' }, ...rollingPresets];
+  }
 
   const latest = new Date(`${ranges.dateMax}T12:00:00`);
   const earliest = new Date(`${ranges.dateMin}T12:00:00`);
   const presets = [
     { value: 'all', label: 'All time', from: '', to: '' },
+    ...rollingPresets,
     { value: 'latest-30', label: 'Latest 30 days', from: formatInputDate(new Date(latest.getTime() - 29 * 86400000)), to: ranges.dateMax },
     { value: 'latest-90', label: 'Latest 90 days', from: formatInputDate(new Date(latest.getTime() - 89 * 86400000)), to: ranges.dateMax },
   ];
@@ -694,8 +747,8 @@ function App() {
   }, [accountsInScope, selectedAccounts]);
 
   const filtered = useMemo(() => {
-    const minDate = dateFrom ? new Date(`${dateFrom}T00:00:00`).getTime() : null;
-    const maxDate = dateTo ? new Date(`${dateTo}T23:59:59`).getTime() : null;
+    const minDate = parseDateBound(dateFrom, false);
+    const maxDate = parseDateBound(dateTo, true);
     const output = [];
 
     for (const post of posts) {
@@ -1004,15 +1057,21 @@ function App() {
                 </legend>
                 <div className="filter-engagement-inner">
                   <label className="range-field compact-range">
-                    <span>Likes <strong>{compactFormatter.format(minLikes)}+</strong></span>
+                    <span>Likes <strong>{minLikes > 0 ? `${compactFormatter.format(minLikes)}+` : 'Any'}</strong></span>
                     <input
                       type="range"
                       aria-label="Minimum likes"
                       min={0}
-                      max={ranges.likesMax}
-                      value={minLikes}
-                      onChange={(e) => startTransition(() => setMinLikes(clampNumber(e.target.value, 0)))}
+                      max={LIKES_STOPS.length - 1}
+                      step={1}
+                      value={likesStopIndex(minLikes)}
+                      onChange={(e) => startTransition(() => setMinLikes(LIKES_STOPS[clampNumber(e.target.value, 0)]))}
                     />
+                    <div className="range-ticks" aria-hidden="true">
+                      {LIKES_STOPS.map((stop) => (
+                        <span key={stop}>{stop === 0 ? '0' : compactFormatter.format(stop)}</span>
+                      ))}
+                    </div>
                   </label>
                   <label className="number-field">
                     <span>Comments</span>
