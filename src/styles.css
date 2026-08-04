@@ -2504,10 +2504,6 @@ body {
   text-transform: uppercase;
 }
 
-.filter-engagement .compact-range strong {
-  color: #fff4bb;
-  font-size: 10px;
-}
 
 /* Thumb width is fixed at 14px on every engine below (Chrome/Edge/Safari via
    -webkit-slider-thumb, Firefox via -moz-range-thumb) specifically so the
@@ -2561,19 +2557,55 @@ body {
   cursor: pointer;
 }
 
-/* One label per fixed stop (see LIKES_STOPS). Padding-inline is exactly half
-   the thumb's 14px width above: the thumb's travel path runs from
-   (thumbWidth / 2) to (trackWidth - thumbWidth / 2), so padding the ticks
-   row by that same 7px on each side makes an evenly-spaced flex row land
-   exactly under each stop instead of drifting outward at both ends. */
+/* One tick per fixed stop (see LIKES_STOPS). Each .range-tick is placed with
+   position: absolute + a calc() left offset computed in JS (RANGE_THUMB_PX)
+   and centered with translateX(-50%). This is deliberately NOT a flex
+   space-between row of text: space-between aligns item *edges*, so
+   variable-width labels like "0" and "100K+" end up with their edges (not
+   their visual centers) on the target point -- the very bug that made the
+   old ticks look consistently off. Anchoring by center instead makes every
+   label line up under the thumb regardless of how wide its text is. */
 .filter-engagement .range-ticks {
+  position: relative;
+  height: 24px;
+  margin-top: 2px;
+}
+
+.filter-engagement .range-tick {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
   display: flex;
-  justify-content: space-between;
-  margin-top: -2px;
-  padding: 0 7px;
-  color: rgba(245, 245, 245, 0.35);
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+}
+
+.filter-engagement .range-tick-mark {
+  width: 1px;
+  height: 5px;
+  background: rgba(245, 245, 245, 0.28);
+}
+
+.filter-engagement .range-tick-label {
+  color: rgba(245, 245, 245, 0.4);
   font-size: 8px;
   font-weight: 700;
+  transition: color 0.15s ease;
+}
+
+/* The active stop is the value indicator now -- it replaces the old "Likes
+   50K+" text that used to sit above the slider, per request. */
+.filter-engagement .range-tick-active .range-tick-mark {
+  height: 8px;
+  width: 2px;
+  background: var(--accent);
+}
+
+.filter-engagement .range-tick-active .range-tick-label {
+  color: #fff4bb;
+  font-weight: 900;
 }
 
 .filter-engagement .engagement-numbers {
