@@ -164,6 +164,12 @@ function formatLikes(value) {
 // value is an index into this list, not a like count.
 const LIKES_STOPS = [0, 1000, 2000, 5000, 10000, 50000, 100000];
 
+// Must match the thumb width set on .filter-engagement .compact-range
+// input[type='range']::-webkit-slider-thumb / ::-moz-range-thumb in
+// styles.css. The tick marks below the slider are positioned in JS using
+// this exact value so they can never drift out of sync with a CSS-only edit.
+const RANGE_THUMB_PX = 14;
+
 // Maps an arbitrary likes count (e.g. from an older shared URL) to its
 // closest stop, so the slider always lands on one of the fixed positions
 // instead of silently clamping or erroring on a value that isn't in the list.
@@ -1057,7 +1063,7 @@ function App() {
                 </legend>
                 <div className="filter-engagement-inner">
                   <label className="range-field compact-range">
-                    <span>Likes <strong>{minLikes > 0 ? `${compactFormatter.format(minLikes)}+` : 'Any'}</strong></span>
+                    <span>Likes</span>
                     <input
                       type="range"
                       aria-label="Minimum likes"
@@ -1067,13 +1073,34 @@ function App() {
                       value={likesStopIndex(minLikes)}
                       onChange={(e) => startTransition(() => setMinLikes(LIKES_STOPS[clampNumber(e.target.value, 0)]))}
                     />
+                    {/* Each tick is positioned with the exact same formula the
+                        browser uses to place the native thumb: the thumb's
+                        travel path runs from THUMB_PX / 2 to
+                        100% - THUMB_PX / 2 (see the CSS thumb rules), so a
+                        stop at fraction f of the way through the stops sits
+                        at calc(THUMB_PX/2 + f * (100% - THUMB_PX)). Centering
+                        each tick on that exact point with translateX(-50%)
+                        (rather than a plain flex space-between row of
+                        variable-width text) is what makes the marks land
+                        exactly under the thumb regardless of label width. */}
                     <div className="range-ticks" aria-hidden="true">
-                      {LIKES_STOPS.map((stop, index) => (
-                        <span key={stop}>
-                          {stop === 0 ? '0' : compactFormatter.format(stop)}
-                          {index === LIKES_STOPS.length - 1 ? '+' : ''}
-                        </span>
-                      ))}
+                      {LIKES_STOPS.map((stop, index) => {
+                        const fraction = index / (LIKES_STOPS.length - 1);
+                        const isActive = likesStopIndex(minLikes) === index;
+                        return (
+                          <div
+                            key={stop}
+                            className={isActive ? 'range-tick range-tick-active' : 'range-tick'}
+                            style={{ left: `calc(${RANGE_THUMB_PX / 2}px + (100% - ${RANGE_THUMB_PX}px) * ${fraction})` }}
+                          >
+                            <span className="range-tick-mark" />
+                            <span className="range-tick-label">
+                              {stop === 0 ? '0' : compactFormatter.format(stop)}
+                              {index === LIKES_STOPS.length - 1 ? '+' : ''}
+                            </span>
+                          </div>
+                        );
+                      })}
                     </div>
                   </label>
                   <div className="engagement-numbers">
