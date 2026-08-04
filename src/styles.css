@@ -2482,9 +2482,9 @@ body {
 
 .filter-engagement-inner {
   display: grid;
-  grid-template-columns: minmax(120px, 1fr) 74px;
-  align-items: end;
-  gap: 8px;
+  grid-template-columns: minmax(140px, 1fr) 90px;
+  align-items: start;
+  gap: 10px;
   max-width: none;
 }
 
@@ -2509,26 +2509,80 @@ body {
   font-size: 10px;
 }
 
+/* Thumb width is fixed at 14px on every engine below (Chrome/Edge/Safari via
+   -webkit-slider-thumb, Firefox via -moz-range-thumb) specifically so the
+   tick labels underneath can be math'd to line up with it. A native,
+   unstyled range input's thumb size varies by OS/browser, which is why the
+   old ticks (plain flex space-between, edge to edge) never quite lined up
+   with where the thumb actually stopped -- the thumb's travel path is inset
+   from the track edges by half its own width, but the ticks weren't. */
 .filter-engagement .compact-range input[type='range'] {
+  -webkit-appearance: none;
+  appearance: none;
   height: 21px;
   padding: 0;
   border: 0;
   background: transparent;
   box-shadow: none;
-  accent-color: var(--accent);
+  cursor: pointer;
 }
 
-/* One label per fixed stop (see LIKES_STOPS) -- the slider's thumb only ever
-   rests on one of these positions, so the ticks double as a legend for what
-   each stop is worth instead of a decorative scale. */
+.filter-engagement .compact-range input[type='range']::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(245, 245, 245, 0.14);
+}
+
+.filter-engagement .compact-range input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-top: -5px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+}
+
+.filter-engagement .compact-range input[type='range']::-moz-range-track {
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(245, 245, 245, 0.14);
+}
+
+.filter-engagement .compact-range input[type='range']::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: none;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+}
+
+/* One label per fixed stop (see LIKES_STOPS). Padding-inline is exactly half
+   the thumb's 14px width above: the thumb's travel path runs from
+   (thumbWidth / 2) to (trackWidth - thumbWidth / 2), so padding the ticks
+   row by that same 7px on each side makes an evenly-spaced flex row land
+   exactly under each stop instead of drifting outward at both ends. */
 .filter-engagement .range-ticks {
   display: flex;
   justify-content: space-between;
   margin-top: -2px;
-  padding: 0 1px;
+  padding: 0 7px;
   color: rgba(245, 245, 245, 0.35);
   font-size: 8px;
   font-weight: 700;
+}
+
+.filter-engagement .engagement-numbers {
+  display: grid;
+  gap: 8px;
+}
+
+.filter-engagement .number-field {
+  margin: 0;
 }
 
 .filter-engagement .number-field input {

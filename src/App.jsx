@@ -1068,21 +1068,36 @@ function App() {
                       onChange={(e) => startTransition(() => setMinLikes(LIKES_STOPS[clampNumber(e.target.value, 0)]))}
                     />
                     <div className="range-ticks" aria-hidden="true">
-                      {LIKES_STOPS.map((stop) => (
-                        <span key={stop}>{stop === 0 ? '0' : compactFormatter.format(stop)}</span>
+                      {LIKES_STOPS.map((stop, index) => (
+                        <span key={stop}>
+                          {stop === 0 ? '0' : compactFormatter.format(stop)}
+                          {index === LIKES_STOPS.length - 1 ? '+' : ''}
+                        </span>
                       ))}
                     </div>
                   </label>
-                  <label className="number-field">
-                    <span>Comments</span>
-                    <input
-                      aria-label="Minimum comments"
-                      type="number"
-                      min={0}
-                      value={minComments}
-                      onChange={(e) => startTransition(() => setMinComments(clampNumber(e.target.value, ranges.commentsMin)))}
-                    />
-                  </label>
+                  <div className="engagement-numbers">
+                    <label className="number-field">
+                      <span>Likes (exact)</span>
+                      <input
+                        aria-label="Minimum likes, exact value"
+                        type="number"
+                        min={0}
+                        value={minLikes}
+                        onChange={(e) => startTransition(() => setMinLikes(clampNumber(e.target.value, 0)))}
+                      />
+                    </label>
+                    <label className="number-field">
+                      <span>Comments</span>
+                      <input
+                        aria-label="Minimum comments"
+                        type="number"
+                        min={0}
+                        value={minComments}
+                        onChange={(e) => startTransition(() => setMinComments(clampNumber(e.target.value, ranges.commentsMin)))}
+                      />
+                    </label>
+                  </div>
                 </div>
               </fieldset>
 
