@@ -16,6 +16,7 @@ import {
   Heart,
   ImagePlus,
   Link2,
+  LogOut,
   MessageCircle,
   MessageSquare,
   MoreHorizontal,
@@ -32,8 +33,57 @@ import {
   X,
   Video,
 } from 'lucide-react';
+import { initializeApp } from 'firebase/app';
+import { GoogleAuthProvider, getAuth, onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
 import chatgptricksProfileImage from './assets/chatgptricks-profile.jpg';
 import traselveloralProfileImage from './assets/traselveloreal-profile.jpg';
+
+// ---------------------------------------------------------------------------
+// Auth (Firebase Google Sign-In)
+//
+// Sentient Dash used to be public-read, gated only by a shared admin password
+// for writes. It's now fully private: every visitor has to sign in with a
+// Google account on the backend's allowlist before seeing anything. Firebase
+// only handles "is this a real Google account" -- the actual allow/deny
+// decision happens server-side (ALLOWED_EMAILS), so the frontend never needs
+// to know the list itself.
+// ---------------------------------------------------------------------------
+const firebaseConfig = {
+  apiKey: 'AIzaSyDrtLGrnRJ3cj64sJ6Ykn-yRGtemybzoN0',
+  authDomain: 'sentient-dash.firebaseapp.com',
+  projectId: 'sentient-dash',
+  storageBucket: 'sentient-dash.firebasestorage.app',
+  messagingSenderId: '74046012975',
+  appId: '1:74046012975:web:02013849972baca1f950da',
+};
+const firebaseApp = initializeApp(firebaseConfig);
+const firebaseAuth = getAuth(firebaseApp);
+const googleProvider = new GoogleAuthProvider();
+
+// Drop-in replacement for apiFetch() that attaches the signed-in user's Firebase
+// ID token to every call. getIdToken() returns the cached token and only
+// hits the network to refresh it when it's actually close to expiring, so
+// this doesn't add a round-trip to normal usage.
+async function apiFetch(url, options = {}) {
+  const headers = new Headers(options.headers || {});
+  if (firebaseAuth.currentUser) {
+    try {
+      const token = await firebaseAuth.currentUser.getIdToken();
+      headers.set('Authorization', `Bearer ${token}`);
+    } catch (error) {
+      // Fall through and let the request go out unauthenticated -- the
+      // backend will bounce it with a 401 and the login gate will catch it.
+    }
+  }
+  return window.fetch(url, { ...options, headers });
+}
+
+// Frontend-only fallback for the ~16 legacy endpoints that still check a
+// shared password server-side. Firebase is now the real security boundary
+// (nothing gets this far without a valid, allowlisted Google session), so
+// this is just a fixed value the UI supplies automatically -- there is no
+// password prompt anywhere anymore.
+const LEGACY_REFRESH_PASSWORD = 'sentient2026';
 
 const ACCOUNT_PROFILE_IMAGES = {
   chatgptricks: chatgptricksProfileImage,
@@ -470,7 +520,7 @@ function buildDatePresets(ranges) {
   return presets;
 }
 
-function App() {
+function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
   const [dashboard, setDashboard] = useState({ posts: [], summary: {} });
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -489,9 +539,13 @@ function App() {
         setLoadError('');
       }
       const [postsResponse, accountsResponse] = await Promise.all([
-        fetch(`${API_BASE}/api/dashboard/posts`, { signal }),
-        fetch(`${API_BASE}/api/dashboard/accounts`, { signal }),
+        apiFetch(`${API_BASE}/api/dashboard/posts`, { signal }),
+        apiFetch(`${API_BASE}/api/dashboard/accounts`, { signal }),
       ]);
+      if (postsResponse.status === 401 || postsResponse.status === 403 || accountsResponse.status === 401 || accountsResponse.status === 403) {
+        onUnauthorized();
+        return;
+      }
       if (!postsResponse.ok) throw new Error(`HTTP ${postsResponse.status}`);
       if (!accountsResponse.ok) throw new Error(`HTTP ${accountsResponse.status}`);
       const postsData = await postsResponse.json();
@@ -508,7 +562,7 @@ function App() {
     } finally {
       if (!signal?.aborted && !silent) setLoading(false);
     }
-  }, []);
+  }, [onUnauthorized]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -536,7 +590,7 @@ function App() {
     setRefreshing(true);
     setRefreshNotice(null);
     try {
-      const response = await fetch(`${API_BASE}/api/dashboard/refresh`, {
+      const response = await apiFetch(`${API_BASE}/api/dashboard/refresh`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({ password }),
@@ -654,7 +708,7 @@ function App() {
     if (account.avatarUrl) {
       (async () => {
         try {
-          const response = await fetch(`${API_BASE}/api/admin/accounts/${encodeURIComponent(account.handle)}/avatar`, {
+          const response = await apiFetch(`${API_BASE}/api/admin/accounts/${encodeURIComponent(account.handle)}/avatar`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: new URLSearchParams({ password, image_url: account.avatarUrl }),
@@ -673,7 +727,7 @@ function App() {
         const params = { password, results_limit: '2000' };
         if (account.dateFrom) params.date_from = account.dateFrom;
         if (account.dateTo) params.date_to = account.dateTo;
-        const response = await fetch(`${API_BASE}/api/admin/accounts/${encodeURIComponent(account.handle)}/backfill`, {
+        const response = await apiFetch(`${API_BASE}/api/admin/accounts/${encodeURIComponent(account.handle)}/backfill`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
           body: new URLSearchParams(params),
@@ -1001,6 +1055,15 @@ function App() {
                 aria-label="Settings"
               >
                 <Settings size={15} className={refreshing ? 'spin' : ''} />
+              </button>
+              <button
+                className="ghost-button refresh-button"
+                type="button"
+                onClick={onSignOut}
+                title={userEmail ? `Signed in as ${userEmail} — sign out` : 'Sign out'}
+                aria-label="Sign out"
+              >
+                <LogOut size={15} />
               </button>
             </div>
             {refreshNotice ? (
@@ -1552,8 +1615,12 @@ const WIZARD_STEPS = ['Account', 'Settings', 'Confirm'];
 // component's state -- never written to localStorage, so closing the panel or
 // reloading the page discards it.
 function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice, onAccountsChanged }) {
-  const [password, setPassword] = useState('');
-  const [unlocked, setUnlocked] = useState(false);
+  // Firebase sign-in is the real gate now (only an allowlisted Google account
+  // can reach this component at all), so the old shared-password unlock
+  // screen is skipped entirely -- the fixed legacy value is supplied
+  // automatically for the handful of backend endpoints that still check it.
+  const [password, setPassword] = useState(LEGACY_REFRESH_PASSWORD);
+  const [unlocked, setUnlocked] = useState(true);
   const [checking, setChecking] = useState(false);
   const [notice, setNotice] = useState('');
   const [tab, setTab] = useState('accounts'); // 'accounts' | 'system'
@@ -1582,7 +1649,7 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
 
   const loadRoster = useCallback(async () => {
     try {
-      const response = await fetch(`${API_BASE}/api/admin/accounts`);
+      const response = await apiFetch(`${API_BASE}/api/admin/accounts`);
       const body = await response.json().catch(() => ({}));
       if (Array.isArray(body.accounts)) setRoster(body.accounts);
     } catch (error) {
@@ -1593,9 +1660,9 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
   const loadSystemStatus = useCallback(async () => {
     try {
       const [diskRes, slackRes, ocrRes] = await Promise.all([
-        fetch(`${API_BASE}/api/admin/disk-status`),
-        fetch(`${API_BASE}/api/admin/slack-status`),
-        fetch(`${API_BASE}/api/admin/ocr/status`),
+        apiFetch(`${API_BASE}/api/admin/disk-status`),
+        apiFetch(`${API_BASE}/api/admin/slack-status`),
+        apiFetch(`${API_BASE}/api/admin/ocr/status`),
       ]);
       if (diskRes.ok) setDisk(await diskRes.json());
       if (slackRes.ok) setSlackStatus(await slackRes.json());
@@ -1609,7 +1676,7 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
     if (!password) return;
     setApifyLoading(true);
     try {
-      const response = await fetch(`${API_BASE}/api/admin/apify/runs?password=${encodeURIComponent(password)}&limit=10`);
+      const response = await apiFetch(`${API_BASE}/api/admin/apify/runs?password=${encodeURIComponent(password)}&limit=10`);
       const body = await response.json().catch(() => ({}));
       if (Array.isArray(body.runs)) setApifyRuns(body.runs);
     } catch (error) {
@@ -1659,7 +1726,7 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
     setNotice('');
     try {
       const account = accounts[0];
-      const response = await fetch(`${API_BASE}/api/admin/accounts/${encodeURIComponent(account.handle)}/settings`, {
+      const response = await apiFetch(`${API_BASE}/api/admin/accounts/${encodeURIComponent(account.handle)}/settings`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({ password, hot_threshold: String(account.hot_threshold) }),
@@ -1705,7 +1772,7 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
       // Backend ignores a blank label rather than clearing it, so only send
       // one when it actually has content.
       if (edit.label.trim()) params.set('label', edit.label.trim());
-      const response = await fetch(`${API_BASE}/api/admin/accounts/${encodeURIComponent(account.handle)}/settings`, {
+      const response = await apiFetch(`${API_BASE}/api/admin/accounts/${encodeURIComponent(account.handle)}/settings`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: params,
@@ -1729,7 +1796,7 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
     setAvatarHandle(handle);
     setNotice('');
     try {
-      const response = await fetch(`${API_BASE}/api/admin/accounts/${encodeURIComponent(handle)}/avatar`, {
+      const response = await apiFetch(`${API_BASE}/api/admin/accounts/${encodeURIComponent(handle)}/avatar`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({ password }),
@@ -1754,7 +1821,7 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
     setLifecycleHandle(account.handle);
     setNotice('');
     try {
-      const response = await fetch(
+      const response = await apiFetch(
         `${API_BASE}/api/admin/accounts/${encodeURIComponent(account.handle)}/${endpoint}`,
         {
           method: 'POST',
@@ -1786,7 +1853,7 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
     setImporting(handle);
     setImportNotice((prev) => ({ ...prev, [handle]: 'Starting…' }));
     try {
-      const response = await fetch(`${API_BASE}/api/admin/accounts/${encodeURIComponent(handle)}/backfill`, {
+      const response = await apiFetch(`${API_BASE}/api/admin/accounts/${encodeURIComponent(handle)}/backfill`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({ password, date_from: from, results_limit: '2000' }),
@@ -1817,7 +1884,7 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
     setSlackSending(true);
     setSlackNotice('');
     try {
-      const response = await fetch(`${API_BASE}/api/admin/slack-test`, {
+      const response = await apiFetch(`${API_BASE}/api/admin/slack-test`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({ password }),
@@ -1839,7 +1906,7 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
     setOcrStarting(true);
     setNotice('');
     try {
-      const response = await fetch(`${API_BASE}/api/admin/ocr/start`, {
+      const response = await apiFetch(`${API_BASE}/api/admin/ocr/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({ password }),
@@ -2216,7 +2283,9 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
 
 function AddAccountWizard({ onClose, onAccountCreated }) {
   const [step, setStep] = useState(0);
-  const [password, setPassword] = useState('');
+  // Firebase sign-in already gates access to this wizard -- no user-facing
+  // password prompt, just the fixed legacy value the backend still checks.
+  const [password] = useState(LEGACY_REFRESH_PASSWORD);
   const [handle, setHandle] = useState('');
   const [label, setLabel] = useState('');
   const [group, setGroup] = useState('competitors');
@@ -2249,7 +2318,7 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
     const requestId = ++previewRequestRef.current;
     const timer = setTimeout(async () => {
       try {
-        const response = await fetch(`${API_BASE}/api/admin/accounts/preview?handle=${encodeURIComponent(cleanHandle)}`);
+        const response = await apiFetch(`${API_BASE}/api/admin/accounts/preview?handle=${encodeURIComponent(cleanHandle)}`);
         if (previewRequestRef.current !== requestId) return; // stale -- handle changed since this fired
         if (!response.ok) {
           setPreviewStatus('error');
@@ -2289,7 +2358,7 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
     setSubmitting(true);
     setNotice('');
     try {
-      const createResponse = await fetch(`${API_BASE}/api/admin/accounts`, {
+      const createResponse = await apiFetch(`${API_BASE}/api/admin/accounts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
@@ -2482,10 +2551,6 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
                 </p>
               </div>
             </div>
-            <label className="modal-field">
-              <span>Refresh password</span>
-              <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required autoFocus />
-            </label>
             <p className="wizard-hint">
               Post history import runs in the background after this -- you can keep using the dashboard while it works.
             </p>
@@ -2799,5 +2864,87 @@ const CoverImage = memo(function CoverImage({ className, post, priority = false,
     </div>
   );
 });
+
+function LoginScreen({ notice }) {
+  const [signingIn, setSigningIn] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSignIn = async () => {
+    setSigningIn(true);
+    setError('');
+    try {
+      await signInWithPopup(firebaseAuth, googleProvider);
+    } catch (err) {
+      if (err?.code !== 'auth/popup-closed-by-user' && err?.code !== 'auth/cancelled-popup-request') {
+        setError('Sign-in failed. Try again.');
+      }
+    } finally {
+      setSigningIn(false);
+    }
+  };
+
+  return (
+    <div className="auth-screen">
+      <div className="auth-card">
+        <h1>Sentient Dash</h1>
+        <p>Sign in with your Google account to continue.</p>
+        <button type="button" className="primary-button auth-google-button" onClick={handleSignIn} disabled={signingIn}>
+          {signingIn ? 'Signing in…' : 'Sign in with Google'}
+        </button>
+        {notice ? <p className="settings-notice">{notice}</p> : null}
+        {error ? <p className="settings-notice">{error}</p> : null}
+      </div>
+    </div>
+  );
+}
+
+function NotAuthorizedScreen({ email, onSignOut }) {
+  return (
+    <div className="auth-screen">
+      <div className="auth-card">
+        <h1>Sentient Dash</h1>
+        <p>
+          {email ? <strong>{email}</strong> : 'This Google account'} isn&rsquo;t authorized for Sentient Dash. Ask for
+          access, then sign in again.
+        </p>
+        <button type="button" className="ghost-button" onClick={onSignOut}>
+          Sign out
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function App() {
+  const [authUser, setAuthUser] = useState(undefined); // undefined = loading, null = signed out
+  const [unauthorized, setUnauthorized] = useState(false);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(firebaseAuth, (user) => {
+      setAuthUser(user);
+      setUnauthorized(false);
+    });
+    return unsubscribe;
+  }, []);
+
+  const handleSignOut = useCallback(() => {
+    signOut(firebaseAuth);
+  }, []);
+
+  const handleUnauthorized = useCallback(() => {
+    setUnauthorized(true);
+  }, []);
+
+  if (authUser === undefined) {
+    return <div className="auth-screen" />;
+  }
+  if (!authUser) {
+    return <LoginScreen />;
+  }
+  if (unauthorized) {
+    return <NotAuthorizedScreen email={authUser.email} onSignOut={handleSignOut} />;
+  }
+  return <Dashboard userEmail={authUser.email} onSignOut={handleSignOut} onUnauthorized={handleUnauthorized} />;
+}
 
 export default App;

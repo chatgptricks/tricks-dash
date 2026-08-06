@@ -4386,3 +4386,42 @@ body {
   opacity: 0.5;
   cursor: default;
 }
+
+/* Full-screen Google sign-in gate. Renders before the dashboard mounts, so it
+   deliberately shares no layout with the rest of the app. */
+.auth-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 360px;
+  padding: 32px 28px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xl);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+
+.auth-card h1 {
+  margin: 0 0 8px;
+  font-size: 20px;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+}
+
+.auth-card p {
+  margin: 0 0 20px;
+  color: var(--muted-strong);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.auth-google-button {
+  width: 100%;
+}
