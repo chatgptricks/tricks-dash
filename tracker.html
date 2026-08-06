@@ -272,7 +272,7 @@ function renderLeaderboard(){
             <td><div class="acct-cell">
               <img class="acct-avatar" src="${API}/api/dashboard/avatar/${encodeURIComponent(r.handle)}" referrerpolicy="no-referrer" onerror="this.style.visibility='hidden'">
               <div class="acct-name"><strong>@${r.handle}${r.verified?' <span title="Verified" style="color:#4aa8ff">✓</span>':''}${r.private?' <span class="na" title="Private account">🔒</span>':''}</strong>
-                ${r.full_name && r.full_name.toLowerCase()!==r.handle.toLowerCase() ? `<span class="na" style="font-size:10px">${r.full_name}</span>` : ''}
+                <span class="na" style="font-size:10px">${r.full_name && r.full_name.toLowerCase()!==r.handle.toLowerCase() ? r.full_name : ' '}</span>
                 <span class="pill ${r.group==='sentient'?'s':'c'}">${r.group==='sentient'?'ours':'competitor'}</span>
               </div>
             </div></td>
