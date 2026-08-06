@@ -563,9 +563,16 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
       setAccounts(accountsData.accounts);
       // Best-effort: role info only controls whether the Settings button
       // shows, so a hiccup here shouldn't block the rest of the dashboard.
+      // Only ever *upgrade* based on a successful response -- a transient
+      // failure (or an aborted request from the next silent poll starting
+      // before this one lands) must never downgrade an admin back to false,
+      // or the admin page would unmount/remount and lose its state (tab
+      // reset, users list cleared) every time that race happens.
       apiFetch(`${API_BASE}/api/dashboard/me`, { signal })
         .then((response) => (response.ok ? response.json() : null))
-        .then((body) => setIsAdmin(Boolean(body?.is_admin)))
+        .then((body) => {
+          if (body) setIsAdmin(Boolean(body.is_admin));
+        })
         .catch(() => {});
     } catch (error) {
       if (error.name !== 'AbortError' && !silent) {
@@ -2269,7 +2276,7 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
                 ) : null}
               </>
             ) : tab === 'system' ? (
-              <>
+              <div className="settings-list-width">
                 <section className="settings-section">
                   <div className="settings-section-head">
                     <h3>Refresh now</h3>
@@ -2387,9 +2394,9 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
                     </button>
                   </div>
                 </section>
-              </>
+              </div>
             ) : (
-              <>
+              <div className="settings-list-width">
                 <section className="settings-section">
                   <h3>Who can sign in</h3>
                   <p className="wizard-hint">
@@ -2454,7 +2461,7 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
                     {!usersLoading && !users.length ? <p className="wizard-hint">No one loaded yet.</p> : null}
                   </div>
                 </section>
-              </>
+              </div>
             )}
         </div>
       </div>
