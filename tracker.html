@@ -70,6 +70,11 @@ th:first-child{text-align:left}
 th.sorted{color:var(--accent)}
 td{text-align:right;padding:9px 8px;border-bottom:1px solid rgba(255,255,255,.045);white-space:nowrap}
 td:first-child{text-align:left}
+/* Account cell (avatar + handle) shrink-wraps to its own content width --
+   without an explicit left align here, shorter rows (no full name shown,
+   or a broken avatar) drift toward the column's right edge instead of
+   lining up with wider rows, since td defaults to text-align:right. */
+td:nth-child(2){text-align:left}
 tbody tr{cursor:pointer}
 tbody tr:hover{background:rgba(255,255,255,.03)}
 .acct-cell{display:flex;align-items:center;gap:9px}
