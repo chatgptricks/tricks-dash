@@ -791,7 +791,22 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
         await loadDashboard(undefined, { silent: true });
         setTimeout(() => setBackgroundTasks((tasks) => tasks.filter((task) => task.id !== id)), 8000);
       } catch (error) {
-        setBackgroundTasks((tasks) => tasks.map((task) => (task.id === id ? { ...task, phase: 'error', error: 'Import failed. Try again in a moment.' } : task)));
+        // A full-history scrape (up to 2000 posts) routinely outlives the
+        // browser's own patience -- the connection drops long before Apify
+        // finishes, but the server keeps running and the posts still land.
+        // Same caveat the admin panel's "Extract history" retry already
+        // handles -- don't report a false failure here, just keep polling
+        // the dashboard so the card resolves once the import actually lands.
+        setBackgroundTasks((tasks) => tasks.map((task) => (task.id === id ? { ...task, phase: 'unknown' } : task)));
+        let attempts = 0;
+        const poll = setInterval(async () => {
+          attempts += 1;
+          await loadDashboard(undefined, { silent: true });
+          if (attempts >= 6) {
+            clearInterval(poll);
+            setBackgroundTasks((tasks) => tasks.filter((task) => task.id !== id));
+          }
+        }, 30000);
       }
     })();
   }, [loadDashboard]);
@@ -2956,7 +2971,7 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
 // so the bar is an indeterminate sweep with an elapsed timer for feedback.
 function BackgroundTaskStack({ tasks, onDismiss }) {
   const [now, setNow] = useState(Date.now());
-  const hasActive = tasks.some((task) => task.phase === 'importing');
+  const hasActive = tasks.some((task) => task.phase === 'importing' || task.phase === 'unknown');
 
   useEffect(() => {
     if (!hasActive) return undefined;
@@ -2985,6 +3000,7 @@ function BackgroundTaskStack({ tasks, onDismiss }) {
               </div>
               <p className="bg-task-status">
                 {task.phase === 'importing' ? `Importing post history… ${elapsedSec}s` : null}
+                {task.phase === 'unknown' ? 'Still running on the server -- large imports can take a few minutes. Posts will appear on their own.' : null}
                 {task.phase === 'done' ? `Imported ${task.added} post${task.added === 1 ? '' : 's'}` : null}
                 {task.phase === 'error' ? task.error || 'Import failed.' : null}
               </p>
