@@ -1469,7 +1469,13 @@ body {
 
 .gallery {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  /* Only two real children here: results-scroll (scrolls internally) and the
+     pagination bar. This used to reserve a 3rd "auto" row for a .gallery-header
+     that no longer exists in the markup -- with only 2 children, grid
+     auto-placement put results-scroll in the first (header) slot and pagination
+     in the middle minmax(0,1fr) slot, so pagination got squeezed toward 0 and
+     its "Load more" button rendered as a clipped sliver. */
+  grid-template-rows: minmax(0, 1fr) auto;
   min-height: 0;
   padding: 14px;
   overflow: hidden;
