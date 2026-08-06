@@ -527,6 +527,10 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
   const [loadError, setLoadError] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [refreshNotice, setRefreshNotice] = useState(null);
+  // Two-tier roles: everyone allowlisted sees the dashboard, only admins see
+  // Settings. This is purely a UI convenience -- the backend rejects
+  // /api/admin/* for non-admins regardless of what this flag says.
+  const [isAdmin, setIsAdmin] = useState(false);
   const posts = useMemo(() => dashboard.posts.map(normalizePost), [dashboard.posts]);
   const summary = dashboard.summary;
   const ranges = useMemo(() => calculateRanges(posts), [posts]);
@@ -555,6 +559,12 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
       }
       setDashboard({ posts: postsData.posts, summary: postsData.summary || {} });
       setAccounts(accountsData.accounts);
+      // Best-effort: role info only controls whether the Settings button
+      // shows, so a hiccup here shouldn't block the rest of the dashboard.
+      apiFetch(`${API_BASE}/api/dashboard/me`, { signal })
+        .then((response) => (response.ok ? response.json() : null))
+        .then((body) => setIsAdmin(Boolean(body?.is_admin)))
+        .catch(() => {});
     } catch (error) {
       if (error.name !== 'AbortError' && !silent) {
         setLoadError('Could not load the shared Post DB. Try again in a moment.');
@@ -1047,15 +1057,17 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
               >
                 <BarChart3 size={15} />
               </a>
-              <button
-                className="ghost-button refresh-button"
-                type="button"
-                onClick={() => setShowSettings(true)}
-                title="Settings — thresholds, history import, refresh"
-                aria-label="Settings"
-              >
-                <Settings size={15} className={refreshing ? 'spin' : ''} />
-              </button>
+              {isAdmin ? (
+                <button
+                  className="ghost-button refresh-button"
+                  type="button"
+                  onClick={() => setShowSettings(true)}
+                  title="Settings — thresholds, history import, refresh"
+                  aria-label="Settings"
+                >
+                  <Settings size={15} className={refreshing ? 'spin' : ''} />
+                </button>
+              ) : null}
               <button
                 className="ghost-button refresh-button"
                 type="button"
