@@ -327,20 +327,21 @@ function formatElapsed(timestampMs) {
   return `${days}d`;
 }
 
-// "Freshness" Harvey-ball clock: a post is brand new for its first 8 hours,
-// losing a quarter of the ring every 2 hours (4/4 -> 3/4 -> 2/4 -> 1/4 -> gone)
-// so how new a post is reads at a glance without doing date math. Once a
-// post passes 8h it has no ring left to lose, so the indicator disappears
-// entirely rather than sitting there permanently empty.
+// "Freshness" Harvey-ball clock: a post is brand new at 0h and the ring
+// drains continuously over its first 8 hours, so how new a post is reads at
+// a glance without doing date math. Continuous rather than quartered -- a
+// post 10 minutes old and one 90 minutes old both used to render as an
+// identical "4/4" wedge, which looked like the clock wasn't moving; a plain
+// fraction of elapsed/window makes every minute visibly drain the ring.
+// Once a post passes 8h there's nothing left to drain, so the indicator
+// disappears entirely rather than sitting there permanently empty.
 const FRESHNESS_WINDOW_HOURS = 8;
-const FRESHNESS_STEP_HOURS = 2;
 
-function freshnessQuarters(timestampMs) {
+function freshnessFraction(timestampMs) {
   if (!Number.isFinite(timestampMs)) return 0;
   const hours = (Date.now() - timestampMs) / 3600000;
   if (hours < 0 || hours >= FRESHNESS_WINDOW_HOURS) return 0;
-  const stepsElapsed = Math.floor(hours / FRESHNESS_STEP_HOURS);
-  return Math.max(0, 4 - stepsElapsed);
+  return 1 - hours / FRESHNESS_WINDOW_HOURS;
 }
 
 // Usage heatmap color scale. Log-based rather than linear against the max
@@ -3193,13 +3194,26 @@ const HotBadge = memo(function HotBadge({ post, large = false }) {
 });
 
 // Sits directly left of the post-menu button. A conic-gradient pie rather
-// than an SVG/icon set: four discrete states (4/4..1/4) is exactly what
-// conic-gradient's hard color stops draw natively, no extra markup per slice.
+// than an SVG/icon set: the filled wedge is just one angle, so a continuous
+// fraction draws as easily as a stepped one -- no extra markup either way.
 const FreshnessRing = memo(function FreshnessRing({ timestamp }) {
-  const quarters = freshnessQuarters(timestamp);
-  if (quarters <= 0) return null;
-  const filledDeg = (quarters / 4) * 360;
-  const hoursLeft = Math.max(1, Math.ceil(FRESHNESS_WINDOW_HOURS - (Date.now() - timestamp) / 3600000));
+  const fraction = freshnessFraction(timestamp);
+  // Without this the ring only visibly moves when something else causes the
+  // card to re-render (the 3-minute poll, a filter change) -- ticking on its
+  // own timer is what makes a continuous fraction actually read as a live
+  // clock rather than a value that happens to be more precise. Scoped to
+  // just this instance and only while there's still a ring to drain, so it
+  // costs nothing for the vast majority of posts that are already stale.
+  const [, forceTick] = useState(0);
+  useEffect(() => {
+    if (fraction <= 0) return undefined;
+    const timer = setInterval(() => forceTick((n) => n + 1), 30000);
+    return () => clearInterval(timer);
+  }, [fraction > 0]);
+  if (fraction <= 0) return null;
+  const filledDeg = fraction * 360;
+  const hoursLeft = FRESHNESS_WINDOW_HOURS - (Date.now() - timestamp) / 3600000;
+  const leftLabel = hoursLeft >= 1 ? `${hoursLeft.toFixed(1)}h` : `${Math.max(1, Math.round(hoursLeft * 60))}m`;
   return (
     <span
       className="freshness-ring"
@@ -3207,8 +3221,8 @@ const FreshnessRing = memo(function FreshnessRing({ timestamp }) {
         background: `conic-gradient(var(--accent) 0deg ${filledDeg}deg, rgba(255,255,255,.16) ${filledDeg}deg 360deg)`,
       }}
       role="img"
-      aria-label={`New post, fading over its first ${FRESHNESS_WINDOW_HOURS} hours -- about ${hoursLeft}h left`}
-      title={`New post · fades out over its first ${FRESHNESS_WINDOW_HOURS}h (~${hoursLeft}h left)`}
+      aria-label={`New post, fading over its first ${FRESHNESS_WINDOW_HOURS} hours -- about ${leftLabel} left`}
+      title={`New post · fades out over its first ${FRESHNESS_WINDOW_HOURS}h (~${leftLabel} left)`}
     />
   );
 });
