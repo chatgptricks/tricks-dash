@@ -1,6 +1,7 @@
 import { memo, startTransition, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
+  ArrowLeft,
   ArrowUpDown,
   AtSign,
   BarChart3,
@@ -131,6 +132,7 @@ const URL_DEFAULTS = {
   to: '',
   range: 'all',
   post: '',
+  view: '',
 };
 
 function readUrlState() {
@@ -686,7 +688,10 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
   );
   const [selectedAccounts, setSelectedAccounts] = useState(() => new Set());
   const [showAddAccount, setShowAddAccount] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
+  // Admin panel is a full page, not a modal, so it's linkable/reload-safe
+  // like every other view here -- gated behind isAdmin below regardless of
+  // what a stale or hand-edited URL says.
+  const [showSettings, setShowSettings] = useState(initialUrl.view === 'admin');
   const [backgroundTasks, setBackgroundTasks] = useState([]);
 
   // Kicks off the (slow, Apify-bound) initial history import for a
@@ -847,11 +852,12 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
       // even when nobody opened anything. Sharing that would pin a stranger's
       // link to whichever post happened to sort first.
       post: isSidebarOpen ? selectedKey : '',
+      view: showSettings ? 'admin' : '',
     });
   }, [
     query, activeGroup, selectedAccounts, accountsInScope, activeType, mediaFilter,
     sortBy, minLikes, minComments, dateFrom, dateTo, datePreset, selectedKey,
-    isSidebarOpen, ranges.likesMin, ranges.commentsMin,
+    isSidebarOpen, ranges.likesMin, ranges.commentsMin, showSettings,
   ]);
 
   const handleResultsScroll = useCallback((event) => {
@@ -998,6 +1004,23 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
       setIsSidebarOpen(true);
     });
   }, []);
+
+  // Admin panel is its own full page, not a modal over the dashboard --
+  // rendered here as a straight replacement rather than an overlay. Gated on
+  // isAdmin regardless of what a stale/hand-edited ?view=admin URL says; the
+  // backend enforces the real boundary on every /api/admin/* call either way.
+  if (showSettings && isAdmin) {
+    return (
+      <SettingsPanel
+        accounts={accounts}
+        onClose={() => setShowSettings(false)}
+        onRefresh={handleRefresh}
+        refreshing={refreshing}
+        refreshNotice={refreshNotice}
+        onAccountsChanged={() => loadDashboard(undefined, { silent: true })}
+      />
+    );
+  }
 
   return (
     <div className="shell">
@@ -1418,17 +1441,6 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
         />
       ) : null}
 
-      {showSettings ? (
-        <SettingsPanel
-          accounts={accounts}
-          onClose={() => setShowSettings(false)}
-          onRefresh={handleRefresh}
-          refreshing={refreshing}
-          refreshNotice={refreshNotice}
-          onAccountsChanged={() => loadDashboard(undefined, { silent: true })}
-        />
-      ) : null}
-
       <BackgroundTaskStack tasks={backgroundTasks} onDismiss={dismissBackgroundTask} />
     </div>
   );
@@ -1635,7 +1647,17 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
   const [unlocked, setUnlocked] = useState(true);
   const [checking, setChecking] = useState(false);
   const [notice, setNotice] = useState('');
-  const [tab, setTab] = useState('accounts'); // 'accounts' | 'system'
+  const [tab, setTab] = useState('accounts'); // 'accounts' | 'system' | 'users'
+
+  // Users tab -- the Google sign-in allowlist + admin/viewer roles, editable
+  // here instead of through Render's environment variables.
+  const [users, setUsers] = useState([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [usersNotice, setUsersNotice] = useState('');
+  const [newUserEmail, setNewUserEmail] = useState('');
+  const [newUserRole, setNewUserRole] = useState('viewer');
+  const [addingUser, setAddingUser] = useState(false);
+  const [userActionEmail, setUserActionEmail] = useState('');
 
   // The prop is /api/dashboard/accounts (active-only, public). This panel
   // needs inactive accounts too (to show/reactivate them), so once unlocked
@@ -1684,6 +1706,19 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
     }
   }, []);
 
+  const loadUsers = useCallback(async () => {
+    setUsersLoading(true);
+    try {
+      const response = await apiFetch(`${API_BASE}/api/admin/users`);
+      const body = await response.json().catch(() => ({}));
+      if (Array.isArray(body.users)) setUsers(body.users);
+    } catch (error) {
+      // Keep whatever list we already had rather than blanking the tab.
+    } finally {
+      setUsersLoading(false);
+    }
+  }, []);
+
   const loadApifyRuns = useCallback(async () => {
     if (!password) return;
     setApifyLoading(true);
@@ -1719,6 +1754,10 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
   useEffect(() => {
     if (unlocked && tab === 'system') loadApifyRuns();
   }, [unlocked, tab, loadApifyRuns]);
+
+  useEffect(() => {
+    if (unlocked && tab === 'users') loadUsers();
+  }, [unlocked, tab, loadUsers]);
 
   // While a sweep is running, poll so the "done" count moves without a manual
   // refresh -- same pattern as the background-task polling used elsewhere.
@@ -1936,67 +1975,131 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
     }
   };
 
+  const addUser = async (event) => {
+    event.preventDefault();
+    const email = newUserEmail.trim().toLowerCase();
+    if (!email || !email.includes('@')) {
+      setUsersNotice('Enter a valid email address.');
+      return;
+    }
+    setAddingUser(true);
+    setUsersNotice('');
+    try {
+      const response = await apiFetch(`${API_BASE}/api/admin/users`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ email, role: newUserRole }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setUsersNotice(body.detail || 'Could not add that person.');
+        return;
+      }
+      setUsers(body.users || []);
+      setNewUserEmail('');
+      setNewUserRole('viewer');
+      setUsersNotice(`Added @${email}.`);
+    } catch (error) {
+      setUsersNotice('Network error while adding.');
+    } finally {
+      setAddingUser(false);
+    }
+  };
+
+  const setUserRole = async (email, role) => {
+    setUserActionEmail(email);
+    setUsersNotice('');
+    try {
+      const response = await apiFetch(`${API_BASE}/api/admin/users`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ email, role }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setUsersNotice(body.detail || `Could not update ${email}.`);
+        return;
+      }
+      setUsers(body.users || []);
+    } catch (error) {
+      setUsersNotice('Network error while updating.');
+    } finally {
+      setUserActionEmail('');
+    }
+  };
+
+  const removeUser = async (email) => {
+    setUserActionEmail(email);
+    setUsersNotice('');
+    try {
+      const response = await apiFetch(`${API_BASE}/api/admin/users/remove`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ email }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setUsersNotice(body.detail || `Could not remove ${email}.`);
+        return;
+      }
+      setUsers(body.users || []);
+      setUsersNotice(`Removed ${email}.`);
+    } catch (error) {
+      setUsersNotice('Network error while removing.');
+    } finally {
+      setUserActionEmail('');
+    }
+  };
+
   const activeRoster = roster.filter((account) => account.is_active !== false);
   const inactiveRoster = roster.filter((account) => account.is_active === false);
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal-card settings-card" onClick={(event) => event.stopPropagation()}>
-        <div className="modal-header">
-          <h2>Admin panel</h2>
-          <button type="button" className="icon-button" onClick={onClose} aria-label="Close">
-            <X size={16} />
-          </button>
-        </div>
+    <div className="admin-page">
+      <header className="admin-page-header">
+        <button type="button" className="ghost-button" onClick={onClose}>
+          <ArrowLeft size={15} />
+          <span>Back to dashboard</span>
+        </button>
+        <h1>Admin panel</h1>
+        <div className="admin-page-header-spacer" />
+      </header>
 
-        {!unlocked ? (
-          <form className="settings-lock" onSubmit={unlock}>
-            <p className="wizard-hint">
-              Enter the refresh password to manage accounts, run diagnostics, or trigger a refresh.
-            </p>
-            <label className="modal-field">
-              <span>Password</span>
-              <input
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                autoFocus
-                required
-              />
-            </label>
-            {notice ? <p className="settings-notice">{notice}</p> : null}
-            <div className="modal-actions">
-              <button type="submit" className="primary-button" disabled={checking || !password}>
-                {checking ? 'Checking…' : 'Unlock'}
-              </button>
-            </div>
-          </form>
-        ) : (
-          <div className="settings-body">
-            <div className="settings-tabs" role="tablist">
-              <button
-                type="button"
-                role="tab"
-                aria-selected={tab === 'accounts'}
-                className={tab === 'accounts' ? 'settings-tab settings-tab-active' : 'settings-tab'}
-                onClick={() => setTab('accounts')}
-              >
-                Accounts
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={tab === 'system'}
-                className={tab === 'system' ? 'settings-tab settings-tab-active' : 'settings-tab'}
-                onClick={() => setTab('system')}
-              >
-                System
-              </button>
-            </div>
+      <div className="admin-page-body">
+        <div className="settings-body">
+          <div className="settings-tabs" role="tablist">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tab === 'accounts'}
+              className={tab === 'accounts' ? 'settings-tab settings-tab-active' : 'settings-tab'}
+              onClick={() => setTab('accounts')}
+            >
+              Accounts
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tab === 'system'}
+              className={tab === 'system' ? 'settings-tab settings-tab-active' : 'settings-tab'}
+              onClick={() => setTab('system')}
+            >
+              System
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tab === 'users'}
+              className={tab === 'users' ? 'settings-tab settings-tab-active' : 'settings-tab'}
+              onClick={() => setTab('users')}
+            >
+              Users
+            </button>
+          </div>
 
-            {notice ? <p className="settings-notice">{notice}</p> : null}
+          {notice ? <p className="settings-notice">{notice}</p> : null}
 
-            {tab === 'accounts' ? (
+          {tab === 'accounts' ? (
               <>
                 <section className="settings-section">
                   <h3>Manage accounts</h3>
@@ -2165,7 +2268,7 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
                   </section>
                 ) : null}
               </>
-            ) : (
+            ) : tab === 'system' ? (
               <>
                 <section className="settings-section">
                   <div className="settings-section-head">
@@ -2285,9 +2388,75 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
                   </div>
                 </section>
               </>
+            ) : (
+              <>
+                <section className="settings-section">
+                  <h3>Who can sign in</h3>
+                  <p className="wizard-hint">
+                    Admins see this Settings page and can manage accounts, users, and diagnostics. Everyone else gets
+                    the read-only dashboard.
+                  </p>
+                  <form className="add-user-form" onSubmit={addUser}>
+                    <label className="modal-field">
+                      <span>Email</span>
+                      <input
+                        type="email"
+                        value={newUserEmail}
+                        onChange={(event) => setNewUserEmail(event.target.value)}
+                        placeholder="name@example.com"
+                        required
+                      />
+                    </label>
+                    <label className="modal-field">
+                      <span>Role</span>
+                      <select value={newUserRole} onChange={(event) => setNewUserRole(event.target.value)}>
+                        <option value="viewer">Viewer</option>
+                        <option value="admin">Admin</option>
+                      </select>
+                    </label>
+                    <button type="submit" className="ghost-button primary" disabled={addingUser}>
+                      {addingUser ? 'Adding…' : 'Add'}
+                    </button>
+                  </form>
+                  {usersNotice ? <p className="settings-notice">{usersNotice}</p> : null}
+                </section>
+
+                <section className="settings-section">
+                  <h3>People with access</h3>
+                  <div className="settings-table">
+                    {usersLoading ? <p className="wizard-hint">Loading…</p> : null}
+                    {users.map((user) => (
+                      <div className="settings-row" key={user.email}>
+                        <div className="settings-row-account">
+                          <strong>{user.email}</strong>
+                          <span>{user.role === 'admin' ? 'Admin' : 'Viewer'}</span>
+                        </div>
+                        <div className="settings-row-controls">
+                          <button
+                            type="button"
+                            className="ghost-button"
+                            onClick={() => setUserRole(user.email, user.role === 'admin' ? 'viewer' : 'admin')}
+                            disabled={userActionEmail === user.email}
+                          >
+                            {user.role === 'admin' ? 'Make viewer' : 'Make admin'}
+                          </button>
+                          <button
+                            type="button"
+                            className="ghost-button ghost-button-danger"
+                            onClick={() => removeUser(user.email)}
+                            disabled={userActionEmail === user.email}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                    {!usersLoading && !users.length ? <p className="wizard-hint">No one loaded yet.</p> : null}
+                  </div>
+                </section>
+              </>
             )}
-          </div>
-        )}
+        </div>
       </div>
     </div>
   );

@@ -3984,6 +3984,62 @@ body {
   flex-direction: column;
 }
 
+/* Admin panel as its own full page (not a modal over the dashboard) --
+   reachable at ?view=admin, with a normal "back" affordance instead of a
+   dismiss button, so it reads like a real site section rather than a popup. */
+.admin-page {
+  min-height: 100vh;
+  background: var(--bg);
+  color: #f5f5f5;
+}
+
+.admin-page-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(6, 6, 6, 0.96);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+.admin-page-header h1 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+  text-align: center;
+  flex: 1;
+}
+
+.admin-page-header-spacer {
+  width: 148px;
+}
+
+.admin-page-body {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.admin-page-body .settings-body {
+  overflow-y: visible;
+  padding-right: 0;
+}
+
+.add-user-form {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.add-user-form .modal-field {
+  min-width: 220px;
+}
+
 .settings-lock {
   display: grid;
   gap: 12px;
