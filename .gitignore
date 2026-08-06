@@ -13,4 +13,7 @@ coverage/
 .vite/
 
 .traselveloreal-sync-state.json
-package-lock.json
+
+# Firebase service-account keys must never be committed -- backend only,
+# stored as a Render Secret File.
+*firebase-adminsdk*.json
