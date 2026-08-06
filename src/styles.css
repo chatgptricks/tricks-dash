@@ -4007,7 +4007,7 @@ body {
 
 .admin-page-header h1 {
   margin: 0;
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 900;
   letter-spacing: -0.01em;
   text-align: center;
@@ -4019,14 +4019,38 @@ body {
 }
 
 .admin-page-body {
-  max-width: 960px;
+  max-width: 1600px;
   margin: 0 auto;
-  padding: 24px;
+  padding: 28px 40px 60px;
 }
 
 .admin-page-body .settings-body {
   overflow-y: visible;
   padding-right: 0;
+  gap: 28px;
+}
+
+.admin-page-body .settings-section {
+  padding-bottom: 28px;
+}
+
+.admin-page-body .settings-tabs {
+  height: 40px;
+}
+
+.admin-page-body .settings-tab {
+  height: 34px;
+  padding: 0 20px;
+  font-size: 12.5px;
+}
+
+/* Accounts is the section with the most content, so it's the one that
+   actually benefits from the page's full width -- cards flow into as many
+   columns as fit instead of stacking in one narrow list. System and Users
+   stay list-shaped (settings-list-width) since rows of diagnostics/people
+   don't get more readable by stretching across 1600px. */
+.settings-list-width {
+  max-width: 760px;
 }
 
 .add-user-form {
@@ -4250,7 +4274,9 @@ body {
    .settings-row because there's simply too many controls to fit one row. */
 .account-manage-list {
   display: grid;
-  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 14px;
+  align-items: start;
 }
 
 .account-manage-card {
