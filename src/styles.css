@@ -684,6 +684,25 @@ img {
   padding: 0;
 }
 
+.post-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex: 0 0 auto;
+}
+
+/* Harvey-ball "freshness" clock -- conic-gradient draws the filled wedge
+   directly, no SVG or per-quarter markup needed. Rendered only while there's
+   a ring left to show (see freshnessQuarters in App.jsx); once a post passes
+   8h old, FreshnessRing returns null and this element simply isn't there. */
+.freshness-ring {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.45);
+}
+
 .post-copy p {
   margin: 6px 0 10px;
   color: rgba(245, 245, 245, 0.78);
@@ -1777,6 +1796,15 @@ body {
   min-width: 28px;
   min-height: 28px;
   border-radius: 9px;
+}
+
+.gallery-grid .post-header-actions {
+  gap: 6px;
+}
+
+.gallery-grid .freshness-ring {
+  width: 12px;
+  height: 12px;
 }
 
 .gallery-grid .post-actions {

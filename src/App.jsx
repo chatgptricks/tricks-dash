@@ -327,6 +327,22 @@ function formatElapsed(timestampMs) {
   return `${days}d`;
 }
 
+// "Freshness" Harvey-ball clock: a post is brand new for its first 8 hours,
+// losing a quarter of the ring every 2 hours (4/4 -> 3/4 -> 2/4 -> 1/4 -> gone)
+// so how new a post is reads at a glance without doing date math. Once a
+// post passes 8h it has no ring left to lose, so the indicator disappears
+// entirely rather than sitting there permanently empty.
+const FRESHNESS_WINDOW_HOURS = 8;
+const FRESHNESS_STEP_HOURS = 2;
+
+function freshnessQuarters(timestampMs) {
+  if (!Number.isFinite(timestampMs)) return 0;
+  const hours = (Date.now() - timestampMs) / 3600000;
+  if (hours < 0 || hours >= FRESHNESS_WINDOW_HOURS) return 0;
+  const stepsElapsed = Math.floor(hours / FRESHNESS_STEP_HOURS);
+  return Math.max(0, 4 - stepsElapsed);
+}
+
 // Usage heatmap color scale. Log-based rather than linear against the max
 // cell: request counts are extremely lopsided (one person refreshing a tab
 // left open all day vs. someone who checks once), so a linear scale would
@@ -3051,9 +3067,12 @@ const PostCard = memo(function PostCard({ post, priority, selected, onSelect, on
             <span>{formatDate(post.postDate)}</span>
           </div>
         </div>
-        <button className="icon-button" onClick={stopAction} aria-label="Post menu">
-          <MoreHorizontal size={16} />
-        </button>
+        <div className="post-header-actions">
+          <FreshnessRing timestamp={post.timestamp} />
+          <button className="icon-button" onClick={stopAction} aria-label="Post menu">
+            <MoreHorizontal size={16} />
+          </button>
+        </div>
       </div>
 
       <CoverImage className={`post-media ${posterTheme(post.type)}`} post={post} priority={priority}>
@@ -3170,6 +3189,27 @@ const HotBadge = memo(function HotBadge({ post, large = false }) {
       {hasRate ? <b className="hot-badge-rate">{post.hotMultiplier.toFixed(1)}x</b> : null}
       {age ? <b className="hot-badge-age">{age}</b> : null}
     </div>
+  );
+});
+
+// Sits directly left of the post-menu button. A conic-gradient pie rather
+// than an SVG/icon set: four discrete states (4/4..1/4) is exactly what
+// conic-gradient's hard color stops draw natively, no extra markup per slice.
+const FreshnessRing = memo(function FreshnessRing({ timestamp }) {
+  const quarters = freshnessQuarters(timestamp);
+  if (quarters <= 0) return null;
+  const filledDeg = (quarters / 4) * 360;
+  const hoursLeft = Math.max(1, Math.ceil(FRESHNESS_WINDOW_HOURS - (Date.now() - timestamp) / 3600000));
+  return (
+    <span
+      className="freshness-ring"
+      style={{
+        background: `conic-gradient(var(--accent) 0deg ${filledDeg}deg, rgba(255,255,255,.16) ${filledDeg}deg 360deg)`,
+      }}
+      role="img"
+      aria-label={`New post, fading over its first ${FRESHNESS_WINDOW_HOURS} hours -- about ${hoursLeft}h left`}
+      title={`New post · fades out over its first ${FRESHNESS_WINDOW_HOURS}h (~${hoursLeft}h left)`}
+    />
   );
 });
 
