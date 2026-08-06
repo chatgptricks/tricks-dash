@@ -194,14 +194,20 @@ let RAW=[], ACCOUNTS=[], SEL=new Set(), CHARTS=[];
 // actual content -- @getintoai's top "topic" was always "getintoai". Split
 // composed names ("Get Into AI") into their individual words too, since
 // each one alone is just as much the page's own branding as the whole phrase.
-let NAME_WORDS=new Set();
+// Keyed PER ACCOUNT (not one global set): @tecnologia's own name shouldn't
+// erase the generic hashtag #tecnologia when 15 *other* accounts use it to
+// tag actual technology content -- only strip a name from its own posts.
+let NAME_WORDS_BY_ACCOUNT={};
+const EMPTY_WORDS=new Set();
 function buildNameWords(){
-  NAME_WORDS=new Set();
+  NAME_WORDS_BY_ACCOUNT={};
   ACCOUNTS.forEach(a=>{
+    const words=new Set();
     [a.handle, a.label].filter(Boolean).forEach(s=>{
       String(s).toLowerCase().split(/[^a-z0-9áéíóúñü]+/i).filter(Boolean)
-        .forEach(w=>NAME_WORDS.add(w));
+        .forEach(w=>words.add(w));
     });
+    NAME_WORDS_BY_ACCOUNT[a.handle]=words;
   });
 }
 
@@ -555,7 +561,9 @@ const STOP=new Set(('the of to and a in is it you that for on with as are was be
   +' de la el en y a los las que con por para un una del al es se su lo como mas más este esta estos estas o u ni si no te tu mi sus le les ha han hay muy ya sin sobre entre cuando donde quien porque'
   // Calls-to-action and boilerplate that ride on nearly every cover regardless
   // of topic (swipe, follow, link in bio...) -- high frequency, zero signal.
-  +' swipe swipeup ad ads advert advertisement sponsored follow followers like likes subscribe share shares comment comments tap taphere link linkinbio bio dm watch video page click here see via amp today full fullvideo part1 part2').split(' '));
+  +' swipe swipeup ad ads advert advertisement sponsored follow followers like likes subscribe share shares comment comments tap taphere link linkinbio bio dm watch video page click here see via amp today full fullvideo part1 part2'
+  // Spanish equivalents of the same CTAs (deslizar = to swipe).
+  +' desliza deslizar deslízalo deslízate desliz').split(' '));
 function sectionTopics(){return `
 <section>
   <h2>Topics &amp; language that work <span class="tag">content</span></h2>
@@ -571,15 +579,16 @@ function drawTopics(P){
   const wordStats={}, tagStats={};
   P.forEach(p=>{
     const metric = idx(p); if(metric==null) return;
+    const ownName = NAME_WORDS_BY_ACCOUNT[p.a] || EMPTY_WORDS;
     if(p.ocr){
       const seen=new Set();
       p.ocr.toLowerCase().replace(/[^a-záéíóúñü0-9\s]/gi,' ').split(/\s+/)
-        .filter(w=>w.length>3&&!STOP.has(w)&&!NAME_WORDS.has(w)&&!/^\d+$/.test(w))
+        .filter(w=>w.length>3&&!STOP.has(w)&&!ownName.has(w)&&!/^\d+$/.test(w))
         .forEach(w=>{ if(seen.has(w))return; seen.add(w);
           (wordStats[w]=wordStats[w]||[]).push(metric); });
     }
     if(p.h) p.h.split(',').map(s=>s.trim().toLowerCase()).filter(Boolean)
-      .filter(t=>!STOP.has(t)&&!NAME_WORDS.has(t))
+      .filter(t=>!STOP.has(t)&&!ownName.has(t))
       .forEach(t=>{(tagStats[t]=tagStats[t]||[]).push(metric)});
   });
   const top=(o,min)=>Object.entries(o).filter(([,v])=>v.length>=min)
