@@ -189,6 +189,22 @@ const pct = n => (n===null||n===undefined||!isFinite(n)) ? '—' : n.toFixed(1)+
 
 let RAW=[], ACCOUNTS=[], SEL=new Set(), CHARTS=[];
 
+// Every account's handle/label shows up as a watermark on its own covers, so
+// without this the "topics" cloud is dominated by page names instead of
+// actual content -- @getintoai's top "topic" was always "getintoai". Split
+// composed names ("Get Into AI") into their individual words too, since
+// each one alone is just as much the page's own branding as the whole phrase.
+let NAME_WORDS=new Set();
+function buildNameWords(){
+  NAME_WORDS=new Set();
+  ACCOUNTS.forEach(a=>{
+    [a.handle, a.label].filter(Boolean).forEach(s=>{
+      String(s).toLowerCase().split(/[^a-z0-9áéíóúñü]+/i).filter(Boolean)
+        .forEach(w=>NAME_WORDS.add(w));
+    });
+  });
+}
+
 // ---------------------------------------------------------------------------
 // URL state -- same contract as the dashboard: the query string is the only
 // place this lives, so a reload restores the view and a copied link reproduces
@@ -253,6 +269,7 @@ async function boot(){
       return {...p, ts:t, hour:isNaN(t)?null:dt.getUTCHours(), dow:isNaN(t)?null:dt.getUTCDay()};
     }).filter(p=>!isNaN(p.ts));
     ACCOUNTS = data.accounts;
+    buildNameWords();
 
     // The URL wins over the defaults, and only over accounts that still exist
     // (a shared link can outlive an account being removed).
@@ -535,7 +552,10 @@ function drawAccounts(P){
 
 /* ---------------- 3. Topics & language ---------------- */
 const STOP=new Set(('the of to and a in is it you that for on with as are was be this have from or an by not but what all we your can will just how new now get out has had who why when where which their there them then than more most some such only other into over after also back down out off up if do does did can could would should who whom whose'
-  +' de la el en y a los las que con por para un una del al es se su lo como mas más este esta estos estas o u ni si no te tu mi sus le les ha han hay muy ya sin sobre entre cuando donde quien porque').split(' '));
+  +' de la el en y a los las que con por para un una del al es se su lo como mas más este esta estos estas o u ni si no te tu mi sus le les ha han hay muy ya sin sobre entre cuando donde quien porque'
+  // Calls-to-action and boilerplate that ride on nearly every cover regardless
+  // of topic (swipe, follow, link in bio...) -- high frequency, zero signal.
+  +' swipe swipeup ad ads advert advertisement sponsored follow followers like likes subscribe share shares comment comments tap taphere link linkinbio bio dm watch video page click here see via amp today full fullvideo part1 part2').split(' '));
 function sectionTopics(){return `
 <section>
   <h2>Topics &amp; language that work <span class="tag">content</span></h2>
@@ -554,11 +574,12 @@ function drawTopics(P){
     if(p.ocr){
       const seen=new Set();
       p.ocr.toLowerCase().replace(/[^a-záéíóúñü0-9\s]/gi,' ').split(/\s+/)
-        .filter(w=>w.length>3&&!STOP.has(w)&&!/^\d+$/.test(w))
+        .filter(w=>w.length>3&&!STOP.has(w)&&!NAME_WORDS.has(w)&&!/^\d+$/.test(w))
         .forEach(w=>{ if(seen.has(w))return; seen.add(w);
           (wordStats[w]=wordStats[w]||[]).push(metric); });
     }
     if(p.h) p.h.split(',').map(s=>s.trim().toLowerCase()).filter(Boolean)
+      .filter(t=>!STOP.has(t)&&!NAME_WORDS.has(t))
       .forEach(t=>{(tagStats[t]=tagStats[t]||[]).push(metric)});
   });
   const top=(o,min)=>Object.entries(o).filter(([,v])=>v.length>=min)
