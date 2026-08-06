@@ -3988,7 +3988,14 @@ body {
    reachable at ?view=admin, with a normal "back" affordance instead of a
    dismiss button, so it reads like a real site section rather than a popup. */
 .admin-page {
-  min-height: 100vh;
+  /* The whole document is deliberately non-scrolling (body { overflow:
+     hidden }, set further down for the dashboard's internal-scroll-areas
+     layout) -- this page has to open its own scroll region rather than
+     relying on the page scrolling normally, or content past the first
+     viewport is simply unreachable ("scroll didn't work" / people missing
+     from the list further down). */
+  height: 100dvh;
+  overflow-y: auto;
   background: var(--bg);
   color: #f5f5f5;
 }
