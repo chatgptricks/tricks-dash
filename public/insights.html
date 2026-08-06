@@ -204,12 +204,22 @@ function buildNameWords(){
   ACCOUNTS.forEach(a=>{
     const words=new Set();
     [a.handle, a.label].filter(Boolean).forEach(s=>{
-      String(s).toLowerCase().split(/[^a-z0-9áéíóúñü]+/i).filter(Boolean)
-        .forEach(w=>words.add(w));
+      const lower=String(s).toLowerCase();
+      lower.split(/[^a-z0-9áéíóúñü]+/i).filter(Boolean).forEach(w=>words.add(w));
+      // Covers often watermark the handle with the separators removed
+      // ("acknowledge.ai" -> "acknowledgeai" burned into the image), which
+      // wouldn't match either individual split word above.
+      const compact=lower.replace(/[^a-z0-9áéíóúñü]/gi,'');
+      if(compact) words.add(compact);
     });
     NAME_WORDS_BY_ACCOUNT[a.handle]=words;
   });
 }
+
+// A handful of OCR misreads that split one real word into two different
+// cloud entries (e.g. the "AI" in "OpenAI" getting read as "al"). Folding
+// them together keeps the frequency count honest instead of splitting it.
+const WORD_ALIASES={openal:'openai'};
 
 // ---------------------------------------------------------------------------
 // URL state -- same contract as the dashboard: the query string is the only
@@ -563,7 +573,10 @@ const STOP=new Set(('the of to and a in is it you that for on with as are was be
   // of topic (swipe, follow, link in bio...) -- high frequency, zero signal.
   +' swipe swipeup ad ads advert advertisement sponsored follow followers like likes subscribe share shares comment comments tap taphere link linkinbio bio dm watch video page click here see via amp today full fullvideo part1 part2'
   // Spanish equivalents of the same CTAs (deslizar = to swipe).
-  +' desliza deslizar deslízalo deslízate desliz').split(' '));
+  +' desliza deslizar deslízalo deslízate desliz'
+  // OCR fragments of page names that don't cleanly attach to one account
+  // (e.g. "Tras el Velo Real" split across a logo + a title card).
+  +' tras velo').split(' '));
 function sectionTopics(){return `
 <section>
   <h2>Topics &amp; language that work <span class="tag">content</span></h2>
@@ -583,6 +596,7 @@ function drawTopics(P){
     if(p.ocr){
       const seen=new Set();
       p.ocr.toLowerCase().replace(/[^a-záéíóúñü0-9\s]/gi,' ').split(/\s+/)
+        .map(w=>WORD_ALIASES[w]||w)
         .filter(w=>w.length>3&&!STOP.has(w)&&!ownName.has(w)&&!/^\d+$/.test(w))
         .forEach(w=>{ if(seen.has(w))return; seen.add(w);
           (wordStats[w]=wordStats[w]||[]).push(metric); });
