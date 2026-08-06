@@ -1,0 +1,419 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sentient Tracker</title>
+<link rel="icon" href="./favicon.svg" />
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+/* Google sign-in gate -- Tracker is a standalone static page (not part of the
+   React bundle), so it gets its own minimal copy of the same Firebase gate
+   instead of sharing App.jsx's. Same pattern as insights.html. */
+#authGate{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+  background:#000;z-index:999}
+#authGate .card{width:100%;max-width:340px;padding:30px 26px;border:1px solid rgba(255,255,255,.1);
+  border-radius:8px;background:#0d0d0d;text-align:center}
+#authGate h1{margin:0 0 8px;font-size:19px;font-weight:900;color:#f5f5f5}
+#authGate p{margin:0 0 18px;color:#b5b5b5;font-size:13px;line-height:1.5}
+#authGate button{width:100%;height:34px;border:1px solid rgba(245,255,0,.5);border-radius:8px;
+  background:rgba(245,255,0,.14);color:#fffce0;font-size:12px;font-weight:800;cursor:pointer}
+#authGate button:hover{background:rgba(245,255,0,.22)}
+#authGate.hidden{display:none}
+:root{
+  color-scheme:dark;
+  --bg:#000; --panel:#0b0b0b; --panel-2:#101010; --line:rgba(255,255,255,.09);
+  --text:#f5f5f5; --muted:#8a8a8a; --muted-2:#b5b5b5; --accent:#f5ff00;
+  --good:#35c759; --warn:#ff9f0a; --hot:#ff6b35; --cool:#4aa8ff;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,sans-serif;
+  font-size:13px;-webkit-font-smoothing:antialiased}
+a{color:inherit}
+.wrap{max-width:1200px;margin:0 auto;padding:18px 22px 80px}
+
+/* topbar */
+.top{display:flex;align-items:center;justify-content:space-between;gap:18px;
+  padding:14px 18px;border:1px solid var(--line);border-radius:12px;background:var(--panel);margin-bottom:14px}
+.brand small{display:block;color:var(--muted);font-size:9px;font-weight:800;
+  letter-spacing:.16em;text-transform:uppercase;margin-bottom:3px}
+.brand h1{margin:0;font-size:23px;font-weight:800;letter-spacing:-.02em}
+.brand h1 span{color:var(--accent)}
+.top-actions{display:flex;gap:8px;align-items:center}
+.linkbtn{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 13px;
+  border:1px solid var(--line);border-radius:8px;background:var(--panel-2);color:var(--muted-2);
+  font-size:11px;font-weight:700;text-decoration:none;cursor:pointer}
+.linkbtn:hover{border-color:rgba(245,255,0,.4);color:var(--text)}
+
+/* kpis */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;margin-bottom:16px}
+.kpi{padding:13px 15px;border:1px solid var(--line);border-radius:11px;background:var(--panel)}
+.kpi b{display:block;color:var(--muted);font-size:9px;font-weight:800;letter-spacing:.1em;
+  text-transform:uppercase;margin-bottom:6px}
+.kpi strong{font-size:22px;font-weight:800;letter-spacing:-.02em}
+.kpi em{display:block;font-style:normal;color:var(--muted);font-size:10px;margin-top:3px}
+
+/* sections */
+section{border:1px solid var(--line);border-radius:12px;background:var(--panel);
+  padding:16px 18px;margin-bottom:14px}
+section>h2{margin:0 0 4px;font-size:14px;font-weight:800;letter-spacing:-.01em}
+section>h2 .tag{margin-left:8px;padding:2px 7px;border-radius:999px;background:rgba(245,255,0,.12);
+  color:var(--accent);font-size:9px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
+section>p.sub{margin:0 0 14px;color:var(--muted);font-size:11px;line-height:1.5}
+
+/* leaderboard table */
+table{width:100%;border-collapse:collapse;font-size:11.5px}
+th{text-align:right;padding:8px;color:var(--muted);font-size:9px;font-weight:800;
+  letter-spacing:.07em;text-transform:uppercase;border-bottom:1px solid var(--line);white-space:nowrap;cursor:pointer}
+th:first-child{text-align:left}
+th.sorted{color:var(--accent)}
+td{text-align:right;padding:9px 8px;border-bottom:1px solid rgba(255,255,255,.045);white-space:nowrap}
+td:first-child{text-align:left}
+tbody tr{cursor:pointer}
+tbody tr:hover{background:rgba(255,255,255,.03)}
+.acct-cell{display:flex;align-items:center;gap:9px}
+.acct-avatar{width:26px;height:26px;border-radius:999px;object-fit:cover;background:var(--panel-2);flex:0 0 auto}
+.acct-name{display:flex;flex-direction:column;gap:2px;min-width:0}
+.acct-name strong{font-size:12px;font-weight:700;color:var(--text)}
+.pill{display:inline-block;padding:2px 7px;border-radius:999px;font-size:9px;font-weight:800;width:fit-content}
+.pill.s{background:rgba(74,168,255,.15);color:#8fc9ff}
+.pill.c{background:rgba(255,107,53,.15);color:#ffa480}
+.delta{font-weight:700}
+.delta.up{color:var(--good)}
+.delta.down{color:#ff6b6b}
+.delta.flat{color:var(--muted)}
+.na{color:var(--muted)}
+.rank-num{color:var(--muted);font-weight:700}
+
+/* charts */
+.chartbox{position:relative;height:280px;min-width:0;width:100%}
+.chartbox canvas{max-width:100%}
+
+.empty{padding:26px;text-align:center;color:var(--muted);font-size:12px}
+.loading{padding:60px;text-align:center;color:var(--muted)}
+.note{margin-top:10px;padding:9px 11px;border-left:2px solid rgba(245,255,0,.4);
+  background:rgba(245,255,0,.04);color:var(--muted-2);font-size:11px;line-height:1.55;border-radius:0 6px 6px 0}
+.note b{color:var(--text)}
+
+/* detail view */
+.detail-head{display:flex;align-items:center;gap:12px;margin-bottom:4px}
+.detail-head img{width:46px;height:46px;border-radius:999px;object-fit:cover;background:var(--panel-2)}
+.detail-head h2{margin:0;font-size:17px}
+.detail-head span{color:var(--muted);font-size:11px}
+</style>
+</head>
+<body>
+<div id="authGate" class="hidden">
+  <div class="card">
+    <h1>Sentient Tracker</h1>
+    <p id="authGateText">Sign in with your Google account to continue.</p>
+    <button id="authGateBtn" type="button">Sign in with Google</button>
+  </div>
+</div>
+<div class="wrap">
+  <div class="top">
+    <div class="brand">
+      <small>Sentient</small>
+      <h1>Tracker<span>.</span></h1>
+    </div>
+    <div class="top-actions">
+      <button class="linkbtn" id="shareBtn" title="Copy a link to this exact view">Copy link</button>
+      <a class="linkbtn" href="./insights.html">Insights</a>
+      <a class="linkbtn" href="./index.html">← Dashboard</a>
+    </div>
+  </div>
+
+  <div id="app"><div class="loading">Loading data…</div></div>
+</div>
+
+<script>
+const API = 'https://cortex-api-db2e.onrender.com';
+const $ = s => document.querySelector(s);
+const fmt = n => n===null||n===undefined||Number.isNaN(n) ? '—'
+  : Math.abs(n)>=1e6 ? (n/1e6).toFixed(1)+'M'
+  : Math.abs(n)>=1e3 ? (n/1e3).toFixed(1)+'K' : Math.round(n).toLocaleString('en-US');
+const signed = n => n===null||n===undefined ? '—' : (n>0?'+':'')+fmt(n);
+const pct = n => (n===null||n===undefined||!isFinite(n)) ? '—' : (n>0?'+':'')+n.toFixed(1)+'%';
+
+let SUMMARY = null;
+let DETAIL_CACHE = {};
+let CHARTS = [];
+function destroyCharts(){ CHARTS.forEach(c=>{try{c.destroy()}catch(e){}}); CHARTS=[]; }
+
+Chart.defaults.color='#8a8a8a';
+Chart.defaults.font.family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,sans-serif";
+Chart.defaults.font.size=10;
+Chart.defaults.borderColor='rgba(255,255,255,.07)';
+Chart.defaults.resizeDelay=120;
+
+// ---------------------------------------------------------------------------
+// URL state -- same contract as Insights/Dashboard: the query string is the
+// only place "which account am I looking at" lives, so a reload or a shared
+// link reproduces the exact same view.
+// ---------------------------------------------------------------------------
+function readAcc(){ return new URLSearchParams(location.search).get('acc') || ''; }
+function writeAcc(handle){
+  const qs = handle ? '?acc='+encodeURIComponent(handle) : '';
+  history.pushState(null, '', location.pathname + qs);
+}
+
+async function shareLink(){
+  const btn=$('#shareBtn');
+  try{
+    await navigator.clipboard.writeText(location.href);
+    btn.textContent='Copied'; setTimeout(()=>{btn.textContent='Copy link'},1600);
+  }catch(e){ prompt('Copy this link:', location.href); }
+}
+
+async function boot(){
+  $('#shareBtn').addEventListener('click', shareLink);
+  window.addEventListener('popstate', render);
+  try{
+    await loadSummary();
+    render();
+  }catch(e){
+    $('#app').innerHTML = '<div class="empty">Could not load the tracker.<br><small>'+e.message+'</small></div>';
+  }
+}
+
+async function authedFetch(path){
+  const headers = {};
+  if(window.__firebaseIdToken) headers.Authorization = 'Bearer '+window.__firebaseIdToken;
+  const r = await fetch(API+path, {headers});
+  if(r.status===401||r.status===403){ window.__onInsightsUnauthorized && window.__onInsightsUnauthorized(); throw new Error('unauthorized'); }
+  if(!r.ok) throw new Error('HTTP '+r.status);
+  return r.json();
+}
+
+async function loadSummary(){
+  SUMMARY = await authedFetch('/api/tracker/summary');
+}
+
+function render(){
+  const acc = readAcc();
+  if(acc) renderDetail(acc);
+  else renderLeaderboard();
+}
+
+/* ---------------- Leaderboard ---------------- */
+let sortKey='followers', sortDir=-1;
+
+function trackingSinceNote(){
+  if(!SUMMARY.tracking_since) return `<div class="note">No follower history recorded yet -- the first daily snapshot runs at 7am CST, or use <b>Admin panel → System</b> to capture one right now. Growth columns fill in day by day from there; there's no way to recover Instagram's past follower counts for an account that just started being tracked.</div>`;
+  const days = Math.max(1, Math.round((Date.now()-new Date(SUMMARY.tracking_since).getTime())/864e5));
+  return `<div class="note">Tracking since <b>${new Date(SUMMARY.tracking_since).toLocaleDateString()}</b> (${days} day${days===1?'':'s'} of history so far). Follower deltas need that many days of snapshots to fill in -- a fresh account naturally shows "—" for windows it hasn't lived through yet.</div>`;
+}
+
+function renderLeaderboard(){
+  destroyCharts();
+  const rows = [...SUMMARY.accounts];
+  const val = r => {
+    if(sortKey==='handle') return r.handle;
+    if(sortKey==='followers') return r.followers ?? -1;
+    if(sortKey==='delta_1d') return r.delta_1d?.delta ?? -Infinity;
+    if(sortKey==='delta_7d') return r.delta_7d?.delta ?? -Infinity;
+    if(sortKey==='delta_30d') return r.delta_30d?.delta ?? -Infinity;
+    if(sortKey==='posts_count') return r.posts_count ?? -1;
+    if(sortKey==='engagement_trend_pct') return r.engagement_trend_pct ?? -Infinity;
+    return 0;
+  };
+  rows.sort((a,b)=>{
+    const va=val(a), vb=val(b);
+    if(typeof va==='string') return va.localeCompare(vb)*sortDir*-1;
+    return (vb-va)*(sortDir<0?1:-1);
+  });
+
+  const withFollowers = rows.filter(r=>r.followers!=null).length;
+  const trackedAll = SUMMARY.accounts.length;
+
+  const cols = [
+    ['rank','#'], ['handle','Account'], ['followers','Followers'],
+    ['delta_1d','1 day'], ['delta_7d','7 days'], ['delta_30d','30 days'],
+    ['posts_count','Posts'], ['engagement_trend_pct','Engagement trend'],
+  ];
+
+  const deltaCell = d => {
+    if(!d) return '<span class="na">—</span>';
+    const cls = d.delta>0?'up':d.delta<0?'down':'flat';
+    return `<span class="delta ${cls}">${signed(d.delta)}</span> <span class="na">${pct(d.pct)}</span>`;
+  };
+
+  $('#app').innerHTML = `
+    <div class="kpis">
+      <div class="kpi"><b>Accounts tracked</b><strong>${trackedAll}</strong><em>${withFollowers} with follower data</em></div>
+      <div class="kpi"><b>Leader</b><strong>${rows[0]&&rows[0].followers!=null?'@'+rows[0].handle:'—'}</strong><em>${rows[0]&&rows[0].followers!=null?fmt(rows[0].followers)+' followers':'no data yet'}</em></div>
+      <div class="kpi"><b>Top 7d grower</b><strong>${(()=>{const g=[...rows].filter(r=>r.delta_7d).sort((a,b)=>b.delta_7d.delta-a.delta_7d.delta)[0]; return g?'@'+g.handle:'—';})()}</strong><em>${(()=>{const g=[...rows].filter(r=>r.delta_7d).sort((a,b)=>b.delta_7d.delta-a.delta_7d.delta)[0]; return g?signed(g.delta_7d.delta)+' in 7d':'not enough history yet';})()}</em></div>
+    </div>
+
+    <section>
+      <h2>Leaderboard <span class="tag">all tracked accounts</span></h2>
+      <p class="sub">Ranked by followers by default -- click any column to re-sort. Click a row to open its growth chart. "Engagement trend" compares this month's average likes to the previous month, from post history we already have.</p>
+      ${trackingSinceNote()}
+      <div style="overflow-x:auto;margin-top:12px">
+      <table id="tLeaderboard">
+        <thead><tr>${cols.map(([k,l])=>`<th data-k="${k}" class="${sortKey===k?'sorted':''}">${l}</th>`).join('')}</tr></thead>
+        <tbody>${rows.map((r,i)=>`
+          <tr data-handle="${r.handle}">
+            <td class="rank-num">${r.rank_by_followers ?? '—'}</td>
+            <td><div class="acct-cell">
+              <img class="acct-avatar" src="${API}/api/dashboard/avatar/${encodeURIComponent(r.handle)}" referrerpolicy="no-referrer" onerror="this.style.visibility='hidden'">
+              <div class="acct-name"><strong>@${r.handle}</strong>
+                <span class="pill ${r.group==='sentient'?'s':'c'}">${r.group==='sentient'?'ours':'competitor'}</span>
+              </div>
+            </div></td>
+            <td>${r.followers!=null?fmt(r.followers):'<span class="na">—</span>'}</td>
+            <td>${deltaCell(r.delta_1d)}</td>
+            <td>${deltaCell(r.delta_7d)}</td>
+            <td>${deltaCell(r.delta_30d)}</td>
+            <td>${r.posts_count!=null?fmt(r.posts_count):'<span class="na">—</span>'}</td>
+            <td>${r.engagement_trend_pct!=null?pct(r.engagement_trend_pct):'<span class="na">—</span>'}</td>
+          </tr>`).join('')}</tbody>
+      </table>
+      </div>
+    </section>
+  `;
+
+  $('#tLeaderboard').querySelectorAll('th').forEach(th=>th.onclick=()=>{
+    const k=th.dataset.k; if(k==='rank') return;
+    sortDir = sortKey===k ? -sortDir : -1; sortKey=k; renderLeaderboard();
+  });
+  $('#tLeaderboard').querySelectorAll('tbody tr').forEach(tr=>tr.onclick=()=>{
+    writeAcc(tr.dataset.handle); render();
+  });
+}
+
+/* ---------------- Account detail ---------------- */
+async function renderDetail(handle){
+  destroyCharts();
+  $('#app').innerHTML = '<div class="loading">Loading @'+handle+'…</div>';
+  let detail;
+  try{
+    detail = DETAIL_CACHE[handle] || await authedFetch('/api/tracker/accounts/'+encodeURIComponent(handle));
+    DETAIL_CACHE[handle] = detail;
+  }catch(e){
+    $('#app').innerHTML = '<div class="empty">Could not load @'+handle+'.<br><small>'+e.message+'</small></div>';
+    return;
+  }
+
+  const row = SUMMARY.accounts.find(r=>r.handle===handle) || {};
+  const hist = detail.followers_history;
+  const first = hist[0], last = hist[hist.length-1];
+  const totalGrowth = (first && last && first.followers!=null && last.followers!=null) ? last.followers-first.followers : null;
+
+  $('#app').innerHTML = `
+    <button class="linkbtn" id="backBtn" style="margin-bottom:14px">← All accounts</button>
+    <div class="detail-head">
+      <img src="${API}/api/dashboard/avatar/${encodeURIComponent(handle)}" referrerpolicy="no-referrer" onerror="this.style.visibility='hidden'">
+      <div>
+        <h2>@${handle}</h2>
+        <span class="pill ${row.group==='sentient'?'s':'c'}">${row.group==='sentient'?'ours':'competitor'}</span>
+        ${row.rank_by_followers ? ' <span>rank #'+row.rank_by_followers+' by followers</span>' : ''}
+      </div>
+    </div>
+
+    <div class="kpis">
+      <div class="kpi"><b>Followers</b><strong>${row.followers!=null?fmt(row.followers):'—'}</strong><em>${row.captured_at?new Date(row.captured_at).toLocaleDateString():'no snapshot yet'}</em></div>
+      <div class="kpi"><b>7 day growth</b><strong>${row.delta_7d?signed(row.delta_7d.delta):'—'}</strong><em>${row.delta_7d?pct(row.delta_7d.pct):'not enough history yet'}</em></div>
+      <div class="kpi"><b>Since tracking began</b><strong>${totalGrowth!=null?signed(totalGrowth):'—'}</strong><em>${hist.length} snapshot${hist.length===1?'':'s'} recorded</em></div>
+      <div class="kpi"><b>Posts (total)</b><strong>${row.posts_count!=null?fmt(row.posts_count):'—'}</strong><em>per latest snapshot</em></div>
+    </div>
+
+    <section>
+      <h2>Follower growth</h2>
+      <p class="sub">${hist.length>1?'One point per recorded snapshot -- daily, starting the day this account began being tracked.':'Only one snapshot recorded so far -- this chart fills in day by day. There is no way to recover Instagram’s past follower counts.'}</p>
+      <div class="chartbox"><canvas id="cFollowers"></canvas></div>
+    </section>
+
+    <section>
+      <h2>Engagement trend <span class="tag">weekly avg likes</span></h2>
+      <p class="sub">From the post history already on hand -- this goes back as far as we've backfilled the account's posts, independent of the follower-snapshot start date above.</p>
+      <div class="chartbox"><canvas id="cEngagement"></canvas></div>
+    </section>
+  `;
+  $('#backBtn').onclick = () => { writeAcc(''); render(); };
+
+  if(hist.length){
+    CHARTS.push(new Chart($('#cFollowers'),{type:'line',
+      data:{labels:hist.map(h=>new Date(h.date).toLocaleDateString()),
+        datasets:[{label:'Followers',data:hist.map(h=>h.followers),borderColor:'#f5ff00',
+          backgroundColor:'#f5ff0022',fill:true,tension:.3,pointRadius:hist.length>1?2:4}]},
+      options:{maintainAspectRatio:false,plugins:{legend:{display:false}},
+        scales:{y:{ticks:{callback:v=>fmt(v)}}}}}));
+  } else {
+    $('#cFollowers').parentElement.innerHTML = '<div class="empty">No snapshots yet.</div>';
+  }
+
+  const eng = detail.engagement_weekly;
+  if(eng.length){
+    CHARTS.push(new Chart($('#cEngagement'),{type:'bar',
+      data:{labels:eng.map(w=>w.week_start),
+        datasets:[{label:'Avg likes',data:eng.map(w=>Math.round(w.avg_likes||0)),
+          backgroundColor:'#4aa8ffcc',borderRadius:4}]},
+      options:{maintainAspectRatio:false,plugins:{legend:{display:false},
+        tooltip:{callbacks:{afterLabel:c=>eng[c.dataIndex].post_count+' posts'}}},
+        scales:{y:{beginAtZero:true,ticks:{callback:v=>fmt(v)}}}}}));
+  } else {
+    $('#cEngagement').parentElement.innerHTML = '<div class="empty">No post history for this account yet.</div>';
+  }
+}
+
+window.__startInsightsBoot = boot;
+</script>
+
+<script type="module">
+// Same Firebase project/config as the main dashboard (src/App.jsx) and
+// insights.html -- Tracker is a standalone static page so it can't share
+// that module, but it needs the same Google sign-in gate.
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
+import {
+  getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut,
+} from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js';
+
+const firebaseConfig = {
+  apiKey: 'AIzaSyDrtLGrnRJ3cj64sJ6Ykn-yRGtemybzoN0',
+  authDomain: 'sentient-dash.firebaseapp.com',
+  projectId: 'sentient-dash',
+  storageBucket: 'sentient-dash.firebasestorage.app',
+  messagingSenderId: '74046012975',
+  appId: '1:74046012975:web:02013849972baca1f950da',
+};
+const auth = getAuth(initializeApp(firebaseConfig));
+const provider = new GoogleAuthProvider();
+
+const gate = document.getElementById('authGate');
+const gateText = document.getElementById('authGateText');
+const gateBtn = document.getElementById('authGateBtn');
+let booted = false;
+
+window.__onInsightsUnauthorized = () => {
+  gateText.textContent = (auth.currentUser?.email || 'This Google account') + ' isn’t authorized for Sentient Dash.';
+  gateBtn.textContent = 'Sign out';
+  gateBtn.onclick = () => signOut(auth);
+  gate.classList.remove('hidden');
+};
+
+gateBtn.addEventListener('click', () => {
+  gateBtn.disabled = true;
+  signInWithPopup(auth, provider).catch(() => {}).finally(() => { gateBtn.disabled = false; });
+});
+
+onAuthStateChanged(auth, async (user) => {
+  if (!user) {
+    booted = false;
+    gateText.textContent = 'Sign in with your Google account to continue.';
+    gateBtn.textContent = 'Sign in with Google';
+    gateBtn.onclick = () => signInWithPopup(auth, provider);
+    gate.classList.remove('hidden');
+    return;
+  }
+  window.__firebaseIdToken = await user.getIdToken();
+  gate.classList.add('hidden');
+  if (!booted) {
+    booted = true;
+    window.__startInsightsBoot();
+  }
+});
+</script>
+</body>
+</html>
