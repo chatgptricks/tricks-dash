@@ -185,6 +185,59 @@ function likesStopIndex(value) {
   });
   return closest;
 }
+// chatgptricks' monthly Canva design doc, keyed by "YYYY-MM". Months with a
+// single doc for the whole month store { url }; months split into two docs
+// (see the source list) store { a, b } -- which one a given post maps to is
+// decided by day-of-month in canvaLinkForPost below (1st-15th -> a, 16th
+// onward -> b), per an explicit decision on how these get split.
+const CANVA_DESIGNS = {
+  '2025-01': { url: 'https://www.canva.com/design/editor/shell?designId=DAGeMj8IriI&extension=wlbjD0yXsAgCTumA0nRalQ&mode=edit' },
+  '2025-02': { url: 'https://www.canva.com/design/editor/shell?designId=DAGhqScjOR8&extension=umu4gkVjx_r6eBx7faP70g&mode=edit' },
+  '2025-03': { url: 'https://www.canva.com/design/editor/shell?designId=DAGjijmmefk&extension=ZcNWd6flzFuFyw8om5c7hg&mode=edit' },
+  '2025-04': { url: 'https://www.canva.com/design/editor/shell?designId=DAGlaWE85DA&extension=r_OvcgpnZZSoc2YKL-BHUQ&mode=edit' },
+  '2025-05': {
+    a: 'https://www.canva.com/design/editor/shell?designId=DAGnw5weeTc&extension=pgcmgN8GWYvlCGScebb_YQ&mode=edit',
+    b: 'https://www.canva.com/design/editor/shell?designId=DAGpQ79lgQA&extension=vK9Tod39Le-5BQ6RLIjIrQ&mode=edit',
+  },
+  '2025-06': { url: 'https://www.canva.com/design/editor/shell?designId=DAGbdOgiNak&extension=w45DIrxDBUacSwD6GK_qtw&mode=edit' },
+  '2025-07': { url: 'https://www.canva.com/design/editor/shell?designId=DAGu5D_2OJM&extension=efbajomt6u0BcJ02g5ziOA&mode=edit' },
+  '2025-08': { url: 'https://www.canva.com/design/editor/shell?designId=DAGwe2Ch8dI&extension=ZJUGx_zPO9galHPL8OjLnw&mode=edit' },
+  '2025-09': { url: 'https://www.canva.com/design/editor/shell?designId=DAGzlzhjY3o&extension=W8gJcpYzTF5dEGMaJ_GQJg&mode=edit' },
+  '2025-10': { url: 'https://www.canva.com/design/editor/shell?designId=DAG3Pcc78IE&extension=f-dCDO0sUZScl0zv_WNcqw&mode=edit' },
+  '2025-11': { url: 'https://www.canva.com/design/editor/shell?designId=DAG5xN_3gvY&extension=MEa4__EfPZ48APT0oOCCmg&mode=edit' },
+  '2025-12': { url: 'https://www.canva.com/design/editor/shell?designId=DAG8oAP2Qbs&extension=WtCOIKQZMhtvqpNsglVEXg&mode=edit' },
+  '2026-01': {
+    a: 'https://www.canva.com/design/editor/shell?designId=DAG-p7dp2G4&extension=ZFQCwzuywyANf7iSGpBQKw&mode=edit',
+    b: 'https://www.canva.com/design/editor/shell?designId=DAHAP9ytKw4&extension=6W1kTRr9Cwxjl9HEh4QopA&mode=edit',
+  },
+  '2026-02': { url: 'https://www.canva.com/design/editor/shell?designId=DAHCUPS8ojc&extension=YSB20zIfLmo6vGgoIvXq1g&mode=edit' },
+  '2026-03': { url: 'https://www.canva.com/design/editor/shell?designId=DAHFBYHiCaU&extension=DdvvzBemTqfTecDSN1x7eg&mode=edit' },
+  '2026-04': {
+    a: 'https://www.canva.com/design/editor/shell?designId=DAHG-Rq7TXM&extension=LEUUopHFNyb3Hcr3dpq-qQ&mode=edit',
+    b: 'https://www.canva.com/design/editor/shell?designId=DAHIaNiBs2k&extension=Xxiwq0Wn6dIz_9El-nsoUg&mode=edit',
+  },
+  '2026-05': {
+    a: 'https://www.canva.com/design/editor/shell?designId=DAHJoPgWbaw&extension=NUE57a6WJJp1rGwAeDHRdg&mode=edit',
+    b: 'https://www.canva.com/design/editor/shell?designId=DAHLT_DomrE&extension=Zc-_C4V1wiUSbaY05wR7Zw&mode=edit',
+  },
+  '2026-06': {
+    a: 'https://www.canva.com/design/editor/shell?designId=DAHM_3BHusk&extension=Ne1aBOBRCAHpHxPZzfvEsg&mode=edit',
+    b: 'https://www.canva.com/design/editor/shell?designId=DAHOH7gL4d4&extension=VZpv8IRJuS3uPCQ4rUJP_A&mode=edit',
+  },
+  '2026-07': { url: 'https://www.canva.com/design/editor/shell?designId=DAHQk6XX7lQ&extension=xT3deI8-L3lHlS-EeYqdrg&mode=edit' },
+};
+
+function canvaLinkForPost(postDateIso) {
+  if (!postDateIso) return null;
+  const d = new Date(postDateIso);
+  if (Number.isNaN(d.getTime())) return null;
+  const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+  const entry = CANVA_DESIGNS[key];
+  if (!entry) return null;
+  if (entry.url) return entry.url;
+  return d.getUTCDate() <= 15 ? entry.a : entry.b;
+}
+
 const dateFormatter = new Intl.DateTimeFormat('en-US', {
   month: 'short',
   day: 'numeric',
@@ -1253,6 +1306,9 @@ function App() {
                 ) : selected.usesOriginalAudio ? (
                   <SongLine url={selected.musicUrl}>Original audio</SongLine>
                 ) : null}
+                {selected.account === 'chatgptricks' ? (
+                  <CanvaLine url={canvaLinkForPost(selected.postDate)} />
+                ) : null}
               </section>
 
               <section className="panel stats-panel">
@@ -1310,6 +1366,19 @@ function SongLine({ url, children }) {
     </a>
   ) : (
     <p className="song-line">{content}</p>
+  );
+}
+
+// chatgptricks-only: the monthly Canva design doc this post's cover most
+// likely came from (see CANVA_DESIGNS / canvaLinkForPost above). No link for
+// months not yet in the list rather than a dead/guessed URL.
+function CanvaLine({ url }) {
+  if (!url) return null;
+  return (
+    <a className="song-line canva-line" href={url} target="_blank" rel="noreferrer" title="Open this month's Canva design doc">
+      <ExternalLink size={14} />
+      <span>Open Canva design doc</span>
+    </a>
   );
 }
 
