@@ -327,6 +327,16 @@ function formatElapsed(timestampMs) {
   return `${days}d`;
 }
 
+// Usage heatmap color scale. Log-based rather than linear against the max
+// cell: request counts are extremely lopsided (one person refreshing a tab
+// left open all day vs. someone who checks once), so a linear scale would
+// leave every cell except the single busiest one looking equally "empty".
+function usageCellColor(count) {
+  if (!count) return 'rgba(255,255,255,.05)';
+  const intensity = Math.min(1, 0.16 + Math.log2(count + 1) / 7);
+  return `rgba(245,255,0,${intensity.toFixed(2)})`;
+}
+
 function typeLabel(value) {
   if (value.startsWith('Carousel')) return 'Carousel';
   if (value.startsWith('Video')) return 'Video';
@@ -1666,6 +1676,12 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
   const [addingUser, setAddingUser] = useState(false);
   const [userActionEmail, setUserActionEmail] = useState('');
 
+  // Users tab -- usage heatmap. Separate load/loading state from the roster
+  // above: the roster is small and cheap, this is a heavier aggregation
+  // query, and neither should block the other from rendering.
+  const [usage, setUsage] = useState(null);
+  const [usageLoading, setUsageLoading] = useState(false);
+
   // The prop is /api/dashboard/accounts (active-only, public). This panel
   // needs inactive accounts too (to show/reactivate them), so once unlocked
   // it re-fetches the full admin roster and works off that instead.
@@ -1726,6 +1742,19 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
     }
   }, []);
 
+  const loadUsage = useCallback(async () => {
+    setUsageLoading(true);
+    try {
+      const response = await apiFetch(`${API_BASE}/api/admin/usage?days=30`);
+      const body = await response.json().catch(() => ({}));
+      if (Array.isArray(body.users)) setUsage(body);
+    } catch (error) {
+      // Keep whatever we already had rather than blanking the heatmap.
+    } finally {
+      setUsageLoading(false);
+    }
+  }, []);
+
   const loadApifyRuns = useCallback(async () => {
     if (!password) return;
     setApifyLoading(true);
@@ -1763,8 +1792,11 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
   }, [unlocked, tab, loadApifyRuns]);
 
   useEffect(() => {
-    if (unlocked && tab === 'users') loadUsers();
-  }, [unlocked, tab, loadUsers]);
+    if (unlocked && tab === 'users') {
+      loadUsers();
+      loadUsage();
+    }
+  }, [unlocked, tab, loadUsers, loadUsage]);
 
   // While a sweep is running, poll so the "done" count moves without a manual
   // refresh -- same pattern as the background-task polling used elsewhere.
@@ -2396,6 +2428,7 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
                 </section>
               </div>
             ) : (
+              <>
               <div className="settings-list-width">
                 <section className="settings-section">
                   <h3>Who can sign in</h3>
@@ -2462,6 +2495,129 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
                   </div>
                 </section>
               </div>
+
+              <section className="settings-section usage-section">
+                <h3>Usage</h3>
+                <p className="wizard-hint">
+                  Who actually opens Sentient Dash, how often, and when — last {usage?.days ?? 30} days.
+                </p>
+                {usageLoading && !usage ? (
+                  <p className="wizard-hint">Loading…</p>
+                ) : !usage ? (
+                  <p className="wizard-hint">Couldn't load usage data.</p>
+                ) : (
+                  <>
+                    <div className="usage-kpis">
+                      <div className="usage-kpi">
+                        <b>Active, 7d</b>
+                        <strong>{usage.active_users_7d}</strong>
+                        <em>of {usage.total_users} people</em>
+                      </div>
+                      <div className="usage-kpi">
+                        <b>Active, 30d</b>
+                        <strong>{usage.active_users_30d}</strong>
+                        <em>of {usage.total_users} people</em>
+                      </div>
+                      <div className="usage-kpi">
+                        <b>Requests, 30d</b>
+                        <strong>{usage.total_events_in_range.toLocaleString('en-US')}</strong>
+                        <em>across everyone</em>
+                      </div>
+                    </div>
+
+                    <h4 className="usage-subhead">Daily activity per person</h4>
+                    <div className="usage-heatmap-scroll">
+                      <div
+                        className="usage-grid"
+                        style={{ gridTemplateColumns: `160px repeat(${usage.day_keys.length}, 1fr)` }}
+                      >
+                        <div className="usage-grid-corner" />
+                        {usage.day_keys.map((day, index) => (
+                          <div className="usage-daylabel" key={day}>
+                            {index % 5 === 0 ? day.slice(5).replace('-', '/') : ''}
+                          </div>
+                        ))}
+                        {usage.users.map((person) => (
+                          <div className="usage-row-group" key={person.email}>
+                            <div className="usage-rowlabel">
+                              <strong>{person.email}</strong>
+                              <span className={`usage-role-pill ${person.role}`}>{person.role}</span>
+                            </div>
+                            {person.daily.map((d) => (
+                              <div
+                                key={d.date}
+                                className="usage-cell"
+                                title={`${person.email} · ${d.date} · ${d.count} request${d.count === 1 ? '' : 's'}`}
+                                style={{ background: usageCellColor(d.count) }}
+                              />
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="usage-secondary">
+                      <div>
+                        <h4 className="usage-subhead">When the team is online (UTC)</h4>
+                        <div
+                          className="usage-grid usage-dowhour-grid"
+                          style={{ gridTemplateColumns: '48px repeat(24, 1fr)' }}
+                        >
+                          <div className="usage-grid-corner" />
+                          {Array.from({ length: 24 }, (_, hour) => (
+                            <div className="usage-hourlabel" key={hour}>
+                              {hour % 3 === 0 ? hour : ''}
+                            </div>
+                          ))}
+                          {usage.dow_labels.map((label, dayIndex) => (
+                            <div className="usage-row-group" key={label}>
+                              <div className="usage-dowlabel">{label}</div>
+                              {usage.global_dow_hour[dayIndex].map((count, hourIndex) => (
+                                <div
+                                  key={hourIndex}
+                                  className="usage-cell"
+                                  title={`${label} ${hourIndex}:00 UTC · ${count} request${count === 1 ? '' : 's'}`}
+                                  style={{ background: usageCellColor(count) }}
+                                />
+                              ))}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <h4 className="usage-subhead">Per-person detail</h4>
+                        <div className="usage-detail-list">
+                          {usage.users.map((person) => (
+                            <div className="usage-detail-row" key={person.email}>
+                              <div className="usage-detail-account">
+                                <strong>{person.email}</strong>
+                                <span className={`usage-role-pill ${person.role}`}>{person.role}</span>
+                              </div>
+                              <div className="usage-detail-stats">
+                                <span>{person.total_all_time.toLocaleString('en-US')} total</span>
+                                <span>{person.last_7d} last 7d</span>
+                                <span>{person.active_days} active days</span>
+                                <span>
+                                  {person.last_seen
+                                    ? `last seen ${formatElapsed(new Date(person.last_seen).getTime())} ago`
+                                    : 'never signed in'}
+                                </span>
+                              </div>
+                              <div className="usage-detail-sections">
+                                <span title="Dashboard requests">Dash {person.sections.dashboard}</span>
+                                <span title="Insights requests">Insights {person.sections.insights}</span>
+                                <span title="Admin panel requests">Admin {person.sections.admin}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </section>
+              </>
             )}
         </div>
       </div>
