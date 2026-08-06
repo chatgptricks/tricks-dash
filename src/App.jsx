@@ -227,15 +227,25 @@ const CANVA_DESIGNS = {
   '2026-07': { url: 'https://www.canva.com/design/editor/shell?designId=DAHQk6XX7lQ&extension=xT3deI8-L3lHlS-EeYqdrg&mode=edit' },
 };
 
+// A standing permalink that always points at whichever design is currently
+// active for the month that hasn't finished yet -- there's no dedicated
+// CANVA_DESIGNS entry for the current month until it ends, at which point a
+// specific link gets added above and this fallback stops applying to it
+// (the next, now-current month falls back to this same permalink again).
+const CURRENT_MONTH_CANVA_URL = 'https://www.canva.com/design/DAGr_aGMCF4/xWvA62aXKdC5rHjmtHe_gA/edit';
+
 function canvaLinkForPost(postDateIso) {
   if (!postDateIso) return null;
   const d = new Date(postDateIso);
   if (Number.isNaN(d.getTime())) return null;
   const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
   const entry = CANVA_DESIGNS[key];
-  if (!entry) return null;
-  if (entry.url) return entry.url;
-  return d.getUTCDate() <= 15 ? entry.a : entry.b;
+  if (entry) {
+    return entry.url ? entry.url : d.getUTCDate() <= 15 ? entry.a : entry.b;
+  }
+  const now = new Date();
+  const currentKey = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+  return key === currentKey ? CURRENT_MONTH_CANVA_URL : null;
 }
 
 const dateFormatter = new Intl.DateTimeFormat('en-US', {
