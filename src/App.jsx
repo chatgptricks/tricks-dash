@@ -31,6 +31,7 @@ import {
   Send,
   Settings,
   SlidersHorizontal,
+  TrendingUp,
   X,
   Video,
 } from 'lucide-react';
@@ -1113,6 +1114,14 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
                 aria-label="Insights"
               >
                 <BarChart3 size={15} />
+              </a>
+              <a
+                className="ghost-button refresh-button"
+                href={`${import.meta.env.BASE_URL}tracker.html`}
+                title="Tracker — crecimiento de seguidores por cuenta"
+                aria-label="Tracker"
+              >
+                <TrendingUp size={15} />
               </a>
               {isAdmin ? (
                 <button
