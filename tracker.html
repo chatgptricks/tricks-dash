@@ -106,6 +106,19 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
 .detail-head img{width:46px;height:46px;border-radius:999px;object-fit:cover;background:var(--panel-2)}
 .detail-head h2{margin:0;font-size:17px}
 .detail-head span{color:var(--muted);font-size:11px}
+
+/* historical stats table (Social-Blade-style day-by-day breakdown) */
+table.hist-table{font-size:12px}
+table.hist-table th{text-align:left}
+table.hist-table th:first-child{width:150px}
+table.hist-table td{text-align:left;padding:11px 8px;white-space:nowrap}
+.hist-date{font-weight:700;color:var(--text)}
+.hist-dow{margin-left:6px;padding:1px 6px;border-radius:5px;background:rgba(255,255,255,.06);
+  color:var(--muted);font-size:9px;font-weight:800;text-transform:uppercase}
+.hist-val{font-weight:700;color:var(--text)}
+.hist-pill{display:inline-block;margin-left:7px;padding:1px 6px;border-radius:6px;font-size:10px;font-weight:800}
+.hist-pill.up{background:rgba(53,199,89,.16);color:var(--good)}
+.hist-pill.down{background:rgba(255,107,107,.16);color:#ff6b6b}
 </style>
 </head>
 <body>
@@ -299,6 +312,44 @@ function renderLeaderboard(){
   });
 }
 
+/* ---------------- Historical stats table ---------------- */
+function histPill(curr, prev, isPct){
+  if(curr==null || prev==null) return '';
+  const diff = curr - prev;
+  if(Math.abs(diff) < (isPct?0.005:1)) return '';
+  const cls = diff>0?'up':'down';
+  const text = isPct ? (diff>0?'+':'')+diff.toFixed(2)+'%' : signed(Math.round(diff));
+  return `<span class="hist-pill ${cls}">${text}</span>`;
+}
+
+function renderHistoricalStats(hist){
+  if(!hist.length) return '<div class="empty">No snapshots yet.</div>';
+  // Newest first, capped at the last 15 days of recorded snapshots.
+  const rows = [...hist].slice(-15).reverse();
+  const rateOf = h => (h.avg_likes_that_day!=null && h.followers) ? h.avg_likes_that_day/h.followers*100 : null;
+  return `
+    <div style="overflow-x:auto">
+    <table class="hist-table">
+      <thead><tr><th>Date</th><th>Followers count</th><th>Following count</th><th>Media count</th><th>Engagement rate</th></tr></thead>
+      <tbody>${rows.map((h,i)=>{
+        const prev = rows[i+1]; // chronologically previous day (rows are newest-first)
+        const d = new Date(h.date);
+        const dateLabel = d.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
+        const dow = d.toLocaleDateString(undefined,{weekday:'short'});
+        const rate = rateOf(h), prevRate = prev?rateOf(prev):null;
+        return `<tr>
+          <td><span class="hist-date">${dateLabel}</span><span class="hist-dow">${dow}</span></td>
+          <td><span class="hist-val">${h.followers!=null?fmt(h.followers):'—'}</span>${prev?histPill(h.followers, prev.followers, false):''}</td>
+          <td><span class="hist-val">${h.following_count!=null?fmt(h.following_count):'—'}</span>${prev?histPill(h.following_count, prev.following_count, false):''}</td>
+          <td><span class="hist-val">${h.posts_count!=null?fmt(h.posts_count):'—'}</span>${prev?histPill(h.posts_count, prev.posts_count, false):''}</td>
+          <td><span class="hist-val">${rate!=null?rate.toFixed(2)+'%':'<span class=\"na\">—</span>'}</span>${(prev&&rate!=null)?histPill(rate, prevRate, true):''}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>
+    </div>
+  `;
+}
+
 /* ---------------- Account detail ---------------- */
 async function renderDetail(handle){
   destroyCharts();
@@ -350,6 +401,12 @@ async function renderDetail(handle){
       <h2>Engagement trend <span class="tag">weekly avg likes</span></h2>
       <p class="sub">From the post history already on hand -- this goes back as far as we've backfilled the account's posts, independent of the follower-snapshot start date above.</p>
       <div class="chartbox"><canvas id="cEngagement"></canvas></div>
+    </section>
+
+    <section>
+      <h2>Historical Stats</h2>
+      <p class="sub">Last ${Math.min(hist.length,15)} day${Math.min(hist.length,15)===1?'':'s'} of recorded snapshots, newest first. Engagement rate is that day's average likes divided by that day's follower count -- shown only for days with a post.</p>
+      ${renderHistoricalStats(hist)}
     </section>
   `;
   $('#backBtn').onclick = () => { writeAcc(''); render(); };
