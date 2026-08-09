@@ -928,19 +928,19 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
     // nothing).
     //
     // Fix has two parts:
-    // 1) A short cooldown after any hide/show transition so a scrollTop
-    //    clamp caused by the resulting reflow can't immediately trigger the
-    //    opposite transition.
+    // 1) A short cooldown that debounces re-HIDING only, so a scrollTop
+    //    clamp caused by the reflow after a hide can't immediately re-hide
+    //    in a tight loop. Showing the filter bar back is NEVER gated by
+    //    this lock -- an earlier version blocked both directions, which
+    //    meant a quick down-then-up flick could have its up-scroll eaten by
+    //    the lock and leave the user stuck with the filter bar hidden and
+    //    no way to bring it back. Being stuck hidden is a much worse bug
+    //    than an occasional extra re-hide, so "show" always wins instantly.
     // 2) After hiding, verify in the next frame whether the container is
     //    still actually scrollable. If hiding removed the ability to
     //    scroll (which is exactly what happens with a short list), revert
     //    immediately instead of guessing a magic-number height threshold
     //    that would vary with list length, avatar/caption wrapping, etc.
-    if (now < scrollHideLockRef.current) {
-      lastScrollTopRef.current = top;
-      return;
-    }
-
     const delta = top - lastScrollTopRef.current;
     const wasHidden = filtersHidden;
     let nextHidden = wasHidden;
@@ -953,19 +953,25 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
       nextHidden = false;
     }
 
-    if (nextHidden !== wasHidden) {
-      setFiltersHidden(nextHidden);
-      scrollHideLockRef.current = now + 400;
-      if (nextHidden) {
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            if (el.scrollHeight <= el.clientHeight + 1) {
-              setFiltersHidden(false);
-              scrollHideLockRef.current = Date.now() + 600;
-            }
-          });
-        });
+    if (nextHidden === false && wasHidden === true) {
+      // Always allow showing the filter bar back, instantly, no lock check.
+      setFiltersHidden(false);
+      scrollHideLockRef.current = 0;
+    } else if (nextHidden === true && wasHidden === false) {
+      if (now < scrollHideLockRef.current) {
+        lastScrollTopRef.current = top;
+        return;
       }
+      setFiltersHidden(true);
+      scrollHideLockRef.current = now + 400;
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (el.scrollHeight <= el.clientHeight + 1) {
+            setFiltersHidden(false);
+            scrollHideLockRef.current = 0;
+          }
+        });
+      });
     }
     lastScrollTopRef.current = top;
   }, [filtersHidden]);
