@@ -914,27 +914,28 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
   const handleResultsScroll = useCallback((event) => {
     const el = event.currentTarget;
     const top = el.scrollTop;
-    const maxScroll = el.scrollHeight - el.clientHeight;
     const now = Date.now();
 
     // Root cause of the "1 row of results" flicker: .results-scroll's height
     // is tied to the topbar's height via a CSS grid `1fr` track (see
     // .gallery in styles.css). Hiding the filter bar grows the results
-    // container, which for a short list eliminates scrollability entirely --
-    // the browser then clamps scrollTop back down, that clamp fires its own
-    // scroll event, which re-shows the filters, which shrinks the container
-    // again, which makes it scrollable again... an oscillation that has
-    // nothing to do with scroll-delta noise (two earlier threshold-based
-    // fixes targeted the wrong cause and did nothing).
+    // container, which for a short list can eliminate scrollability
+    // entirely -- the browser then clamps scrollTop back down, that clamp
+    // fires its own scroll event, which re-shows the filters, which shrinks
+    // the container again, which makes it scrollable again... an
+    // oscillation that has nothing to do with scroll-delta noise (two
+    // earlier threshold-based fixes targeted the wrong cause and did
+    // nothing).
     //
     // Fix has two parts:
-    // 1) Never hide the filter bar unless there's comfortably more room to
-    //    scroll than the space hiding it would free up -- so a short list
-    //    can't be pushed past the "no longer scrollable" line by our own
-    //    action.
-    // 2) A short cooldown after any hide/show transition so that whatever
-    //    scrollTop-clamping the browser does as a result of the resulting
-    //    layout change can't immediately trigger the opposite transition.
+    // 1) A short cooldown after any hide/show transition so a scrollTop
+    //    clamp caused by the resulting reflow can't immediately trigger the
+    //    opposite transition.
+    // 2) After hiding, verify in the next frame whether the container is
+    //    still actually scrollable. If hiding removed the ability to
+    //    scroll (which is exactly what happens with a short list), revert
+    //    immediately instead of guessing a magic-number height threshold
+    //    that would vary with list length, avatar/caption wrapping, etc.
     if (now < scrollHideLockRef.current) {
       lastScrollTopRef.current = top;
       return;
@@ -946,7 +947,7 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
 
     if (top < 40) {
       nextHidden = false;
-    } else if (delta > 8 && maxScroll > 160) {
+    } else if (delta > 8) {
       nextHidden = true;
     } else if (delta < -8) {
       nextHidden = false;
@@ -955,6 +956,16 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
     if (nextHidden !== wasHidden) {
       setFiltersHidden(nextHidden);
       scrollHideLockRef.current = now + 400;
+      if (nextHidden) {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            if (el.scrollHeight <= el.clientHeight + 1) {
+              setFiltersHidden(false);
+              scrollHideLockRef.current = Date.now() + 600;
+            }
+          });
+        });
+      }
     }
     lastScrollTopRef.current = top;
   }, [filtersHidden]);
