@@ -2770,8 +2770,16 @@ body {
   max-height: 420px;
   opacity: 1;
   transform: translateY(0);
-  transition: max-height 240ms ease, opacity 180ms ease, transform 240ms ease,
-    padding 240ms ease, margin 240ms ease, border-width 240ms ease;
+  /* Softer collapse: slower, and eased with a gentle cubic-bezier instead
+     of plain `ease` so the motion starts and settles smoothly rather than
+     snapping shut. Opacity trails slightly behind the height so the strip
+     fades as it collapses instead of vanishing first. */
+  transition: max-height 420ms cubic-bezier(0.22, 0.61, 0.36, 1),
+    opacity 320ms cubic-bezier(0.22, 0.61, 0.36, 1),
+    transform 420ms cubic-bezier(0.22, 0.61, 0.36, 1),
+    padding 420ms cubic-bezier(0.22, 0.61, 0.36, 1),
+    margin 420ms cubic-bezier(0.22, 0.61, 0.36, 1),
+    border-width 420ms cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
 .filter-strip-hidden {
@@ -3181,22 +3189,30 @@ body {
 /* Title bar shrinks in lockstep with the filter strip's auto-hide, so
    scrolling reclaims vertical space from both at once instead of leaving a
    now-oversized header sitting above a hidden filter row. */
+/* Softer auto-hide motion: everything that collapses when the topbar goes
+   compact shares one slower duration and a gentle cubic-bezier, so the bar
+   eases shut and eases back rather than snapping. */
 .topbar {
-  transition: min-height 220ms ease, padding 220ms ease;
+  transition: min-height 420ms cubic-bezier(0.22, 0.61, 0.36, 1),
+    padding 420ms cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
 .brand-title {
   overflow: hidden;
-  transition: max-height 220ms ease, opacity 160ms ease, margin 220ms ease;
+  transition: max-height 420ms cubic-bezier(0.22, 0.61, 0.36, 1),
+    opacity 320ms cubic-bezier(0.22, 0.61, 0.36, 1),
+    margin 420ms cubic-bezier(0.22, 0.61, 0.36, 1);
   max-height: 60px;
 }
 
 .eyebrow {
-  transition: max-height 200ms ease, opacity 160ms ease, margin-bottom 200ms ease;
+  transition: max-height 400ms cubic-bezier(0.22, 0.61, 0.36, 1),
+    opacity 300ms cubic-bezier(0.22, 0.61, 0.36, 1),
+    margin-bottom 400ms cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
 .brand h1 {
-  transition: font-size 220ms ease;
+  transition: font-size 420ms cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
 .topbar-compact {
@@ -3238,9 +3254,22 @@ body {
 
 /* Per explicit request: while scrolled/compact, keep only the (shrunk)
    title and (shrunk) search bar visible -- hide the metrics/refresh/predict
-   cluster entirely rather than just shrinking it. */
+   cluster entirely rather than just shrinking it.
+
+   `display` isn't normally animatable, so this used to pop out instantly
+   while everything around it eased. transition-behavior: allow-discrete
+   keeps the element displayed for the duration of the fade and only then
+   flips to display:none, so it fades out with the rest of the bar. In
+   browsers without allow-discrete it simply behaves as it did before. */
+.topbar-metrics {
+  opacity: 1;
+  transition: opacity 320ms cubic-bezier(0.22, 0.61, 0.36, 1),
+    display 320ms allow-discrete;
+}
+
 .topbar-compact .topbar-metrics {
   display: none;
+  opacity: 0;
 }
 
 /* Filter bar polish pass: a touch more depth/separation between the strip
@@ -3298,7 +3327,10 @@ body {
   max-height: 46px;
   opacity: 1;
   transform: translateY(0);
-  transition: max-height 220ms ease, opacity 160ms ease, transform 220ms ease, margin 220ms ease;
+  transition: max-height 420ms cubic-bezier(0.22, 0.61, 0.36, 1),
+    opacity 320ms cubic-bezier(0.22, 0.61, 0.36, 1),
+    transform 420ms cubic-bezier(0.22, 0.61, 0.36, 1),
+    margin 420ms cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
 .group-tabs-hidden {
