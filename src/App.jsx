@@ -1,4 +1,4 @@
-import { memo, startTransition, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { memo, startTransition, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   ArrowLeft,
@@ -183,6 +183,10 @@ const TYPE_LABELS = {
   Image: 'Image',
 };
 const POSTS_PER_BATCH = 60;
+// Must match the filter-bar collapse duration in styles.css (.filter-strip,
+// .group-tabs, .topbar). Used to know when the animation has settled so the
+// layout measurement can run without cancelling it.
+const FILTER_BAR_ANIM_MS = 420;
 const IG_HANDLE = 'chatgptricks';
 const API_BASE = (import.meta.env.VITE_API_BASE || 'https://cortex-api-db2e.onrender.com').replace(/\/$/, '');
 const PREDICT_URL = 'https://chatgptricks.github.io/cortex/';
@@ -864,6 +868,13 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
   // "Can this list sustain a hidden filter bar at the current viewport?"
   // Recomputed on layout changes only -- never during a scroll event.
   const canHideFiltersRef = useRef(true);
+  // Mirrors filtersHidden so the measurement callback can stay identity-stable
+  // (depending on the state would make it re-run on every toggle).
+  const filtersHiddenRef = useRef(false);
+  // True while the show/hide animation is in flight; measuring during that
+  // window would cancel the animation (see recomputeCanHideFilters).
+  const filtersAnimatingRef = useRef(false);
+  const filtersAnimationTimerRef = useRef(null);
   const [shareCopied, setShareCopied] = useState(false);
 
   // The URL is already up to date by the time this runs (the effect below keeps
@@ -940,19 +951,30 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
   // handler only reads it. If a list can't sustain hiding, the filter bar
   // simply never hides, so there is no toggle, no revert and nothing to
   // flash, at any viewport size.
+  // CRITICAL: this measurement must never run while the filter bar is
+  // mid-transition. Applying `transition: none` to an element with an
+  // in-flight transition cancels it and snaps it straight to its end value.
+  // An earlier version ran this from a useLayoutEffect keyed on
+  // filtersHidden, which fires synchronously right after React adds the
+  // collapse class and before the first frame is painted -- so it killed
+  // every single collapse animation at birth. That, not the easing or the
+  // duration, is why the bar appeared to teleport no matter what timings
+  // the CSS asked for. The ResizeObserver below made it worse: the results
+  // pane resizes on every frame of the animation, so it re-fired the
+  // measurement continuously.
   const recomputeCanHideFilters = useCallback(() => {
+    if (filtersAnimatingRef.current) return;
     const scroller = resultsScrollRef.current;
     const pane = leftPaneRef.current;
     if (!scroller || !pane) return;
 
-    // Kill transitions on the whole subtree while measuring, otherwise
-    // offsetHeight returns an interpolated mid-animation value. The class
-    // is added and removed within this one synchronous block, so nothing
-    // is ever painted in the measuring state.
+    // Transitions are killed subtree-wide only for this one synchronous
+    // block (nothing is painted in between), so offsetHeight reports true
+    // collapsed heights rather than interpolated ones.
     pane.classList.add('measuring-layout');
 
     let freed = 0;
-    if (!filtersHidden) {
+    if (!filtersHiddenRef.current) {
       const nodes = [
         { el: topbarRef.current, cls: 'topbar-compact' },
         { el: groupTabsRef.current, cls: 'group-tabs-hidden' },
@@ -972,9 +994,12 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
     canHideFiltersRef.current = scroller.scrollHeight > clientWhenHidden + 24;
 
     pane.classList.remove('measuring-layout');
-  }, [filtersHidden]);
+  }, []);
 
-  useLayoutEffect(() => {
+  // Deliberately a plain effect (runs after paint) with no dependency on
+  // filtersHidden, so toggling the bar never schedules a measurement in the
+  // same commit that starts its animation.
+  useEffect(() => {
     recomputeCanHideFilters();
     const scroller = resultsScrollRef.current;
     if (!scroller) return undefined;
@@ -991,6 +1016,22 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
     };
   }, [recomputeCanHideFilters, visibleCount, loading]);
 
+  // Marks the animation window so no measurement can interrupt it, then
+  // re-measures once the bar has settled into its new size.
+  const setFiltersHiddenAnimated = useCallback((next) => {
+    if (filtersHiddenRef.current === next) return;
+    filtersHiddenRef.current = next;
+    filtersAnimatingRef.current = true;
+    setFiltersHidden(next);
+    clearTimeout(filtersAnimationTimerRef.current);
+    filtersAnimationTimerRef.current = setTimeout(() => {
+      filtersAnimatingRef.current = false;
+      recomputeCanHideFilters();
+    }, FILTER_BAR_ANIM_MS + 60);
+  }, [recomputeCanHideFilters]);
+
+  useEffect(() => () => clearTimeout(filtersAnimationTimerRef.current), []);
+
   const handleResultsScroll = useCallback((event) => {
     const top = event.currentTarget.scrollTop;
     const delta = top - lastScrollTopRef.current;
@@ -1002,11 +1043,11 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
     // upward delta can no longer re-show the bar mid-list, so a hide can't
     // be undone by the very scroll events its own reflow produces.
     if (top < 40) {
-      setFiltersHidden(false);
+      setFiltersHiddenAnimated(false);
     } else if (delta > 8 && canHideFiltersRef.current) {
-      setFiltersHidden(true);
+      setFiltersHiddenAnimated(true);
     }
-  }, []);
+  }, [setFiltersHiddenAnimated]);
 
   // Switching tabs changes which accounts are in scope, but the effect that
   // re-selects them runs *after* this render -- so for one pass the selection
