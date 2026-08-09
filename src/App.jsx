@@ -913,20 +913,18 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
   const handleResultsScroll = useCallback((event) => {
     const el = event.currentTarget;
     const top = el.scrollTop;
-    // A single row of results barely (or never) exceeds the container's own
-    // height, so there's nothing to actually scroll -- yet trackpad rubber-
-    // banding still fires scroll events with a few px of bounce, which the
-    // delta logic below misread as a real scroll gesture and flickered the
-    // filters open/closed on every bounce. With so little real scroll range
-    // available, just keep the filters visible and skip the hide logic.
     const maxScroll = el.scrollHeight - el.clientHeight;
-    if (maxScroll < 80) {
-      setFiltersHidden(false);
-      lastScrollTopRef.current = top;
-      return;
-    }
+    // With only a row or two of results, the whole scrollable range can
+    // still be 100-300px (one tall cover image is enough) -- not zero, but
+    // short enough that trackpad inertia overshoots and corrects within
+    // that same short range, flipping the per-event delta sign rapidly and
+    // flickering the filter bar open/closed. Scale the "stay visible near
+    // the top" zone with the actual scroll range (capped at 150px) so a
+    // short list gets a proportionally large dead zone; any list with more
+    // than ~300px of scroll range falls back to the original fixed 40px.
+    const nearTopZone = Math.min(150, Math.max(40, maxScroll * 0.5));
     const delta = top - lastScrollTopRef.current;
-    if (top < 40) {
+    if (top < nearTopZone) {
       setFiltersHidden(false);
     } else if (delta > 8) {
       setFiltersHidden(true);
