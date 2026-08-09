@@ -856,6 +856,7 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(Boolean(initialUrl.post));
   const [filtersHidden, setFiltersHidden] = useState(false);
   const lastScrollTopRef = useRef(0);
+  const scrollHideLockRef = useRef(0);
   const [shareCopied, setShareCopied] = useState(false);
 
   // The URL is already up to date by the time this runs (the effect below keeps
@@ -914,25 +915,49 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
     const el = event.currentTarget;
     const top = el.scrollTop;
     const maxScroll = el.scrollHeight - el.clientHeight;
-    // With only a row or two of results, the whole scrollable range can
-    // still be 100-300px (one tall cover image is enough) -- not zero, but
-    // short enough that trackpad inertia overshoots and corrects within
-    // that same short range, flipping the per-event delta sign rapidly and
-    // flickering the filter bar open/closed. Scale the "stay visible near
-    // the top" zone with the actual scroll range (capped at 150px) so a
-    // short list gets a proportionally large dead zone; any list with more
-    // than ~300px of scroll range falls back to the original fixed 40px.
-    const nearTopZone = Math.min(150, Math.max(40, maxScroll * 0.5));
+    const now = Date.now();
+
+    // Root cause of the "1 row of results" flicker: .results-scroll's height
+    // is tied to the topbar's height via a CSS grid `1fr` track (see
+    // .gallery in styles.css). Hiding the filter bar grows the results
+    // container, which for a short list eliminates scrollability entirely --
+    // the browser then clamps scrollTop back down, that clamp fires its own
+    // scroll event, which re-shows the filters, which shrinks the container
+    // again, which makes it scrollable again... an oscillation that has
+    // nothing to do with scroll-delta noise (two earlier threshold-based
+    // fixes targeted the wrong cause and did nothing).
+    //
+    // Fix has two parts:
+    // 1) Never hide the filter bar unless there's comfortably more room to
+    //    scroll than the space hiding it would free up -- so a short list
+    //    can't be pushed past the "no longer scrollable" line by our own
+    //    action.
+    // 2) A short cooldown after any hide/show transition so that whatever
+    //    scrollTop-clamping the browser does as a result of the resulting
+    //    layout change can't immediately trigger the opposite transition.
+    if (now < scrollHideLockRef.current) {
+      lastScrollTopRef.current = top;
+      return;
+    }
+
     const delta = top - lastScrollTopRef.current;
-    if (top < nearTopZone) {
-      setFiltersHidden(false);
-    } else if (delta > 8) {
-      setFiltersHidden(true);
+    const wasHidden = filtersHidden;
+    let nextHidden = wasHidden;
+
+    if (top < 40) {
+      nextHidden = false;
+    } else if (delta > 8 && maxScroll > 160) {
+      nextHidden = true;
     } else if (delta < -8) {
-      setFiltersHidden(false);
+      nextHidden = false;
+    }
+
+    if (nextHidden !== wasHidden) {
+      setFiltersHidden(nextHidden);
+      scrollHideLockRef.current = now + 400;
     }
     lastScrollTopRef.current = top;
-  }, []);
+  }, [filtersHidden]);
 
   // Switching tabs changes which accounts are in scope, but the effect that
   // re-selects them runs *after* this render -- so for one pass the selection
