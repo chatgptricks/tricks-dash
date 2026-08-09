@@ -856,7 +856,9 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(Boolean(initialUrl.post));
   const [filtersHidden, setFiltersHidden] = useState(false);
   const lastScrollTopRef = useRef(0);
-  const scrollHideLockRef = useRef(false); // true once we've learned hiding breaks scrollability for the current list
+  const topbarRef = useRef(null);
+  const groupTabsRef = useRef(null);
+  const filterStripRef = useRef(null);
   const [shareCopied, setShareCopied] = useState(false);
 
   // The URL is already up to date by the time this runs (the effect below keeps
@@ -911,6 +913,42 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
     isSidebarOpen, ranges.likesMin, ranges.commentsMin, showSettings,
   ]);
 
+  // Measures, with zero visual side effect, exactly how much vertical space
+  // hiding the filter bar would free up right now. Toggles the real
+  // "hidden" classes on the real elements and reads offsetHeight, but does
+  // it all synchronously (no fetch/await in between) so the browser never
+  // gets a chance to paint the intermediate state -- and disables each
+  // element's CSS transition first so the measurement reflects the true
+  // end-of-transition collapsed height, not an interpolated in-progress
+  // value. This replaces an earlier "hide it, then check a frame later and
+  // revert if that broke scrollability" approach, which -- despite looking
+  // fine in scripted/screenshot testing -- caused a real, visible flash on
+  // every affected scroll in an actual full-size window, because the
+  // browser *does* paint the briefly-hidden state before the revert lands.
+  // Measuring first means we simply never hide when it isn't safe, so
+  // there is nothing to flash.
+  const measureFreedHeight = useCallback(() => {
+    const nodes = [
+      { el: topbarRef.current, cls: 'topbar-compact' },
+      { el: groupTabsRef.current, cls: 'group-tabs-hidden' },
+      { el: filterStripRef.current, cls: 'filter-strip-hidden' },
+    ].filter((n) => n.el);
+
+    nodes.forEach(({ el }) => { el.style.transition = 'none'; });
+
+    let freed = 0;
+    nodes.forEach(({ el, cls }) => {
+      const before = el.offsetHeight;
+      el.classList.add(cls);
+      const after = el.offsetHeight;
+      el.classList.remove(cls);
+      freed += before - after;
+    });
+
+    nodes.forEach(({ el }) => { el.style.transition = ''; });
+    return freed;
+  }, []);
+
   const handleResultsScroll = useCallback((event) => {
     const el = event.currentTarget;
     const top = el.scrollTop;
@@ -923,44 +961,33 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
     // fires its own scroll event, which re-shows the filters, which shrinks
     // the container again, which makes it scrollable again, so it tries to
     // hide again... a loop that has nothing to do with scroll-delta noise.
-    //
-    // No timers or locks here on purpose -- an earlier version used a
-    // time-based cooldown and it kept creating new races (blocking a
-    // genuine up-scroll and leaving the bar stuck hidden, or clearing the
-    // cooldown too early and flickering every animation frame). Instead:
-    // showing the filter bar is ALWAYS immediate and unconditional, and
-    // once we've actually observed that hiding breaks scrollability for
-    // the current list, we simply remember that (scrollHideBlockedRef) and
-    // stop attempting to hide again until the user scrolls back near the
-    // top, which is the natural point a fresh scroll "session" starts.
+    const maxScroll = el.scrollHeight - el.clientHeight;
     const delta = top - lastScrollTopRef.current;
     const wasHidden = filtersHidden;
     let nextHidden = wasHidden;
 
     if (top < 40) {
       nextHidden = false;
-      scrollHideLockRef.current = false;
-    } else if (delta > 8 && !scrollHideLockRef.current) {
+    } else if (delta > 8) {
       nextHidden = true;
     } else if (delta < -8) {
       nextHidden = false;
     }
 
-    if (nextHidden !== wasHidden) {
-      setFiltersHidden(nextHidden);
-      if (nextHidden) {
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            if (el.scrollHeight <= el.clientHeight + 1) {
-              setFiltersHidden(false);
-              scrollHideLockRef.current = true;
-            }
-          });
-        });
+    if (nextHidden === true && wasHidden === false) {
+      // Only actually hide if there's real room left to scroll afterward --
+      // measured for real, right now, not guessed. Showing is always
+      // allowed instantly (below); this check only ever blocks a hide, so
+      // it can never leave the user stuck.
+      const freed = measureFreedHeight();
+      if (maxScroll - freed > 12) {
+        setFiltersHidden(true);
       }
+    } else if (nextHidden !== wasHidden) {
+      setFiltersHidden(nextHidden);
     }
     lastScrollTopRef.current = top;
-  }, [filtersHidden]);
+  }, [filtersHidden, measureFreedHeight]);
 
   // Switching tabs changes which accounts are in scope, but the effect that
   // re-selects them runs *after* this render -- so for one pass the selection
@@ -1116,7 +1143,7 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
       <div className="backdrop" />
       <main className="app-layout">
         <section className="left-pane">
-          <header className={filtersHidden ? 'topbar topbar-compact' : 'topbar'}>
+          <header ref={topbarRef} className={filtersHidden ? 'topbar topbar-compact' : 'topbar'}>
             <div className="brand">
               <div className="brand-title">
                 <p className="eyebrow">Dash explorer</p>
@@ -1210,6 +1237,7 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
 
           {!loading && !loadError ? <>
           <div
+            ref={groupTabsRef}
             className={filtersHidden ? 'group-tabs group-tabs-hidden' : 'group-tabs'}
             role="tablist"
             aria-label="Account group"
@@ -1230,6 +1258,7 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
           </div>
 
           <section
+            ref={filterStripRef}
             className={filtersHidden ? 'filter-strip filter-strip-hidden' : 'filter-strip'}
             aria-label="Dashboard filters"
             aria-hidden={filtersHidden}
