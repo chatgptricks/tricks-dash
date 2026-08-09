@@ -1,5 +1,10 @@
 :root {
   color-scheme: dark;
+  /* Lets `height: auto` participate in transitions, so the auto-hiding
+     filter bar can animate between its real height and 0 instead of
+     faking it with a max-height guess (which made the collapse look
+     instant -- see the .filter-strip comment). */
+  interpolate-size: allow-keywords;
   --bg: #000000;
   --bg-soft: #0b0b0b;
   --panel: #0d0d0d;
@@ -2765,28 +2770,28 @@ body {
 
 /* Auto-hiding filter strip: collapses while scrolling down through the
    gallery results, reappears when scrolling back up or near the top. */
+/* This used to animate max-height from 420px to 0. The strip is only about
+   150px tall, so ~two thirds of the animation was spent shrinking invisible
+   empty space and the real collapse happened in the last blink -- which is
+   exactly why it read as "just disappears" no matter how long the duration
+   was. Animating `height` between its real auto value and 0 (enabled by
+   interpolate-size below) means every frame of the transition is visible
+   motion, so it actually flows. */
 .filter-strip {
   overflow: hidden;
-  max-height: 420px;
+  height: auto;
   opacity: 1;
-  transform: translateY(0);
-  /* Softer collapse: slower, and eased with a gentle cubic-bezier instead
-     of plain `ease` so the motion starts and settles smoothly rather than
-     snapping shut. Opacity trails slightly behind the height so the strip
-     fades as it collapses instead of vanishing first. */
-  transition: max-height 420ms cubic-bezier(0.22, 0.61, 0.36, 1),
-    opacity 320ms cubic-bezier(0.22, 0.61, 0.36, 1),
-    transform 420ms cubic-bezier(0.22, 0.61, 0.36, 1),
-    padding 420ms cubic-bezier(0.22, 0.61, 0.36, 1),
-    margin 420ms cubic-bezier(0.22, 0.61, 0.36, 1),
-    border-width 420ms cubic-bezier(0.22, 0.61, 0.36, 1);
+  transition: height 420ms cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 420ms cubic-bezier(0.4, 0, 0.2, 1),
+    padding 420ms cubic-bezier(0.4, 0, 0.2, 1),
+    margin 420ms cubic-bezier(0.4, 0, 0.2, 1),
+    border-width 420ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .filter-strip-hidden {
-  max-height: 0;
+  height: 0;
   min-height: 0;
   opacity: 0;
-  transform: translateY(-8px);
   padding-top: 0;
   padding-bottom: 0;
   margin-top: 0;
@@ -3199,20 +3204,22 @@ body {
 
 .brand-title {
   overflow: hidden;
-  transition: max-height 420ms cubic-bezier(0.22, 0.61, 0.36, 1),
-    opacity 320ms cubic-bezier(0.22, 0.61, 0.36, 1),
-    margin 420ms cubic-bezier(0.22, 0.61, 0.36, 1);
-  max-height: 60px;
+  height: auto;
+  transition: height 420ms cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 420ms cubic-bezier(0.4, 0, 0.2, 1),
+    margin 420ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .eyebrow {
-  transition: max-height 400ms cubic-bezier(0.22, 0.61, 0.36, 1),
-    opacity 300ms cubic-bezier(0.22, 0.61, 0.36, 1),
-    margin-bottom 400ms cubic-bezier(0.22, 0.61, 0.36, 1);
+  overflow: hidden;
+  height: auto;
+  transition: height 420ms cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 420ms cubic-bezier(0.4, 0, 0.2, 1),
+    margin-bottom 420ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .brand h1 {
-  transition: font-size 420ms cubic-bezier(0.22, 0.61, 0.36, 1);
+  transition: font-size 420ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .topbar-compact {
@@ -3222,11 +3229,11 @@ body {
 }
 
 .topbar-compact .brand-title {
-  max-height: 26px;
+  height: auto;
 }
 
 .topbar-compact .eyebrow {
-  max-height: 0;
+  height: 0;
   opacity: 0;
   margin-bottom: 0;
 }
@@ -3239,8 +3246,15 @@ body {
   min-height: 34px;
 }
 
+.topbar-search .filter-search-copy > span:first-child {
+  opacity: 1;
+  transition: opacity 420ms cubic-bezier(0.4, 0, 0.2, 1),
+    display 420ms allow-discrete;
+}
+
 .topbar-compact .topbar-search .filter-search-copy > span:first-child {
   display: none;
+  opacity: 0;
 }
 
 .topbar-compact .metric {
@@ -3263,8 +3277,8 @@ body {
    browsers without allow-discrete it simply behaves as it did before. */
 .topbar-metrics {
   opacity: 1;
-  transition: opacity 320ms cubic-bezier(0.22, 0.61, 0.36, 1),
-    display 320ms allow-discrete;
+  transition: opacity 420ms cubic-bezier(0.4, 0, 0.2, 1),
+    display 420ms allow-discrete;
 }
 
 .topbar-compact .topbar-metrics {
@@ -3324,20 +3338,17 @@ body {
   gap: 6px;
   margin: 0 0 10px;
   overflow: hidden;
-  max-height: 46px;
+  height: auto;
   opacity: 1;
-  transform: translateY(0);
-  transition: max-height 420ms cubic-bezier(0.22, 0.61, 0.36, 1),
-    opacity 320ms cubic-bezier(0.22, 0.61, 0.36, 1),
-    transform 420ms cubic-bezier(0.22, 0.61, 0.36, 1),
-    margin 420ms cubic-bezier(0.22, 0.61, 0.36, 1);
+  transition: height 420ms cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 420ms cubic-bezier(0.4, 0, 0.2, 1),
+    margin 420ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .group-tabs-hidden {
-  max-height: 0;
+  height: 0;
   opacity: 0;
   margin: 0;
-  transform: translateY(-8px);
   pointer-events: none;
 }
 
