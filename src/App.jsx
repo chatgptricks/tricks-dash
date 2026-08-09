@@ -856,7 +856,7 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(Boolean(initialUrl.post));
   const [filtersHidden, setFiltersHidden] = useState(false);
   const lastScrollTopRef = useRef(0);
-  const scrollHideLockRef = useRef(0);
+  const scrollHideLockRef = useRef(false); // true once we've learned hiding breaks scrollability for the current list
   const [shareCopied, setShareCopied] = useState(false);
 
   // The URL is already up to date by the time this runs (the effect below keeps
@@ -914,7 +914,6 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
   const handleResultsScroll = useCallback((event) => {
     const el = event.currentTarget;
     const top = el.scrollTop;
-    const now = Date.now();
 
     // Root cause of the "1 row of results" flicker: .results-scroll's height
     // is tied to the topbar's height via a CSS grid `1fr` track (see
@@ -922,56 +921,43 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
     // container, which for a short list can eliminate scrollability
     // entirely -- the browser then clamps scrollTop back down, that clamp
     // fires its own scroll event, which re-shows the filters, which shrinks
-    // the container again, which makes it scrollable again... an
-    // oscillation that has nothing to do with scroll-delta noise (two
-    // earlier threshold-based fixes targeted the wrong cause and did
-    // nothing).
+    // the container again, which makes it scrollable again, so it tries to
+    // hide again... a loop that has nothing to do with scroll-delta noise.
     //
-    // Fix has two parts:
-    // 1) A short cooldown that debounces re-HIDING only, so a scrollTop
-    //    clamp caused by the reflow after a hide can't immediately re-hide
-    //    in a tight loop. Showing the filter bar back is NEVER gated by
-    //    this lock -- an earlier version blocked both directions, which
-    //    meant a quick down-then-up flick could have its up-scroll eaten by
-    //    the lock and leave the user stuck with the filter bar hidden and
-    //    no way to bring it back. Being stuck hidden is a much worse bug
-    //    than an occasional extra re-hide, so "show" always wins instantly.
-    // 2) After hiding, verify in the next frame whether the container is
-    //    still actually scrollable. If hiding removed the ability to
-    //    scroll (which is exactly what happens with a short list), revert
-    //    immediately instead of guessing a magic-number height threshold
-    //    that would vary with list length, avatar/caption wrapping, etc.
+    // No timers or locks here on purpose -- an earlier version used a
+    // time-based cooldown and it kept creating new races (blocking a
+    // genuine up-scroll and leaving the bar stuck hidden, or clearing the
+    // cooldown too early and flickering every animation frame). Instead:
+    // showing the filter bar is ALWAYS immediate and unconditional, and
+    // once we've actually observed that hiding breaks scrollability for
+    // the current list, we simply remember that (scrollHideBlockedRef) and
+    // stop attempting to hide again until the user scrolls back near the
+    // top, which is the natural point a fresh scroll "session" starts.
     const delta = top - lastScrollTopRef.current;
     const wasHidden = filtersHidden;
     let nextHidden = wasHidden;
 
     if (top < 40) {
       nextHidden = false;
-    } else if (delta > 8) {
+      scrollHideLockRef.current = false;
+    } else if (delta > 8 && !scrollHideLockRef.current) {
       nextHidden = true;
     } else if (delta < -8) {
       nextHidden = false;
     }
 
-    if (nextHidden === false && wasHidden === true) {
-      // Always allow showing the filter bar back, instantly, no lock check.
-      setFiltersHidden(false);
-      scrollHideLockRef.current = 0;
-    } else if (nextHidden === true && wasHidden === false) {
-      if (now < scrollHideLockRef.current) {
-        lastScrollTopRef.current = top;
-        return;
-      }
-      setFiltersHidden(true);
-      scrollHideLockRef.current = now + 400;
-      requestAnimationFrame(() => {
+    if (nextHidden !== wasHidden) {
+      setFiltersHidden(nextHidden);
+      if (nextHidden) {
         requestAnimationFrame(() => {
-          if (el.scrollHeight <= el.clientHeight + 1) {
-            setFiltersHidden(false);
-            scrollHideLockRef.current = 0;
-          }
+          requestAnimationFrame(() => {
+            if (el.scrollHeight <= el.clientHeight + 1) {
+              setFiltersHidden(false);
+              scrollHideLockRef.current = true;
+            }
+          });
         });
-      });
+      }
     }
     lastScrollTopRef.current = top;
   }, [filtersHidden]);
