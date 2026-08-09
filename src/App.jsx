@@ -911,7 +911,20 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
   ]);
 
   const handleResultsScroll = useCallback((event) => {
-    const top = event.currentTarget.scrollTop;
+    const el = event.currentTarget;
+    const top = el.scrollTop;
+    // A single row of results barely (or never) exceeds the container's own
+    // height, so there's nothing to actually scroll -- yet trackpad rubber-
+    // banding still fires scroll events with a few px of bounce, which the
+    // delta logic below misread as a real scroll gesture and flickered the
+    // filters open/closed on every bounce. With so little real scroll range
+    // available, just keep the filters visible and skip the hide logic.
+    const maxScroll = el.scrollHeight - el.clientHeight;
+    if (maxScroll < 80) {
+      setFiltersHidden(false);
+      lastScrollTopRef.current = top;
+      return;
+    }
     const delta = top - lastScrollTopRef.current;
     if (top < 40) {
       setFiltersHidden(false);
