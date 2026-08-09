@@ -996,9 +996,12 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
     const delta = top - lastScrollTopRef.current;
     lastScrollTopRef.current = top;
 
-    // Showing is always allowed and always instant, so this can never
-    // leave the user stuck with no way to get the filters back.
-    if (top < 40 || delta < -8) {
+    // The filter bar comes back only once the user has scrolled all the way
+    // back to the top -- not on any incremental up-scroll. Besides being the
+    // requested behaviour, it removes the last oscillation source: an
+    // upward delta can no longer re-show the bar mid-list, so a hide can't
+    // be undone by the very scroll events its own reflow produces.
+    if (top < 40) {
       setFiltersHidden(false);
     } else if (delta > 8 && canHideFiltersRef.current) {
       setFiltersHidden(true);
