@@ -1,4 +1,4 @@
-import { memo, startTransition, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, startTransition, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   ArrowLeft,
@@ -859,6 +859,11 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
   const topbarRef = useRef(null);
   const groupTabsRef = useRef(null);
   const filterStripRef = useRef(null);
+  const leftPaneRef = useRef(null);
+  const resultsScrollRef = useRef(null);
+  // "Can this list sustain a hidden filter bar at the current viewport?"
+  // Recomputed on layout changes only -- never during a scroll event.
+  const canHideFiltersRef = useRef(true);
   const [shareCopied, setShareCopied] = useState(false);
 
   // The URL is already up to date by the time this runs (the effect below keeps
@@ -913,81 +918,92 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
     isSidebarOpen, ranges.likesMin, ranges.commentsMin, showSettings,
   ]);
 
-  // Measures, with zero visual side effect, exactly how much vertical space
-  // hiding the filter bar would free up right now. Toggles the real
-  // "hidden" classes on the real elements and reads offsetHeight, but does
-  // it all synchronously (no fetch/await in between) so the browser never
-  // gets a chance to paint the intermediate state -- and disables each
-  // element's CSS transition first so the measurement reflects the true
-  // end-of-transition collapsed height, not an interpolated in-progress
-  // value. This replaces an earlier "hide it, then check a frame later and
-  // revert if that broke scrollability" approach, which -- despite looking
-  // fine in scripted/screenshot testing -- caused a real, visible flash on
-  // every affected scroll in an actual full-size window, because the
-  // browser *does* paint the briefly-hidden state before the revert lands.
-  // Measuring first means we simply never hide when it isn't safe, so
-  // there is nothing to flash.
-  const measureFreedHeight = useCallback(() => {
-    const nodes = [
-      { el: topbarRef.current, cls: 'topbar-compact' },
-      { el: groupTabsRef.current, cls: 'group-tabs-hidden' },
-      { el: filterStripRef.current, cls: 'filter-strip-hidden' },
-    ].filter((n) => n.el);
+  // Root cause of the filter-bar flicker: .results-scroll's height is tied
+  // to the topbar's height via a CSS grid `1fr` track (see .gallery in
+  // styles.css). Hiding the filter bar grows the results container, which
+  // for a short list can eliminate scrollability entirely -- the browser
+  // then clamps scrollTop, that clamp fires its own scroll event, which
+  // re-shows the filters, which shrinks the container again... an
+  // oscillation with nothing to do with scroll-delta noise.
+  //
+  // Every previous attempt made this decision *during* the scroll event,
+  // and every one of them raced: hide-then-revert flashed a real painted
+  // frame, and time-based locks either ate a genuine up-scroll (stuck
+  // hidden) or expired into the same loop. Whether it misbehaves also
+  // depends on the exact viewport height, which is why it could look fine
+  // in one window size and flicker in another.
+  //
+  // So the decision is no longer made during scroll at all. Instead we
+  // compute one stable boolean -- "can this list sustain a hidden filter
+  // bar at the current viewport?" -- whenever the layout actually changes
+  // (results change, window resizes, images finish loading). The scroll
+  // handler only reads it. If a list can't sustain hiding, the filter bar
+  // simply never hides, so there is no toggle, no revert and nothing to
+  // flash, at any viewport size.
+  const recomputeCanHideFilters = useCallback(() => {
+    const scroller = resultsScrollRef.current;
+    const pane = leftPaneRef.current;
+    if (!scroller || !pane) return;
 
-    nodes.forEach(({ el }) => { el.style.transition = 'none'; });
+    // Kill transitions on the whole subtree while measuring, otherwise
+    // offsetHeight returns an interpolated mid-animation value. The class
+    // is added and removed within this one synchronous block, so nothing
+    // is ever painted in the measuring state.
+    pane.classList.add('measuring-layout');
 
     let freed = 0;
-    nodes.forEach(({ el, cls }) => {
-      const before = el.offsetHeight;
-      el.classList.add(cls);
-      const after = el.offsetHeight;
-      el.classList.remove(cls);
-      freed += before - after;
-    });
+    if (!filtersHidden) {
+      const nodes = [
+        { el: topbarRef.current, cls: 'topbar-compact' },
+        { el: groupTabsRef.current, cls: 'group-tabs-hidden' },
+        { el: filterStripRef.current, cls: 'filter-strip-hidden' },
+      ].filter((n) => n.el);
+      nodes.forEach(({ el, cls }) => {
+        const before = el.offsetHeight;
+        el.classList.add(cls);
+        freed += before - el.offsetHeight;
+        el.classList.remove(cls);
+      });
+    }
 
-    nodes.forEach(({ el }) => { el.style.transition = ''; });
-    return freed;
-  }, []);
+    // How tall the results container would be with the filter bar hidden,
+    // and therefore whether the content would still overflow it.
+    const clientWhenHidden = scroller.clientHeight + freed;
+    canHideFiltersRef.current = scroller.scrollHeight > clientWhenHidden + 24;
+
+    pane.classList.remove('measuring-layout');
+  }, [filtersHidden]);
+
+  useLayoutEffect(() => {
+    recomputeCanHideFilters();
+    const scroller = resultsScrollRef.current;
+    if (!scroller) return undefined;
+
+    // Covers window resizes, images finishing load, and the "Load 60 more"
+    // growth -- anything that changes whether the content overflows.
+    const observer = new ResizeObserver(() => recomputeCanHideFilters());
+    observer.observe(scroller);
+    if (scroller.firstElementChild) observer.observe(scroller.firstElementChild);
+    window.addEventListener('resize', recomputeCanHideFilters);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', recomputeCanHideFilters);
+    };
+  }, [recomputeCanHideFilters, visibleCount, loading]);
 
   const handleResultsScroll = useCallback((event) => {
-    const el = event.currentTarget;
-    const top = el.scrollTop;
-
-    // Root cause of the "1 row of results" flicker: .results-scroll's height
-    // is tied to the topbar's height via a CSS grid `1fr` track (see
-    // .gallery in styles.css). Hiding the filter bar grows the results
-    // container, which for a short list can eliminate scrollability
-    // entirely -- the browser then clamps scrollTop back down, that clamp
-    // fires its own scroll event, which re-shows the filters, which shrinks
-    // the container again, which makes it scrollable again, so it tries to
-    // hide again... a loop that has nothing to do with scroll-delta noise.
-    const maxScroll = el.scrollHeight - el.clientHeight;
+    const top = event.currentTarget.scrollTop;
     const delta = top - lastScrollTopRef.current;
-    const wasHidden = filtersHidden;
-    let nextHidden = wasHidden;
-
-    if (top < 40) {
-      nextHidden = false;
-    } else if (delta > 8) {
-      nextHidden = true;
-    } else if (delta < -8) {
-      nextHidden = false;
-    }
-
-    if (nextHidden === true && wasHidden === false) {
-      // Only actually hide if there's real room left to scroll afterward --
-      // measured for real, right now, not guessed. Showing is always
-      // allowed instantly (below); this check only ever blocks a hide, so
-      // it can never leave the user stuck.
-      const freed = measureFreedHeight();
-      if (maxScroll - freed > 12) {
-        setFiltersHidden(true);
-      }
-    } else if (nextHidden !== wasHidden) {
-      setFiltersHidden(nextHidden);
-    }
     lastScrollTopRef.current = top;
-  }, [filtersHidden, measureFreedHeight]);
+
+    // Showing is always allowed and always instant, so this can never
+    // leave the user stuck with no way to get the filters back.
+    if (top < 40 || delta < -8) {
+      setFiltersHidden(false);
+    } else if (delta > 8 && canHideFiltersRef.current) {
+      setFiltersHidden(true);
+    }
+  }, []);
 
   // Switching tabs changes which accounts are in scope, but the effect that
   // re-selects them runs *after* this render -- so for one pass the selection
@@ -1142,7 +1158,7 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
     <div className="shell">
       <div className="backdrop" />
       <main className="app-layout">
-        <section className="left-pane">
+        <section ref={leftPaneRef} className="left-pane">
           <header ref={topbarRef} className={filtersHidden ? 'topbar topbar-compact' : 'topbar'}>
             <div className="brand">
               <div className="brand-title">
@@ -1445,7 +1461,7 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
           </section>
 
           <section className="panel gallery">
-          <div className="results-scroll" onScroll={handleResultsScroll}>
+          <div ref={resultsScrollRef} className="results-scroll" onScroll={handleResultsScroll}>
             {visible.length ? (
               <div className="gallery-grid">
                 {visible.map((post, index) => (

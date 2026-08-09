@@ -3309,6 +3309,18 @@ body {
   pointer-events: none;
 }
 
+/* Applied for the duration of one synchronous measurement pass in
+   recomputeCanHideFilters() (App.jsx) and removed in the same block, so it
+   is never painted. Without it, reading offsetHeight right after toggling
+   a collapse class returns an interpolated mid-transition height, which
+   made the "would hiding the filter bar leave room to scroll?" check wrong
+   and reintroduced the flicker. */
+.measuring-layout,
+.measuring-layout * {
+  transition: none !important;
+  animation: none !important;
+}
+
 .group-tab {
   height: 34px;
   padding: 0 18px;
