@@ -241,16 +241,32 @@ img {
 
 .dash-skeleton-actions {
   display: flex;
-  gap: 10px;
   align-items: center;
-  padding: 0 12px;
+  /* .post-actions already supplies the padding; matching only the gap keeps
+     the dots on the same rhythm as the real action buttons. */
+  gap: 10px;
 }
 
+/* 28px = the real action button, so this row lands at the same height. */
 .skeleton-dot {
-  width: 18px;
-  height: 18px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
 }
+
+/* Mirror the real .post-copy stack: likes line, caption line, footer row. */
+.skeleton-row {
+  display: flex;
+  align-items: center;
+}
+
+.skeleton-row-likes { height: 14px; }
+.skeleton-row-caption { height: 15px; margin: 4px 0; }
+.skeleton-row-footer { height: 24px; }
+
+.skeleton-row span { width: 100%; }
+.skeleton-row .skeleton-line-sm { width: 55%; }
+.skeleton-row .skeleton-line-xs { width: 32%; }
 
 .skeleton-line {
   height: 9px;
