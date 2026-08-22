@@ -1670,20 +1670,29 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
                     </div>
                   </label>
                   <div className="engagement-numbers">
+                    {/* Both of these are floors, not equality matches -- the
+                        box exists so you can type a threshold between the
+                        slider's stops (e.g. 3,500), not to find posts with
+                        exactly that many likes. It was labelled "Likes
+                        (exact)", which read as the latter. */}
                     <label className="number-field">
-                      <span>Likes (exact)</span>
+                      <span>Min likes</span>
                       <input
-                        aria-label="Minimum likes, exact value"
+                        aria-label="Minimum likes"
                         type="number"
                         min={0}
+                        placeholder="0"
+                        title="Show posts with at least this many likes"
                         value={minLikes}
                         onChange={(e) => startTransition(() => setMinLikes(clampNumber(e.target.value, 0)))}
                       />
                     </label>
                     <label className="number-field">
-                      <span>Comments</span>
+                      <span>Min comments</span>
                       <input
                         aria-label="Minimum comments"
+                        placeholder="0"
+                        title="Show posts with at least this many comments"
                         type="number"
                         min={0}
                         value={minComments}
