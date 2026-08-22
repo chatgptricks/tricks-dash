@@ -1095,6 +1095,14 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
     return new Set(chosen.length ? chosen : inScope);
   }, [accountsInScope, selectedAccounts]);
 
+  const activeList = useMemo(
+    () =>
+      activeGroup.startsWith('list:')
+        ? customLists.find((list) => `list:${list.id}` === activeGroup) || null
+        : null,
+    [activeGroup, customLists],
+  );
+
   const filtered = useMemo(() => {
     const minDate = parseDateBound(dateFrom, false);
     const maxDate = parseDateBound(dateTo, true);
@@ -1156,7 +1164,7 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
     });
 
     return output;
-  }, [posts, activeGroup, effectiveAccounts, activeType, mediaFilter, minLikes, minComments, dateFrom, dateTo, deferredQuery, sortBy, showHidden]);
+  }, [posts, activeGroup, effectiveAccounts, activeType, mediaFilter, minLikes, minComments, dateFrom, dateTo, deferredQuery, sortBy, showHidden, activeList]);
 
   useEffect(() => {
     setVisibleCount(POSTS_PER_BATCH);
@@ -1209,14 +1217,6 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
     setDateFrom(preset?.from ?? '');
     setDateTo(preset?.to ?? '');
   }, [datePresets]);
-
-  const activeList = useMemo(
-    () =>
-      activeGroup.startsWith('list:')
-        ? customLists.find((list) => `list:${list.id}` === activeGroup) || null
-        : null,
-    [activeGroup, customLists],
-  );
 
   const loadLists = useCallback(async () => {
     try {
