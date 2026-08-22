@@ -3449,10 +3449,10 @@ body {
 .account-multiselect-panel {
   position: fixed;
   z-index: 80;
-  width: max-content;
-  /* Wide enough for the multi-column grid below, but still capped to the
-     viewport so it can't overflow on a narrow window. */
-  max-width: min(760px, calc(100vw - 32px));
+  /* Width is set inline from the account count (see AccountMultiSelect) so
+     the auto-fill grid actually gets room to form columns; capped here so it
+     can never overflow a narrow viewport. */
+  max-width: calc(100vw - 32px);
   padding: 8px;
   border: 1px solid rgba(255, 255, 255, 0.13);
   border-radius: 10px;
