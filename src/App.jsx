@@ -1789,6 +1789,15 @@ function AccountMultiSelect({ accounts, counts, selected, onChange, onAddAccount
       )
     : accounts;
 
+  // The panel needs an explicit width or the auto-fill grid collapses to a
+  // single column: with `width: max-content` the grid's own max-content size
+  // is one track wide, so it never gets the room to wrap into columns.
+  // Derived from the roster size (not the filtered subset) so the panel
+  // doesn't resize under the cursor while typing a search.
+  const COLUMN_PX = 232;
+  const columns = Math.min(4, Math.max(1, Math.ceil(accounts.length / 9)));
+  const panelWidth = Math.max(panelRect?.width ?? 0, columns * COLUMN_PX);
+
   // Select all / Clear act on what's currently filtered, which is what you
   // want after searching a niche ("select all the ones matching 'ai'"). With
   // an empty search that's still every account, so the plain case is normal.
@@ -1816,7 +1825,7 @@ function AccountMultiSelect({ accounts, counts, selected, onChange, onAddAccount
               role="listbox"
               aria-multiselectable="true"
               ref={panelRef}
-              style={{ top: panelRect.top, left: panelRect.left, minWidth: panelRect.width }}
+              style={{ top: panelRect.top, left: panelRect.left, width: panelWidth }}
             >
               <div className="account-multiselect-search">
                 <Search size={14} />
