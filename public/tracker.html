@@ -46,6 +46,55 @@ a{color:inherit}
   font-size:11px;font-weight:700;text-decoration:none;cursor:pointer}
 .linkbtn:hover{border-color:rgba(245,255,0,.4);color:var(--text)}
 
+
+/* --- Social Blade-style shell: account rail on the left --------------- */
+.tracker-shell{display:grid;grid-template-columns:250px minmax(0,1fr);gap:16px;align-items:start}
+@media (max-width:900px){.tracker-shell{grid-template-columns:1fr}}
+
+.tracker-sidebar{position:sticky;top:14px;max-height:calc(100vh - 28px);overflow-y:auto;
+  padding:10px;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
+.tracker-sidebar::-webkit-scrollbar{width:6px}
+.tracker-sidebar::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border-radius:999px}
+
+.side-search input{width:100%;height:30px;padding:0 9px;border:1px solid var(--line);border-radius:7px;
+  background:rgba(255,255,255,.03);color:var(--text);font-size:11px;outline:none}
+.side-search input:focus{border-color:rgba(245,255,0,.4)}
+.side-search input::-webkit-search-cancel-button{appearance:none}
+
+.side-all{width:100%;margin-top:8px;padding:7px 9px;border:1px solid var(--line);border-radius:7px;
+  background:transparent;color:var(--muted-strong);font-size:11px;font-weight:700;text-align:left;cursor:pointer}
+.side-all:hover,.side-all.active{border-color:rgba(245,255,0,.35);color:#fff}
+
+.side-group{margin-top:12px}
+.side-group h3{display:flex;align-items:center;gap:6px;margin:0 0 5px;padding:0 2px;
+  color:var(--muted);font-size:9px;font-weight:800;letter-spacing:.12em;text-transform:uppercase}
+.side-group h3 span{color:rgba(245,245,245,.3)}
+.side-group ul{list-style:none;margin:0;padding:0;display:grid;gap:1px}
+
+.side-item{display:flex;align-items:center;gap:7px;padding:5px 6px;border:1px solid transparent;
+  border-radius:7px;cursor:pointer}
+.side-item:hover{background:rgba(255,255,255,.05)}
+.side-item.active{border-color:rgba(245,255,0,.3);background:rgba(245,255,0,.06)}
+
+.side-star{flex:none;padding:0;border:0;background:none;cursor:pointer;font-size:12px;line-height:1;
+  color:rgba(255,255,255,.18)}
+.side-star:hover{color:rgba(245,255,0,.6)}
+.side-star.on{color:var(--accent)}
+
+.side-avatar{flex:none;width:22px;height:22px;border-radius:50%;object-fit:cover;background:rgba(255,255,255,.06)}
+.side-name{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.2}
+.side-name strong{font-size:11px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.side-name em{font-style:normal;color:var(--muted);font-size:9px}
+.side-delta{flex:none;font-size:10px;font-weight:800}
+.side-delta.up{color:#48d18b}.side-delta.down{color:#ff6b6b}.side-delta.flat{color:var(--muted)}
+
+/* Daily change is the headline number; the running total sits to its right,
+   deliberately quieter, because it barely moves day to day. */
+.hist-daily{font-size:15px;font-weight:800;letter-spacing:-.01em}
+.hist-daily.up{color:#48d18b}.hist-daily.down{color:#ff6b6b}.hist-daily.flat{color:var(--muted)}
+.hist-total{color:var(--muted-strong);font-size:12px;font-weight:600}
+.hist-secondary{opacity:.72}
+
 /* kpis */
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;margin-bottom:16px}
 .kpi{padding:13px 15px;border:1px solid var(--line);border-radius:11px;background:var(--panel)}
@@ -142,7 +191,10 @@ table.hist-table td{text-align:left;padding:11px 8px;white-space:nowrap}
     </div>
   </div>
 
-  <div id="app"><div class="loading">Loading data…</div></div>
+  <div class="tracker-shell">
+    <aside id="sidebar" class="tracker-sidebar"></aside>
+    <div id="app"><div class="loading">Loading data…</div></div>
+  </div>
 </div>
 
 <script>
@@ -213,8 +265,93 @@ async function loadSummary(){
   SUMMARY = await authedFetch('/api/tracker/summary');
 }
 
+/* ---------------- Favourites + sidebar ----------------
+   Favourites live in localStorage rather than the database: this is a
+   per-person "what am I watching today" shortlist, it needs to feel
+   instant, and losing it costs nothing (the account is still tracked, it
+   just isn't pinned). Everything that must survive a device change --
+   which accounts exist, their history -- is already server-side. */
+const FAV_KEY = 'sentient.tracker.favs';
+function readFavs(){
+  try{ const v = JSON.parse(localStorage.getItem(FAV_KEY)||'[]'); return new Set(Array.isArray(v)?v:[]); }
+  catch{ return new Set(); }
+}
+function writeFavs(set){
+  try{ localStorage.setItem(FAV_KEY, JSON.stringify([...set])); }catch{}
+}
+function toggleFav(handle){
+  const favs = readFavs();
+  favs.has(handle) ? favs.delete(handle) : favs.add(handle);
+  writeFavs(favs);
+  renderSidebar();
+}
+
+function renderSidebar(){
+  if(!SUMMARY || !SUMMARY.accounts) return;
+  const favs = readFavs();
+  const current = readAcc();
+  const q = (window.__sidebarQuery||'').trim().toLowerCase();
+  const match = r => !q || r.handle.toLowerCase().includes(q) || (r.full_name||'').toLowerCase().includes(q);
+
+  // Grouped by category, favourites hoisted into their own group at the top
+  // so the accounts you actually watch are always the first thing in reach.
+  const all = SUMMARY.accounts.filter(match);
+  const groups = [
+    ['Favourites', all.filter(r=>favs.has(r.handle))],
+    ['Ours',       all.filter(r=>!favs.has(r.handle) && r.group==='sentient')],
+    ['Competitors',all.filter(r=>!favs.has(r.handle) && r.group!=='sentient')],
+  ];
+
+  const item = r => {
+    const d = r.delta_1d ? r.delta_1d.delta : null;
+    const cls = d==null ? 'flat' : d>0 ? 'up' : d<0 ? 'down' : 'flat';
+    return `<li class="side-item ${current===r.handle?'active':''}" data-handle="${r.handle}">
+      <button class="side-star ${favs.has(r.handle)?'on':''}" data-fav="${r.handle}"
+              title="${favs.has(r.handle)?'Remove from favourites':'Add to favourites'}" aria-label="Toggle favourite">★</button>
+      <img class="side-avatar" src="${API}/api/dashboard/avatar/${encodeURIComponent(r.handle)}"
+           referrerpolicy="no-referrer" onerror="this.style.visibility='hidden'">
+      <span class="side-name">
+        <strong>@${r.handle}</strong>
+        <em>${r.followers!=null?fmt(r.followers):'—'}</em>
+      </span>
+      <span class="side-delta ${cls}">${d==null?'':signed(d)}</span>
+    </li>`;
+  };
+
+  $('#sidebar').innerHTML = `
+    <div class="side-search">
+      <input id="sideSearch" type="search" placeholder="Search accounts" value="${(window.__sidebarQuery||'').replace(/"/g,'&quot;')}">
+    </div>
+    <button class="side-all ${current?'':'active'}" id="sideAll">All accounts</button>
+    ${groups.map(([label, rows]) => !rows.length ? '' : `
+      <div class="side-group">
+        <h3>${label} <span>${rows.length}</span></h3>
+        <ul>${rows.map(item).join('')}</ul>
+      </div>`).join('')}
+  `;
+
+  $('#sideAll').onclick = () => { writeAcc(''); render(); };
+  $('#sidebar').querySelectorAll('[data-fav]').forEach(b => b.onclick = e => {
+    e.stopPropagation();
+    toggleFav(b.dataset.fav);
+  });
+  $('#sidebar').querySelectorAll('.side-item').forEach(li => li.onclick = () => {
+    writeAcc(li.dataset.handle); render();
+  });
+  const search = $('#sideSearch');
+  search.oninput = () => {
+    window.__sidebarQuery = search.value;
+    renderSidebar();
+    // Re-rendering blows away focus, so put the caret back where it was.
+    const next = $('#sideSearch');
+    next.focus();
+    next.setSelectionRange(next.value.length, next.value.length);
+  };
+}
+
 function render(){
   const acc = readAcc();
+  renderSidebar();
   if(acc) renderDetail(acc);
   else renderLeaderboard();
 }
@@ -324,22 +461,36 @@ function histPill(curr, prev, isPct){
 
 function renderHistoricalStats(hist){
   if(!hist.length) return '<div class="empty">No snapshots yet.</div>';
-  // Newest first, capped at the last 15 days of recorded snapshots.
-  const rows = [...hist].slice(-15).reverse();
+  // Oldest at the top, newest at the bottom -- reading downwards follows the
+  // account forwards in time, which is how Social Blade presents it and how
+  // people actually read a run of daily numbers.
+  const rows = [...hist].slice(-15);
   const rateOf = h => (h.avg_likes_that_day!=null && h.followers) ? h.avg_likes_that_day/h.followers*100 : null;
+  const dailyDelta = (curr, prev) =>
+    (prev && curr.followers!=null && prev.followers!=null) ? curr.followers-prev.followers : null;
   return `
     <div style="overflow-x:auto">
     <table class="hist-table">
-      <thead><tr><th>Date</th><th>Followers count</th><th>Following count</th><th>Media count</th><th>Engagement rate</th></tr></thead>
+      <thead><tr>
+        <th>Date</th>
+        <th>Followers +/-</th>
+        <th class="hist-secondary">Total followers</th>
+        <th>Following</th>
+        <th>Media</th>
+        <th>Engagement rate</th>
+      </tr></thead>
       <tbody>${rows.map((h,i)=>{
-        const prev = rows[i+1]; // chronologically previous day (rows are newest-first)
+        const prev = rows[i-1]; // rows run oldest -> newest, so the previous day is behind us
         const d = new Date(h.date);
         const dateLabel = d.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
         const dow = d.toLocaleDateString(undefined,{weekday:'short'});
         const rate = rateOf(h), prevRate = prev?rateOf(prev):null;
+        const delta = dailyDelta(h, prev);
+        const deltaCls = delta==null ? 'flat' : delta>0 ? 'up' : delta<0 ? 'down' : 'flat';
         return `<tr>
           <td><span class="hist-date">${dateLabel}</span><span class="hist-dow">${dow}</span></td>
-          <td><span class="hist-val">${h.followers!=null?fmt(h.followers):'—'}</span>${prev?histPill(h.followers, prev.followers, false):''}</td>
+          <td><span class="hist-daily ${deltaCls}">${delta==null?'—':signed(delta)}</span></td>
+          <td class="hist-secondary"><span class="hist-total">${h.followers!=null?fmt(h.followers):'—'}</span></td>
           <td><span class="hist-val">${h.following_count!=null?fmt(h.following_count):'—'}</span>${prev?histPill(h.following_count, prev.following_count, false):''}</td>
           <td><span class="hist-val">${h.posts_count!=null?fmt(h.posts_count):'—'}</span>${prev?histPill(h.posts_count, prev.posts_count, false):''}</td>
           <td><span class="hist-val">${rate!=null?rate.toFixed(2)+'%':'<span class=\"na\">—</span>'}</span>${(prev&&rate!=null)?histPill(rate, prevRate, true):''}</td>
