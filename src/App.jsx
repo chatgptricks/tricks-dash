@@ -1955,6 +1955,10 @@ function DashboardSkeleton() {
               </div>
             </div>
             <div className="post-media skeleton-block" />
+            {/* Row heights mirror the real card's internals (28px action
+                buttons; a 14/15/24 likes-caption-footer stack) so the
+                placeholder ends up the same total height as a loaded card
+                and the grid doesn't resize when data arrives. */}
             <div className="post-actions">
               <div className="dash-skeleton-actions">
                 {Array.from({ length: 3 }).map((_, dot) => (
@@ -1962,9 +1966,16 @@ function DashboardSkeleton() {
                 ))}
               </div>
             </div>
-            <div className="post-copy dash-skeleton-lines">
-              <div className="skeleton-block skeleton-line skeleton-line-sm" />
-              <div className="skeleton-block skeleton-line" />
+            <div className="post-copy">
+              <div className="skeleton-row skeleton-row-likes">
+                <span className="skeleton-block skeleton-line skeleton-line-xs" />
+              </div>
+              <div className="skeleton-row skeleton-row-caption">
+                <span className="skeleton-block skeleton-line" />
+              </div>
+              <div className="skeleton-row skeleton-row-footer">
+                <span className="skeleton-block skeleton-line skeleton-line-sm" />
+              </div>
             </div>
           </article>
         ))}
