@@ -1499,6 +1499,26 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
                 Edit
               </button>
             ) : null}
+
+            {/* Not a filter: it switches which set of posts you're looking at
+                (visible vs. the ones you've hidden), so it sits with the tabs
+                rather than adding an eighth card to the filter strip. Only
+                appears once something is actually hidden -- until then it
+                would be a control with nothing to show. */}
+            {hiddenCount ? (
+              <button
+                type="button"
+                className={showHidden ? 'hidden-toggle hidden-toggle-on' : 'hidden-toggle'}
+                onClick={() => startTransition(() => setShowHidden((value) => !value))}
+                role="switch"
+                aria-checked={showHidden}
+                title={showHidden ? 'Back to visible posts' : "Show the posts you've hidden, so you can bring them back"}
+              >
+                {showHidden ? <Eye size={12} /> : <EyeOff size={12} />}
+                {showHidden ? 'Viewing hidden' : 'Hidden'}
+                <span>{hiddenCount}</span>
+              </button>
+            ) : null}
           </div>
 
           <section
@@ -1560,33 +1580,6 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
                       {option.label}
                     </button>
                   ))}
-                </div>
-              </fieldset>
-
-              <fieldset className="filter-group-card filter-media">
-                <legend>
-                  {showHidden ? <EyeOff size={13} /> : <Eye size={13} />}
-                  Visibility
-                </legend>
-                <div className="chip-row compact-chips">
-                  <button
-                    type="button"
-                    className={showHidden ? 'chip' : 'chip chip-active'}
-                    onClick={() => startTransition(() => setShowHidden(false))}
-                    aria-pressed={!showHidden}
-                  >
-                    Visible
-                  </button>
-                  <button
-                    type="button"
-                    className={showHidden ? 'chip chip-active' : 'chip'}
-                    onClick={() => startTransition(() => setShowHidden(true))}
-                    aria-pressed={showHidden}
-                    title="Show only posts you've hidden, so you can bring them back"
-                  >
-                    Hidden
-                    {hiddenCount ? <span>{hiddenCount}</span> : null}
-                  </button>
                 </div>
               </fieldset>
 
@@ -1935,27 +1928,45 @@ function DashboardSkeleton() {
   return (
     <section className="dash-skeleton" role="status" aria-live="polite">
       <span className="sr-only">Loading the post library</span>
-      <div className="dash-skeleton-filters" aria-hidden="true">
-        {Array.from({ length: 6 }).map((_, index) => (
-          <div className="skeleton-block skeleton-filter" key={index} />
-        ))}
-      </div>
-      <div className="dash-skeleton-grid" aria-hidden="true">
+      {/* Built from the real .filter-strip / .gallery-grid / .post-card
+          classes rather than lookalike ones, so the placeholders inherit the
+          actual column count, gaps, card height and 3:4 media ratio. Any
+          future change to the card layout moves the skeleton with it instead
+          of leaving a copy behind to drift out of sync. */}
+      <section className="filter-strip dash-skeleton-strip" aria-hidden="true">
+        <div className="filter-groups-row">
+          {Array.from({ length: 7 }).map((_, index) => (
+            <fieldset className="filter-group-card" key={index}>
+              <div className="skeleton-block skeleton-filter" />
+            </fieldset>
+          ))}
+        </div>
+      </section>
+      <div className="gallery-grid" aria-hidden="true">
         {Array.from({ length: 10 }).map((_, index) => (
-          <div className="dash-skeleton-card" key={index}>
-            <div className="dash-skeleton-card-head">
-              <div className="skeleton-block skeleton-avatar" />
-              <div className="dash-skeleton-lines">
-                <div className="skeleton-block skeleton-line skeleton-line-sm" />
-                <div className="skeleton-block skeleton-line skeleton-line-xs" />
+          <article className="post-card dash-skeleton-card" key={index}>
+            <div className="post-header">
+              <div className="post-user">
+                <div className="post-avatar skeleton-block" />
+                <div className="post-user-copy dash-skeleton-lines">
+                  <div className="skeleton-block skeleton-line skeleton-line-sm" />
+                  <div className="skeleton-block skeleton-line skeleton-line-xs" />
+                </div>
               </div>
             </div>
-            <div className="skeleton-block dash-skeleton-media" />
-            <div className="dash-skeleton-card-foot">
+            <div className="post-media skeleton-block" />
+            <div className="post-actions">
+              <div className="dash-skeleton-actions">
+                {Array.from({ length: 3 }).map((_, dot) => (
+                  <span className="skeleton-block skeleton-dot" key={dot} />
+                ))}
+              </div>
+            </div>
+            <div className="post-copy dash-skeleton-lines">
               <div className="skeleton-block skeleton-line skeleton-line-sm" />
               <div className="skeleton-block skeleton-line" />
             </div>
-          </div>
+          </article>
         ))}
       </div>
     </section>
