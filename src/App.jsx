@@ -892,6 +892,8 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
   const [selectedKey, setSelectedKey] = useState(initialUrl.post);
   const [isSidebarOpen, setIsSidebarOpen] = useState(Boolean(initialUrl.post));
   const [showHidden, setShowHidden] = useState(false);
+  // HOT tab: false shows only what's hot now, true adds everything older.
+  const [showHotHistory, setShowHotHistory] = useState(false);
   const [filtersHidden, setFiltersHidden] = useState(false);
   const lastScrollTopRef = useRef(0);
   const topbarRef = useRef(null);
@@ -1110,10 +1112,10 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
 
     for (const post of posts) {
       if (activeGroup === 'hot') {
-        // Every post that ever earned HOT, not just the ones inside the badge
-        // window. The tab is a searchable history; the Published date filter
-        // is how you narrow it to today, this week, or any past period.
-        if (!post.isHot) continue;
+        // Default view is what's hot right now; the full history is opt-in
+        // via "Show historical" so the tab opens on a short, current list
+        // rather than hundreds of past winners.
+        if (showHotHistory ? !post.isHot : !post.isHotRecent) continue;
       } else if (activeList) {
         // A custom list is a hand-picked set of accounts, so it cuts across
         // the sentient/competitors split rather than sitting inside it.
@@ -1164,11 +1166,17 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
     });
 
     return output;
-  }, [posts, activeGroup, effectiveAccounts, activeType, mediaFilter, minLikes, minComments, dateFrom, dateTo, deferredQuery, sortBy, showHidden, activeList]);
+  }, [posts, activeGroup, effectiveAccounts, activeType, mediaFilter, minLikes, minComments, dateFrom, dateTo, deferredQuery, sortBy, showHidden, activeList, showHotHistory]);
+
+  // Leaving the HOT tab collapses history again, so coming back always
+  // opens on "what's hot now" rather than a stale expanded state.
+  useEffect(() => {
+    if (activeGroup !== 'hot' && showHotHistory) setShowHotHistory(false);
+  }, [activeGroup, showHotHistory]);
 
   useEffect(() => {
     setVisibleCount(POSTS_PER_BATCH);
-  }, [deferredQuery, activeGroup, selectedAccounts, activeType, mediaFilter, minLikes, minComments, dateFrom, dateTo, sortBy, showHidden]);
+  }, [deferredQuery, activeGroup, selectedAccounts, activeType, mediaFilter, minLikes, minComments, dateFrom, dateTo, sortBy, showHidden, showHotHistory]);
 
   const visible = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount]);
   const showingFrom = filtered.length ? 1 : 0;
@@ -1263,6 +1271,13 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
   // Counted across the whole library, not the current filters: the badge is
   // there to tell you hidden posts exist at all.
   const hiddenCount = useMemo(() => posts.reduce((total, post) => total + (post.hidden ? 1 : 0), 0), [posts]);
+
+  // Hot posts that are no longer current -- the number behind the
+  // "Show historical" button.
+  const hotHistoryCount = useMemo(
+    () => posts.reduce((total, post) => total + (post.isHot && !post.isHotRecent ? 1 : 0), 0),
+    [posts],
+  );
 
   const copyShortcode = useCallback(async (shortcode) => {
     await navigator.clipboard.writeText(shortcode);
@@ -1731,12 +1746,36 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
               </div>
             ) : (
               <div className="empty-state">
-                <p>No posts match the current filters.</p>
+                <p>{activeGroup === 'hot' && !showHotHistory && hotHistoryCount
+                  ? 'Nothing is hot right now.'
+                  : 'No posts match the current filters.'}</p>
                 <button className="ghost-button" onClick={onReset}>
                   Clear filters
                 </button>
               </div>
             )}
+
+            {/* The HOT tab defaults to what's hot *now*; everything older sits
+                behind this. Placed after the last current post so the default
+                view stays a short, scannable "what's happening today" list
+                instead of opening on hundreds of past winners. */}
+            {activeGroup === 'hot' && !showHotHistory && hotHistoryCount ? (
+              <div className="hot-history-cta">
+                <button className="ghost-button" onClick={() => startTransition(() => setShowHotHistory(true))}>
+                  <Flame size={13} />
+                  Show historical HOT posts
+                  <span>{hotHistoryCount.toLocaleString()}</span>
+                </button>
+                <p>Older posts that went hot before the last {HOT_TAB_WINDOW_HOURS}h.</p>
+              </div>
+            ) : null}
+            {activeGroup === 'hot' && showHotHistory ? (
+              <div className="hot-history-cta">
+                <button className="ghost-button" onClick={() => startTransition(() => setShowHotHistory(false))}>
+                  Hide historical
+                </button>
+              </div>
+            ) : null}
           </div>
 
           <div className="pagination">
