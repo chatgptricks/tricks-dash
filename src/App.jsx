@@ -738,14 +738,25 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
       averageLikes: totalPosts ? Math.round(totalLikes / totalPosts) : 0,
     };
   }, [groupScopedPosts]);
+  const [customLists, setCustomLists] = useState([]);
+  // null = closed. Otherwise the list being created (id null) or edited.
+  const [listEditor, setListEditor] = useState(null);
+
   const accountsInScope = useMemo(
     // 'hot' isn't a group -- it's a cross-account view, so every account stays
     // in scope and only the HOT-recency filter narrows the results.
-    () =>
-      activeGroup === 'all' || activeGroup === 'hot'
+    () => {
+      if (activeGroup.startsWith('list:')) {
+        const list = customLists.find((entry) => `list:${entry.id}` === activeGroup);
+        // Unknown id (e.g. a stale link to a deleted list) falls back to the
+        // full roster rather than rendering an empty, unexplained account box.
+        return list ? accounts.filter((account) => list.handles.includes(account.handle)) : accounts;
+      }
+      return activeGroup === 'all' || activeGroup === 'hot'
         ? accounts
-        : accounts.filter((account) => account.group === activeGroup),
-    [accounts, activeGroup],
+        : accounts.filter((account) => account.group === activeGroup);
+    },
+    [accounts, activeGroup, customLists],
   );
   const [selectedAccounts, setSelectedAccounts] = useState(() => new Set());
   const [showAddAccount, setShowAddAccount] = useState(false);
@@ -1095,6 +1106,10 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
         // window. The tab is a searchable history; the Published date filter
         // is how you narrow it to today, this week, or any past period.
         if (!post.isHot) continue;
+      } else if (activeList) {
+        // A custom list is a hand-picked set of accounts, so it cuts across
+        // the sentient/competitors split rather than sitting inside it.
+        if (!activeList.handles.includes(post.account)) continue;
       } else if (activeGroup !== 'all' && post.group !== activeGroup) continue;
       // Hidden posts are filtered out, not deleted -- the Visibility filter is
       // how you get back to them to unhide. Without that switch, hiding would
@@ -1194,6 +1209,56 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
     setDateFrom(preset?.from ?? '');
     setDateTo(preset?.to ?? '');
   }, [datePresets]);
+
+  const activeList = useMemo(
+    () =>
+      activeGroup.startsWith('list:')
+        ? customLists.find((list) => `list:${list.id}` === activeGroup) || null
+        : null,
+    [activeGroup, customLists],
+  );
+
+  const loadLists = useCallback(async () => {
+    try {
+      const response = await apiFetch(`${API_BASE}/api/dashboard/lists`);
+      if (!response.ok) return;
+      const data = await response.json();
+      if (Array.isArray(data.lists)) setCustomLists(data.lists);
+    } catch {
+      // Lists are an enhancement -- never block the dashboard on them.
+    }
+  }, []);
+
+  useEffect(() => {
+    loadLists();
+  }, [loadLists]);
+
+  const saveList = useCallback(async (draft) => {
+    const body = new FormData();
+    body.append('name', draft.name);
+    body.append('handles', draft.handles.join(','));
+    if (draft.id) body.append('list_id', String(draft.id));
+    const response = await apiFetch(`${API_BASE}/api/dashboard/lists`, { method: 'POST', body });
+    if (!response.ok) {
+      const detail = await response.json().catch(() => ({}));
+      throw new Error(detail.detail || `HTTP ${response.status}`);
+    }
+    const data = await response.json();
+    await loadLists();
+    setActiveGroup(`list:${data.list.id}`);
+    return data.list;
+  }, [loadLists]);
+
+  const deleteList = useCallback(async (listId) => {
+    const body = new FormData();
+    body.append('list_id', String(listId));
+    const response = await apiFetch(`${API_BASE}/api/dashboard/lists/delete`, { method: 'POST', body });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    // Fall back to All rather than leaving the user on a tab that no longer
+    // exists (which would render an empty grid with no way to tell why).
+    setActiveGroup('all');
+    await loadLists();
+  }, [loadLists]);
 
   // Counted across the whole library, not the current filters: the badge is
   // there to tell you hidden posts exist at all.
@@ -1398,6 +1463,42 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
                 {tab.label}
               </button>
             ))}
+            {/* Custom lists render as extra tabs after HOT. They're private
+                to whoever made them, so this row differs per signed-in user. */}
+            {customLists.map((list) => (
+              <button
+                key={`list:${list.id}`}
+                type="button"
+                role="tab"
+                aria-selected={activeGroup === `list:${list.id}`}
+                className={activeGroup === `list:${list.id}` ? 'group-tab group-tab-active' : 'group-tab'}
+                onClick={() => startTransition(() => setActiveGroup(`list:${list.id}`))}
+                title={`${list.handles.length} accounts`}
+              >
+                {list.name}
+              </button>
+            ))}
+            <button
+              type="button"
+              className="group-tab group-tab-add"
+              onClick={() => setListEditor({ id: null, name: '', handles: [] })}
+              title="Create a custom list of accounts"
+              aria-label="Create a custom list"
+            >
+              <Plus size={13} />
+            </button>
+            {activeList ? (
+              <button
+                type="button"
+                className="group-tab group-tab-edit"
+                onClick={() =>
+                  setListEditor({ id: activeList.id, name: activeList.name, handles: [...activeList.handles] })
+                }
+                title={`Edit "${activeList.name}"`}
+              >
+                Edit
+              </button>
+            ) : null}
           </div>
 
           <section
@@ -1728,6 +1829,16 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
         </aside> : null}
       </main>
 
+      {listEditor ? (
+        <ListEditor
+          draft={listEditor}
+          accounts={accounts}
+          onSave={saveList}
+          onDelete={deleteList}
+          onClose={() => setListEditor(null)}
+        />
+      ) : null}
+
       {showAddAccount ? (
         <AddAccountWizard
           onClose={() => setShowAddAccount(false)}
@@ -1848,6 +1959,129 @@ function DashboardSkeleton() {
         ))}
       </div>
     </section>
+  );
+}
+
+// Create/edit a custom account list. Kept as a small modal rather than a
+// wizard: a list is just a name plus a set of handles.
+function ListEditor({ draft, accounts, onSave, onDelete, onClose }) {
+  const [name, setName] = useState(draft.name);
+  const [picked, setPicked] = useState(() => new Set(draft.handles));
+  const [search, setSearch] = useState('');
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const term = search.trim().toLowerCase();
+  const visible = term
+    ? accounts.filter(
+        (a) => a.handle.toLowerCase().includes(term) || (a.label || '').toLowerCase().includes(term),
+      )
+    : accounts;
+
+  const toggle = (handle) => {
+    setPicked((current) => {
+      const next = new Set(current);
+      if (next.has(handle)) next.delete(handle);
+      else next.add(handle);
+      return next;
+    });
+  };
+
+  const submit = async () => {
+    setError('');
+    if (!name.trim()) return setError('Give the list a name.');
+    if (!picked.size) return setError('Pick at least one account.');
+    setSaving(true);
+    try {
+      await onSave({ id: draft.id, name: name.trim(), handles: [...picked] });
+      onClose();
+    } catch (exc) {
+      setError(exc.message || 'Could not save that list.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal list-editor" onClick={(event) => event.stopPropagation()}>
+        <div className="modal-header">
+          <h2>{draft.id ? 'Edit list' : 'New list'}</h2>
+          <button className="icon-button" onClick={onClose} aria-label="Close">
+            <X size={16} />
+          </button>
+        </div>
+
+        <label className="modal-field">
+          <span>Name</span>
+          <input
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="e.g. AI news, Spanish, Competitors to watch"
+            autoFocus
+          />
+        </label>
+
+        <div className="list-editor-picker">
+          <div className="account-multiselect-search">
+            <Search size={14} />
+            <input
+              type="search"
+              value={search}
+              placeholder="Search accounts"
+              onChange={(event) => setSearch(event.target.value)}
+            />
+          </div>
+          <div className="account-multiselect-list account-multiselect-grid list-editor-grid">
+            {visible.map((account) => (
+              <label
+                key={account.handle}
+                className={
+                  picked.has(account.handle)
+                    ? 'account-multiselect-item account-multiselect-item-on'
+                    : 'account-multiselect-item'
+                }
+              >
+                <input
+                  type="checkbox"
+                  checked={picked.has(account.handle)}
+                  onChange={() => toggle(account.handle)}
+                />
+                <AccountAvatar handle={account.handle} hasAvatar={account.has_avatar} />
+                <span className="account-multiselect-name">
+                  <strong>{account.label}</strong>
+                  <em>@{account.handle}</em>
+                </span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {error ? <p className="modal-error">{error}</p> : null}
+
+        <div className="modal-actions list-editor-actions">
+          {draft.id ? (
+            <button
+              type="button"
+              className="ghost-button danger"
+              onClick={async () => {
+                await onDelete(draft.id);
+                onClose();
+              }}
+            >
+              Delete list
+            </button>
+          ) : null}
+          <span className="list-editor-count">{picked.size} selected</span>
+          <button type="button" className="ghost-button" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="button" className="primary-button" onClick={submit} disabled={saving}>
+            {saving ? 'Saving...' : 'Save list'}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
