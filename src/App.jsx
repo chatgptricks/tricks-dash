@@ -1678,11 +1678,38 @@ function Metric({ label, value }) {
 // (All/Sentient/Competitors) is currently active. Adding a new account
 // (self-serve, via the "+ Add account" row at the bottom) never requires a
 // frontend change -- the list is entirely driven by /api/dashboard/accounts.
+// Bundled profile image first (a handful are shipped with the app), then the
+// backend's cached avatar, then initials. Shared so the filter dropdown and
+// the admin roster can't drift apart.
+function AccountAvatar({ handle, hasAvatar, size = 28 }) {
+  const bundled = ACCOUNT_PROFILE_IMAGES[handle];
+  const style = { width: size, height: size };
+  if (bundled) return <img className="account-avatar" style={style} src={bundled} alt="" />;
+  if (hasAvatar) {
+    return (
+      <img
+        className="account-avatar"
+        style={style}
+        src={`${API_BASE}/api/dashboard/avatar/${encodeURIComponent(handle)}`}
+        alt=""
+        referrerPolicy="no-referrer"
+      />
+    );
+  }
+  return (
+    <span className="account-avatar account-avatar-fallback" style={style}>
+      {handle.slice(0, 2).toUpperCase()}
+    </span>
+  );
+}
+
 function AccountMultiSelect({ accounts, counts, selected, onChange, onAddAccount }) {
   const [open, setOpen] = useState(false);
   const [panelRect, setPanelRect] = useState(null);
+  const [search, setSearch] = useState('');
   const containerRef = useRef(null);
   const panelRef = useRef(null);
+  const searchRef = useRef(null);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -1721,6 +1748,18 @@ function AccountMultiSelect({ accounts, counts, selected, onChange, onAddAccount
     };
   }, [open]);
 
+  // Reset the query each time the panel opens (a stale filter from last time
+  // looks like accounts have gone missing) and put the cursor in the box so
+  // you can just start typing.
+  useEffect(() => {
+    if (!open) {
+      setSearch('');
+      return;
+    }
+    const id = requestAnimationFrame(() => searchRef.current?.focus());
+    return () => cancelAnimationFrame(id);
+  }, [open]);
+
   const allSelected = accounts.length > 0 && accounts.every((account) => selected.has(account.handle));
   let label = 'No accounts yet';
   if (accounts.length) {
@@ -1736,6 +1775,26 @@ function AccountMultiSelect({ accounts, counts, selected, onChange, onAddAccount
     const next = new Set(selected);
     if (next.has(handle)) next.delete(handle);
     else next.add(handle);
+    onChange(next);
+  };
+
+  // Match on handle and label so both "@chatgptricks" and a custom display
+  // name find the same account.
+  const term = search.trim().toLowerCase();
+  const visibleAccounts = term
+    ? accounts.filter(
+        (account) =>
+          account.handle.toLowerCase().includes(term) ||
+          (account.label || '').toLowerCase().includes(term),
+      )
+    : accounts;
+
+  // Select all / Clear act on what's currently filtered, which is what you
+  // want after searching a niche ("select all the ones matching 'ai'"). With
+  // an empty search that's still every account, so the plain case is normal.
+  const applyToVisible = (add) => {
+    const next = new Set(selected);
+    visibleAccounts.forEach((account) => (add ? next.add(account.handle) : next.delete(account.handle)));
     onChange(next);
   };
 
@@ -1759,30 +1818,68 @@ function AccountMultiSelect({ accounts, counts, selected, onChange, onAddAccount
               ref={panelRef}
               style={{ top: panelRect.top, left: panelRect.left, minWidth: panelRect.width }}
             >
+              <div className="account-multiselect-search">
+                <Search size={14} />
+                <input
+                  ref={searchRef}
+                  type="search"
+                  value={search}
+                  placeholder="Search accounts"
+                  onChange={(event) => setSearch(event.target.value)}
+                  // Escape clears the query first and only closes the panel
+                  // when it's already empty, so a mistyped search doesn't
+                  // cost you the whole dropdown.
+                  onKeyDown={(event) => {
+                    if (event.key !== 'Escape') return;
+                    if (search) {
+                      event.stopPropagation();
+                      setSearch('');
+                    } else {
+                      setOpen(false);
+                    }
+                  }}
+                />
+                {search ? (
+                  <button type="button" className="account-multiselect-search-clear" onClick={() => setSearch('')}>
+                    <X size={13} />
+                  </button>
+                ) : null}
+              </div>
               <div className="account-multiselect-actions">
-                <button
-                  type="button"
-                  onClick={() => onChange(new Set(accounts.map((account) => account.handle)))}
-                >
-                  Select all
+                <button type="button" onClick={() => applyToVisible(true)}>
+                  {term ? `Select these (${visibleAccounts.length})` : 'Select all'}
                 </button>
-                <button type="button" onClick={() => onChange(new Set())}>
+                <button type="button" onClick={() => applyToVisible(false)}>
                   Clear
                 </button>
               </div>
-              <div className="account-multiselect-list">
-                {accounts.map((account) => (
-                  <label key={account.handle} className="account-multiselect-item">
+              <div className="account-multiselect-list account-multiselect-grid">
+                {visibleAccounts.map((account) => (
+                  <label
+                    key={account.handle}
+                    className={
+                      selected.has(account.handle)
+                        ? 'account-multiselect-item account-multiselect-item-on'
+                        : 'account-multiselect-item'
+                    }
+                  >
                     <input
                       type="checkbox"
                       checked={selected.has(account.handle)}
                       onChange={() => toggle(account.handle)}
                     />
-                    <span>{account.label}</span>
+                    <AccountAvatar handle={account.handle} hasAvatar={account.has_avatar} />
+                    <span className="account-multiselect-name">
+                      <strong>{account.label}</strong>
+                      <em>@{account.handle}</em>
+                    </span>
                     <b>{counts[account.handle] ?? 0}</b>
                   </label>
                 ))}
                 {!accounts.length ? <p className="account-multiselect-empty">No accounts in this group yet.</p> : null}
+                {accounts.length && !visibleAccounts.length ? (
+                  <p className="account-multiselect-empty">No accounts match &ldquo;{search}&rdquo;.</p>
+                ) : null}
               </div>
               {onAddAccount ? (
                 <button

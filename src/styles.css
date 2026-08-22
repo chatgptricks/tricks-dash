@@ -3450,7 +3450,9 @@ body {
   position: fixed;
   z-index: 80;
   width: max-content;
-  max-width: 280px;
+  /* Wide enough for the multi-column grid below, but still capped to the
+     viewport so it can't overflow on a narrow window. */
+  max-width: min(760px, calc(100vw - 32px));
   padding: 8px;
   border: 1px solid rgba(255, 255, 255, 0.13);
   border-radius: 10px;
@@ -3499,11 +3501,68 @@ body {
   border-radius: 999px;
 }
 
+/* Multi-column so 20+ accounts are scannable at a glance instead of being a
+   long scroll. auto-fill rather than a fixed count: one column on a narrow
+   window, up to four on a wide one, without a media query per breakpoint. */
+.account-multiselect-grid {
+  grid-template-columns: repeat(auto-fill, minmax(215px, 1fr));
+  gap: 2px 6px;
+  max-height: 340px;
+}
+
+.account-multiselect-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  padding: 0 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(245, 245, 245, 0.45);
+}
+
+.account-multiselect-search:focus-within {
+  border-color: rgba(245, 255, 0, 0.4);
+}
+
+.account-multiselect-search input {
+  flex: 1;
+  height: 30px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 11px;
+  outline: none;
+}
+
+/* Kill the native WebKit clear button -- we render our own so it matches. */
+.account-multiselect-search input::-webkit-search-cancel-button {
+  appearance: none;
+}
+
+.account-multiselect-search-clear {
+  display: grid;
+  place-items: center;
+  padding: 2px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: rgba(245, 245, 245, 0.5);
+  cursor: pointer;
+}
+
+.account-multiselect-search-clear:hover {
+  color: #fff;
+}
+
 .account-multiselect-item {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 6px;
+  padding: 5px 6px;
+  border: 1px solid transparent;
   border-radius: 6px;
   color: rgba(245, 245, 245, 0.82);
   font-size: 11px;
@@ -3514,19 +3573,59 @@ body {
   background: rgba(255, 255, 255, 0.05);
 }
 
-.account-multiselect-item input {
-  accent-color: var(--accent);
+/* Selected rows get a border rather than a fill: with a grid this dense a
+   solid highlight on many rows turns into visual noise. */
+.account-multiselect-item-on {
+  border-color: rgba(245, 255, 0, 0.28);
+  background: rgba(245, 255, 0, 0.06);
 }
 
-.account-multiselect-item span {
+.account-multiselect-item input {
+  accent-color: var(--accent);
+  flex: none;
+}
+
+.account-multiselect-name {
+  display: flex;
+  flex-direction: column;
   flex: 1;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.account-multiselect-name strong {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-weight: 600;
+}
+
+.account-multiselect-name em {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: rgba(245, 245, 245, 0.38);
+  font-size: 9px;
+  font-style: normal;
 }
 
 .account-multiselect-item b {
   color: rgba(245, 245, 245, 0.4);
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.account-avatar {
+  flex: none;
+  border-radius: 50%;
+  object-fit: cover;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.account-avatar-fallback {
+  display: grid;
+  place-items: center;
+  color: rgba(245, 245, 245, 0.6);
   font-size: 9px;
   font-weight: 800;
 }
