@@ -24,6 +24,9 @@ import {
   Music2,
   Plus,
   Power,
+  Eye,
+  EyeOff,
+  Megaphone,
   RefreshCw,
   RotateCcw,
   ScanText,
@@ -422,8 +425,14 @@ function normalizePost(post) {
   // A post keeps its HOT flag forever once it earns it (permanent record); the
   // badge only shows while it's still inside the active refresh window.
   const isHot = Boolean(post.isHot);
-  const showsHotBadge = isHot && ageDays <= HOT_BADGE_WINDOW_HOURS / 24;
-  // The HOT tab uses the same window, so badge and tab can never disagree.
+  // The badge is permanent, like the flag itself. It used to expire after 30h,
+  // which made sense when the HOT tab only covered that window -- but now that
+  // the tab is a full history, a time-boxed badge meant browsing past hot
+  // posts showed a grid with no HOT markers and no rates on it. If a post
+  // earned HOT, it says so, and its multiplier stays visible.
+  const showsHotBadge = isHot;
+  // Still available for anything that wants "hot right now" rather than "was
+  // ever hot" -- the recency is conveyed by the age shown on the badge.
   const isHotRecent = isHot && ageDays <= HOT_TAB_WINDOW_HOURS / 24;
 
   return {
@@ -871,6 +880,7 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
   const [visibleCount, setVisibleCount] = useState(POSTS_PER_BATCH);
   const [selectedKey, setSelectedKey] = useState(initialUrl.post);
   const [isSidebarOpen, setIsSidebarOpen] = useState(Boolean(initialUrl.post));
+  const [showHidden, setShowHidden] = useState(false);
   const [filtersHidden, setFiltersHidden] = useState(false);
   const lastScrollTopRef = useRef(0);
   const topbarRef = useRef(null);
@@ -1086,6 +1096,10 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
         // is how you narrow it to today, this week, or any past period.
         if (!post.isHot) continue;
       } else if (activeGroup !== 'all' && post.group !== activeGroup) continue;
+      // Hidden posts are filtered out, not deleted -- the Visibility filter is
+      // how you get back to them to unhide. Without that switch, hiding would
+      // be effectively irreversible from the UI.
+      if (showHidden ? !post.hidden : Boolean(post.hidden)) continue;
       if (!effectiveAccounts.has(post.account)) continue;
       if (activeType !== 'All posts' && post.postType !== activeType) continue;
       if (mediaFilter === 'video' && !post.isVideo) continue;
@@ -1127,11 +1141,11 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
     });
 
     return output;
-  }, [posts, activeGroup, effectiveAccounts, activeType, mediaFilter, minLikes, minComments, dateFrom, dateTo, deferredQuery, sortBy]);
+  }, [posts, activeGroup, effectiveAccounts, activeType, mediaFilter, minLikes, minComments, dateFrom, dateTo, deferredQuery, sortBy, showHidden]);
 
   useEffect(() => {
     setVisibleCount(POSTS_PER_BATCH);
-  }, [deferredQuery, activeGroup, selectedAccounts, activeType, mediaFilter, minLikes, minComments, dateFrom, dateTo, sortBy]);
+  }, [deferredQuery, activeGroup, selectedAccounts, activeType, mediaFilter, minLikes, minComments, dateFrom, dateTo, sortBy, showHidden]);
 
   const visible = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount]);
   const showingFrom = filtered.length ? 1 : 0;
@@ -1181,9 +1195,59 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
     setDateTo(preset?.to ?? '');
   }, [datePresets]);
 
+  // Counted across the whole library, not the current filters: the badge is
+  // there to tell you hidden posts exist at all.
+  const hiddenCount = useMemo(() => posts.reduce((total, post) => total + (post.hidden ? 1 : 0), 0), [posts]);
+
   const copyShortcode = useCallback(async (shortcode) => {
     await navigator.clipboard.writeText(shortcode);
   }, []);
+
+  // Patch one post in place. The dashboard payload is tens of thousands of
+  // posts, so re-fetching the whole thing to reflect a single flag would be
+  // both slow and visually jarring (scroll position, image reloads).
+  const patchPost = useCallback((account, shortcode, patch) => {
+    setDashboard((current) => ({
+      ...current,
+      posts: current.posts.map((post) =>
+        post.account === account && post.shortcode === shortcode ? { ...post, ...patch } : post,
+      ),
+    }));
+  }, []);
+
+  const setPostFlags = useCallback(async (post, flags) => {
+    // Optimistic: the toggle should feel instant. On failure we put the old
+    // values back rather than leaving the UI lying about server state.
+    const previous = { isPromo: post.isPromo, hidden: post.hidden };
+    const optimistic = {};
+    if ('is_promo' in flags) optimistic.isPromo = flags.is_promo;
+    if ('hidden' in flags) optimistic.hidden = flags.hidden;
+    patchPost(post.account, post.shortcode, optimistic);
+
+    const body = new FormData();
+    body.append('account', post.account);
+    body.append('shortcode', post.shortcode);
+    Object.entries(flags).forEach(([key, value]) => body.append(key, value ? 'true' : 'false'));
+    try {
+      const response = await apiFetch(`${API_BASE}/api/dashboard/posts/flags`, { method: 'POST', body });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json();
+      patchPost(post.account, post.shortcode, { isPromo: data.is_promo, hidden: data.hidden });
+    } catch {
+      patchPost(post.account, post.shortcode, previous);
+    }
+  }, [patchPost]);
+
+  const reloadPost = useCallback(async (post) => {
+    const body = new FormData();
+    body.append('account', post.account);
+    body.append('shortcode', post.shortcode);
+    const response = await apiFetch(`${API_BASE}/api/dashboard/posts/reload`, { method: 'POST', body });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    patchPost(post.account, post.shortcode, { likes: data.likes, comments: data.comments });
+    return data;
+  }, [patchPost]);
 
   const copyCaption = useCallback(async (caption) => {
     await navigator.clipboard.writeText(caption);
@@ -1398,6 +1462,33 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
                 </div>
               </fieldset>
 
+              <fieldset className="filter-group-card filter-media">
+                <legend>
+                  {showHidden ? <EyeOff size={13} /> : <Eye size={13} />}
+                  Visibility
+                </legend>
+                <div className="chip-row compact-chips">
+                  <button
+                    type="button"
+                    className={showHidden ? 'chip' : 'chip chip-active'}
+                    onClick={() => startTransition(() => setShowHidden(false))}
+                    aria-pressed={!showHidden}
+                  >
+                    Visible
+                  </button>
+                  <button
+                    type="button"
+                    className={showHidden ? 'chip chip-active' : 'chip'}
+                    onClick={() => startTransition(() => setShowHidden(true))}
+                    aria-pressed={showHidden}
+                    title="Show only posts you've hidden, so you can bring them back"
+                  >
+                    Hidden
+                    {hiddenCount ? <span>{hiddenCount}</span> : null}
+                  </button>
+                </div>
+              </fieldset>
+
               <fieldset className="filter-group-card filter-date">
                 <legend>
                   <CalendarDays size={13} />
@@ -1539,6 +1630,8 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
                     selected={selected?.postKey === post.postKey}
                     onSelect={selectPost}
                     onCopy={copyShortcode}
+                    onFlags={setPostFlags}
+                    onReload={reloadPost}
                   />
                 ))}
               </div>
@@ -3337,7 +3430,114 @@ const SelectedPost = memo(function SelectedPost({ post }) {
   );
 });
 
-const PostCard = memo(function PostCard({ post, priority, selected, onSelect, onCopy }) {
+// The card's ... menu. Positioned absolutely inside the card header rather
+// than portaled: the header isn't inside an overflow-hidden container, so a
+// plain absolute panel is enough and avoids the fixed-position bookkeeping
+// the account dropdown needs.
+function PostMenu({ post, isPromo, onFlags, onReload }) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState('');
+  const [note, setNote] = useState('');
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onDown = (event) => {
+      if (ref.current && !ref.current.contains(event.target)) setOpen(false);
+    };
+    const onKey = (event) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  const run = async (event, key, action) => {
+    event.stopPropagation();
+    setBusy(key);
+    setNote('');
+    try {
+      const result = await action();
+      if (key === 'reload' && result) {
+        const before = result.likes_before;
+        const after = result.likes;
+        setNote(
+          Number.isFinite(before) && Number.isFinite(after) && before !== after
+            ? `Likes ${currencyFormatter.format(before)} → ${currencyFormatter.format(after)}`
+            : 'Already up to date',
+        );
+        // Leave the menu open briefly so the result is actually readable.
+        setBusy('');
+        setTimeout(() => setOpen(false), 1400);
+        return;
+      }
+      setOpen(false);
+    } catch {
+      setNote('That failed -- try again.');
+    } finally {
+      setBusy('');
+    }
+  };
+
+  return (
+    <div className="post-menu" ref={ref}>
+      <button
+        className="icon-button"
+        onClick={(event) => {
+          event.stopPropagation();
+          setOpen((value) => !value);
+        }}
+        aria-label="Post menu"
+        aria-expanded={open}
+      >
+        <MoreHorizontal size={16} />
+      </button>
+      {open ? (
+        <div className="post-menu-panel" role="menu" onClick={(event) => event.stopPropagation()}>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={(event) => run(event, 'promo', () => onFlags(post, { is_promo: !post.isPromo }))}
+            disabled={Boolean(busy)}
+          >
+            <Megaphone size={13} />
+            {post.isPromo ? 'Remove promo' : 'Mark as promo'}
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={(event) => run(event, 'hide', () => onFlags(post, { hidden: !post.hidden }))}
+            disabled={Boolean(busy)}
+          >
+            {post.hidden ? <Eye size={13} /> : <EyeOff size={13} />}
+            {post.hidden ? 'Unhide' : 'Hide'}
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={(event) => run(event, 'reload', () => onReload(post))}
+            disabled={Boolean(busy)}
+          >
+            <RefreshCw size={13} className={busy === 'reload' ? 'spin' : ''} />
+            {busy === 'reload' ? 'Reloading...' : 'Reload counts'}
+          </button>
+          {/* Promo is inferred from the caption hashtag as well as the flag,
+              so say so rather than showing a toggle that looks stuck on. */}
+          {isPromo && !post.isPromo ? (
+            <p className="post-menu-note">Tagged {PROMO_HASHTAG}</p>
+          ) : null}
+          {note ? <p className="post-menu-note">{note}</p> : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+const PostCard = memo(function PostCard({ post, priority, selected, onSelect, onCopy, onFlags, onReload }) {
   const [avatarFailed, setAvatarFailed] = useState(false);
   const handleClick = () => onSelect(post.postKey);
   const handleKeyDown = (event) => {
@@ -3355,11 +3555,11 @@ const PostCard = memo(function PostCard({ post, priority, selected, onSelect, on
   };
 
   const effects = hotEffects(post);
-  const cardClassName = `post-card${selected ? ' selected' : ''}${effects.className}`;
+  const cardClassName = `post-card${selected ? ' selected' : ''}${effects.className}${post.hidden ? ' post-card-hidden' : ''}`;
   // Promo is either detected from the caption hashtag or set explicitly on
   // the post (the card's ... menu writes that flag), so a promo that didn't
   // use the tag can still be marked by hand.
-  const isPromo = Boolean(post.is_promo) || PROMO_HASHTAG_RE.test(post.caption || '');
+  const isPromo = Boolean(post.isPromo) || PROMO_HASHTAG_RE.test(post.caption || '');
 
   return (
     <article className={cardClassName} onClick={handleClick} onKeyDown={handleKeyDown} role="button" tabIndex={0} aria-pressed={selected}>
@@ -3388,9 +3588,7 @@ const PostCard = memo(function PostCard({ post, priority, selected, onSelect, on
         </div>
         <div className="post-header-actions">
           <FreshnessRing timestamp={post.timestamp} />
-          <button className="icon-button" onClick={stopAction} aria-label="Post menu">
-            <MoreHorizontal size={16} />
-          </button>
+          <PostMenu post={post} isPromo={isPromo} onFlags={onFlags} onReload={onReload} />
         </div>
       </div>
 
