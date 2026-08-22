@@ -183,6 +183,11 @@ const TYPE_LABELS = {
   Image: 'Image',
 };
 const POSTS_PER_BATCH = 60;
+// Posts carrying this hashtag are paid placements. `\B` before the # and a
+// word boundary after it so "#aitoolsentientlabs" doesn't match, while
+// "...tool. #AIToolSentient" does regardless of case.
+const PROMO_HASHTAG = '#aitoolsentient';
+const PROMO_HASHTAG_RE = /#aitoolsentient\b/i;
 // Must match the filter-bar collapse duration in styles.css (.filter-strip,
 // .group-tabs, .topbar). Used to know when the animation has settled so the
 // layout measurement can run without cancelling it.
@@ -1292,7 +1297,7 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
             ) : null}
           </header>
 
-          {loading ? <section className="dash-state">Loading the shared Post DB...</section> : null}
+          {loading ? <DashboardSkeleton /> : null}
           {loadError ? <section className="dash-state dash-state-error">{loadError}</section> : null}
 
           {!loading && !loadError ? <>
@@ -1700,6 +1705,42 @@ function AccountAvatar({ handle, hasAvatar, size = 28 }) {
     <span className="account-avatar account-avatar-fallback" style={style}>
       {handle.slice(0, 2).toUpperCase()}
     </span>
+  );
+}
+
+// Shown while the post library loads. A skeleton of the real layout rather
+// than a spinner or a line of text: the first load pulls tens of thousands of
+// posts, and a bare "Loading..." on an empty page reads as broken. Mirroring
+// the filter strip and card grid also means the page doesn't visibly jump
+// when the data lands.
+function DashboardSkeleton() {
+  return (
+    <section className="dash-skeleton" role="status" aria-live="polite">
+      <span className="sr-only">Loading the post library</span>
+      <div className="dash-skeleton-filters" aria-hidden="true">
+        {Array.from({ length: 6 }).map((_, index) => (
+          <div className="skeleton-block skeleton-filter" key={index} />
+        ))}
+      </div>
+      <div className="dash-skeleton-grid" aria-hidden="true">
+        {Array.from({ length: 10 }).map((_, index) => (
+          <div className="dash-skeleton-card" key={index}>
+            <div className="dash-skeleton-card-head">
+              <div className="skeleton-block skeleton-avatar" />
+              <div className="dash-skeleton-lines">
+                <div className="skeleton-block skeleton-line skeleton-line-sm" />
+                <div className="skeleton-block skeleton-line skeleton-line-xs" />
+              </div>
+            </div>
+            <div className="skeleton-block dash-skeleton-media" />
+            <div className="dash-skeleton-card-foot">
+              <div className="skeleton-block skeleton-line skeleton-line-sm" />
+              <div className="skeleton-block skeleton-line" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -3301,6 +3342,10 @@ const PostCard = memo(function PostCard({ post, priority, selected, onSelect, on
 
   const effects = hotEffects(post);
   const cardClassName = `post-card${selected ? ' selected' : ''}${effects.className}`;
+  // Promo is either detected from the caption hashtag or set explicitly on
+  // the post (the card's ... menu writes that flag), so a promo that didn't
+  // use the tag can still be marked by hand.
+  const isPromo = Boolean(post.is_promo) || PROMO_HASHTAG_RE.test(post.caption || '');
 
   return (
     <article className={cardClassName} onClick={handleClick} onKeyDown={handleKeyDown} role="button" tabIndex={0} aria-pressed={selected}>
@@ -3343,6 +3388,11 @@ const PostCard = memo(function PostCard({ post, priority, selected, onSelect, on
           </div>
         ) : null}
         {post.showsHotBadge ? <HotBadge post={post} /> : null}
+        {isPromo ? (
+          <div className="promo-ribbon" title={`Promo (${PROMO_HASHTAG})`}>
+            <span>Promo</span>
+          </div>
+        ) : null}
       </CoverImage>
 
       <div className="post-actions">

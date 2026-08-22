@@ -192,6 +192,135 @@ img {
   color: #ffb6aa;
 }
 
+/* Visually hidden but still announced by screen readers. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Loading skeleton -- mirrors the real filter strip + card grid so the page
+   doesn't jump when data lands. */
+.dash-skeleton {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.dash-skeleton-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(8, 8, 8, 0.96);
+}
+
+.skeleton-filter {
+  height: 64px;
+  border-radius: 10px;
+}
+
+.dash-skeleton-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(8, 8, 8, 0.96);
+}
+
+.dash-skeleton-card {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(13, 13, 13, 0.9);
+}
+
+.dash-skeleton-card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dash-skeleton-lines {
+  display: grid;
+  gap: 6px;
+  flex: 1;
+}
+
+.dash-skeleton-media {
+  aspect-ratio: 3 / 4;
+  border-radius: 10px;
+}
+
+.dash-skeleton-card-foot {
+  display: grid;
+  gap: 6px;
+}
+
+.skeleton-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.skeleton-line {
+  height: 9px;
+  border-radius: 999px;
+}
+
+.skeleton-line-sm {
+  width: 55%;
+}
+
+.skeleton-line-xs {
+  width: 32%;
+}
+
+/* One shared shimmer. background-size >100% so the gradient has somewhere to
+   travel; the animation just slides its position. */
+.skeleton-block {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.04) 25%,
+    rgba(255, 255, 255, 0.09) 37%,
+    rgba(255, 255, 255, 0.04) 63%
+  );
+  background-size: 400% 100%;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0 50%;
+  }
+}
+
+/* Respect a reduced-motion preference: keep the placeholder, drop the
+   movement. */
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-block {
+    animation: none;
+  }
+}
+
 .dash-state {
   position: relative;
   z-index: 1;
@@ -584,6 +713,34 @@ img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+/* Corner ribbon for paid placements (#aitoolsentient, or set by hand from
+   the card menu). Anchored bottom-left: the top-right corner is taken by the
+   video badge and the top-left by the HOT badge, and cover art usually has
+   its headline across the middle. overflow:hidden on the parent clips the
+   rotated bar into a clean triangle. */
+.promo-ribbon {
+  position: absolute;
+  bottom: 14px;
+  left: -34px;
+  z-index: 3;
+  width: 132px;
+  padding: 5px 0;
+  transform: rotate(45deg);
+  transform-origin: center;
+  background: linear-gradient(90deg, #f5ff00, #d4e000);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  text-align: center;
+  pointer-events: none;
+}
+
+.promo-ribbon span {
+  color: #0a0a0a;
+  font-size: 0.58rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
 }
 
 .media-badge {
