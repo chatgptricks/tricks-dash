@@ -102,9 +102,14 @@ const GROUP_TABS = [
   { value: 'hot', label: 'HOT' },
 ];
 
-// Single source of truth for how long a post counts as HOT, in both the tab and
-// the badge. 30h rather than 48h: two days still felt stale in practice -- the
-// window covers a post's first full day plus the following morning, then lets go.
+// How long a HOT post keeps showing its badge in the grid. 30h rather than
+// 48h: two days still felt stale in practice -- the window covers a post's
+// first full day plus the following morning, then lets go.
+//
+// This no longer bounds the HOT *tab*, which is a full history of everything
+// that ever went hot (narrow it with the Published date filter). The badge
+// stays time-boxed because it means "hot right now" in a mixed feed, whereas
+// the tab is somewhere you go deliberately to look back.
 const HOT_TAB_WINDOW_HOURS = 30;
 
 // ---------------------------------------------------------------------------
@@ -170,6 +175,9 @@ const SORT_OPTIONS = [
   { value: 'comments-desc', label: 'Most commented' },
   { value: 'newest', label: 'Newest' },
   { value: 'oldest', label: 'Oldest' },
+  // How hard a post beat its own account's HOT threshold. Comparable across
+  // accounts with very different baselines, so it's the "most viral" ranking.
+  { value: 'hot-rate', label: 'Hot rate' },
 ];
 const MEDIA_OPTIONS = [
   { value: 'all', label: 'All' },
@@ -1073,7 +1081,10 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
 
     for (const post of posts) {
       if (activeGroup === 'hot') {
-        if (!post.isHotRecent) continue;
+        // Every post that ever earned HOT, not just the ones inside the badge
+        // window. The tab is a searchable history; the Published date filter
+        // is how you narrow it to today, this week, or any past period.
+        if (!post.isHot) continue;
       } else if (activeGroup !== 'all' && post.group !== activeGroup) continue;
       if (!effectiveAccounts.has(post.account)) continue;
       if (activeType !== 'All posts' && post.postType !== activeType) continue;
@@ -1088,10 +1099,13 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
     }
 
     output.sort((a, b) => {
-      // The HOT tab ranks by how hard each post beat its own account's
-      // threshold -- the only fair comparison across accounts whose baselines
-      // differ by an order of magnitude.
-      if (activeGroup === 'hot') {
+      // Ranking by how hard a post beat its own account's threshold is the
+      // only fair comparison across accounts whose baselines differ by an
+      // order of magnitude. It used to be forced on the HOT tab, but now that
+      // the tab spans all history that would pin the same all-time winners to
+      // the top forever -- so it's an explicit sort option instead, and the
+      // HOT tab otherwise honours the Order control like every other view.
+      if (sortBy === 'hot-rate') {
         const diff = (b.hotMultiplier || 0) - (a.hotMultiplier || 0);
         if (diff) return diff;
         return (b.timestamp || 0) - (a.timestamp || 0);
