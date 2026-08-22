@@ -205,77 +205,51 @@ img {
   border: 0;
 }
 
-/* Loading skeleton -- mirrors the real filter strip + card grid so the page
-   doesn't jump when data lands. */
+/* Loading skeleton. Structure comes from the real .filter-strip /
+   .gallery-grid / .post-card classes (see DashboardSkeleton), so only the
+   placeholder fills live here -- sizing is inherited and can't drift. */
 .dash-skeleton {
   position: relative;
   z-index: 1;
   display: grid;
   gap: 14px;
-  margin-top: 14px;
 }
 
-.dash-skeleton-filters {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: 10px;
-  padding: 14px;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: rgba(8, 8, 8, 0.96);
+/* The strip normally animates its own height when the filter bar hides; the
+   skeleton is static, so drop the transition to avoid an opening flourish. */
+.dash-skeleton-strip {
+  transition: none;
 }
 
 .skeleton-filter {
-  height: 64px;
-  border-radius: 10px;
+  height: 46px;
+  border-radius: 8px;
 }
 
-.dash-skeleton-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 14px;
-  padding: 14px;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: rgba(8, 8, 8, 0.96);
-}
-
+/* Cards are placeholders: kill the interactive affordances the real ones
+   carry so nothing invites a click while data is still loading. */
 .dash-skeleton-card {
-  display: grid;
-  gap: 10px;
-  padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: rgba(13, 13, 13, 0.9);
-}
-
-.dash-skeleton-card-head {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+  cursor: default;
+  pointer-events: none;
 }
 
 .dash-skeleton-lines {
   display: grid;
   gap: 6px;
-  flex: 1;
+  align-content: center;
 }
 
-.dash-skeleton-media {
-  aspect-ratio: 3 / 4;
-  border-radius: 10px;
+.dash-skeleton-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 0 12px;
 }
 
-.dash-skeleton-card-foot {
-  display: grid;
-  gap: 6px;
-}
-
-.skeleton-avatar {
-  width: 34px;
-  height: 34px;
+.skeleton-dot {
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
-  flex: none;
 }
 
 .skeleton-line {
@@ -283,17 +257,12 @@ img {
   border-radius: 999px;
 }
 
-.skeleton-line-sm {
-  width: 55%;
-}
+.skeleton-line-sm { width: 55%; }
+.skeleton-line-xs { width: 32%; }
 
-.skeleton-line-xs {
-  width: 32%;
-}
-
-/* One shared shimmer. background-size >100% so the gradient has somewhere to
-   travel; the animation just slides its position. */
-.skeleton-block {
+/* Two classes so this beats single-class rules like .post-media's own
+   background, which would otherwise hide the shimmer. */
+.dash-skeleton .skeleton-block {
   background: linear-gradient(
     90deg,
     rgba(255, 255, 255, 0.04) 25%,
@@ -305,20 +274,14 @@ img {
 }
 
 @keyframes skeleton-shimmer {
-  0% {
-    background-position: 100% 50%;
-  }
-  100% {
-    background-position: 0 50%;
-  }
+  0%   { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
 }
 
 /* Respect a reduced-motion preference: keep the placeholder, drop the
    movement. */
 @media (prefers-reduced-motion: reduce) {
-  .skeleton-block {
-    animation: none;
-  }
+  .dash-skeleton .skeleton-block { animation: none; }
 }
 
 .dash-state {
@@ -5193,4 +5156,43 @@ body {
   margin: 8px 0 0;
   color: #ff6b6b;
   font-size: 11px;
+}
+
+/* Hidden-posts switch. Lives with the group tabs, pushed to the far right so
+   it reads as "which set am I looking at" rather than another filter. */
+.hidden-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  padding: 0 11px;
+  height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(245, 245, 245, 0.55);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.hidden-toggle:hover {
+  border-color: rgba(245, 255, 0, 0.35);
+  color: #fff;
+}
+
+.hidden-toggle-on {
+  border-color: rgba(245, 255, 0, 0.45);
+  background: rgba(245, 255, 0, 0.08);
+  color: var(--accent);
+}
+
+.hidden-toggle span {
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.09);
+  color: inherit;
+  font-size: 9px;
 }
