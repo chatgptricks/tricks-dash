@@ -556,7 +556,7 @@ async function renderDetail(handle){
 
     <section>
       <h2>Historical Stats</h2>
-      <p class="sub">Last ${Math.min(hist.length,15)} day${Math.min(hist.length,15)===1?'':'s'} of recorded snapshots, newest first. Engagement rate is that day's average likes divided by that day's follower count -- shown only for days with a post.</p>
+      <p class="sub">Last ${Math.min(hist.length,15)} day${Math.min(hist.length,15)===1?'':'s'} of recorded snapshots, oldest first. "Followers +/-" is that day's change -- the running total sits beside it for reference. Engagement rate is that day's average likes divided by that day's follower count, shown only for days with a post.</p>
       ${renderHistoricalStats(hist)}
     </section>
   `;
