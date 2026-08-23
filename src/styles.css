@@ -5880,3 +5880,190 @@ body {
 .group-tabs {
   margin: 0;
 }
+
+/* ---------------------------------------------------------------------------
+   Header layout fixes.
+
+   Three real bugs, all mine:
+
+   1. An older rule gives .topbar-search `flex: 1 1 320px`. In the old
+      horizontal .brand row that made it grow sideways, which was right. Inside
+      the new column it made it grow *downwards* to 320px tall, which is what
+      wrecked the header. flex-grow has no idea which axis it's on -- the
+      container decides.
+
+   2. .left-pane became a flex column inside a fixed-height parent, and flex
+      items shrink by default. The topbar was squashed from its natural height
+      to 61px while its content overflowed to y=415. Only the gallery may flex.
+
+   3. The right column was `1fr` of a 1700px viewport, so right-aligned filters
+      left a ~600px hole in the middle. The left column takes the slack now and
+      the right one sizes to its content.
+   --------------------------------------------------------------------------- */
+
+.left-pane > .topbar,
+.left-pane > .group-tabs,
+.left-pane > .active-chips,
+.left-pane > .dash-skeleton {
+  flex: 0 0 auto;
+}
+
+.topbar {
+  grid-template-columns: minmax(300px, 1fr) auto;
+  align-items: start;
+  gap: 28px;
+  padding: 12px 18px;
+}
+
+.topbar-identity {
+  gap: 8px;
+}
+
+/* Row one of the left column: name and the count it produces, on one line. */
+.topbar-brandline {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 14px;
+  min-height: 32px;
+}
+
+.topbar-search {
+  flex: 0 0 auto;
+  height: 38px;
+  min-height: 0;
+  max-width: 560px;
+}
+
+.results-count {
+  margin-bottom: 2px;
+}
+
+/* Six triggers on one line. They total ~630px, so wrapping was purely the
+   right column being wider than it needed to be. */
+@media (min-width: 901px) {
+  .filter-triggers {
+    flex-wrap: nowrap;
+  }
+}
+
+/* Placeholder count line, so row one keeps its height before data lands. */
+.results-count-pending {
+  width: 210px;
+  height: 13px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.topbar-search input:disabled {
+  cursor: default;
+}
+
+/* Skeleton pills sit in the real .filter-triggers row, so they must match a
+   real trigger exactly: 32px tall, same gap, same order. */
+.filter-triggers .skeleton-filter {
+  width: 96px;
+  height: 32px;
+  border-radius: 8px;
+}
+
+.dash-skeleton {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* ---------------------------------------------------------------------------
+   Filters move onto the group-tab row.
+
+   Tabs choose the set, filters narrow it -- the same decision, so they belong
+   on one line rather than in two stacked bars. Matching the pill shape and
+   34px height is what makes the row read as one control surface instead of
+   two systems sharing a strip.
+   --------------------------------------------------------------------------- */
+
+.tabs-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.tabs-bar .group-tabs {
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  margin: 0;
+}
+
+/* Pushes the filters to the right edge of the same row. */
+.tabs-bar .filter-row {
+  flex: 1 1 auto;
+  width: auto;
+  justify-content: flex-end;
+}
+
+/* Same geometry as .group-tab: 34px, pill, 1px hairline. Only the type case
+   differs -- the tabs are uppercase labels, these carry values like
+   "@chatgptricks" that shouldn't be shouted. */
+.filter-trigger {
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border-color: rgba(255, 255, 255, 0.09);
+  background: #080808;
+  color: rgba(245, 245, 245, 0.5);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.filter-trigger:hover {
+  border-color: rgba(255, 255, 255, 0.22);
+  background: #080808;
+  color: #fff;
+}
+
+.filter-trigger-active {
+  border-color: rgba(245, 255, 0, 0.5);
+  background: rgba(245, 255, 0, 0.12);
+  color: #fffce0;
+}
+
+.filter-trigger-active:hover {
+  border-color: rgba(245, 255, 0, 0.7);
+  background: rgba(245, 255, 0, 0.18);
+}
+
+.tool-icon.share-button {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border-color: rgba(255, 255, 255, 0.09);
+  background: #080808;
+}
+
+.filter-triggers .skeleton-filter {
+  height: 34px;
+  border-radius: 999px;
+}
+
+/* The header keeps only identity + search + tools now, so it drops to two
+   rows and the right column no longer needs to be wide. */
+.topbar {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.topbar-controls {
+  justify-content: flex-start;
+}
+
+/* Regression fix: making the account list inline for its popover, I set it to
+   a single column and lost the multi-column grid we built for it. The panel
+   is wide enough for real columns -- restore them. */
+.account-multiselect-inline .account-multiselect-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(212px, 1fr));
+  gap: 2px 10px;
+  max-height: 340px;
+  overflow-y: auto;
+}

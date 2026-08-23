@@ -1462,30 +1462,13 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
                 The old "DASH EXPLORER" eyebrow sat exactly where the search
                 field now goes and said nothing the wordmark doesn't. */}
             <div className="topbar-identity">
-              <h1><Wordmark /></h1>
-
-              {!loading && !loadError ? (
-                <>
-                  <div className="topbar-search">
-                    <Search size={18} aria-hidden="true" />
-                    <input
-                      ref={searchInputRef}
-                      type="search"
-                      value={query}
-                      onChange={(event) => setQuery(event.target.value)}
-                      aria-label="Search posts"
-                      placeholder="Captions, songs, or text inside a cover"
-                    />
-                    {query ? (
-                      <button className="search-clear" type="button" aria-label="Clear search" onClick={() => setQuery('')}>
-                        <X size={15} />
-                      </button>
-                    ) : <kbd className="search-kbd">⌘K</kbd>}
-                  </div>
-
-                  {/* Moved down from the far right of the topbar: this number is
-                      the direct result of the search and filters beside it, and
-                      it used to sit in the opposite corner next to sign out. */}
+              {/* Wordmark and count share row one so the left column is two
+                  rows tall, the same as tools + filters on the right. Three
+                  stacked rows here left the right column short and the header
+                  lopsided. */}
+              <div className="topbar-brandline">
+                <h1><Wordmark /></h1>
+                {!loading && !loadError ? (
                   <p className="results-count">
                     <strong>{filtered.length.toLocaleString()}</strong> of {posts.length.toLocaleString()} posts
                     <span className="results-count-aside">
@@ -1494,8 +1477,30 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
                       {compactFormatter.format(combinedSummary.averageLikes ?? summary['Average likes'] ?? 0)} avg
                     </span>
                   </p>
-                </>
-              ) : null}
+                ) : <p className="results-count results-count-pending" aria-hidden="true" />}
+              </div>
+
+              {/* Rendered while loading too, just disabled. Hiding it made the
+                  header change shape the moment data landed, which is what
+                  made the load look broken -- the skeleton has to occupy the
+                  same box as the real thing or it isn't a skeleton. */}
+              <div className="topbar-search">
+                <Search size={18} aria-hidden="true" />
+                <input
+                  ref={searchInputRef}
+                  type="search"
+                  value={query}
+                  disabled={loading || Boolean(loadError)}
+                  onChange={(event) => setQuery(event.target.value)}
+                  aria-label="Search posts"
+                  placeholder="Captions, songs, or text inside a cover"
+                />
+                {query ? (
+                  <button className="search-clear" type="button" aria-label="Clear search" onClick={() => setQuery('')}>
+                    <X size={15} />
+                  </button>
+                ) : <kbd className="search-kbd">⌘K</kbd>}
+              </div>
             </div>
 
             {/* Right column: tools on top, filters underneath. */}
@@ -1545,230 +1550,6 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
                 <AccountMenu email={userEmail} onSignOut={onSignOut} />
               </div>
 
-              {!loading && !loadError ? (
-                <div className="filter-row">
-                  <button
-                    type="button"
-                    className={mobileFiltersOpen ? 'filter-sheet-toggle filter-sheet-toggle-open' : 'filter-sheet-toggle'}
-                    onClick={() => setMobileFiltersOpen((value) => !value)}
-                    aria-expanded={mobileFiltersOpen}
-                  >
-                    <SlidersHorizontal size={14} />
-                    Filters
-                    {activeFilterCount ? <b>{activeFilterCount}</b> : null}
-                  </button>
-
-                  <div className={mobileFiltersOpen ? 'filter-triggers filter-triggers-open' : 'filter-triggers'}>
-                    <FilterPopover
-                      id="account"
-                      icon={<AtSign size={13} />}
-                      label="Account"
-                      summary={accountSummary}
-                      isActive={Boolean(accountSummary)}
-                      width={340}
-                    >
-                      <AccountMultiSelect
-                        inline
-                        accounts={accountsInScope}
-                        counts={accountCounts}
-                        selected={selectedAccounts}
-                        onChange={(next) => startTransition(() => setSelectedAccounts(next))}
-                        onAddAccount={() => setShowAddAccount(true)}
-                      />
-                    </FilterPopover>
-
-                    <FilterPopover
-                      id="type"
-                      icon={<Filter size={13} />}
-                      label="Type"
-                      summary={activeType !== 'All posts' ? TYPE_LABELS[activeType] ?? activeType : ''}
-                      isActive={activeType !== 'All posts'}
-                    >
-                      <div className="chip-row">
-                        {TYPE_OPTIONS.map((option) => (
-                          <button
-                            key={option}
-                            type="button"
-                            className={option === activeType ? 'chip chip-active' : 'chip'}
-                            onClick={() => startTransition(() => setActiveType(option))}
-                            aria-pressed={option === activeType}
-                          >
-                            {TYPE_LABELS[option] ?? option}
-                            {option !== 'All posts' ? <span>{typeCounts[option] ?? 0}</span> : null}
-                          </button>
-                        ))}
-                      </div>
-                    </FilterPopover>
-
-                    <FilterPopover
-                      id="asset"
-                      icon={<Video size={13} />}
-                      label="Asset"
-                      summary={mediaFilter !== 'all' ? MEDIA_OPTIONS.find((o) => o.value === mediaFilter)?.label : ''}
-                      isActive={mediaFilter !== 'all'}
-                      width={240}
-                    >
-                      <div className="chip-row compact-chips">
-                        {MEDIA_OPTIONS.map((option) => (
-                          <button
-                            key={option.value}
-                            type="button"
-                            className={option.value === mediaFilter ? 'chip chip-active' : 'chip'}
-                            onClick={() => startTransition(() => setMediaFilter(option.value))}
-                            aria-pressed={option.value === mediaFilter}
-                          >
-                            {option.label}
-                          </button>
-                        ))}
-                      </div>
-                    </FilterPopover>
-
-                    <FilterPopover
-                      id="date"
-                      icon={<CalendarDays size={13} />}
-                      label="Date"
-                      summary={dateSummary}
-                      isActive={Boolean(dateSummary)}
-                      width={280}
-                    >
-                      <div className="date-fields">
-                        <label className="select-field">
-                          <span>Range</span>
-                          <select aria-label="Date range" value={datePreset} onChange={(event) => applyDatePreset(event.target.value)}>
-                            {datePreset === 'custom' ? <option value="custom">Custom range</option> : null}
-                            {datePresets.map((preset) => <option key={preset.value} value={preset.value}>{preset.label}</option>)}
-                          </select>
-                        </label>
-                        <label className="date-field">
-                          <span>From</span>
-                          <input type="date" aria-label="Date from" value={dateFrom} min={ranges.dateMin} max={ranges.dateMax} onChange={(e) => { setDatePreset('custom'); setDateFrom(e.target.value); }} />
-                        </label>
-                        <label className="date-field">
-                          <span>To</span>
-                          <input type="date" aria-label="Date to" value={dateTo} min={ranges.dateMin} max={ranges.dateMax} onChange={(e) => { setDatePreset('custom'); setDateTo(e.target.value); }} />
-                        </label>
-                      </div>
-                    </FilterPopover>
-
-                    <FilterPopover
-                      id="engagement"
-                      icon={<SlidersHorizontal size={13} />}
-                      label="Engagement"
-                      summary={engagementSummary}
-                      isActive={minLikes > 0 || minComments > 0}
-                      width={320}
-                    >
-                      <div className="filter-engagement-inner">
-                        <label className="range-field compact-range">
-                          <span>Likes</span>
-                          <input
-                            type="range"
-                            aria-label="Minimum likes"
-                            min={0}
-                            max={LIKES_STOPS.length - 1}
-                            step={1}
-                            value={likesStopIndex(minLikes)}
-                            onChange={(e) => startTransition(() => setMinLikes(LIKES_STOPS[clampNumber(e.target.value, 0)]))}
-                          />
-                          {/* Each tick is positioned with the exact same formula the
-                              browser uses to place the native thumb: the thumb's
-                              travel path runs from THUMB_PX / 2 to
-                              100% - THUMB_PX / 2 (see the CSS thumb rules), so a
-                              stop at fraction f of the way through the stops sits
-                              at calc(THUMB_PX/2 + f * (100% - THUMB_PX)). Centering
-                              each tick on that exact point with translateX(-50%)
-                              (rather than a plain flex space-between row of
-                              variable-width text) is what makes the marks land
-                              exactly under the thumb regardless of label width. */}
-                          <div className="range-ticks" aria-hidden="true">
-                            {LIKES_STOPS.map((stop, index) => {
-                              const fraction = index / (LIKES_STOPS.length - 1);
-                              const isActive = likesStopIndex(minLikes) === index;
-                              return (
-                                <div
-                                  key={stop}
-                                  className={isActive ? 'range-tick range-tick-active' : 'range-tick'}
-                                  style={{ left: `calc(${RANGE_THUMB_PX / 2}px + (100% - ${RANGE_THUMB_PX}px) * ${fraction})` }}
-                                >
-                                  <span className="range-tick-mark" />
-                                  <span className="range-tick-label">
-                                    {stop === 0 ? '0' : compactFormatter.format(stop)}
-                                    {index === LIKES_STOPS.length - 1 ? '+' : ''}
-                                  </span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </label>
-                        <div className="engagement-numbers">
-                          {/* Both of these are floors, not equality matches -- the
-                              box exists so you can type a threshold between the
-                              slider's stops (e.g. 3,500), not to find posts with
-                              exactly that many likes. */}
-                          <label className="number-field">
-                            <span>Min likes</span>
-                            <input
-                              aria-label="Minimum likes"
-                              type="number"
-                              min={0}
-                              placeholder="0"
-                              title="Show posts with at least this many likes"
-                              value={minLikes}
-                              onChange={(e) => startTransition(() => setMinLikes(clampNumber(e.target.value, 0)))}
-                            />
-                          </label>
-                          <label className="number-field">
-                            <span>Min comments</span>
-                            <input
-                              aria-label="Minimum comments"
-                              placeholder="0"
-                              title="Show posts with at least this many comments"
-                              type="number"
-                              min={0}
-                              value={minComments}
-                              onChange={(e) => startTransition(() => setMinComments(clampNumber(e.target.value, ranges.commentsMin)))}
-                            />
-                          </label>
-                        </div>
-                      </div>
-                    </FilterPopover>
-
-                    <FilterPopover
-                      id="sort"
-                      icon={<ArrowUpDown size={13} />}
-                      label="Sort"
-                      summary={sortBy !== 'newest' ? SORT_OPTIONS.find((o) => o.value === sortBy)?.label : ''}
-                      isActive={sortBy !== 'newest'}
-                      width={240}
-                    >
-                      <div className="sort-options">
-                        {SORT_OPTIONS.map((option) => (
-                          <button
-                            key={option.value}
-                            type="button"
-                            className={option.value === sortBy ? 'sort-option sort-option-active' : 'sort-option'}
-                            onClick={() => startTransition(() => setSortBy(option.value))}
-                            aria-pressed={option.value === sortBy}
-                          >
-                            {option.label}
-                            {option.value === sortBy ? <Check size={14} /> : null}
-                          </button>
-                        ))}
-                      </div>
-                    </FilterPopover>
-                  </div>
-
-                  <button
-                    className="tool-icon share-button"
-                    type="button"
-                    onClick={copyShareLink}
-                    title="Copy a link to this exact view"
-                    aria-label="Copy link to this view"
-                  >
-                    {shareCopied ? <Check size={15} /> : <Link2 size={15} />}
-                  </button>
-                </div>
-              ) : null}
             </div>
 
             {refreshNotice ? (
@@ -1804,6 +1585,10 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
           {loadError ? <section className="dash-state dash-state-error">{loadError}</section> : null}
 
           {!loading && !loadError ? <>
+          {/* Filters share this row with the group tabs: same height,
+              same pill shape. Tabs pick the set, filters narrow it --
+              one decision surface instead of two stacked bars. */}
+          <div className="tabs-bar">
           <div
             ref={groupTabsRef}
             className="group-tabs"
@@ -1878,6 +1663,233 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
                 <span>{hiddenCount}</span>
               </button>
             ) : null}
+          </div>
+            <div className="filter-row">
+                <button
+                  type="button"
+                  className={mobileFiltersOpen ? 'filter-sheet-toggle filter-sheet-toggle-open' : 'filter-sheet-toggle'}
+                  onClick={() => setMobileFiltersOpen((value) => !value)}
+                  aria-expanded={mobileFiltersOpen}
+                >
+                  <SlidersHorizontal size={14} />
+                  Filters
+                  {activeFilterCount ? <b>{activeFilterCount}</b> : null}
+                </button>
+
+                <div className={mobileFiltersOpen ? 'filter-triggers filter-triggers-open' : 'filter-triggers'}>
+                  <FilterPopover
+                    id="account"
+                    icon={<AtSign size={13} />}
+                    label="Account"
+                    summary={accountSummary}
+                    isActive={Boolean(accountSummary)}
+                    /* Wide enough for the multi-column roster. 340 gave it a
+                       single column and quietly undid the columns+avatars
+                       layout already built for this list. */
+                    width={700}
+                  >
+                    <AccountMultiSelect
+                      inline
+                      accounts={accountsInScope}
+                      counts={accountCounts}
+                      selected={selectedAccounts}
+                      onChange={(next) => startTransition(() => setSelectedAccounts(next))}
+                      onAddAccount={() => setShowAddAccount(true)}
+                    />
+                  </FilterPopover>
+
+                  <FilterPopover
+                    id="type"
+                    icon={<Filter size={13} />}
+                    label="Type"
+                    summary={activeType !== 'All posts' ? TYPE_LABELS[activeType] ?? activeType : ''}
+                    isActive={activeType !== 'All posts'}
+                  >
+                    <div className="chip-row">
+                      {TYPE_OPTIONS.map((option) => (
+                        <button
+                          key={option}
+                          type="button"
+                          className={option === activeType ? 'chip chip-active' : 'chip'}
+                          onClick={() => startTransition(() => setActiveType(option))}
+                          aria-pressed={option === activeType}
+                        >
+                          {TYPE_LABELS[option] ?? option}
+                          {option !== 'All posts' ? <span>{typeCounts[option] ?? 0}</span> : null}
+                        </button>
+                      ))}
+                    </div>
+                  </FilterPopover>
+
+                  <FilterPopover
+                    id="asset"
+                    icon={<Video size={13} />}
+                    label="Asset"
+                    summary={mediaFilter !== 'all' ? MEDIA_OPTIONS.find((o) => o.value === mediaFilter)?.label : ''}
+                    isActive={mediaFilter !== 'all'}
+                    width={240}
+                  >
+                    <div className="chip-row compact-chips">
+                      {MEDIA_OPTIONS.map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          className={option.value === mediaFilter ? 'chip chip-active' : 'chip'}
+                          onClick={() => startTransition(() => setMediaFilter(option.value))}
+                          aria-pressed={option.value === mediaFilter}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </FilterPopover>
+
+                  <FilterPopover
+                    id="date"
+                    icon={<CalendarDays size={13} />}
+                    label="Date"
+                    summary={dateSummary}
+                    isActive={Boolean(dateSummary)}
+                    width={280}
+                  >
+                    <div className="date-fields">
+                      <label className="select-field">
+                        <span>Range</span>
+                        <select aria-label="Date range" value={datePreset} onChange={(event) => applyDatePreset(event.target.value)}>
+                          {datePreset === 'custom' ? <option value="custom">Custom range</option> : null}
+                          {datePresets.map((preset) => <option key={preset.value} value={preset.value}>{preset.label}</option>)}
+                        </select>
+                      </label>
+                      <label className="date-field">
+                        <span>From</span>
+                        <input type="date" aria-label="Date from" value={dateFrom} min={ranges.dateMin} max={ranges.dateMax} onChange={(e) => { setDatePreset('custom'); setDateFrom(e.target.value); }} />
+                      </label>
+                      <label className="date-field">
+                        <span>To</span>
+                        <input type="date" aria-label="Date to" value={dateTo} min={ranges.dateMin} max={ranges.dateMax} onChange={(e) => { setDatePreset('custom'); setDateTo(e.target.value); }} />
+                      </label>
+                    </div>
+                  </FilterPopover>
+
+                  <FilterPopover
+                    id="engagement"
+                    icon={<SlidersHorizontal size={13} />}
+                    label="Engagement"
+                    summary={engagementSummary}
+                    isActive={minLikes > 0 || minComments > 0}
+                    width={320}
+                  >
+                    <div className="filter-engagement-inner">
+                      <label className="range-field compact-range">
+                        <span>Likes</span>
+                        <input
+                          type="range"
+                          aria-label="Minimum likes"
+                          min={0}
+                          max={LIKES_STOPS.length - 1}
+                          step={1}
+                          value={likesStopIndex(minLikes)}
+                          onChange={(e) => startTransition(() => setMinLikes(LIKES_STOPS[clampNumber(e.target.value, 0)]))}
+                        />
+                        {/* Each tick is positioned with the exact same formula the
+                            browser uses to place the native thumb: the thumb's
+                            travel path runs from THUMB_PX / 2 to
+                            100% - THUMB_PX / 2 (see the CSS thumb rules), so a
+                            stop at fraction f of the way through the stops sits
+                            at calc(THUMB_PX/2 + f * (100% - THUMB_PX)). Centering
+                            each tick on that exact point with translateX(-50%)
+                            (rather than a plain flex space-between row of
+                            variable-width text) is what makes the marks land
+                            exactly under the thumb regardless of label width. */}
+                        <div className="range-ticks" aria-hidden="true">
+                          {LIKES_STOPS.map((stop, index) => {
+                            const fraction = index / (LIKES_STOPS.length - 1);
+                            const isActive = likesStopIndex(minLikes) === index;
+                            return (
+                              <div
+                                key={stop}
+                                className={isActive ? 'range-tick range-tick-active' : 'range-tick'}
+                                style={{ left: `calc(${RANGE_THUMB_PX / 2}px + (100% - ${RANGE_THUMB_PX}px) * ${fraction})` }}
+                              >
+                                <span className="range-tick-mark" />
+                                <span className="range-tick-label">
+                                  {stop === 0 ? '0' : compactFormatter.format(stop)}
+                                  {index === LIKES_STOPS.length - 1 ? '+' : ''}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </label>
+                      <div className="engagement-numbers">
+                        {/* Both of these are floors, not equality matches -- the
+                            box exists so you can type a threshold between the
+                            slider's stops (e.g. 3,500), not to find posts with
+                            exactly that many likes. */}
+                        <label className="number-field">
+                          <span>Min likes</span>
+                          <input
+                            aria-label="Minimum likes"
+                            type="number"
+                            min={0}
+                            placeholder="0"
+                            title="Show posts with at least this many likes"
+                            value={minLikes}
+                            onChange={(e) => startTransition(() => setMinLikes(clampNumber(e.target.value, 0)))}
+                          />
+                        </label>
+                        <label className="number-field">
+                          <span>Min comments</span>
+                          <input
+                            aria-label="Minimum comments"
+                            placeholder="0"
+                            title="Show posts with at least this many comments"
+                            type="number"
+                            min={0}
+                            value={minComments}
+                            onChange={(e) => startTransition(() => setMinComments(clampNumber(e.target.value, ranges.commentsMin)))}
+                          />
+                        </label>
+                      </div>
+                    </div>
+                  </FilterPopover>
+
+                  <FilterPopover
+                    id="sort"
+                    icon={<ArrowUpDown size={13} />}
+                    label="Sort"
+                    summary={sortBy !== 'newest' ? SORT_OPTIONS.find((o) => o.value === sortBy)?.label : ''}
+                    isActive={sortBy !== 'newest'}
+                    width={240}
+                  >
+                    <div className="sort-options">
+                      {SORT_OPTIONS.map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          className={option.value === sortBy ? 'sort-option sort-option-active' : 'sort-option'}
+                          onClick={() => startTransition(() => setSortBy(option.value))}
+                          aria-pressed={option.value === sortBy}
+                        >
+                          {option.label}
+                          {option.value === sortBy ? <Check size={14} /> : null}
+                        </button>
+                      ))}
+                    </div>
+                  </FilterPopover>
+                </div>
+
+                <button
+                  className="tool-icon share-button"
+                  type="button"
+                  onClick={copyShareLink}
+                  title="Copy a link to this exact view"
+                  aria-label="Copy link to this view"
+                >
+                  {shareCopied ? <Check size={15} /> : <Link2 size={15} />}
+                </button>
+              </div>
+            )}
           </div>
 
           <section className="panel gallery">
@@ -2137,16 +2149,12 @@ function DashboardSkeleton() {
   return (
     <section className="dash-skeleton" role="status" aria-live="polite">
       <span className="sr-only">Loading the post library</span>
-      {/* Built from the real .filter-row / .gallery-grid / .post-card classes
-          rather than lookalike ones, so the placeholders inherit the actual
-          column count, gaps, card height and 3:4 media ratio. Any future
-          change to the card layout moves the skeleton with it instead of
-          leaving a copy behind to drift out of sync. */}
-      <div className="filter-row dash-skeleton-strip" aria-hidden="true">
-        {Array.from({ length: 6 }).map((_, index) => (
-          <div className="skeleton-block skeleton-filter" key={index} />
-        ))}
-      </div>
+      {/* No filter placeholders here: the real topbar already renders its own
+          disabled search and six placeholder pills while loading, so a second
+          set below duplicated the row and overlapped it. This is only the
+          grid, built from the real .gallery-grid / .post-card classes so the
+          placeholders inherit the actual column count, gaps, card height and
+          3:4 media ratio. */}
       <div className="gallery-grid" aria-hidden="true">
         {Array.from({ length: 10 }).map((_, index) => (
           <article className="post-card dash-skeleton-card" key={index}>
