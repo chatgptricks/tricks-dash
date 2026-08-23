@@ -5260,3 +5260,623 @@ body {
   color: rgba(245, 245, 245, 0.35);
   font-weight: 600;
 }
+
+/* ===========================================================================
+   Header rebuild: identity + search on the left, tools + filters on the right.
+
+   Everything below supersedes the older .brand / .topbar-metrics /
+   .filter-strip rules further up this file. The six always-open filter cards
+   are gone; their controls now live in popovers, which is what let the whole
+   scroll-to-hide mechanism (and its flicker) be deleted.
+   =========================================================================== */
+
+/* Was an explicit 4-track grid, which assumed a fixed number of children.
+   The active-filter chip row only renders when something is filtering, so the
+   child count varies -- a flex column absorbs that without the last track
+   silently swallowing a sibling. */
+.left-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.left-pane > .gallery {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.topbar {
+  display: grid;
+  grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
+  align-items: start;
+  gap: 24px;
+  min-height: 0;
+  padding: 14px 18px;
+}
+
+/* --- left column ------------------------------------------------------- */
+
+.topbar-identity {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.topbar-identity h1 {
+  margin: 0;
+  font-size: 26px;
+  line-height: 1;
+  font-weight: 700;
+  color: #fff;
+}
+
+/* The search field is now the widest thing in its column instead of
+   whatever was left over after a 42px headline. */
+.topbar-search {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  height: 40px;
+  padding: 0 10px 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(245, 245, 245, 0.5);
+  transition: border-color 140ms ease, background 140ms ease;
+}
+
+.topbar-search:focus-within {
+  border-color: rgba(245, 255, 0, 0.55);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.topbar-search input {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #f5f5f5;
+  font-size: 14px;
+  font-family: inherit;
+}
+
+.topbar-search input:focus {
+  outline: none;
+}
+
+.topbar-search input::placeholder {
+  color: rgba(245, 245, 245, 0.42);
+}
+
+/* Native search clear button duplicates our own ✕. */
+.topbar-search input::-webkit-search-cancel-button {
+  appearance: none;
+}
+
+.search-kbd {
+  flex-shrink: 0;
+  padding: 1px 5px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 4px;
+  color: rgba(245, 245, 245, 0.4);
+  font-size: 11px;
+  font-family: inherit;
+}
+
+.topbar-search .search-clear {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(245, 245, 245, 0.7);
+  cursor: pointer;
+}
+
+.topbar-search .search-clear:hover {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+
+/* Used to be a Metric card in the far top-right corner, next to sign out --
+   about as far from the filters that produce it as the layout allowed. */
+.results-count {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  color: rgba(245, 245, 245, 0.55);
+  font-size: 13px;
+}
+
+.results-count strong {
+  color: #f5f5f5;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.results-count-aside {
+  color: rgba(245, 245, 245, 0.32);
+  font-size: 12px;
+}
+
+/* --- right column ------------------------------------------------------ */
+
+.topbar-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12px;
+  min-width: 0;
+}
+
+.tool-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* Labelled, not a fifth anonymous green circle. */
+.tool-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 11px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  color: rgba(245, 245, 245, 0.86);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.tool-link:hover {
+  border-color: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+}
+
+.tool-link-out {
+  color: rgba(245, 245, 245, 0.4);
+}
+
+/* Separates navigation from admin/session, which used to be indistinguishable. */
+.tool-divider {
+  width: 1px;
+  height: 20px;
+  margin: 0 2px;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.tool-icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: none;
+  color: rgba(245, 245, 245, 0.72);
+  cursor: pointer;
+}
+
+.tool-icon:hover {
+  border-color: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+}
+
+/* --- account menu ------------------------------------------------------ */
+
+.account-menu {
+  position: relative;
+}
+
+.account-menu-trigger {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(245, 255, 0, 0.35);
+  border-radius: 50%;
+  background: rgba(245, 255, 0, 0.14);
+  color: #f5ff00;
+  font-size: 13px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.account-menu-trigger:hover {
+  background: rgba(245, 255, 0, 0.22);
+}
+
+.account-menu-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 220px;
+  padding: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  background: #0a0a0a;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.6);
+}
+
+/* The signed-in address used to live only in a title attribute on the
+   sign-out button, so you had to hover a destructive control to read it. */
+.account-menu-email {
+  margin: 0;
+  padding: 6px 8px;
+  overflow: hidden;
+  color: rgba(245, 245, 245, 0.55);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px;
+  border: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0 0 6px 6px;
+  background: none;
+  color: rgba(245, 245, 245, 0.9);
+  font-size: 13px;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.account-menu-item:hover {
+  background: rgba(226, 75, 74, 0.16);
+  color: #ff9b9b;
+}
+
+/* --- filter triggers --------------------------------------------------- */
+
+.filter-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  justify-content: flex-end;
+}
+
+.filter-triggers {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.filter-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 9px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: none;
+  color: rgba(245, 245, 245, 0.7);
+  font-size: 13px;
+  font-family: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.filter-trigger:hover {
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #fff;
+}
+
+/* An active filter has to be legible at a glance from the trigger alone --
+   otherwise the only way to know what's narrowing the set is to open all six. */
+.filter-trigger-active {
+  border-color: rgba(245, 255, 0, 0.5);
+  background: rgba(245, 255, 0, 0.1);
+  color: #f5ff00;
+}
+
+.filter-trigger-label {
+  font-weight: 600;
+}
+
+.filter-trigger-summary {
+  max-width: 130px;
+  overflow: hidden;
+  opacity: 0.8;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.filter-trigger-summary::before {
+  content: '· ';
+}
+
+.filter-trigger .chevron {
+  transition: transform 140ms ease;
+}
+
+.filter-trigger .chevron-open {
+  transform: rotate(180deg);
+}
+
+.filter-popover-panel {
+  position: fixed;
+  z-index: 90;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 12px;
+  background: #0a0a0a;
+  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.65);
+}
+
+.filter-popover-title {
+  margin: 0 0 10px;
+  color: rgba(245, 245, 245, 0.5);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+/* The account list is rendered straight into its popover rather than behind
+   its own second trigger -- two stacked floating layers to reach one list. */
+.account-multiselect-inline {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.account-multiselect-inline .account-multiselect-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.filter-popover-panel .chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.filter-popover-panel .date-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.filter-popover-panel .filter-engagement-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.filter-popover-panel .engagement-numbers {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.sort-options {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sort-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 9px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: rgba(245, 245, 245, 0.82);
+  font-size: 13px;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sort-option:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
+}
+
+.sort-option-active {
+  background: rgba(245, 255, 0, 0.12);
+  color: #f5ff00;
+}
+
+/* --- active filter chips ----------------------------------------------- */
+
+.active-chips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 0 4px;
+}
+
+.active-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px 4px 11px;
+  border: 1px solid rgba(245, 255, 0, 0.4);
+  border-radius: 999px;
+  background: rgba(245, 255, 0, 0.1);
+  color: #f5ff00;
+  font-size: 12px;
+  font-family: inherit;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.active-chip:hover {
+  border-color: rgba(245, 255, 0, 0.75);
+  background: rgba(245, 255, 0, 0.18);
+}
+
+.active-chips-clear {
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: rgba(245, 245, 245, 0.5);
+  font-size: 12px;
+  font-family: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.active-chips-clear:hover {
+  color: #fff;
+}
+
+/* --- skeleton ----------------------------------------------------------- */
+
+.dash-skeleton-strip {
+  justify-content: flex-end;
+}
+
+.skeleton-filter {
+  width: 92px;
+  height: 32px;
+  border-radius: 8px;
+}
+
+/* --- mobile ------------------------------------------------------------- */
+
+/* Six triggers wrapping over three lines on a phone is no better than six
+   stacked cards, so below this width they collapse behind one button. */
+.filter-sheet-toggle {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .topbar {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .topbar-controls {
+    align-items: stretch;
+  }
+
+  .tool-row {
+    justify-content: flex-start;
+  }
+
+  .filter-row {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .filter-sheet-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    height: 34px;
+    padding: 0 12px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 8px;
+    background: none;
+    color: rgba(245, 245, 245, 0.85);
+    font-size: 13px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+  }
+
+  .filter-sheet-toggle b {
+    display: grid;
+    place-items: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: #f5ff00;
+    color: #0a0a0a;
+    font-size: 11px;
+  }
+
+  .filter-sheet-toggle-open {
+    border-color: rgba(245, 255, 0, 0.5);
+    color: #f5ff00;
+  }
+
+  .filter-triggers {
+    display: none;
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .filter-triggers-open {
+    display: flex;
+  }
+
+  .topbar-identity h1 {
+    font-size: 22px;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Retiring the scroll-to-hide filter bar.
+
+   The header no longer collapses on scroll, because with the filters behind
+   popovers it costs one 32px row instead of ~150px of cards -- there is
+   nothing left worth hiding. The rules below neutralise the transitions and
+   collapse states that the removed machinery drove. The dead selectors
+   themselves (.topbar-compact, .filter-strip-hidden, .group-tabs-hidden,
+   .measuring-layout, .brand-title, .eyebrow) match no element any more and
+   are simply inert.
+
+   Worth remembering if this ever comes back: `transition: none` applied to an
+   element with an in-flight transition cancels it and snaps straight to the
+   end value. That, applied from a useLayoutEffect, is what killed every
+   collapse animation and produced the flicker.
+   --------------------------------------------------------------------------- */
+
+.topbar,
+.group-tabs {
+  transition: none;
+  height: auto;
+  opacity: 1;
+  overflow: visible;
+}
+
+.group-tabs {
+  margin: 0;
+}
