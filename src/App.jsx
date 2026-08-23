@@ -39,7 +39,16 @@ import {
   Video,
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
-import { GoogleAuthProvider, getAuth, onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
+import {
+  GoogleAuthProvider,
+  browserPopupRedirectResolver,
+  getAuth,
+  getRedirectResult,
+  onAuthStateChanged,
+  signInWithPopup,
+  signInWithRedirect,
+  signOut,
+} from 'firebase/auth';
 import chatgptricksProfileImage from './assets/chatgptricks-profile.jpg';
 import traselveloralProfileImage from './assets/traselveloreal-profile.jpg';
 
@@ -64,6 +73,49 @@ const firebaseConfig = {
 const firebaseApp = initializeApp(firebaseConfig);
 const firebaseAuth = getAuth(firebaseApp);
 const googleProvider = new GoogleAuthProvider();
+googleProvider.setCustomParameters({ prompt: 'select_account' });
+
+// Sign-in that survives mobile browsers.
+//
+// Popup is still the happy path: it keeps the user on our origin, so Firebase's
+// session state stays first-party. But mobile browsers block popups far more
+// aggressively than desktop (and some in-app webviews have no window.open at
+// all), so when the popup can't open we fall back to a full-page redirect.
+// getRedirectResult() below picks the user back up when they come back.
+const POPUP_FALLBACK_CODES = new Set([
+  'auth/popup-blocked',
+  'auth/operation-not-supported-in-this-environment',
+  'auth/web-storage-unsupported',
+  'auth/internal-error',
+]);
+
+async function startGoogleSignIn() {
+  try {
+    await signInWithPopup(firebaseAuth, googleProvider, browserPopupRedirectResolver);
+    return null;
+  } catch (err) {
+    const code = err?.code || '';
+    if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
+      return null; // user backed out on purpose
+    }
+    if (POPUP_FALLBACK_CODES.has(code)) {
+      await signInWithRedirect(firebaseAuth, googleProvider, browserPopupRedirectResolver);
+      return null; // page is navigating away
+    }
+    return err;
+  }
+}
+
+function describeSignInError(err) {
+  const code = err?.code || '';
+  if (code === 'auth/unauthorized-domain') {
+    return `This domain (${typeof window !== 'undefined' ? window.location.hostname : ''}) isn't authorized in Firebase yet.`;
+  }
+  if (code === 'auth/network-request-failed') {
+    return 'Network error reaching Google. Check your connection and try again.';
+  }
+  return code ? `Sign-in failed (${code}). Try again.` : 'Sign-in failed. Try again.';
+}
 
 // Drop-in replacement for apiFetch() that attaches the signed-in user's Firebase
 // ID token to every call. getIdToken() returns the cached token and only
@@ -4139,15 +4191,9 @@ function LoginScreen({ notice }) {
   const handleSignIn = async () => {
     setSigningIn(true);
     setError('');
-    try {
-      await signInWithPopup(firebaseAuth, googleProvider);
-    } catch (err) {
-      if (err?.code !== 'auth/popup-closed-by-user' && err?.code !== 'auth/cancelled-popup-request') {
-        setError('Sign-in failed. Try again.');
-      }
-    } finally {
-      setSigningIn(false);
-    }
+    const err = await startGoogleSignIn();
+    if (err) setError(describeSignInError(err));
+    setSigningIn(false);
   };
 
   return (
@@ -4185,6 +4231,15 @@ function NotAuthorizedScreen({ email, onSignOut }) {
 function App() {
   const [authUser, setAuthUser] = useState(undefined); // undefined = loading, null = signed out
   const [unauthorized, setUnauthorized] = useState(false);
+  const [authNotice, setAuthNotice] = useState('');
+
+  // Picks the user back up after the mobile redirect fallback sends them
+  // through Google and back. Resolves to null on a normal (non-redirect) load.
+  useEffect(() => {
+    getRedirectResult(firebaseAuth, browserPopupRedirectResolver).catch((err) => {
+      setAuthNotice(describeSignInError(err));
+    });
+  }, []);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(firebaseAuth, (user) => {
@@ -4206,7 +4261,7 @@ function App() {
     return <div className="auth-screen" />;
   }
   if (!authUser) {
-    return <LoginScreen />;
+    return <LoginScreen notice={authNotice} />;
   }
   if (unauthorized) {
     return <NotAuthorizedScreen email={authUser.email} onSignOut={handleSignOut} />;
