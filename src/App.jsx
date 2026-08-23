@@ -1762,7 +1762,9 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
                     label="Engagement"
                     summary={engagementSummary}
                     isActive={minLikes > 0 || minComments > 0}
-                    width={320}
+                    /* Seven tick labels ending in "100K+" need the room: at
+                       320 the last two ran into each other. */
+                    width={400}
                   >
                     <div className="filter-engagement-inner">
                       <label className="range-field compact-range">
