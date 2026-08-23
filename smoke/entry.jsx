@@ -1,4 +1,5 @@
 import { createRoot } from 'react-dom/client';
+import { StrictMode } from 'react';
 import { act } from 'react';
 import App from '../src/App.jsx';
 
@@ -44,12 +45,12 @@ const origError = console.error;
 console.error = (...args) => { errors.push(args.map(String).join(' ')); origError(...args); };
 window.addEventListener('error', (e) => errors.push('window.error: ' + e.message));
 
-const el = document.createElement('div');
-document.body.appendChild(el);
+const el = document.getElementById('root') || document.body.appendChild(document.createElement('div'));
 
 (async () => {
+ try {
   const root = createRoot(el);
-  await act(async () => { root.render(<App />); });
+  await act(async () => { root.render(<StrictMode><App /></StrictMode>); });
   await act(async () => { await new Promise((r) => setTimeout(r, 400)); });
 
   const html = el.innerHTML;
@@ -62,7 +63,7 @@ document.body.appendChild(el);
       || (html.includes('tracker.html') && html.includes('target="_blank"')),
     'insights link': html.includes('insights.html'),
     'account menu': html.includes('account-menu-trigger'),
-    'filter triggers': (html.match(/filter-trigger[ "]/g) || []).length >= 6,
+    'filter triggers': (html.match(/filter-trigger[ "]/g) || []).length >= 5,
     'no old filter-strip': !html.includes('filter-group-card'),
     'no eyebrow': !html.includes('Dash explorer'),
     'favicon set': (document.querySelector('link[rel="icon"]')?.href || '').startsWith('data:image/svg+xml'),
@@ -97,10 +98,9 @@ document.body.appendChild(el);
   await press('Escape');
   inter['Escape closes popover'] = !q('.filter-popover-panel');
 
-  const chips = qa('.active-chip');
-  inter['active chip appeared'] = chips.some((c) => /Video/.test(c.textContent));
-  await click(chips.find((c) => /Video/.test(c.textContent)));
-  inter['chip X clears the filter'] = !q('.active-chip') && !typeTrigger.classList.contains('filter-trigger-active');
+  inter['Clear pill shows the count'] = /1/.test(q('.filter-clear-pill')?.textContent || '');
+  await click(q('.filter-clear-pill'));
+  inter['Clear resets the trigger'] = !typeTrigger.classList.contains('filter-trigger-active');
 
   const searchBox = q('.topbar-search input');
   await act(async () => {
@@ -108,7 +108,6 @@ document.body.appendChild(el);
     setter.call(searchBox, 'robot');
     searchBox.dispatchEvent(new window.Event('input', { bubbles: true }));
   });
-  inter['search creates a chip'] = qa('.active-chip').some((c) => /robot/.test(c.textContent));
   inter['clear button replaces kbd hint'] = Boolean(q('.topbar-search .search-clear')) && !q('.search-kbd');
 
   await act(async () => { window.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true })); });
@@ -135,6 +134,38 @@ document.body.appendChild(el);
   inter['Sort is a list, not a select'] = qa('.filter-popover-panel .sort-option').length >= 5
     && !q('.filter-popover-panel select');
   await press('Escape');
+  inter['no Asset filter'] = !qa('.filter-trigger').some(b => /Asset/.test(b.textContent));
+  inter['no active-chip row'] = !q('.active-chips');
+  const promo = qa('.filter-trigger').find(b => /Promo/.test(b.textContent));
+  inter['Promo pill exists'] = Boolean(promo);
+  await click(promo);
+  inter['Promo toggles active'] = promo.classList.contains('filter-trigger-active');
+  inter['Clear pill appears'] = Boolean(q('.filter-clear-pill'));
+  await click(q('.filter-clear-pill'));
+  inter['Clear resets promo'] = !promo.classList.contains('filter-trigger-active');
+  inter['filters live on the tab row'] = Boolean(q('.tabs-bar .filter-row')) && Boolean(q('.tabs-bar .group-tabs'));
+  await press('Escape');
+
+
+  // ---- layout probe (computed styles, not pixel geometry: jsdom has no
+  // layout engine, so we assert the CSS that decides the layout) ----
+  const gcs = (sel, props) => {
+    const n = document.querySelector(sel);
+    if (!n) return { MISSING: sel };
+    const c = getComputedStyle(n);
+    return Object.fromEntries(props.map(p => [p, c[p]]));
+  };
+  console.log('\n=== LAYOUT ===');
+  console.log('.topbar-search ', JSON.stringify(gcs('.topbar-search', ['flex','height','minHeight','maxWidth'])));
+  console.log('.topbar        ', JSON.stringify(gcs('.topbar', ['display','gridTemplateColumns','alignItems'])));
+  console.log('.topbar-brandline', JSON.stringify(gcs('.topbar-brandline', ['display','alignItems','minHeight'])));
+  const lay = {};
+  lay['search is not flex-grow'] = !/^1 /.test(getComputedStyle(document.querySelector('.topbar-search')).flex);
+  lay['search height 38px'] = getComputedStyle(document.querySelector('.topbar-search')).height === '38px';
+  lay['brandline holds count'] = Boolean(document.querySelector('.topbar-brandline .results-count'));
+  lay['one filter row in DOM'] = document.querySelectorAll('.filter-row').length === 1;
+  lay['no duplicate skeleton strip'] = document.querySelectorAll('.dash-skeleton-strip').length === 0;
+  Object.assign(checks, lay);
 
   console.log('\n=== INTERACTION CHECKS ===');
   for (const [k, v] of Object.entries(inter)) console.log(`${v ? 'PASS' : 'FAIL'}  ${k}`);
@@ -145,4 +176,5 @@ document.body.appendChild(el);
   real.slice(0, 8).forEach((e) => console.log('-', e.slice(0, 300)));
   const failed = Object.values(checks).some((v) => !v) || real.length > 0;
   process.exit(failed ? 1 : 0);
+ } catch (e) { console.log('\nHARNESS ERROR:', e && e.message); console.log((e && e.stack || '').split('\n').slice(0,4).join('\n').slice(0,400)); process.exit(1); }
 })();

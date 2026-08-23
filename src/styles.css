@@ -6067,3 +6067,104 @@ body {
   max-height: 340px;
   overflow-y: auto;
 }
+
+/* ---------------------------------------------------------------------------
+   Popover internals.
+
+   These controls were designed to sit inside the old filter cards, where they
+   were small inline fields on a panel background. Dropped into a popover they
+   kept the browser's default light chrome -- a white select and white date
+   inputs on a black panel, which is what looked broken. `color-scheme: dark`
+   is the part that matters: it's what makes the native date picker and its
+   calendar icon render dark instead of white.
+   --------------------------------------------------------------------------- */
+
+.filter-popover-panel {
+  color-scheme: dark;
+}
+
+.filter-popover-panel .select-field,
+.filter-popover-panel .date-field,
+.filter-popover-panel .number-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.filter-popover-panel .select-field > span,
+.filter-popover-panel .date-field > span,
+.filter-popover-panel .number-field > span,
+.filter-popover-panel .range-field > span {
+  color: rgba(245, 245, 245, 0.45);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.filter-popover-panel select,
+.filter-popover-panel input[type='date'],
+.filter-popover-panel input[type='number'] {
+  width: 100%;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #f5f5f5;
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.filter-popover-panel select:focus,
+.filter-popover-panel input:focus {
+  border-color: rgba(245, 255, 0, 0.5);
+  outline: none;
+}
+
+/* The tick labels under the slider need room, or the bottom row of numbers
+   collides with the Min likes / Min comments fields below it. */
+.filter-popover-panel .range-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 26px;
+}
+
+.filter-popover-panel .range-field input[type='range'] {
+  width: 100%;
+}
+
+.filter-clear-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid rgba(226, 75, 74, 0.4);
+  border-radius: 999px;
+  background: rgba(226, 75, 74, 0.1);
+  color: #ff9b9b;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.filter-clear-pill:hover {
+  border-color: rgba(226, 75, 74, 0.7);
+  background: rgba(226, 75, 74, 0.18);
+}
+
+.filter-clear-pill b {
+  display: grid;
+  place-items: center;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: rgba(226, 75, 74, 0.35);
+  color: #fff;
+  font-size: 11px;
+}

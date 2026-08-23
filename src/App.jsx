@@ -192,6 +192,7 @@ const URL_DEFAULTS = {
   from: '',
   to: '',
   range: 'all',
+  promo: '',
   post: '',
   view: '',
 };
@@ -292,7 +293,7 @@ const SECTION_ICONS = {
   hot: { emoji: '🔥', title: 'HOT' },
   sentient: { emoji: '🧠', title: 'Sentient' },
   competitors: { emoji: '👀', title: 'Competitors' },
-  all: { emoji: '📦', title: 'Archive' },
+  all: { emoji: '🎛️', title: 'Dashboard' },
   admin: { emoji: '👤', title: 'Users' },
 };
 
@@ -1014,6 +1015,10 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
   const [selectedKey, setSelectedKey] = useState(initialUrl.post);
   const [isSidebarOpen, setIsSidebarOpen] = useState(Boolean(initialUrl.post));
   const [showHidden, setShowHidden] = useState(false);
+  // Paid placements, flagged either by the #aitoolsentient hashtag or by
+  // hand from the card menu. Both count -- the hashtag is the automatic
+  // signal, the manual flag is the correction when it's missing.
+  const [promoOnly, setPromoOnly] = useState(initialUrl.promo === '1');
   // HOT tab: false shows only what's hot now, true adds everything older.
   const [showHotHistory, setShowHotHistory] = useState(false);
   const topbarRef = useRef(null);
@@ -1083,6 +1088,7 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
       from: dateFrom,
       to: dateTo,
       range: datePreset,
+      promo: promoOnly ? '1' : '',
       // Only when the sidebar is actually open. `selected` falls back to the
       // first result so the preview pane always has something to show, and an
       // effect writes that back into selectedKey -- meaning selectedKey is set
@@ -1093,7 +1099,7 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
     });
   }, [
     query, activeGroup, selectedAccounts, accountsInScope, activeType, mediaFilter,
-    sortBy, minLikes, minComments, dateFrom, dateTo, datePreset, selectedKey,
+    sortBy, minLikes, minComments, dateFrom, dateTo, datePreset, promoOnly, selectedKey,
     isSidebarOpen, ranges.likesMin, ranges.commentsMin, showSettings,
   ]);
 
@@ -1137,6 +1143,7 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
       // how you get back to them to unhide. Without that switch, hiding would
       // be effectively irreversible from the UI.
       if (showHidden ? !post.hidden : Boolean(post.hidden)) continue;
+      if (promoOnly && !(post.isPromo || PROMO_HASHTAG_RE.test(post.caption || ''))) continue;
       if (!effectiveAccounts.has(post.account)) continue;
       if (activeType !== 'All posts' && post.postType !== activeType) continue;
       if (mediaFilter === 'video' && !post.isVideo) continue;
@@ -1178,7 +1185,7 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
     });
 
     return output;
-  }, [posts, activeGroup, effectiveAccounts, activeType, mediaFilter, minLikes, minComments, dateFrom, dateTo, deferredQuery, sortBy, showHidden, activeList, showHotHistory]);
+  }, [posts, activeGroup, effectiveAccounts, activeType, mediaFilter, minLikes, minComments, dateFrom, dateTo, deferredQuery, sortBy, showHidden, promoOnly, activeList, showHotHistory]);
 
   // Leaving the HOT tab collapses history again, so coming back always
   // opens on "what's hot now" rather than a stale expanded state.
@@ -1202,6 +1209,7 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
     minLikes > 0,
     minComments > 0,
     sortBy !== 'newest',
+    promoOnly,
   ].filter(Boolean).length;
 
   // One chip per active filter, each able to clear just itself.
@@ -1306,6 +1314,7 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
       setDateFrom('');
       setDateTo('');
       setDatePreset('all');
+      setPromoOnly(false);
       setVisibleCount(POSTS_PER_BATCH);
     });
   }, [accountsInScope]);
@@ -1559,27 +1568,6 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
             ) : null}
           </header>
 
-          {/* The only always-visible answer to "why am I seeing 412 of 2,655?".
-              Renders nothing at all when no filter is active. */}
-          {!loading && !loadError && activeFilterChips.length ? (
-            <div className="active-chips" aria-label="Active filters">
-              {activeFilterChips.map((chip) => (
-                <button
-                  key={chip.key}
-                  type="button"
-                  className="active-chip"
-                  onClick={() => startTransition(chip.clear)}
-                  title={`Clear ${chip.label}`}
-                >
-                  {chip.label}
-                  <X size={12} />
-                </button>
-              ))}
-              <button type="button" className="active-chips-clear" onClick={onReset}>
-                Clear all
-              </button>
-            </div>
-          ) : null}
 
           {loading ? <DashboardSkeleton /> : null}
           {loadError ? <section className="dash-state dash-state-error">{loadError}</section> : null}
@@ -1677,6 +1665,17 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
                 </button>
 
                 <div className={mobileFiltersOpen ? 'filter-triggers filter-triggers-open' : 'filter-triggers'}>
+                  <button
+                    type="button"
+                    className={promoOnly ? 'filter-trigger filter-trigger-active' : 'filter-trigger'}
+                    onClick={() => startTransition(() => setPromoOnly((value) => !value))}
+                    aria-pressed={promoOnly}
+                    title={`Only posts carrying ${PROMO_HASHTAG} or flagged as promo by hand`}
+                  >
+                    <Megaphone size={13} />
+                    <span className="filter-trigger-label">Promo</span>
+                  </button>
+
                   <FilterPopover
                     id="account"
                     icon={<AtSign size={13} />}
@@ -1721,28 +1720,6 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
                     </div>
                   </FilterPopover>
 
-                  <FilterPopover
-                    id="asset"
-                    icon={<Video size={13} />}
-                    label="Asset"
-                    summary={mediaFilter !== 'all' ? MEDIA_OPTIONS.find((o) => o.value === mediaFilter)?.label : ''}
-                    isActive={mediaFilter !== 'all'}
-                    width={240}
-                  >
-                    <div className="chip-row compact-chips">
-                      {MEDIA_OPTIONS.map((option) => (
-                        <button
-                          key={option.value}
-                          type="button"
-                          className={option.value === mediaFilter ? 'chip chip-active' : 'chip'}
-                          onClick={() => startTransition(() => setMediaFilter(option.value))}
-                          aria-pressed={option.value === mediaFilter}
-                        >
-                          {option.label}
-                        </button>
-                      ))}
-                    </div>
-                  </FilterPopover>
 
                   <FilterPopover
                     id="date"
@@ -1879,6 +1856,17 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
                   </FilterPopover>
                 </div>
 
+                {/* Replaces the old chip row: every trigger already shows its
+                    own value, so the chips repeated all of it one row down.
+                    Resetting them all still needs one control, though. */}
+                {activeFilterCount ? (
+                  <button type="button" className="filter-clear-pill" onClick={onReset}>
+                    <RotateCcw size={13} />
+                    Clear
+                    <b>{activeFilterCount}</b>
+                  </button>
+                ) : null}
+
                 <button
                   className="tool-icon share-button"
                   type="button"
@@ -1889,7 +1877,6 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
                   {shareCopied ? <Check size={15} /> : <Link2 size={15} />}
                 </button>
               </div>
-            )}
           </div>
 
           <section className="panel gallery">
