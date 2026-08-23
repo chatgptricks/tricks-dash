@@ -136,13 +136,20 @@ const el = document.getElementById('root') || document.body.appendChild(document
   await press('Escape');
   inter['no Asset filter'] = !qa('.filter-trigger').some(b => /Asset/.test(b.textContent));
   inter['no active-chip row'] = !q('.active-chips');
-  const promo = qa('.filter-trigger').find(b => /Promo/.test(b.textContent));
-  inter['Promo pill exists'] = Boolean(promo);
-  await click(promo);
-  inter['Promo toggles active'] = promo.classList.contains('filter-trigger-active');
+  inter['no standalone Promo pill'] = !qa('.filter-trigger').some(b => /^Promo/.test(b.textContent.trim()));
+  inter['no Hidden pill on tab row'] = !q('.tabs-bar .hidden-toggle');
+  await click(typeTrigger);
+  const flagChips = qa('.filter-popover-panel .chip');
+  inter['Promo lives in Type'] = flagChips.some(c => /Promo/.test(c.textContent));
+  inter['Hidden lives in Type'] = flagChips.some(c => /Hidden/.test(c.textContent));
+  const promoChip = flagChips.find(c => /Promo/.test(c.textContent));
+  await click(promoChip);
+  inter['Promo toggles'] = promoChip.classList.contains('chip-active');
+  inter['Type trigger summarises Promo'] = /Promo/.test(typeTrigger.textContent);
+  await press('Escape');
   inter['Clear pill appears'] = Boolean(q('.filter-clear-pill'));
   await click(q('.filter-clear-pill'));
-  inter['Clear resets promo'] = !promo.classList.contains('filter-trigger-active');
+  inter['Clear resets promo'] = !/Promo/.test(typeTrigger.textContent);
   inter['filters live on the tab row'] = Boolean(q('.tabs-bar .filter-row')) && Boolean(q('.tabs-bar .group-tabs'));
   await press('Escape');
 
