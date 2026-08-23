@@ -144,10 +144,36 @@ const URL_DEFAULTS = {
   view: '',
 };
 
+// Each section has its own subdomain (hot.sentientdash.app, users.…). A
+// Cloudflare Worker serves the right page under that hostname without
+// redirecting, so the address bar keeps the subdomain -- which also means the
+// browser's query string stays empty. Since this app reads its state from
+// window.location, the section has to be derived from the hostname instead,
+// or a bare subdomain would silently fall back to the "all" tab.
+//
+// These are defaults, not overrides: an explicit ?tab= always wins, so
+// switching tabs on a subdomain and sharing that link still works.
+const SUBDOMAIN_VIEWS = {
+  hot: { tab: 'hot' },
+  sentient: { tab: 'sentient' },
+  competitors: { tab: 'competitors' },
+  archive: { tab: 'all' },
+  users: { view: 'admin' },
+};
+
+function subdomainDefaults() {
+  if (typeof window === 'undefined') return {};
+  const [sub, ...rest] = window.location.hostname.split('.');
+  // Only trust the prefix on the real domain -- on localhost or a preview
+  // host, "hot" could be a coincidence rather than a section.
+  if (rest.join('.') !== 'sentientdash.app') return {};
+  return SUBDOMAIN_VIEWS[sub] || {};
+}
+
 function readUrlState() {
   if (typeof window === 'undefined') return { ...URL_DEFAULTS };
   const params = new URLSearchParams(window.location.search);
-  const state = { ...URL_DEFAULTS };
+  const state = { ...URL_DEFAULTS, ...subdomainDefaults() };
   for (const key of Object.keys(URL_DEFAULTS)) {
     const value = params.get(key);
     if (value !== null) state[key] = value;
@@ -158,7 +184,12 @@ function readUrlState() {
 function writeUrlState(state) {
   if (typeof window === 'undefined') return;
   const params = new URLSearchParams();
-  for (const [key, fallback] of Object.entries(URL_DEFAULTS)) {
+  // Compare against the subdomain's own defaults so hot.sentientdash.app
+  // doesn't write a redundant ?tab=hot. Switching to another tab there still
+  // gets written, because it now differs from that host's default -- so the
+  // Copy link button keeps producing a URL that reopens what you're seeing.
+  const defaults = { ...URL_DEFAULTS, ...subdomainDefaults() };
+  for (const [key, fallback] of Object.entries(defaults)) {
     const value = state[key];
     if (value === undefined || value === null) continue;
     const text = String(value);
