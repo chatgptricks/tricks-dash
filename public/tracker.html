@@ -46,7 +46,6 @@ a{color:inherit}
   font-size:11px;font-weight:700;text-decoration:none;cursor:pointer}
 .linkbtn:hover{border-color:rgba(245,255,0,.4);color:var(--text)}
 
-
 /* --- Social Blade-style shell: account rail on the left --------------- */
 .tracker-shell{display:grid;grid-template-columns:250px minmax(0,1fr);gap:16px;align-items:start}
 @media (max-width:900px){.tracker-shell{grid-template-columns:1fr}}
@@ -617,7 +616,7 @@ const gateBtn = document.getElementById('authGateBtn');
 let booted = false;
 
 window.__onInsightsUnauthorized = () => {
-  gateText.textContent = (auth.currentUser?.email || 'This Google account') + ' isn’t authorized for Sentient Dash.';
+  gateText.textContent = (auth.currentUser?.email || 'This Google account') + ' isn’t authorized for sentientdash.app.';
   gateBtn.textContent = 'Sign out';
   gateBtn.onclick = () => signOut(auth);
   gate.classList.remove('hidden');
