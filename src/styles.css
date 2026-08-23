@@ -5243,3 +5243,20 @@ body {
   color: rgba(245, 245, 245, 0.4);
   font-size: 10px;
 }
+
+/* Wordmark: sentientdash.app, with "dash" carrying the accent so the product
+   name and the URL are the same object -- you read the brand and learn where
+   to find it. lowercase on purpose: it's a domain, not a title. */
+.brand h1 {
+  text-transform: lowercase;
+}
+
+.wordmark-accent {
+  color: var(--accent);
+}
+
+/* The TLD is part of the name but shouldn't compete with it. */
+.wordmark-tld {
+  color: rgba(245, 245, 245, 0.35);
+  font-weight: 600;
+}

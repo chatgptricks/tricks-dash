@@ -1370,7 +1370,7 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
             <div className="brand">
               <div className="brand-title">
                 <p className="eyebrow">Dash explorer</p>
-                <h1>Sentient Dash</h1>
+                <h1><Wordmark /></h1>
               </div>
 
               {!loading && !loadError ? (
@@ -1964,6 +1964,19 @@ function AccountAvatar({ handle, hasAvatar, size = 28 }) {
     <span className="account-avatar account-avatar-fallback" style={style}>
       {handle.slice(0, 2).toUpperCase()}
     </span>
+  );
+}
+
+// The product wordmark: sentientdash.app, with "dash" in the accent colour.
+// A component rather than a repeated string so the three places it appears
+// (topbar, sign-in gate, unauthorized gate) can't drift apart, and so the
+// highlight is markup instead of something to re-hand-craft each time.
+function Wordmark() {
+  return (
+    <>
+      sentient<span className="wordmark-accent">dash</span>
+      <span className="wordmark-tld">.app</span>
+    </>
   );
 }
 
@@ -3226,7 +3239,7 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
               <section className="settings-section usage-section">
                 <h3>Usage</h3>
                 <p className="wizard-hint">
-                  Who actually opens Sentient Dash, how often, and when — last {usage?.days ?? 30} days.
+                  Who actually opens sentientdash.app, how often, and when — last {usage?.days ?? 30} days.
                 </p>
                 {usageLoading && !usage ? (
                   <p className="wizard-hint">Loading…</p>
@@ -4109,7 +4122,7 @@ function LoginScreen({ notice }) {
   return (
     <div className="auth-screen">
       <div className="auth-card">
-        <h1>Sentient Dash</h1>
+        <h1><Wordmark /></h1>
         <p>Sign in with your Google account to continue.</p>
         <button type="button" className="primary-button auth-google-button" onClick={handleSignIn} disabled={signingIn}>
           {signingIn ? 'Signing in…' : 'Sign in with Google'}
@@ -4125,9 +4138,9 @@ function NotAuthorizedScreen({ email, onSignOut }) {
   return (
     <div className="auth-screen">
       <div className="auth-card">
-        <h1>Sentient Dash</h1>
+        <h1><Wordmark /></h1>
         <p>
-          {email ? <strong>{email}</strong> : 'This Google account'} isn&rsquo;t authorized for Sentient Dash. Ask for
+          {email ? <strong>{email}</strong> : 'This Google account'} isn&rsquo;t authorized for sentientdash.app. Ask for
           access, then sign in again.
         </p>
         <button type="button" className="ghost-button" onClick={onSignOut}>
