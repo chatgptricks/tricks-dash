@@ -6191,3 +6191,67 @@ body {
   opacity: 0.35;
   cursor: default;
 }
+
+/* ---------------------------------------------------------------------------
+   Slider ticks in the popover.
+
+   All of the tick styling above is scoped to .filter-engagement -- the old
+   fieldset class, which no longer exists now that the control lives in a
+   popover. Without it the ticks lost `position: absolute` and stacked into a
+   vertical list of 0 / 1K / 2K / 5K …, which is what looked broken.
+
+   Same geometry as the original: absolute + a calc() left offset computed in
+   JS, centered with translateX(-50%). Deliberately not a space-between flex
+   row -- that aligns item edges, so "0" and "100K+" would sit off-center by
+   half their own width.
+   --------------------------------------------------------------------------- */
+
+.filter-popover-panel .range-ticks {
+  position: relative;
+  height: 24px;
+  margin-top: 2px;
+}
+
+.filter-popover-panel .range-tick {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+}
+
+.filter-popover-panel .range-tick-mark {
+  width: 1px;
+  height: 5px;
+  background: rgba(245, 245, 245, 0.28);
+}
+
+.filter-popover-panel .range-tick-label {
+  color: rgba(245, 245, 245, 0.4);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.filter-popover-panel .range-tick-active .range-tick-mark {
+  width: 2px;
+  height: 8px;
+  background: var(--accent);
+}
+
+.filter-popover-panel .range-tick-active .range-tick-label {
+  color: #fff4bb;
+  font-weight: 900;
+}
+
+/* The ticks are absolutely positioned, so they contribute no height to the
+   field -- this is the room they need before the number inputs below. */
+.filter-popover-panel .range-field {
+  padding-bottom: 4px;
+}
+
+.filter-popover-panel .range-field input[type='range'] {
+  accent-color: var(--accent);
+}
