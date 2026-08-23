@@ -596,7 +596,8 @@ window.__startInsightsBoot = boot;
 // that module, but it needs the same Google sign-in gate.
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
 import {
-  getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut,
+  getAuth, GoogleAuthProvider, getRedirectResult, onAuthStateChanged,
+  signInWithPopup, signInWithRedirect, signOut,
 } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js';
 
 const firebaseConfig = {
@@ -609,6 +610,42 @@ const firebaseConfig = {
 };
 const auth = getAuth(initializeApp(firebaseConfig));
 const provider = new GoogleAuthProvider();
+provider.setCustomParameters({ prompt: 'select_account' });
+
+// Popup first (keeps us first-party); full-page redirect when the browser
+// won't give us a popup, which is the common case on mobile.
+const POPUP_FALLBACK_CODES = new Set([
+  'auth/popup-blocked',
+  'auth/operation-not-supported-in-this-environment',
+  'auth/web-storage-unsupported',
+  'auth/internal-error',
+]);
+
+async function startSignIn() {
+  try {
+    await signInWithPopup(auth, provider);
+    return null;
+  } catch (err) {
+    const code = err?.code || '';
+    if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') return null;
+    if (POPUP_FALLBACK_CODES.has(code)) {
+      await signInWithRedirect(auth, provider);
+      return null;
+    }
+    return err;
+  }
+}
+
+function describeSignInError(err) {
+  const code = err?.code || '';
+  if (code === 'auth/unauthorized-domain') {
+    return 'This domain (' + location.hostname + ') isn’t authorized in Firebase yet.';
+  }
+  if (code === 'auth/network-request-failed') {
+    return 'Network error reaching Google. Check your connection and try again.';
+  }
+  return code ? 'Sign-in failed (' + code + '). Try again.' : 'Sign-in failed. Try again.';
+}
 
 const gate = document.getElementById('authGate');
 const gateText = document.getElementById('authGateText');
@@ -622,17 +659,22 @@ window.__onInsightsUnauthorized = () => {
   gate.classList.remove('hidden');
 };
 
-gateBtn.addEventListener('click', () => {
+// Picks the user back up when the redirect fallback returns them here.
+getRedirectResult(auth).catch((err) => { gateText.textContent = describeSignInError(err); });
+
+async function runSignIn() {
   gateBtn.disabled = true;
-  signInWithPopup(auth, provider).catch(() => {}).finally(() => { gateBtn.disabled = false; });
-});
+  const err = await startSignIn();
+  if (err) gateText.textContent = describeSignInError(err);
+  gateBtn.disabled = false;
+}
 
 onAuthStateChanged(auth, async (user) => {
   if (!user) {
     booted = false;
     gateText.textContent = 'Sign in with your Google account to continue.';
     gateBtn.textContent = 'Sign in with Google';
-    gateBtn.onclick = () => signInWithPopup(auth, provider);
+    gateBtn.onclick = runSignIn;
     gate.classList.remove('hidden');
     return;
   }
