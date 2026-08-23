@@ -282,10 +282,45 @@ const POSTS_PER_BATCH = 60;
 // "...tool. #AIToolSentient" does regardless of case.
 const PROMO_HASHTAG = '#aitoolsentient';
 const PROMO_HASHTAG_RE = /#aitoolsentient\b/i;
-// Must match the filter-bar collapse duration in styles.css (.filter-strip,
-// .group-tabs, .topbar). Used to know when the animation has settled so the
-// layout measurement can run without cancelling it.
-const FILTER_BAR_ANIM_MS = 420;
+// One emoji favicon per section, drawn as an inline SVG data URI.
+//
+// All the dashboard sections are the same index.html, so a static <link> can
+// only ever show one icon for seven subdomains. Swapping it at runtime means a
+// pinned tab for hot.sentientdash.app and one for archive.sentientdash.app are
+// actually distinguishable, which is the entire point of pinning them.
+const SECTION_ICONS = {
+  hot: { emoji: '🔥', title: 'HOT' },
+  sentient: { emoji: '🧠', title: 'Sentient' },
+  competitors: { emoji: '👀', title: 'Competitors' },
+  all: { emoji: '📦', title: 'Archive' },
+  admin: { emoji: '👤', title: 'Users' },
+};
+
+// A bare emoji in an SVG <text> renders at whatever size the font gives it and
+// sits on the baseline, so it gets clipped at the bottom of a 16px favicon.
+// font-size 84 in a 100-box with dominant-baseline central and a 4px nudge
+// keeps the whole glyph inside the viewBox for every emoji we use.
+function emojiFaviconHref(emoji) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text x="50" y="54" font-size="84" text-anchor="middle" dominant-baseline="central">${emoji}</text></svg>`;
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+}
+
+function useSectionFavicon(section) {
+  useEffect(() => {
+    const config = SECTION_ICONS[section];
+    if (!config) return;
+    let link = document.querySelector('link[rel="icon"]');
+    if (!link) {
+      link = document.createElement('link');
+      link.rel = 'icon';
+      document.head.appendChild(link);
+    }
+    link.type = 'image/svg+xml';
+    link.href = emojiFaviconHref(config.emoji);
+    document.title = `${config.title} · sentientdash.app`;
+  }, [section]);
+}
+
 const IG_HANDLE = 'chatgptricks';
 const API_BASE = (import.meta.env.VITE_API_BASE || 'https://cortex-api-db2e.onrender.com').replace(/\/$/, '');
 const PREDICT_URL = 'https://chatgptricks.github.io/cortex/';
@@ -849,6 +884,10 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
   const [showSettings, setShowSettings] = useState(initialUrl.view === 'admin');
   const [backgroundTasks, setBackgroundTasks] = useState([]);
 
+  // Custom lists fall back to the archive icon: they're user-made and there's
+  // no sensible per-list emoji to pick.
+  useSectionFavicon(showSettings ? 'admin' : (SECTION_ICONS[activeGroup] ? activeGroup : 'all'));
+
   // Kicks off the (slow, Apify-bound) initial history import for a
   // freshly-created account without blocking the UI -- tracked as a
   // floating card in BackgroundTaskStack instead of a modal the user has
@@ -977,24 +1016,34 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
   const [showHidden, setShowHidden] = useState(false);
   // HOT tab: false shows only what's hot now, true adds everything older.
   const [showHotHistory, setShowHotHistory] = useState(false);
-  const [filtersHidden, setFiltersHidden] = useState(false);
-  const lastScrollTopRef = useRef(0);
   const topbarRef = useRef(null);
   const groupTabsRef = useRef(null);
-  const filterStripRef = useRef(null);
   const leftPaneRef = useRef(null);
   const resultsScrollRef = useRef(null);
-  // "Can this list sustain a hidden filter bar at the current viewport?"
-  // Recomputed on layout changes only -- never during a scroll event.
-  const canHideFiltersRef = useRef(true);
-  // Mirrors filtersHidden so the measurement callback can stay identity-stable
-  // (depending on the state would make it re-run on every toggle).
-  const filtersHiddenRef = useRef(false);
-  // True while the show/hide animation is in flight; measuring during that
-  // window would cancel the animation (see recomputeCanHideFilters).
-  const filtersAnimatingRef = useRef(false);
-  const filtersAnimationTimerRef = useRef(null);
+  const searchInputRef = useRef(null);
   const [shareCopied, setShareCopied] = useState(false);
+  // Only meaningful on narrow viewports, where the six popover triggers
+  // collapse behind a single "Filters" button.
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+
+  // Cmd/Ctrl+K and "/" jump to the search box. Search is the most-used control
+  // on the page and until now had no keyboard route to it at all.
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      const key = event.key?.toLowerCase();
+      const isShortcut = (key === 'k' && (event.metaKey || event.ctrlKey))
+        // Bare "/" only when you're not already typing somewhere.
+        || (event.key === '/' && !event.metaKey && !event.ctrlKey && !event.altKey
+            && !/^(input|textarea|select)$/i.test(event.target?.tagName || '')
+            && !event.target?.isContentEditable);
+      if (!isShortcut) return;
+      event.preventDefault();
+      searchInputRef.current?.focus();
+      searchInputRef.current?.select();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
 
   // The URL is already up to date by the time this runs (the effect below keeps
   // it in sync), so copying it is just reading location.href.
@@ -1047,126 +1096,6 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
     sortBy, minLikes, minComments, dateFrom, dateTo, datePreset, selectedKey,
     isSidebarOpen, ranges.likesMin, ranges.commentsMin, showSettings,
   ]);
-
-  // Root cause of the filter-bar flicker: .results-scroll's height is tied
-  // to the topbar's height via a CSS grid `1fr` track (see .gallery in
-  // styles.css). Hiding the filter bar grows the results container, which
-  // for a short list can eliminate scrollability entirely -- the browser
-  // then clamps scrollTop, that clamp fires its own scroll event, which
-  // re-shows the filters, which shrinks the container again... an
-  // oscillation with nothing to do with scroll-delta noise.
-  //
-  // Every previous attempt made this decision *during* the scroll event,
-  // and every one of them raced: hide-then-revert flashed a real painted
-  // frame, and time-based locks either ate a genuine up-scroll (stuck
-  // hidden) or expired into the same loop. Whether it misbehaves also
-  // depends on the exact viewport height, which is why it could look fine
-  // in one window size and flicker in another.
-  //
-  // So the decision is no longer made during scroll at all. Instead we
-  // compute one stable boolean -- "can this list sustain a hidden filter
-  // bar at the current viewport?" -- whenever the layout actually changes
-  // (results change, window resizes, images finish loading). The scroll
-  // handler only reads it. If a list can't sustain hiding, the filter bar
-  // simply never hides, so there is no toggle, no revert and nothing to
-  // flash, at any viewport size.
-  // CRITICAL: this measurement must never run while the filter bar is
-  // mid-transition. Applying `transition: none` to an element with an
-  // in-flight transition cancels it and snaps it straight to its end value.
-  // An earlier version ran this from a useLayoutEffect keyed on
-  // filtersHidden, which fires synchronously right after React adds the
-  // collapse class and before the first frame is painted -- so it killed
-  // every single collapse animation at birth. That, not the easing or the
-  // duration, is why the bar appeared to teleport no matter what timings
-  // the CSS asked for. The ResizeObserver below made it worse: the results
-  // pane resizes on every frame of the animation, so it re-fired the
-  // measurement continuously.
-  const recomputeCanHideFilters = useCallback(() => {
-    if (filtersAnimatingRef.current) return;
-    const scroller = resultsScrollRef.current;
-    const pane = leftPaneRef.current;
-    if (!scroller || !pane) return;
-
-    // Transitions are killed subtree-wide only for this one synchronous
-    // block (nothing is painted in between), so offsetHeight reports true
-    // collapsed heights rather than interpolated ones.
-    pane.classList.add('measuring-layout');
-
-    let freed = 0;
-    if (!filtersHiddenRef.current) {
-      const nodes = [
-        { el: topbarRef.current, cls: 'topbar-compact' },
-        { el: groupTabsRef.current, cls: 'group-tabs-hidden' },
-        { el: filterStripRef.current, cls: 'filter-strip-hidden' },
-      ].filter((n) => n.el);
-      nodes.forEach(({ el, cls }) => {
-        const before = el.offsetHeight;
-        el.classList.add(cls);
-        freed += before - el.offsetHeight;
-        el.classList.remove(cls);
-      });
-    }
-
-    // How tall the results container would be with the filter bar hidden,
-    // and therefore whether the content would still overflow it.
-    const clientWhenHidden = scroller.clientHeight + freed;
-    canHideFiltersRef.current = scroller.scrollHeight > clientWhenHidden + 24;
-
-    pane.classList.remove('measuring-layout');
-  }, []);
-
-  // Deliberately a plain effect (runs after paint) with no dependency on
-  // filtersHidden, so toggling the bar never schedules a measurement in the
-  // same commit that starts its animation.
-  useEffect(() => {
-    recomputeCanHideFilters();
-    const scroller = resultsScrollRef.current;
-    if (!scroller) return undefined;
-
-    // Covers window resizes, images finishing load, and the "Load 60 more"
-    // growth -- anything that changes whether the content overflows.
-    const observer = new ResizeObserver(() => recomputeCanHideFilters());
-    observer.observe(scroller);
-    if (scroller.firstElementChild) observer.observe(scroller.firstElementChild);
-    window.addEventListener('resize', recomputeCanHideFilters);
-    return () => {
-      observer.disconnect();
-      window.removeEventListener('resize', recomputeCanHideFilters);
-    };
-  }, [recomputeCanHideFilters, visibleCount, loading]);
-
-  // Marks the animation window so no measurement can interrupt it, then
-  // re-measures once the bar has settled into its new size.
-  const setFiltersHiddenAnimated = useCallback((next) => {
-    if (filtersHiddenRef.current === next) return;
-    filtersHiddenRef.current = next;
-    filtersAnimatingRef.current = true;
-    setFiltersHidden(next);
-    clearTimeout(filtersAnimationTimerRef.current);
-    filtersAnimationTimerRef.current = setTimeout(() => {
-      filtersAnimatingRef.current = false;
-      recomputeCanHideFilters();
-    }, FILTER_BAR_ANIM_MS + 60);
-  }, [recomputeCanHideFilters]);
-
-  useEffect(() => () => clearTimeout(filtersAnimationTimerRef.current), []);
-
-  const handleResultsScroll = useCallback((event) => {
-    const top = event.currentTarget.scrollTop;
-    const delta = top - lastScrollTopRef.current;
-    lastScrollTopRef.current = top;
-
-    // The filter bar comes back only once the user has scrolled all the way
-    // back to the top -- not on any incremental up-scroll. Besides being the
-    // requested behaviour, it removes the last oscillation source: an
-    // upward delta can no longer re-show the bar mid-list, so a hide can't
-    // be undone by the very scroll events its own reflow produces.
-    if (top < 40) {
-      setFiltersHiddenAnimated(false);
-    } else if (delta > 8 && canHideFiltersRef.current) {
-      setFiltersHiddenAnimated(true);
-    }
-  }, [setFiltersHiddenAnimated]);
 
   // Switching tabs changes which accounts are in scope, but the effect that
   // re-selects them runs *after* this render -- so for one pass the selection
@@ -1274,6 +1203,85 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
     minComments > 0,
     sortBy !== 'newest',
   ].filter(Boolean).length;
+
+  // One chip per active filter, each able to clear just itself.
+  //
+  // With the controls behind popovers there'd otherwise be no way to see what
+  // is narrowing the set without opening all six -- and the old strip had the
+  // same blind spot the moment it scrolled away. These chips are the only
+  // always-visible answer to "why am I seeing 412 of 2,655?".
+  //
+  // Sort is included even though it isn't strictly a filter: it changes what
+  // you see first, and being able to get back to Newest in one click is worth
+  // more than taxonomic purity.
+  const activeFilterChips = useMemo(() => {
+    const chips = [];
+    if (query.trim()) {
+      chips.push({ key: 'q', label: `“${query.trim()}”`, clear: () => setQuery('') });
+    }
+    if (selectedAccounts.size < accountsInScope.length) {
+      const label =
+        selectedAccounts.size === 1
+          ? accountsInScope.find((account) => selectedAccounts.has(account.handle))?.label ?? '1 account'
+          : `${selectedAccounts.size} of ${accountsInScope.length} accounts`;
+      chips.push({
+        key: 'acc',
+        label,
+        clear: () => setSelectedAccounts(new Set(accountsInScope.map((account) => account.handle))),
+      });
+    }
+    if (activeType !== 'All posts') {
+      chips.push({ key: 'type', label: TYPE_LABELS[activeType] ?? activeType, clear: () => setActiveType('All posts') });
+    }
+    if (mediaFilter !== 'all') {
+      const label = MEDIA_OPTIONS.find((option) => option.value === mediaFilter)?.label ?? mediaFilter;
+      chips.push({ key: 'media', label, clear: () => setMediaFilter('all') });
+    }
+    if (datePreset !== 'all' || dateFrom || dateTo) {
+      const preset = datePresets.find((option) => option.value === datePreset);
+      const label = preset && datePreset !== 'custom'
+        ? preset.label
+        : [dateFrom || '…', dateTo || '…'].join(' → ');
+      chips.push({
+        key: 'date',
+        label,
+        clear: () => { setDatePreset('all'); setDateFrom(''); setDateTo(''); },
+      });
+    }
+    if (minLikes > 0) {
+      chips.push({ key: 'likes', label: `${compactFormatter.format(minLikes)}+ likes`, clear: () => setMinLikes(0) });
+    }
+    if (minComments > 0) {
+      chips.push({
+        key: 'comments',
+        label: `${compactFormatter.format(minComments)}+ comments`,
+        clear: () => setMinComments(0),
+      });
+    }
+    if (sortBy !== 'newest') {
+      const label = SORT_OPTIONS.find((option) => option.value === sortBy)?.label ?? sortBy;
+      chips.push({ key: 'sort', label, clear: () => setSortBy('newest') });
+    }
+    return chips;
+  }, [
+    query, selectedAccounts, accountsInScope, activeType, mediaFilter,
+    datePreset, dateFrom, dateTo, datePresets, minLikes, minComments, sortBy,
+  ]);
+
+  // Short status strings for the popover triggers, so a collapsed filter still
+  // says what it's doing ("Date · Last 7 days" rather than a bare "Date").
+  const accountSummary = selectedAccounts.size < accountsInScope.length
+    ? (selectedAccounts.size === 1
+        ? accountsInScope.find((account) => selectedAccounts.has(account.handle))?.label
+        : String(selectedAccounts.size))
+    : '';
+  const dateSummary = datePreset !== 'all' && datePreset !== 'custom'
+    ? datePresets.find((option) => option.value === datePreset)?.label
+    : (dateFrom || dateTo ? 'Custom' : '');
+  const engagementSummary = [
+    minLikes > 0 ? `${compactFormatter.format(minLikes)}+` : '',
+    minComments > 0 ? `${compactFormatter.format(minComments)}+ 💬` : '',
+  ].filter(Boolean).join(' · ');
 
   const selected = useMemo(() => {
     if (!filtered.length) return null;
@@ -1449,88 +1457,320 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
       <div className="backdrop" />
       <main className="app-layout">
         <section ref={leftPaneRef} className="left-pane">
-          <header ref={topbarRef} className={filtersHidden ? 'topbar topbar-compact' : 'topbar'}>
-            <div className="brand">
-              <div className="brand-title">
-                <p className="eyebrow">Dash explorer</p>
-                <h1><Wordmark /></h1>
+          <header ref={topbarRef} className="topbar">
+            {/* Left column: who we are, then the single most-used control.
+                The old "DASH EXPLORER" eyebrow sat exactly where the search
+                field now goes and said nothing the wordmark doesn't. */}
+            <div className="topbar-identity">
+              <h1><Wordmark /></h1>
+
+              {!loading && !loadError ? (
+                <>
+                  <div className="topbar-search">
+                    <Search size={18} aria-hidden="true" />
+                    <input
+                      ref={searchInputRef}
+                      type="search"
+                      value={query}
+                      onChange={(event) => setQuery(event.target.value)}
+                      aria-label="Search posts"
+                      placeholder="Captions, songs, or text inside a cover"
+                    />
+                    {query ? (
+                      <button className="search-clear" type="button" aria-label="Clear search" onClick={() => setQuery('')}>
+                        <X size={15} />
+                      </button>
+                    ) : <kbd className="search-kbd">⌘K</kbd>}
+                  </div>
+
+                  {/* Moved down from the far right of the topbar: this number is
+                      the direct result of the search and filters beside it, and
+                      it used to sit in the opposite corner next to sign out. */}
+                  <p className="results-count">
+                    <strong>{filtered.length.toLocaleString()}</strong> of {posts.length.toLocaleString()} posts
+                    <span className="results-count-aside">
+                      {compactFormatter.format(combinedSummary.totalLikes ?? summary['Total likes'] ?? 0)} likes
+                      {' · '}
+                      {compactFormatter.format(combinedSummary.averageLikes ?? summary['Average likes'] ?? 0)} avg
+                    </span>
+                  </p>
+                </>
+              ) : null}
+            </div>
+
+            {/* Right column: tools on top, filters underneath. */}
+            <div className="topbar-controls">
+              <div className="tool-row">
+                {/* target=_blank because these are separate apps with their own
+                    auth gate and load: navigating in place threw away the
+                    filters, the scroll position and the open post. And they're
+                    labelled now -- five identical green icons gave you no way
+                    to know where you were about to go. */}
+                <a
+                  className="tool-link"
+                  href={`${import.meta.env.BASE_URL}tracker.html`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="Follower growth per account"
+                >
+                  <TrendingUp size={15} />
+                  <span>Tracker</span>
+                  <ExternalLink size={12} className="tool-link-out" aria-hidden="true" />
+                </a>
+                <a
+                  className="tool-link"
+                  href={`${import.meta.env.BASE_URL}insights.html`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="Aggregate analysis across all accounts"
+                >
+                  <BarChart3 size={15} />
+                  <span>Insights</span>
+                  <ExternalLink size={12} className="tool-link-out" aria-hidden="true" />
+                </a>
+
+                <span className="tool-divider" aria-hidden="true" />
+
+                {isAdmin ? (
+                  <button
+                    className="tool-icon"
+                    type="button"
+                    onClick={() => setShowSettings(true)}
+                    title="Settings — thresholds, history import, refresh"
+                    aria-label="Settings"
+                  >
+                    <Settings size={15} className={refreshing ? 'spin' : ''} />
+                  </button>
+                ) : null}
+                <AccountMenu email={userEmail} onSignOut={onSignOut} />
               </div>
 
               {!loading && !loadError ? (
-                <label className="filter-search-field topbar-search">
-                  <Search size={18} aria-hidden="true" />
-                  <span className="filter-search-copy">
-                    <span>Search the post library</span>
-                    <input
-                      value={query}
-                      onChange={(event) => setQuery(event.target.value)}
-                      placeholder="Search captions, topics, songs, or text inside a cover..."
-                    />
-                  </span>
-                  {query ? (
-                    <button className="search-clear" type="button" aria-label="Clear search" onClick={() => setQuery('')}>
-                      <X size={15} />
-                    </button>
-                  ) : <span className="search-scope">Includes cover text &amp; songs</span>}
-                </label>
+                <div className="filter-row">
+                  <button
+                    type="button"
+                    className={mobileFiltersOpen ? 'filter-sheet-toggle filter-sheet-toggle-open' : 'filter-sheet-toggle'}
+                    onClick={() => setMobileFiltersOpen((value) => !value)}
+                    aria-expanded={mobileFiltersOpen}
+                  >
+                    <SlidersHorizontal size={14} />
+                    Filters
+                    {activeFilterCount ? <b>{activeFilterCount}</b> : null}
+                  </button>
+
+                  <div className={mobileFiltersOpen ? 'filter-triggers filter-triggers-open' : 'filter-triggers'}>
+                    <FilterPopover
+                      id="account"
+                      icon={<AtSign size={13} />}
+                      label="Account"
+                      summary={accountSummary}
+                      isActive={Boolean(accountSummary)}
+                      width={340}
+                    >
+                      <AccountMultiSelect
+                        inline
+                        accounts={accountsInScope}
+                        counts={accountCounts}
+                        selected={selectedAccounts}
+                        onChange={(next) => startTransition(() => setSelectedAccounts(next))}
+                        onAddAccount={() => setShowAddAccount(true)}
+                      />
+                    </FilterPopover>
+
+                    <FilterPopover
+                      id="type"
+                      icon={<Filter size={13} />}
+                      label="Type"
+                      summary={activeType !== 'All posts' ? TYPE_LABELS[activeType] ?? activeType : ''}
+                      isActive={activeType !== 'All posts'}
+                    >
+                      <div className="chip-row">
+                        {TYPE_OPTIONS.map((option) => (
+                          <button
+                            key={option}
+                            type="button"
+                            className={option === activeType ? 'chip chip-active' : 'chip'}
+                            onClick={() => startTransition(() => setActiveType(option))}
+                            aria-pressed={option === activeType}
+                          >
+                            {TYPE_LABELS[option] ?? option}
+                            {option !== 'All posts' ? <span>{typeCounts[option] ?? 0}</span> : null}
+                          </button>
+                        ))}
+                      </div>
+                    </FilterPopover>
+
+                    <FilterPopover
+                      id="asset"
+                      icon={<Video size={13} />}
+                      label="Asset"
+                      summary={mediaFilter !== 'all' ? MEDIA_OPTIONS.find((o) => o.value === mediaFilter)?.label : ''}
+                      isActive={mediaFilter !== 'all'}
+                      width={240}
+                    >
+                      <div className="chip-row compact-chips">
+                        {MEDIA_OPTIONS.map((option) => (
+                          <button
+                            key={option.value}
+                            type="button"
+                            className={option.value === mediaFilter ? 'chip chip-active' : 'chip'}
+                            onClick={() => startTransition(() => setMediaFilter(option.value))}
+                            aria-pressed={option.value === mediaFilter}
+                          >
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
+                    </FilterPopover>
+
+                    <FilterPopover
+                      id="date"
+                      icon={<CalendarDays size={13} />}
+                      label="Date"
+                      summary={dateSummary}
+                      isActive={Boolean(dateSummary)}
+                      width={280}
+                    >
+                      <div className="date-fields">
+                        <label className="select-field">
+                          <span>Range</span>
+                          <select aria-label="Date range" value={datePreset} onChange={(event) => applyDatePreset(event.target.value)}>
+                            {datePreset === 'custom' ? <option value="custom">Custom range</option> : null}
+                            {datePresets.map((preset) => <option key={preset.value} value={preset.value}>{preset.label}</option>)}
+                          </select>
+                        </label>
+                        <label className="date-field">
+                          <span>From</span>
+                          <input type="date" aria-label="Date from" value={dateFrom} min={ranges.dateMin} max={ranges.dateMax} onChange={(e) => { setDatePreset('custom'); setDateFrom(e.target.value); }} />
+                        </label>
+                        <label className="date-field">
+                          <span>To</span>
+                          <input type="date" aria-label="Date to" value={dateTo} min={ranges.dateMin} max={ranges.dateMax} onChange={(e) => { setDatePreset('custom'); setDateTo(e.target.value); }} />
+                        </label>
+                      </div>
+                    </FilterPopover>
+
+                    <FilterPopover
+                      id="engagement"
+                      icon={<SlidersHorizontal size={13} />}
+                      label="Engagement"
+                      summary={engagementSummary}
+                      isActive={minLikes > 0 || minComments > 0}
+                      width={320}
+                    >
+                      <div className="filter-engagement-inner">
+                        <label className="range-field compact-range">
+                          <span>Likes</span>
+                          <input
+                            type="range"
+                            aria-label="Minimum likes"
+                            min={0}
+                            max={LIKES_STOPS.length - 1}
+                            step={1}
+                            value={likesStopIndex(minLikes)}
+                            onChange={(e) => startTransition(() => setMinLikes(LIKES_STOPS[clampNumber(e.target.value, 0)]))}
+                          />
+                          {/* Each tick is positioned with the exact same formula the
+                              browser uses to place the native thumb: the thumb's
+                              travel path runs from THUMB_PX / 2 to
+                              100% - THUMB_PX / 2 (see the CSS thumb rules), so a
+                              stop at fraction f of the way through the stops sits
+                              at calc(THUMB_PX/2 + f * (100% - THUMB_PX)). Centering
+                              each tick on that exact point with translateX(-50%)
+                              (rather than a plain flex space-between row of
+                              variable-width text) is what makes the marks land
+                              exactly under the thumb regardless of label width. */}
+                          <div className="range-ticks" aria-hidden="true">
+                            {LIKES_STOPS.map((stop, index) => {
+                              const fraction = index / (LIKES_STOPS.length - 1);
+                              const isActive = likesStopIndex(minLikes) === index;
+                              return (
+                                <div
+                                  key={stop}
+                                  className={isActive ? 'range-tick range-tick-active' : 'range-tick'}
+                                  style={{ left: `calc(${RANGE_THUMB_PX / 2}px + (100% - ${RANGE_THUMB_PX}px) * ${fraction})` }}
+                                >
+                                  <span className="range-tick-mark" />
+                                  <span className="range-tick-label">
+                                    {stop === 0 ? '0' : compactFormatter.format(stop)}
+                                    {index === LIKES_STOPS.length - 1 ? '+' : ''}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </label>
+                        <div className="engagement-numbers">
+                          {/* Both of these are floors, not equality matches -- the
+                              box exists so you can type a threshold between the
+                              slider's stops (e.g. 3,500), not to find posts with
+                              exactly that many likes. */}
+                          <label className="number-field">
+                            <span>Min likes</span>
+                            <input
+                              aria-label="Minimum likes"
+                              type="number"
+                              min={0}
+                              placeholder="0"
+                              title="Show posts with at least this many likes"
+                              value={minLikes}
+                              onChange={(e) => startTransition(() => setMinLikes(clampNumber(e.target.value, 0)))}
+                            />
+                          </label>
+                          <label className="number-field">
+                            <span>Min comments</span>
+                            <input
+                              aria-label="Minimum comments"
+                              placeholder="0"
+                              title="Show posts with at least this many comments"
+                              type="number"
+                              min={0}
+                              value={minComments}
+                              onChange={(e) => startTransition(() => setMinComments(clampNumber(e.target.value, ranges.commentsMin)))}
+                            />
+                          </label>
+                        </div>
+                      </div>
+                    </FilterPopover>
+
+                    <FilterPopover
+                      id="sort"
+                      icon={<ArrowUpDown size={13} />}
+                      label="Sort"
+                      summary={sortBy !== 'newest' ? SORT_OPTIONS.find((o) => o.value === sortBy)?.label : ''}
+                      isActive={sortBy !== 'newest'}
+                      width={240}
+                    >
+                      <div className="sort-options">
+                        {SORT_OPTIONS.map((option) => (
+                          <button
+                            key={option.value}
+                            type="button"
+                            className={option.value === sortBy ? 'sort-option sort-option-active' : 'sort-option'}
+                            onClick={() => startTransition(() => setSortBy(option.value))}
+                            aria-pressed={option.value === sortBy}
+                          >
+                            {option.label}
+                            {option.value === sortBy ? <Check size={14} /> : null}
+                          </button>
+                        ))}
+                      </div>
+                    </FilterPopover>
+                  </div>
+
+                  <button
+                    className="tool-icon share-button"
+                    type="button"
+                    onClick={copyShareLink}
+                    title="Copy a link to this exact view"
+                    aria-label="Copy link to this view"
+                  >
+                    {shareCopied ? <Check size={15} /> : <Link2 size={15} />}
+                  </button>
+                </div>
               ) : null}
             </div>
 
-            <div className="topbar-metrics">
-              {!loading && !loadError ? (
-                <Metric
-                  label="Matching"
-                  value={`${filtered.length.toLocaleString()} / ${posts.length.toLocaleString()}`}
-                />
-              ) : null}
-              <Metric label="Likes" value={compactFormatter.format(combinedSummary.totalLikes ?? summary['Total likes'] ?? 0)} />
-              <Metric label="Avg likes" value={compactFormatter.format(combinedSummary.averageLikes ?? summary['Average likes'] ?? 0)} />
-              <button
-                className="ghost-button refresh-button"
-                type="button"
-                onClick={copyShareLink}
-                title="Copy a link to this exact view"
-                aria-label="Copy link to this view"
-              >
-                {shareCopied ? <Check size={15} /> : <Link2 size={15} />}
-              </button>
-              <a
-                className="ghost-button refresh-button"
-                href={`${import.meta.env.BASE_URL}insights.html`}
-                title="Insights — análisis agregado de todas las cuentas"
-                aria-label="Insights"
-              >
-                <BarChart3 size={15} />
-              </a>
-              <a
-                className="ghost-button refresh-button"
-                href={`${import.meta.env.BASE_URL}tracker.html`}
-                title="Tracker — crecimiento de seguidores por cuenta"
-                aria-label="Tracker"
-              >
-                <TrendingUp size={15} />
-              </a>
-              {isAdmin ? (
-                <button
-                  className="ghost-button refresh-button"
-                  type="button"
-                  onClick={() => setShowSettings(true)}
-                  title="Settings — thresholds, history import, refresh"
-                  aria-label="Settings"
-                >
-                  <Settings size={15} className={refreshing ? 'spin' : ''} />
-                </button>
-              ) : null}
-              <button
-                className="ghost-button refresh-button"
-                type="button"
-                onClick={onSignOut}
-                title={userEmail ? `Signed in as ${userEmail} — sign out` : 'Sign out'}
-                aria-label="Sign out"
-              >
-                <LogOut size={15} />
-              </button>
-            </div>
             {refreshNotice ? (
               <p className={`refresh-notice refresh-notice-${refreshNotice.type}`} role="status">
                 {refreshNotice.text}
@@ -1538,16 +1778,37 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
             ) : null}
           </header>
 
+          {/* The only always-visible answer to "why am I seeing 412 of 2,655?".
+              Renders nothing at all when no filter is active. */}
+          {!loading && !loadError && activeFilterChips.length ? (
+            <div className="active-chips" aria-label="Active filters">
+              {activeFilterChips.map((chip) => (
+                <button
+                  key={chip.key}
+                  type="button"
+                  className="active-chip"
+                  onClick={() => startTransition(chip.clear)}
+                  title={`Clear ${chip.label}`}
+                >
+                  {chip.label}
+                  <X size={12} />
+                </button>
+              ))}
+              <button type="button" className="active-chips-clear" onClick={onReset}>
+                Clear all
+              </button>
+            </div>
+          ) : null}
+
           {loading ? <DashboardSkeleton /> : null}
           {loadError ? <section className="dash-state dash-state-error">{loadError}</section> : null}
 
           {!loading && !loadError ? <>
           <div
             ref={groupTabsRef}
-            className={filtersHidden ? 'group-tabs group-tabs-hidden' : 'group-tabs'}
+            className="group-tabs"
             role="tablist"
             aria-label="Account group"
-            aria-hidden={filtersHidden}
           >
             {GROUP_TABS.map((tab) => (
               <button
@@ -1619,204 +1880,8 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
             ) : null}
           </div>
 
-          <section
-            ref={filterStripRef}
-            className={filtersHidden ? 'filter-strip filter-strip-hidden' : 'filter-strip'}
-            aria-label="Dashboard filters"
-            aria-hidden={filtersHidden}
-          >
-            <div className="filter-groups-row">
-              <fieldset className="filter-group-card filter-account">
-                <legend>
-                  <AtSign size={13} />
-                  Account
-                </legend>
-                <AccountMultiSelect
-                  accounts={accountsInScope}
-                  counts={accountCounts}
-                  selected={selectedAccounts}
-                  onChange={(next) => startTransition(() => setSelectedAccounts(next))}
-                  onAddAccount={() => setShowAddAccount(true)}
-                />
-              </fieldset>
-
-              <fieldset className="filter-group-card filter-type">
-                <legend>
-                  <Filter size={13} />
-                  Content type
-                </legend>
-                <div className="chip-row">
-                  {TYPE_OPTIONS.map((option) => (
-                    <button
-                      key={option}
-                      type="button"
-                      className={option === activeType ? 'chip chip-active' : 'chip'}
-                      onClick={() => startTransition(() => setActiveType(option))}
-                      aria-pressed={option === activeType}
-                    >
-                      {TYPE_LABELS[option] ?? option}
-                      {option !== 'All posts' ? <span>{typeCounts[option] ?? 0}</span> : null}
-                    </button>
-                  ))}
-                </div>
-              </fieldset>
-
-              <fieldset className="filter-group-card filter-media">
-                <legend>
-                  <Video size={13} />
-                  Asset
-                </legend>
-                <div className="chip-row compact-chips">
-                  {MEDIA_OPTIONS.map((option) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      className={option.value === mediaFilter ? 'chip chip-active' : 'chip'}
-                      onClick={() => startTransition(() => setMediaFilter(option.value))}
-                      aria-pressed={option.value === mediaFilter}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-              </fieldset>
-
-              <fieldset className="filter-group-card filter-date">
-                <legend>
-                  <CalendarDays size={13} />
-                  Published
-                </legend>
-                <div className="date-fields">
-                  <label className="select-field">
-                    <span>Range</span>
-                    <select aria-label="Date range" value={datePreset} onChange={(event) => applyDatePreset(event.target.value)}>
-                    {datePreset === 'custom' ? <option value="custom">Custom range</option> : null}
-                    {datePresets.map((preset) => <option key={preset.value} value={preset.value}>{preset.label}</option>)}
-                    </select>
-                  </label>
-                  <label className="date-field">
-                    <span>From</span>
-                    <input type="date" aria-label="Date from" value={dateFrom} min={ranges.dateMin} max={ranges.dateMax} onChange={(e) => { setDatePreset('custom'); setDateFrom(e.target.value); }} />
-                  </label>
-                  <label className="date-field">
-                    <span>To</span>
-                    <input type="date" aria-label="Date to" value={dateTo} min={ranges.dateMin} max={ranges.dateMax} onChange={(e) => { setDatePreset('custom'); setDateTo(e.target.value); }} />
-                  </label>
-                </div>
-              </fieldset>
-
-              <fieldset className="filter-group-card filter-engagement">
-                <legend>
-                  <SlidersHorizontal size={13} />
-                  Minimum engagement
-                </legend>
-                <div className="filter-engagement-inner">
-                  <label className="range-field compact-range">
-                    <span>Likes</span>
-                    <input
-                      type="range"
-                      aria-label="Minimum likes"
-                      min={0}
-                      max={LIKES_STOPS.length - 1}
-                      step={1}
-                      value={likesStopIndex(minLikes)}
-                      onChange={(e) => startTransition(() => setMinLikes(LIKES_STOPS[clampNumber(e.target.value, 0)]))}
-                    />
-                    {/* Each tick is positioned with the exact same formula the
-                        browser uses to place the native thumb: the thumb's
-                        travel path runs from THUMB_PX / 2 to
-                        100% - THUMB_PX / 2 (see the CSS thumb rules), so a
-                        stop at fraction f of the way through the stops sits
-                        at calc(THUMB_PX/2 + f * (100% - THUMB_PX)). Centering
-                        each tick on that exact point with translateX(-50%)
-                        (rather than a plain flex space-between row of
-                        variable-width text) is what makes the marks land
-                        exactly under the thumb regardless of label width. */}
-                    <div className="range-ticks" aria-hidden="true">
-                      {LIKES_STOPS.map((stop, index) => {
-                        const fraction = index / (LIKES_STOPS.length - 1);
-                        const isActive = likesStopIndex(minLikes) === index;
-                        return (
-                          <div
-                            key={stop}
-                            className={isActive ? 'range-tick range-tick-active' : 'range-tick'}
-                            style={{ left: `calc(${RANGE_THUMB_PX / 2}px + (100% - ${RANGE_THUMB_PX}px) * ${fraction})` }}
-                          >
-                            <span className="range-tick-mark" />
-                            <span className="range-tick-label">
-                              {stop === 0 ? '0' : compactFormatter.format(stop)}
-                              {index === LIKES_STOPS.length - 1 ? '+' : ''}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </label>
-                  <div className="engagement-numbers">
-                    {/* Both of these are floors, not equality matches -- the
-                        box exists so you can type a threshold between the
-                        slider's stops (e.g. 3,500), not to find posts with
-                        exactly that many likes. It was labelled "Likes
-                        (exact)", which read as the latter. */}
-                    <label className="number-field">
-                      <span>Min likes</span>
-                      <input
-                        aria-label="Minimum likes"
-                        type="number"
-                        min={0}
-                        placeholder="0"
-                        title="Show posts with at least this many likes"
-                        value={minLikes}
-                        onChange={(e) => startTransition(() => setMinLikes(clampNumber(e.target.value, 0)))}
-                      />
-                    </label>
-                    <label className="number-field">
-                      <span>Min comments</span>
-                      <input
-                        aria-label="Minimum comments"
-                        placeholder="0"
-                        title="Show posts with at least this many comments"
-                        type="number"
-                        min={0}
-                        value={minComments}
-                        onChange={(e) => startTransition(() => setMinComments(clampNumber(e.target.value, ranges.commentsMin)))}
-                      />
-                    </label>
-                  </div>
-                </div>
-              </fieldset>
-
-              <fieldset className="filter-group-card filter-sort">
-                <legend>
-                  <ArrowUpDown size={13} />
-                  Order
-                </legend>
-                <div className="filter-sort-inner">
-                  <select aria-label="Sort posts" value={sortBy} onChange={(e) => startTransition(() => setSortBy(e.target.value))}>
-                    {SORT_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </fieldset>
-
-              <button
-                className={activeFilterCount ? 'filter-clear-all filter-clear-all-active' : 'filter-clear-all'}
-                type="button"
-                onClick={onReset}
-                disabled={!activeFilterCount}
-              >
-                <RotateCcw size={15} />
-                <span>Clear filters</span>
-                {activeFilterCount ? <b>{activeFilterCount}</b> : null}
-              </button>
-            </div>
-          </section>
-
           <section className="panel gallery">
-          <div ref={resultsScrollRef} className="results-scroll" onScroll={handleResultsScroll}>
+          <div ref={resultsScrollRef} className="results-scroll">
             {visible.length ? (
               <div className="gallery-grid">
                 {visible.map((post, index) => (
@@ -2072,20 +2137,16 @@ function DashboardSkeleton() {
   return (
     <section className="dash-skeleton" role="status" aria-live="polite">
       <span className="sr-only">Loading the post library</span>
-      {/* Built from the real .filter-strip / .gallery-grid / .post-card
-          classes rather than lookalike ones, so the placeholders inherit the
-          actual column count, gaps, card height and 3:4 media ratio. Any
-          future change to the card layout moves the skeleton with it instead
-          of leaving a copy behind to drift out of sync. */}
-      <section className="filter-strip dash-skeleton-strip" aria-hidden="true">
-        <div className="filter-groups-row">
-          {Array.from({ length: 7 }).map((_, index) => (
-            <fieldset className="filter-group-card" key={index}>
-              <div className="skeleton-block skeleton-filter" />
-            </fieldset>
-          ))}
-        </div>
-      </section>
+      {/* Built from the real .filter-row / .gallery-grid / .post-card classes
+          rather than lookalike ones, so the placeholders inherit the actual
+          column count, gaps, card height and 3:4 media ratio. Any future
+          change to the card layout moves the skeleton with it instead of
+          leaving a copy behind to drift out of sync. */}
+      <div className="filter-row dash-skeleton-strip" aria-hidden="true">
+        {Array.from({ length: 6 }).map((_, index) => (
+          <div className="skeleton-block skeleton-filter" key={index} />
+        ))}
+      </div>
       <div className="gallery-grid" aria-hidden="true">
         {Array.from({ length: 10 }).map((_, index) => (
           <article className="post-card dash-skeleton-card" key={index}>
@@ -2251,8 +2312,156 @@ function ListEditor({ draft, accounts, onSave, onDelete, onClose }) {
   );
 }
 
-function AccountMultiSelect({ accounts, counts, selected, onChange, onAddAccount }) {
+// Sign out used to be a 42px green button sitting immediately beside the
+// Tracker link and styled identically to it -- a session-ending action one
+// pixel from a navigation link, with nothing to tell them apart. Behind a menu
+// it takes a deliberate second click, and the menu is also the only place the
+// signed-in email was ever shown (it used to hide in a title attribute).
+function AccountMenu({ email, onSignOut }) {
   const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onPointerDown = (event) => {
+      if (!ref.current?.contains(event.target)) setOpen(false);
+    };
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [open]);
+
+  const initial = (email || '?').trim().charAt(0).toUpperCase();
+
+  return (
+    <div className="account-menu" ref={ref}>
+      <button
+        type="button"
+        className="account-menu-trigger"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        aria-label={email ? `Account: ${email}` : 'Account'}
+      >
+        {initial}
+      </button>
+      {open ? (
+        <div className="account-menu-panel" role="menu">
+          <p className="account-menu-email">{email || 'Signed in'}</p>
+          <button type="button" role="menuitem" className="account-menu-item" onClick={onSignOut}>
+            <LogOut size={14} />
+            Sign out
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+// A filter that lives behind a compact trigger instead of an always-open card.
+//
+// Six always-open filter cards cost ~150px of vertical space at the top of a
+// page whose whole job is showing a grid -- that height is what forced the
+// scroll-to-hide machinery in the first place. As triggers they cost one 34px
+// row, and the control itself only exists while you're using it.
+//
+// The panel is portaled to document.body and positioned from the trigger's
+// bounding rect, the same approach AccountMultiSelect already uses: the
+// trigger lives inside a flex row that may clip, so an absolutely-positioned
+// panel would be cut off rather than floating over the gallery.
+function FilterPopover({ id, icon, label, summary, isActive, width = 300, children }) {
+  const [open, setOpen] = useState(false);
+  const [rect, setRect] = useState(null);
+  const triggerRef = useRef(null);
+  const panelRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onPointerDown = (event) => {
+      if (triggerRef.current?.contains(event.target)) return;
+      if (panelRef.current?.contains(event.target)) return;
+      setOpen(false);
+    };
+    // Esc closes and hands focus back to the trigger, so keyboard users don't
+    // get dumped at the top of the document.
+    const onKeyDown = (event) => {
+      if (event.key !== 'Escape') return;
+      setOpen(false);
+      triggerRef.current?.focus();
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const place = () => {
+      const trigger = triggerRef.current;
+      if (!trigger) return;
+      const bounds = trigger.getBoundingClientRect();
+      // Right-align to the trigger when a left-aligned panel would run off
+      // screen -- these triggers sit in the right-hand column, so most of
+      // them are closer to the right edge than the panel is wide.
+      const left = Math.max(8, Math.min(bounds.left, window.innerWidth - width - 8));
+      setRect({ top: bounds.bottom + 6, left });
+    };
+    place();
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => {
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+    };
+  }, [open, width]);
+
+  const panelId = `filter-popover-${id}`;
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        className={isActive ? 'filter-trigger filter-trigger-active' : 'filter-trigger'}
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        aria-controls={open ? panelId : undefined}
+      >
+        {icon}
+        <span className="filter-trigger-label">{label}</span>
+        {summary ? <span className="filter-trigger-summary">{summary}</span> : null}
+        <ChevronDown size={13} className={open ? 'chevron chevron-open' : 'chevron'} />
+      </button>
+      {open && rect
+        ? createPortal(
+            <div
+              id={panelId}
+              ref={panelRef}
+              className="filter-popover-panel"
+              role="group"
+              aria-label={label}
+              style={{ top: rect.top, left: rect.left, width }}
+            >
+              <p className="filter-popover-title">{label}</p>
+              {children}
+            </div>,
+            document.body,
+          )
+        : null}
+    </>
+  );
+}
+
+function AccountMultiSelect({ accounts, counts, selected, onChange, onAddAccount, inline = false }) {
+  const [open, setOpen] = useState(inline);
   const [panelRect, setPanelRect] = useState(null);
   const [search, setSearch] = useState('');
   const containerRef = useRef(null);
@@ -2355,26 +2564,11 @@ function AccountMultiSelect({ accounts, counts, selected, onChange, onAddAccount
     onChange(next);
   };
 
-  return (
-    <div className="account-multiselect" ref={containerRef}>
-      <button
-        type="button"
-        className="account-multiselect-trigger"
-        onClick={() => setOpen((value) => !value)}
-        aria-expanded={open}
-      >
-        <span>{label}</span>
-        <ChevronDown size={14} className={open ? 'chevron chevron-open' : 'chevron'} />
-      </button>
-      {open && panelRect
-        ? createPortal(
-            <div
-              className="account-multiselect-panel"
-              role="listbox"
-              aria-multiselectable="true"
-              ref={panelRef}
-              style={{ top: panelRect.top, left: panelRect.left, width: panelWidth }}
-            >
+  // Inline mode: the caller (a FilterPopover) is already a floating panel, so
+  // rendering our own trigger and second portal on top of it would mean two
+  // clicks and two stacked layers to reach one list.
+  const body = (
+    <>
               <div className="account-multiselect-search">
                 <Search size={14} />
                 <input
@@ -2451,6 +2645,38 @@ function AccountMultiSelect({ accounts, counts, selected, onChange, onAddAccount
                   Add account
                 </button>
               ) : null}
+    </>
+  );
+
+  if (inline) {
+    return (
+      <div className="account-multiselect-inline" role="listbox" aria-multiselectable="true">
+        {body}
+      </div>
+    );
+  }
+
+  return (
+    <div className="account-multiselect" ref={containerRef}>
+      <button
+        type="button"
+        className="account-multiselect-trigger"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+      >
+        <span>{label}</span>
+        <ChevronDown size={14} className={open ? 'chevron chevron-open' : 'chevron'} />
+      </button>
+      {open && panelRect
+        ? createPortal(
+            <div
+              className="account-multiselect-panel"
+              role="listbox"
+              aria-multiselectable="true"
+              ref={panelRef}
+              style={{ top: panelRect.top, left: panelRect.left, width: panelWidth }}
+            >
+              {body}
             </div>,
             document.body,
           )

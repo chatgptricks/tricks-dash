@@ -1,0 +1,148 @@
+import { createRoot } from 'react-dom/client';
+import { act } from 'react';
+import App from '../src/App.jsx';
+
+const POSTS = Array.from({ length: 12 }).map((_, i) => ({
+  postKey: `chatgptricks:SC${i}`,
+  shortcode: `SC${i}`,
+  account: 'chatgptricks',
+  accountLabel: 'ChatGPTricks',
+  ownerUsername: 'chatgptricks',
+  caption: i % 3 === 0 ? 'A caption #aitoolsentient' : 'Another caption about AI',
+  postType: i % 2 ? 'Video' : 'Carousel',
+  video: i % 2 ? 'Video' : 'Static',
+  likes: 1000 * (i + 1),
+  comments: 10 * i,
+  postDate: `2026-08-${String(10 + i).padStart(2, '0')}T10:00:00Z`,
+  isHot: i < 3,
+  hotRate: 1.4,
+  is_promo: i === 0 ? 1 : 0,
+  hidden: 0,
+  song: 'Some song',
+  artist: 'Some artist',
+}));
+
+const ACCOUNTS = [
+  { handle: 'chatgptricks', label: 'ChatGPTricks', group: 'sentient', has_avatar: 1, active: 1 },
+  { handle: 'rivalpage', label: 'Rival Page', group: 'competitors', has_avatar: 0, active: 1 },
+];
+
+const stubFetch = async (url) => {
+  const u = String(url);
+  let body = {};
+  if (u.includes('/api/dashboard/posts')) body = { posts: POSTS, summary: {}, ranges: {} };
+  else if (u.includes('/api/dashboard/accounts')) body = { accounts: ACCOUNTS };
+  else if (u.includes('/api/dashboard/lists')) body = { lists: [] };
+  else if (u.includes('/api/admin/me')) body = { role: 'admin', email: 'esteban@sentientagency.io' };
+  return { ok: true, status: 200, json: async () => body, text: async () => JSON.stringify(body) };
+};
+globalThis.fetch = stubFetch;
+window.fetch = stubFetch;
+
+const errors = [];
+const origError = console.error;
+console.error = (...args) => { errors.push(args.map(String).join(' ')); origError(...args); };
+window.addEventListener('error', (e) => errors.push('window.error: ' + e.message));
+
+const el = document.createElement('div');
+document.body.appendChild(el);
+
+(async () => {
+  const root = createRoot(el);
+  await act(async () => { root.render(<App />); });
+  await act(async () => { await new Promise((r) => setTimeout(r, 400)); });
+
+  const html = el.innerHTML;
+  console.log('--- STATE ---', html.includes('dash-skeleton') ? 'SKELETON' : (html.includes('dash-state-error') ? 'ERROR' : 'LOADED'));
+  const checks = {
+    'topbar rendered': html.includes('class="topbar"'),
+    'search field': html.includes('topbar-search'),
+    'results count': html.includes('results-count'),
+    'tracker link new tab': /href="[^"]*tracker\.html"[^>]*target="_blank"/.test(html)
+      || (html.includes('tracker.html') && html.includes('target="_blank"')),
+    'insights link': html.includes('insights.html'),
+    'account menu': html.includes('account-menu-trigger'),
+    'filter triggers': (html.match(/filter-trigger[ "]/g) || []).length >= 6,
+    'no old filter-strip': !html.includes('filter-group-card'),
+    'no eyebrow': !html.includes('Dash explorer'),
+    'favicon set': (document.querySelector('link[rel="icon"]')?.href || '').startsWith('data:image/svg+xml'),
+    'title has section': /sentientdash\.app/.test(document.title),
+  };
+  console.log('\n=== RENDER CHECKS ===');
+  for (const [k, v] of Object.entries(checks)) console.log(`${v ? 'PASS' : 'FAIL'}  ${k}`);
+  console.log('\ndocument.title =', JSON.stringify(document.title));
+  console.log('favicon =', (document.querySelector('link[rel="icon"]')?.getAttribute('href') || '').slice(0, 70));
+
+
+  // ---- interaction checks -------------------------------------------------
+  const q = (sel, root = document) => root.querySelector(sel);
+  const qa = (sel, root = document) => [...root.querySelectorAll(sel)];
+  const click = async (node) => { await act(async () => { node.dispatchEvent(new window.MouseEvent('click', { bubbles: true })); }); };
+  const press = async (key, opts = {}) => { await act(async () => { document.dispatchEvent(new window.KeyboardEvent('keydown', { key, bubbles: true, ...opts })); }); };
+  const inter = {};
+
+  const typeTrigger = qa('.filter-trigger').find((b) => /Type/.test(b.textContent));
+  inter['Type trigger exists'] = Boolean(typeTrigger);
+  await click(typeTrigger);
+  inter['popover opens on click'] = Boolean(q('.filter-popover-panel'));
+  inter['popover is portaled to body'] = q('.filter-popover-panel')?.parentElement === document.body;
+  inter['trigger reports expanded'] = typeTrigger.getAttribute('aria-expanded') === 'true';
+
+  const videoChip = qa('.filter-popover-panel .chip').find((b) => b.textContent.trim().startsWith('Video'));
+  inter['Video option in popover'] = Boolean(videoChip);
+  await click(videoChip);
+  inter['trigger goes active'] = typeTrigger.classList.contains('filter-trigger-active');
+  inter['trigger shows summary'] = /Video/.test(typeTrigger.textContent);
+
+  await press('Escape');
+  inter['Escape closes popover'] = !q('.filter-popover-panel');
+
+  const chips = qa('.active-chip');
+  inter['active chip appeared'] = chips.some((c) => /Video/.test(c.textContent));
+  await click(chips.find((c) => /Video/.test(c.textContent)));
+  inter['chip X clears the filter'] = !q('.active-chip') && !typeTrigger.classList.contains('filter-trigger-active');
+
+  const searchBox = q('.topbar-search input');
+  await act(async () => {
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+    setter.call(searchBox, 'robot');
+    searchBox.dispatchEvent(new window.Event('input', { bubbles: true }));
+  });
+  inter['search creates a chip'] = qa('.active-chip').some((c) => /robot/.test(c.textContent));
+  inter['clear button replaces kbd hint'] = Boolean(q('.topbar-search .search-clear')) && !q('.search-kbd');
+
+  await act(async () => { window.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true })); });
+  inter['Cmd+K focuses search'] = document.activeElement === searchBox;
+
+  await click(q('.account-menu-trigger'));
+  inter['account menu opens'] = Boolean(q('.account-menu-panel'));
+  inter['menu shows the email'] = /sentientagency\.io/.test(q('.account-menu-email')?.textContent || '');
+  inter['sign out lives in the menu'] = /Sign out/.test(q('.account-menu-panel')?.textContent || '');
+
+
+  const acctTrigger = qa('.filter-trigger').find((b) => /Account/.test(b.textContent));
+  await click(acctTrigger);
+  const acctPanel = q('.filter-popover-panel');
+  inter['Account popover opens'] = Boolean(acctPanel);
+  inter['account list is inline, not nested'] = Boolean(q('.account-multiselect-inline', acctPanel))
+    && !q('.account-multiselect-trigger', acctPanel);
+  inter['account search box present'] = Boolean(q('.account-multiselect-search input', acctPanel));
+  inter['accounts listed'] = qa('.account-multiselect-item', acctPanel).length >= 1;
+  await press('Escape');
+
+  const sortTrigger = qa('.filter-trigger').find((b) => /Sort/.test(b.textContent));
+  await click(sortTrigger);
+  inter['Sort is a list, not a select'] = qa('.filter-popover-panel .sort-option').length >= 5
+    && !q('.filter-popover-panel select');
+  await press('Escape');
+
+  console.log('\n=== INTERACTION CHECKS ===');
+  for (const [k, v] of Object.entries(inter)) console.log(`${v ? 'PASS' : 'FAIL'}  ${k}`);
+  Object.assign(checks, inter);
+
+  const real = errors.filter((e) => !/not wrapped in act|ReactDOMTestUtils|useLayoutEffect does nothing/.test(e));
+  console.log('\n=== CONSOLE ERRORS (' + real.length + ') ===');
+  real.slice(0, 8).forEach((e) => console.log('-', e.slice(0, 300)));
+  const failed = Object.values(checks).some((v) => !v) || real.length > 0;
+  process.exit(failed ? 1 : 0);
+})();
