@@ -255,7 +255,11 @@ function serveLocalCovers() {
 }
 
 export default defineConfig({
-  base: '/tricks-dash/',
+  // Served from the apex of a custom domain (sentientdash.app), so assets
+  // live at the root. This was '/tricks-dash/' when the site was hosted at
+  // chatgptricks.github.io/tricks-dash/ -- the repo-name path segment that
+  // GitHub Pages requires when there's no custom domain.
+  base: '/',
   plugins: [react(), serveLocalCovers(), serveInstagramCovers()],
   server: {
     host: '0.0.0.0',
