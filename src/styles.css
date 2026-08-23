@@ -6255,3 +6255,46 @@ body {
 .filter-popover-panel .range-field input[type='range'] {
   accent-color: var(--accent);
 }
+
+/* ---------------------------------------------------------------------------
+   Six cards per row.
+
+   The base rule is the last .gallery-grid declaration further up (five
+   columns); this raises it to six on wide screens and shifts the responsive
+   ladder up one step so the cards don't get narrower than they were before at
+   any given width. Below 1600 it lands back on the old ladder unchanged.
+   --------------------------------------------------------------------------- */
+
+.gallery-grid {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+@media (max-width: 1600px) {
+  .gallery-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1280px) {
+  .gallery-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 960px) {
+  .gallery-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .gallery-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 460px) {
+  .gallery-grid {
+    grid-template-columns: 1fr;
+  }
+}
