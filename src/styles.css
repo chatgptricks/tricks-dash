@@ -6168,3 +6168,26 @@ body {
   color: #fff;
   font-size: 11px;
 }
+
+/* Section divider inside a popover that holds more than one question. */
+.popover-subhead {
+  margin: 14px 0 8px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(245, 245, 245, 0.4);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.filter-popover-panel .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.filter-popover-panel .chip:disabled {
+  opacity: 0.35;
+  cursor: default;
+}

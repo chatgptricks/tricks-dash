@@ -1210,6 +1210,7 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
     minComments > 0,
     sortBy !== 'newest',
     promoOnly,
+    showHidden,
   ].filter(Boolean).length;
 
   // One chip per active filter, each able to clear just itself.
@@ -1283,6 +1284,11 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
         ? accountsInScope.find((account) => selectedAccounts.has(account.handle))?.label
         : String(selectedAccounts.size))
     : '';
+  const typeSummary = [
+    activeType !== 'All posts' ? TYPE_LABELS[activeType] ?? activeType : '',
+    promoOnly ? 'Promo' : '',
+    showHidden ? 'Hidden' : '',
+  ].filter(Boolean).join(', ');
   const dateSummary = datePreset !== 'all' && datePreset !== 'custom'
     ? datePresets.find((option) => option.value === datePreset)?.label
     : (dateFrom || dateTo ? 'Custom' : '');
@@ -1315,6 +1321,7 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
       setDateTo('');
       setDatePreset('all');
       setPromoOnly(false);
+      setShowHidden(false);
       setVisibleCount(POSTS_PER_BATCH);
     });
   }, [accountsInScope]);
@@ -1632,25 +1639,6 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
               </button>
             ) : null}
 
-            {/* Not a filter: it switches which set of posts you're looking at
-                (visible vs. the ones you've hidden), so it sits with the tabs
-                rather than adding an eighth card to the filter strip. Only
-                appears once something is actually hidden -- until then it
-                would be a control with nothing to show. */}
-            {hiddenCount ? (
-              <button
-                type="button"
-                className={showHidden ? 'hidden-toggle hidden-toggle-on' : 'hidden-toggle'}
-                onClick={() => startTransition(() => setShowHidden((value) => !value))}
-                role="switch"
-                aria-checked={showHidden}
-                title={showHidden ? 'Back to visible posts' : "Show the posts you've hidden, so you can bring them back"}
-              >
-                {showHidden ? <Eye size={12} /> : <EyeOff size={12} />}
-                {showHidden ? 'Viewing hidden' : 'Hidden'}
-                <span>{hiddenCount}</span>
-              </button>
-            ) : null}
           </div>
             <div className="filter-row">
                 <button
@@ -1665,16 +1653,6 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
                 </button>
 
                 <div className={mobileFiltersOpen ? 'filter-triggers filter-triggers-open' : 'filter-triggers'}>
-                  <button
-                    type="button"
-                    className={promoOnly ? 'filter-trigger filter-trigger-active' : 'filter-trigger'}
-                    onClick={() => startTransition(() => setPromoOnly((value) => !value))}
-                    aria-pressed={promoOnly}
-                    title={`Only posts carrying ${PROMO_HASHTAG} or flagged as promo by hand`}
-                  >
-                    <Megaphone size={13} />
-                    <span className="filter-trigger-label">Promo</span>
-                  </button>
 
                   <FilterPopover
                     id="account"
@@ -1701,8 +1679,9 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
                     id="type"
                     icon={<Filter size={13} />}
                     label="Type"
-                    summary={activeType !== 'All posts' ? TYPE_LABELS[activeType] ?? activeType : ''}
-                    isActive={activeType !== 'All posts'}
+                    summary={typeSummary}
+                    isActive={Boolean(typeSummary)}
+                    width={280}
                   >
                     <div className="chip-row">
                       {TYPE_OPTIONS.map((option) => (
@@ -1717,6 +1696,35 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
                           {option !== 'All posts' ? <span>{typeCounts[option] ?? 0}</span> : null}
                         </button>
                       ))}
+                    </div>
+
+                    {/* Promo and Hidden are the same question as Type -- "which
+                        posts do I want to see?" -- so they live here instead of
+                        as two more pills competing for room on the tab row. */}
+                    <p className="popover-subhead">Flags</p>
+                    <div className="chip-row">
+                      <button
+                        type="button"
+                        className={promoOnly ? 'chip chip-active' : 'chip'}
+                        onClick={() => startTransition(() => setPromoOnly((value) => !value))}
+                        aria-pressed={promoOnly}
+                        title={`Only posts carrying ${PROMO_HASHTAG} or flagged as promo by hand`}
+                      >
+                        <Megaphone size={12} />
+                        Promo
+                      </button>
+                      <button
+                        type="button"
+                        className={showHidden ? 'chip chip-active' : 'chip'}
+                        onClick={() => startTransition(() => setShowHidden((value) => !value))}
+                        aria-pressed={showHidden}
+                        disabled={!hiddenCount}
+                        title={hiddenCount ? 'Show the posts you have hidden, so you can bring them back' : 'Nothing hidden yet'}
+                      >
+                        {showHidden ? <Eye size={12} /> : <EyeOff size={12} />}
+                        Hidden
+                        <span>{hiddenCount}</span>
+                      </button>
                     </div>
                   </FilterPopover>
 
