@@ -6298,3 +6298,27 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+/* Carousel download, in the selected-post rail. */
+.slide-download {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.slide-download .ghost-button {
+  flex: 1 1 auto;
+  justify-content: center;
+}
+
+.slide-download-note {
+  margin: 0;
+  width: 100%;
+  color: rgba(245, 245, 245, 0.45);
+  font-size: 11px;
+}
+
+.slide-download-note.is-error {
+  color: #ff9b9b;
+}
