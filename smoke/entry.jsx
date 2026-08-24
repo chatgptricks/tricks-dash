@@ -11,6 +11,7 @@ const POSTS = Array.from({ length: 12 }).map((_, i) => ({
   ownerUsername: 'chatgptricks',
   caption: i % 3 === 0 ? 'A caption #aitoolsentient' : 'Another caption about AI',
   postType: i % 2 ? 'Video' : 'Carousel',
+  type: i % 2 ? 'Video' : 'Carousel',
   video: i % 2 ? 'Video' : 'Static',
   likes: 1000 * (i + 1),
   comments: 10 * i,
@@ -174,11 +175,66 @@ const el = document.getElementById('root') || document.body.appendChild(document
   lay['no duplicate skeleton strip'] = document.querySelectorAll('.dash-skeleton-strip').length === 0;
   Object.assign(checks, lay);
 
+
+  // ---- carousel download ---------------------------------------------------
+  // Earlier checks left "robot" in the search box, which filters everything
+  // out -- with no results there is no selected post and no rail to test.
+  await act(async () => {
+    const box = q('.topbar-search input');
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+    setter.call(box, '');
+    box.dispatchEvent(new window.Event('input', { bubbles: true }));
+  });
+  const clearPill = q('.filter-clear-pill');
+  if (clearPill) await click(clearPill);
+  // The harness loads hot.sentientdash.app, so the app opens on the HOT tab
+  // by subdomain. The fixture has no currently-hot posts, so switch to ALL.
+  const allTab = qa('.group-tab').find(t => /^ALL$/i.test(t.textContent.trim()));
+  if (allTab) await click(allTab);
+  await act(async () => { await new Promise(r => setTimeout(r, 300)); });
+  console.log('GRID:', qa('.post-card').length, 'cards | triggers active:',
+    qa('.filter-trigger-active').map(t => t.textContent.trim()).join(' , ') || 'none',
+    '| search:', JSON.stringify(q('.topbar-search input')?.value),
+    '| tab:', q('.group-tab-active')?.textContent, '| count:', q('.results-count')?.textContent);
+  const card = q('.post-card');
+  if (card) { await click(card); }
+  await act(async () => { await new Promise(r => setTimeout(r, 200)); });
+  console.log('RAIL:', (q('.right-rail')?.className) || 'NO RAIL', '| panels:', qa('.right-rail .panel').map(n=>n.className).join(' , ') || 'none', '| detail html:', (q('.panel.detail')?.innerHTML || '').slice(0,120));
+  const dl = qa('.slide-download button')[0];
+  inter['download button in rail'] = Boolean(dl);
+  inter['download button labelled'] = /Download images/.test(dl?.textContent || '');
+  let called = null;
+  const realFetch = globalThis.fetch;
+  // apiFetch goes through window.fetch, so stubbing globalThis alone misses it.
+  const stubbed = async (u, o) => {
+    if (String(u).includes('/posts/media')) {
+      called = String(u);
+      return { ok: true, status: 200,
+        blob: async () => new (window.Blob || Blob)(['zip']),
+        headers: { get: (k) => (k === 'X-Slide-Count' ? '3' : 'instagram') } };
+    }
+    return realFetch(u, o);
+  };
+  globalThis.fetch = stubbed; window.fetch = stubbed;
+  // The app calls the global URL, which in this harness is Node's, not
+  // jsdom's -- and Node's createObjectURL rejects a jsdom Blob. Stub both.
+  window.URL.createObjectURL = () => 'blob:stub';
+  window.URL.revokeObjectURL = () => {};
+  globalThis.URL.createObjectURL = () => 'blob:stub';
+  globalThis.URL.revokeObjectURL = () => {};
+  if (dl) await click(dl);
+  await act(async () => { await new Promise(r => setTimeout(r, 250)); });
+  inter['calls the media endpoint'] = Boolean(called && /account=/.test(called) && /shortcode=/.test(called));
+  await act(async () => { await new Promise(r => setTimeout(r, 400)); });
+  console.log('NOTE:', JSON.stringify(q('.slide-download-note')?.textContent || null));
+  inter['reports the slide count'] = /3 images/.test(q('.slide-download-note')?.textContent || '');
+  globalThis.fetch = realFetch; window.fetch = realFetch;
+
   console.log('\n=== INTERACTION CHECKS ===');
   for (const [k, v] of Object.entries(inter)) console.log(`${v ? 'PASS' : 'FAIL'}  ${k}`);
   Object.assign(checks, inter);
 
-  const real = errors.filter((e) => !/not wrapped in act|ReactDOMTestUtils|useLayoutEffect does nothing/.test(e));
+  const real = errors.filter((e) => !/not wrapped in act|ReactDOMTestUtils|useLayoutEffect does nothing|Not implemented: navigation/.test(e));
   console.log('\n=== CONSOLE ERRORS (' + real.length + ') ===');
   real.slice(0, 8).forEach((e) => console.log('-', e.slice(0, 300)));
   const failed = Object.values(checks).some((v) => !v) || real.length > 0;

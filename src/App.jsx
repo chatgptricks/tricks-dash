@@ -10,6 +10,7 @@ import {
   CalendarDays,
   ChevronDown,
   Copy,
+  Download,
   ExternalLink,
   Filter,
   Flame,
@@ -495,8 +496,11 @@ function usageCellColor(count) {
 }
 
 function typeLabel(value) {
-  if (value.startsWith('Carousel')) return 'Carousel';
-  if (value.startsWith('Video')) return 'Video';
+  // Coerced rather than assumed: this runs on every card render, and a post
+  // arriving without `type` used to throw here and blank the whole page.
+  const text = String(value ?? '');
+  if (text.startsWith('Carousel')) return 'Carousel';
+  if (text.startsWith('Video')) return 'Video';
   return 'Image';
 }
 
@@ -2022,6 +2026,8 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
                 <Metric label="Date" value={formatDate(selected.postDate)} />
                 <Metric label="Media" value={selected.video} />
               </section>
+
+              <SlideDownload post={selected} />
             </>
           ) : null}
         </aside> : null}
@@ -4272,6 +4278,77 @@ const PostCard = memo(function PostCard({ post, priority, selected, onSelect, on
     </article>
   );
 });
+
+// Pulls every image in the open post down as one ZIP.
+//
+// Replaces doing it by hand in DevTools. The backend does the fetching: the
+// Instagram CDN doesn't reliably allow cross-origin reads, so downloading the
+// slides from the browser would work for some posts and silently fail for
+// others. One ZIP rather than n files also avoids Chrome's "allow multiple
+// downloads?" prompt.
+function SlideDownload({ post }) {
+  const [state, setState] = useState('idle'); // idle | working | done | error
+  const [note, setNote] = useState('');
+
+  // A new post means the previous result no longer describes what's on screen.
+  useEffect(() => {
+    setState('idle');
+    setNote('');
+  }, [post.postKey]);
+
+  const download = async () => {
+    setState('working');
+    setNote('');
+    try {
+      const url = `${API_BASE}/api/dashboard/posts/media`
+        + `?account=${encodeURIComponent(post.account || IG_HANDLE)}`
+        + `&shortcode=${encodeURIComponent(post.shortcode)}`;
+      const response = await apiFetch(url);
+      if (!response.ok) {
+        let detail = `HTTP ${response.status}`;
+        try {
+          const body = await response.json();
+          if (body?.detail) detail = body.detail;
+        } catch { /* not JSON; keep the status */ }
+        throw new Error(detail);
+      }
+
+      const blob = await response.blob();
+      const count = response.headers.get('X-Slide-Count');
+      const source = response.headers.get('X-Media-Source');
+
+      // Anchor + object URL rather than window.open: this keeps the filename
+      // the server chose, and doesn't trip the popup blocker.
+      const href = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = href;
+      link.download = `${post.account || IG_HANDLE}-${post.shortcode}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      // Revoking immediately can cancel the download in some browsers.
+      setTimeout(() => URL.revokeObjectURL(href), 30000);
+
+      setState('done');
+      setNote(`${count || '?'} image${count === '1' ? '' : 's'}${source === 'apify' ? ' · via Apify' : ''}`);
+    } catch (error) {
+      setState('error');
+      setNote(error.message || 'Download failed');
+    }
+  };
+
+  return (
+    <section className="panel slide-download">
+      <button type="button" className="ghost-button" onClick={download} disabled={state === 'working'}>
+        <Download size={15} className={state === 'working' ? 'spin' : ''} />
+        {state === 'working' ? 'Fetching images…' : 'Download images'}
+      </button>
+      {note ? (
+        <p className={state === 'error' ? 'slide-download-note is-error' : 'slide-download-note'}>{note}</p>
+      ) : null}
+    </section>
+  );
+}
 
 function InstagramLink({ post, onClick, compact = false }) {
   if (!post.permalink) return null;
