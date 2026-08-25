@@ -3090,30 +3090,69 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
     }
     setImporting(handle);
     setImportNotice((prev) => ({ ...prev, [handle]: 'Starting…' }));
+    // Uses the background endpoint, not the synchronous one: a full-history
+    // scrape from an old date routinely runs for minutes, far longer than the
+    // proxy in front of the API holds an idle connection open. The blocking
+    // call died every time here (same bug the add-account wizard had) and
+    // left the account exactly where it started with no real error shown --
+    // "Extraction failed" was actually "the request never got a response."
     try {
-      const response = await apiFetch(`${API_BASE}/api/admin/accounts/${encodeURIComponent(handle)}/backfill`, {
+      const response = await apiFetch(`${API_BASE}/api/admin/accounts/backfill-bg/${encodeURIComponent(handle)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({ password, date_from: from, results_limit: '2000' }),
       });
-      const body = await response.json().catch(() => ({}));
+      const started = await response.json().catch(() => ({}));
       if (!response.ok) {
-        setImportNotice((prev) => ({ ...prev, [handle]: body.detail || 'Extraction failed.' }));
+        setImportNotice((prev) => ({ ...prev, [handle]: started.detail || 'Could not start the import.' }));
+        setImporting('');
         return;
       }
-      setImportNotice((prev) => ({
-        ...prev,
-        [handle]: `Done: ${body.added ?? 0} new posts.`,
-      }));
-      onAccountsChanged?.();
+      if (started.already_running) {
+        setImportNotice((prev) => ({
+          ...prev,
+          [handle]: `Another import (@${started.handle}) is already running. Try again once it finishes.`,
+        }));
+        setImporting('');
+        return;
+      }
+
+      // Poll until the worker reports back. 2000 posts from an old date can
+      // take a good while -- giving up early is what made this look broken
+      // in the first place.
+      let attempts = 0;
+      const poll = setInterval(async () => {
+        attempts += 1;
+        try {
+          const statusResponse = await apiFetch(`${API_BASE}/api/admin/accounts/backfill-status`);
+          const status = await statusResponse.json().catch(() => ({}));
+          if (status.running) {
+            if (attempts >= 120) { // ~20 minutes
+              clearInterval(poll);
+              setImportNotice((prev) => ({
+                ...prev,
+                [handle]: 'Still running on the server. New posts will show up on their own.',
+              }));
+              setImporting('');
+            }
+            return;
+          }
+          clearInterval(poll);
+          if (status.error) {
+            setImportNotice((prev) => ({ ...prev, [handle]: status.error }));
+          } else {
+            setImportNotice((prev) => ({ ...prev, [handle]: `Done: ${status.result?.added ?? 0} new posts.` }));
+            onAccountsChanged?.();
+            await loadRoster();
+          }
+          setImporting('');
+        } catch {
+          // Transient poll failure -- next tick tries again, importing stays
+          // true so the button shows busy rather than falsely idle.
+        }
+      }, 10000);
     } catch (error) {
-      // A long scrape routinely outlives the browser's patience; the server
-      // keeps going, so say so instead of reporting a false failure.
-      setImportNotice((prev) => ({
-        ...prev,
-        [handle]: 'Still running on the server. New posts will show up on their own.',
-      }));
-    } finally {
+      setImportNotice((prev) => ({ ...prev, [handle]: 'Network error starting the import.' }));
       setImporting('');
     }
   };
