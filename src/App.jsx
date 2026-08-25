@@ -3774,48 +3774,46 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
   const cleanHandle = handle.trim().replace(/^@/, '');
   const canLeaveStep0 = cleanHandle.length > 0;
 
+  // Typing no longer triggers a lookup. Each one costs an Apify credit and
+  // takes 5-20s, so spending them on half-typed prefixes was both slow and
+  // wasteful -- and blowing the server's per-minute cap made a perfectly good
+  // handle report as nonexistent. Now it happens once, when asked.
   useEffect(() => {
     setPreview(null);
     setPreviewError('');
-    // Instagram handles are at least 3 characters, and the server allows only
-    // ten lookups a minute because each one costs an Apify credit. At a 700ms
-    // debounce, typing a ten-character handle could spend most of that budget
-    // on prefixes that were never going to resolve -- and then the real
-    // lookup came back 429 and was reported as "couldn't find that account".
-    if (cleanHandle.length < 3) {
-      setPreviewStatus('idle');
-      return undefined;
-    }
-    setPreviewStatus('loading');
-    const requestId = ++previewRequestRef.current;
-    const timer = setTimeout(async () => {
-      try {
-        const response = await apiFetch(`${API_BASE}/api/admin/accounts/preview?handle=${encodeURIComponent(cleanHandle)}`);
-        if (previewRequestRef.current !== requestId) return; // stale -- handle changed since this fired
-        if (!response.ok) {
-          const body = await response.json().catch(() => ({}));
-          setPreviewStatus('error');
-          if (response.status === 429) {
-            setPreviewError('Too many lookups in a row. Wait a moment and try again.');
-          } else if (response.status === 404) {
-            setPreviewError(body.detail || "Couldn't find that account -- double-check the handle.");
-          } else {
-            setPreviewError(body.detail || `Lookup failed (${response.status}). The account may still be fine.`);
-          }
-          return;
-        }
-        const data = await response.json();
-        setPreview(data);
-        setPreviewStatus('idle');
-      } catch (error) {
-        if (previewRequestRef.current === requestId) {
-          setPreviewStatus('error');
-          setPreviewError('Network error during lookup. The account may still be fine.');
-        }
-      }
-    }, 1100);
-    return () => clearTimeout(timer);
+    setPreviewStatus('idle');
+    previewRequestRef.current += 1; // abandon anything still in flight
   }, [cleanHandle]);
+
+  const lookupHandle = useCallback(async () => {
+    if (cleanHandle.length < 3 || previewStatus === 'loading') return;
+    setPreviewStatus('loading');
+    setPreviewError('');
+    const requestId = ++previewRequestRef.current;
+    try {
+      const response = await apiFetch(`${API_BASE}/api/admin/accounts/preview?handle=${encodeURIComponent(cleanHandle)}`);
+      if (previewRequestRef.current !== requestId) return; // handle changed since this fired
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        setPreviewStatus('error');
+        if (response.status === 429) {
+          setPreviewError('Too many lookups in a row. Wait a moment and try again.');
+        } else if (response.status === 404) {
+          setPreviewError(body.detail || "Couldn't find that account -- double-check the handle.");
+        } else {
+          setPreviewError(body.detail || `Lookup failed (${response.status}). The account may still be fine.`);
+        }
+        return;
+      }
+      setPreview(await response.json());
+      setPreviewStatus('idle');
+    } catch (error) {
+      if (previewRequestRef.current === requestId) {
+        setPreviewStatus('error');
+        setPreviewError('Network error during lookup. The account may still be fine.');
+      }
+    }
+  }, [cleanHandle, previewStatus]);
 
   const goNext = () => {
     if (step === 0 && !canLeaveStep0) {
@@ -3926,13 +3924,30 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
               </div>
               <label className="modal-field wizard-handle-field">
                 <span>Instagram handle</span>
-                <input
-                  value={handle}
-                  onChange={(event) => setHandle(event.target.value)}
-                  placeholder="e.g. natgeo"
-                  autoFocus
-                  required
-                />
+                <div className="wizard-handle-input">
+                  <input
+                    value={handle}
+                    onChange={(event) => setHandle(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key !== 'Enter') return;
+                      // Enter would otherwise submit the surrounding form and
+                      // skip the step before the lookup has run.
+                      event.preventDefault();
+                      lookupHandle();
+                    }}
+                    placeholder="e.g. natgeo"
+                    autoFocus
+                    required
+                  />
+                  <button
+                    type="button"
+                    className="ghost-button"
+                    onClick={lookupHandle}
+                    disabled={cleanHandle.length < 3 || previewStatus === 'loading'}
+                  >
+                    {previewStatus === 'loading' ? 'Checking…' : 'Check'}
+                  </button>
+                </div>
               </label>
             </div>
             {preview ? (
@@ -3945,6 +3960,8 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
               <p className="wizard-preview-meta wizard-preview-meta-error">
                 {previewError || "Couldn't find that account -- double-check the handle."}
               </p>
+            ) : cleanHandle.length >= 3 && previewStatus === 'idle' ? (
+              <p className="wizard-preview-meta">Press Enter to check the account, or just continue.</p>
             ) : null}
             <label className="modal-field">
               <span>Display label (optional)</span>
