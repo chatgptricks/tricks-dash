@@ -6393,9 +6393,7 @@ body {
      same hue held at a luminance that actually reads, so active pills and
      links stay recognisably the brand colour without being unreadable. */
   --accent: #c3c702;
-  /* Same hue at L22% -- 4.87:1 on the page background. The fill value
-     itself is 1.8:1 as text, so it can only ever be a background. */
-  --accent-text: #6d6f01;
+  --accent-text: #c3c702;
   --accent-ink: #2e2f00;
 
   --line: rgba(0, 0, 0, 0.12);
