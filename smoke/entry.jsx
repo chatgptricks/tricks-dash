@@ -203,31 +203,65 @@ const el = document.getElementById('root') || document.body.appendChild(document
   const dl = qa('.slide-download button')[0];
   inter['download button in rail'] = Boolean(dl);
   inter['download button labelled'] = /Download media/.test(dl?.textContent || '');
-  let called = null;
+
   const realFetch = globalThis.fetch;
-  // apiFetch goes through window.fetch, so stubbing globalThis alone misses it.
+  let listedUrl = null, zipUrl = null;
   const stubbed = async (u, o) => {
-    if (String(u).includes('/posts/media')) {
-      called = String(u);
+    const str = String(u);
+    if (str.includes('/posts/media') && str.includes('list=1')) {
+      listedUrl = str;
+      const body = { source: 'instagram', items: [
+        { index: 1, kind: 'video', filename: '01.mp4', poster: 'https://cdn/p1.jpg' },
+        { index: 2, kind: 'image', filename: '02.jpg', poster: 'https://cdn/p2.jpg' },
+        { index: 3, kind: 'image', filename: '03.jpg', poster: 'https://cdn/p3.jpg' },
+      ] };
+      return { ok: true, status: 200, json: async () => body };
+    }
+    if (str.includes('/posts/media')) {
+      zipUrl = str;
       return { ok: true, status: 200,
         blob: async () => new (window.Blob || Blob)(['zip']),
-        headers: { get: (k) => (k === 'X-Slide-Count' ? '3' : 'instagram') } };
+        headers: { get: (k) => (k === 'Content-Disposition' ? 'attachment; filename="x.zip"' : null) } };
     }
     return realFetch(u, o);
   };
   globalThis.fetch = stubbed; window.fetch = stubbed;
-  // The app calls the global URL, which in this harness is Node's, not
-  // jsdom's -- and Node's createObjectURL rejects a jsdom Blob. Stub both.
   window.URL.createObjectURL = () => 'blob:stub';
   window.URL.revokeObjectURL = () => {};
   globalThis.URL.createObjectURL = () => 'blob:stub';
   globalThis.URL.revokeObjectURL = () => {};
-  if (dl) await click(dl);
+
+  await click(dl);
+  await act(async () => { await new Promise(r => setTimeout(r, 300)); });
+  inter['opens a modal'] = Boolean(q('.media-modal'));
+  inter['asks for the list first'] = Boolean(listedUrl) && !zipUrl;
+  inter['shows one cell per item'] = qa('.media-cell').length === 3;
+  inter['all picked by default'] = qa('.media-cell.is-picked').length === 3;
+  inter['labels video vs image'] = /Video/.test(qa('.media-cell-tag')[0]?.textContent || '')
+    && /Image/.test(qa('.media-cell-tag')[1]?.textContent || '');
+
+  await click(qa('.media-cell')[1]);
+  inter['clicking a cell unticks it'] = qa('.media-cell.is-picked').length === 2;
+
+  const selBtn = qa('.media-modal-actions button').find(b => /Download selected/.test(b.textContent));
+  inter['selected count in the button'] = /\(2\)/.test(selBtn?.textContent || '');
+  await click(selBtn);
   await act(async () => { await new Promise(r => setTimeout(r, 250)); });
-  inter['calls the media endpoint'] = Boolean(called && /account=/.test(called) && /shortcode=/.test(called));
-  await act(async () => { await new Promise(r => setTimeout(r, 400)); });
-  console.log('NOTE:', JSON.stringify(q('.slide-download-note')?.textContent || null));
-  inter['reports the file count'] = /3 files/.test(q('.slide-download-note')?.textContent || '');
+  inter['downloads only the ticked ones'] = /only=1,3/.test(zipUrl || '');
+
+  zipUrl = null;
+  await click(qa('.media-cell-solo')[2]);
+  await act(async () => { await new Promise(r => setTimeout(r, 250)); });
+  inter['per-item button asks for that one'] = /only=3/.test(zipUrl || '') && !/only=3,/.test(zipUrl || '');
+
+  zipUrl = null;
+  await click(qa('.media-modal-actions button').find(b => /Download all/.test(b.textContent)));
+  await act(async () => { await new Promise(r => setTimeout(r, 250)); });
+  inter['download all sends no only='] = Boolean(zipUrl) && !/only=/.test(zipUrl);
+
+  await press('Escape');
+  inter['Escape closes the modal'] = !q('.media-modal');
+
   globalThis.fetch = realFetch; window.fetch = realFetch;
 
 
