@@ -993,7 +993,9 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
 
     (async () => {
       try {
-        const params = { password, results_limit: '2000' };
+        // 2000 stays the default for the other two modes; the wizard only
+        // sends a number when you explicitly picked a post count.
+        const params = { password, results_limit: String(account.resultsLimit || 2000) };
         if (account.dateFrom) params.date_from = account.dateFrom;
         if (account.dateTo) params.date_to = account.dateTo;
         const response = await apiFetch(`${API_BASE}/api/admin/accounts/${encodeURIComponent(account.handle)}/backfill`, {
@@ -3758,7 +3760,11 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
   const { t } = usePrefs();
   const [hotThreshold, setHotThreshold] = useState('600');
   const hotThresholdValue = Math.max(0, Math.round(Number(hotThreshold) || 0));
-  const [importScope, setImportScope] = useState('all'); // 'all' | 'range'
+  const [importScope, setImportScope] = useState('all'); // 'all' | 'range' | 'count'
+  // Text while editing, same reason as the threshold: coercing per keystroke
+  // makes the field impossible to clear.
+  const [importCount, setImportCount] = useState('2000');
+  const importCountValue = Math.min(5000, Math.max(1, Math.round(Number(importCount) || 0)));
   const [importFrom, setImportFrom] = useState('');
   const [importTo, setImportTo] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -3830,6 +3836,10 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
       setNotice('Pick at least a start date, or switch back to All posts.');
       return;
     }
+    if (step === 1 && importScope === 'count' && !(Number(importCount) >= 1)) {
+      setNotice('Enter how many posts to import.');
+      return;
+    }
     setNotice('');
     setStep((value) => Math.min(value + 1, WIZARD_STEPS.length - 1));
   };
@@ -3878,6 +3888,7 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
           avatarUrl: preview?.profile_pic_url || null,
           dateFrom: importScope === 'range' ? importFrom || null : null,
           dateTo: importScope === 'range' ? importTo || null : null,
+          resultsLimit: importScope === 'count' ? importCountValue : null,
         },
         password,
       );
@@ -4029,6 +4040,15 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
                 >
                   Date range
                 </button>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={importScope === 'count'}
+                  className={importScope === 'count' ? 'wizard-scope-option wizard-scope-option-active' : 'wizard-scope-option'}
+                  onClick={() => setImportScope('count')}
+                >
+                  Post count
+                </button>
               </div>
             </div>
             {importScope === 'range' ? (
@@ -4042,8 +4062,30 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
                   <input type="date" value={importTo} onChange={(event) => setImportTo(event.target.value)} />
                 </label>
               </div>
+            ) : importScope === 'count' ? (
+              <>
+                <label className="modal-field">
+                  <span>How many of the most recent posts</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={5000}
+                    value={importCount}
+                    onChange={(event) => setImportCount(event.target.value)}
+                    onBlur={() => {
+                      const parsed = Number(importCount);
+                      if (importCount.trim() === '' || !Number.isFinite(parsed) || parsed < 1) setImportCount('2000');
+                      else setImportCount(String(Math.min(5000, Math.round(parsed))));
+                    }}
+                  />
+                </label>
+                <p className="wizard-hint">
+                  Newest first. The scraper is billed per post, so this is the direct lever on
+                  what the import costs -- roughly ${(importCountValue * 0.0023).toFixed(2)} for {importCountValue.toLocaleString()} posts.
+                </p>
+              </>
             ) : (
-              <p className="wizard-hint">Imports up to the most recent 2,000 posts. Use a date range for a narrower, faster import.</p>
+              <p className="wizard-hint">Imports up to the most recent 2,000 posts. Use a date range or a post count for a narrower, faster import.</p>
             )}
           </div>
         ) : null}
@@ -4064,7 +4106,9 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
                   {ACCOUNT_GROUP_OPTIONS.find((option) => option.value === group)?.label} · HOT at {hotThresholdValue}+ likes/hr
                 </p>
                 <p className="wizard-summary-meta">
-                  {importScope === 'range'
+                  {importScope === 'count'
+                    ? `Importing the ${importCountValue.toLocaleString()} most recent posts`
+                    : importScope === 'range'
                     ? `Importing ${importFrom || '…'} to ${importTo || '…'}`
                     : 'Importing up to 2,000 most recent posts'}
                 </p>
