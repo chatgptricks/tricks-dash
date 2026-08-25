@@ -193,6 +193,7 @@ tbody tr:hover{background:rgba(var(--edge),.03)}
       </div>
       <span id="scope" style="color:var(--muted);font-size:11px"></span>
       <button class="linkbtn" id="shareBtn" title="Copy a link to this exact view">Copy link</button>
+      <button class="linkbtn" id="pdfBtn" title="Download a PDF of the current selection">Export PDF</button>
       <a class="linkbtn" href="./index.html">← Dashboard</a>
     </div>
   </div>
@@ -387,6 +388,9 @@ function buildChips(){
   const mk=(label,handler,on)=>{const s=document.createElement('span');s.className='chip'+(on?' on':'');
     s.textContent=label;s.onclick=handler;box.appendChild(s);return s;};
   mk('All',()=>{SEL=new Set(ACCOUNTS.map(a=>a.handle));buildChips();render()},SEL.size===ACCOUNTS.length);
+  // Deselecting everything is a real state, not an error: it is how you
+  // start from nothing and add back just the accounts you want to compare.
+  mk('Clear',()=>{SEL=new Set();buildChips();render()},SEL.size===0);
   mk('Ours only',()=>{SEL=new Set(ACCOUNTS.filter(a=>a.group==='sentient').map(a=>a.handle));buildChips();render()},false);
   mk('Competitors only',()=>{SEL=new Set(ACCOUNTS.filter(a=>a.group==='competitors').map(a=>a.handle));buildChips();render()},false);
   ACCOUNTS.forEach(a=>{
@@ -901,6 +905,157 @@ onAuthStateChanged(auth, async (user) => {
 });
 </script>
 <script>
+
+/* --- PDF export ---------------------------------------------------------
+   Built from the DOM that is already on screen rather than from RAW, so the
+   report always matches exactly what the filters are showing -- there is no
+   second code path that can drift out of step with the page.
+
+   jsPDF is loaded on first click, not at page load: most visits never export,
+   and it is ~350KB. */
+let jsPdfReady = null;
+function loadJsPdf(){
+  if(jsPdfReady) return jsPdfReady;
+  jsPdfReady = new Promise((res, rej) => {
+    const sc = document.createElement('script');
+    sc.src = 'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js';
+    sc.onload = () => res(window.jspdf.jsPDF);
+    sc.onerror = () => rej(new Error('Could not load the PDF library'));
+    document.head.appendChild(sc);
+  });
+  return jsPdfReady;
+}
+
+/* Chart.js canvases are transparent, and their labels are drawn in whatever
+   colour suited the theme at construction. Dropped straight onto a white PDF
+   page a dark-theme chart would be invisible, so each one is composited onto
+   an opaque swatch of the panel colour it was designed against. */
+function canvasOnPanel(canvas){
+  const bg = getComputedStyle(document.body).backgroundColor || '#000';
+  const out = document.createElement('canvas');
+  out.width = canvas.width; out.height = canvas.height;
+  const ctx = out.getContext('2d');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, out.width, out.height);
+  ctx.drawImage(canvas, 0, 0);
+  return out.toDataURL('image/png');
+}
+
+async function exportPdf(){
+  const btn = document.getElementById('pdfBtn');
+  const label = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Building…';
+  try {
+    const JsPDF = await loadJsPdf();
+    const doc = new JsPDF({ unit: 'pt', format: 'a4' });
+    const M = 40, W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
+    const CW = W - M * 2;
+    let y = M;
+
+    const room = (need) => { if(y + need > H - M){ doc.addPage(); y = M; } };
+    const text = (str, size, style, gap) => {
+      doc.setFont('helvetica', style || 'normal'); doc.setFontSize(size);
+      const lines = doc.splitTextToSize(String(str), CW);
+      room(lines.length * (size + 2));
+      doc.text(lines, M, y);
+      y += lines.length * (size + 2) + (gap === undefined ? 6 : gap);
+    };
+
+    // header
+    text('Sentient Insights', 20, 'bold', 2);
+    const when = new Date().toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
+    doc.setTextColor(120);
+    text(`${document.getElementById('scope')?.textContent || ''}  ·  generated ${when}`, 9, 'normal', 10);
+
+    // the filters this report was built from
+    const filters = [];
+    document.querySelectorAll('.filters .f').forEach((f) => {
+      const lab = f.querySelector('label')?.textContent?.trim();
+      const ctl = f.querySelector('select, input');
+      if(lab && ctl && ctl.value) filters.push(`${lab}: ${ctl.selectedOptions ? ctl.selectedOptions[0].text : ctl.value}`);
+    });
+    const accs = [...document.querySelectorAll('#accChips .chip.on')]
+      .map(c => c.textContent).filter(t => t.startsWith('@'));
+    if(accs.length) filters.push(`Accounts: ${accs.join(', ')}`);
+    if(filters.length) text(filters.join('   |   '), 8, 'normal', 14);
+    doc.setTextColor(0);
+
+    // KPIs, two columns
+    const kpis = [...document.querySelectorAll('.kpi')].map(k => ({
+      label: k.querySelector('b')?.textContent?.trim() || '',
+      value: k.querySelector('strong')?.textContent?.trim() || '',
+      note: k.querySelector('em')?.textContent?.trim() || '',
+    }));
+    if(kpis.length){
+      room(30); text('Summary', 12, 'bold', 8);
+      const colW = CW / 2;
+      kpis.forEach((k, i) => {
+        const col = i % 2, x = M + col * colW;
+        if(col === 0) room(30);
+        doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.text(k.value, x, y);
+        doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(120);
+        doc.text(`${k.label}${k.note ? '  ' + k.note : ''}`, x, y + 11);
+        doc.setTextColor(0);
+        if(col === 1 || i === kpis.length - 1) y += 30;
+      });
+      y += 6;
+    }
+
+    // one block per on-screen section: heading, then its charts
+    for(const sec of document.querySelectorAll('.wrap > section')){
+      const h = sec.querySelector('h2');
+      const canvases = [...sec.querySelectorAll('canvas')].filter(c => c.width && c.height);
+      const table = sec.querySelector('table');
+      if(!h || (!canvases.length && !table)) continue;
+
+      room(40);
+      text(h.textContent.replace(/\s+/g, ' ').trim(), 12, 'bold', 4);
+      const sub = sec.querySelector('p.sub');
+      if(sub){ doc.setTextColor(120); text(sub.textContent.trim(), 8, 'normal', 8); doc.setTextColor(0); }
+
+      for(const c of canvases){
+        const ratio = c.height / c.width;
+        const w = CW, hgt = Math.min(CW * ratio, 260);
+        room(hgt + 10);
+        doc.addImage(canvasOnPanel(c), 'PNG', M, y, w, hgt);
+        y += hgt + 12;
+      }
+
+      if(table){
+        const head = [...table.querySelectorAll('thead th')].map(t => t.textContent.trim());
+        const rows = [...table.querySelectorAll('tbody tr')].slice(0, 20)
+          .map(tr => [...tr.children].map(td => td.textContent.replace(/\s+/g,' ').trim()));
+        if(head.length && rows.length){
+          const cw = CW / head.length;
+          room(20);
+          doc.setFont('helvetica','bold'); doc.setFontSize(7); doc.setTextColor(120);
+          head.forEach((t, i) => doc.text(doc.splitTextToSize(t, cw - 4)[0] || '', M + i * cw, y));
+          doc.setTextColor(0); y += 10;
+          doc.setFont('helvetica','normal'); doc.setFontSize(7);
+          rows.forEach((r) => {
+            room(11);
+            r.forEach((t, i) => doc.text(doc.splitTextToSize(t, cw - 4)[0] || '', M + i * cw, y));
+            y += 11;
+          });
+          y += 8;
+        }
+      }
+    }
+
+    const stamp = new Date().toISOString().slice(0, 10);
+    doc.save(`sentient-insights-${stamp}.pdf`);
+    btn.textContent = 'Saved';
+    setTimeout(() => { btn.textContent = label; }, 1800);
+  } catch (err) {
+    btn.textContent = 'Failed';
+    console.error('PDF export failed:', err);
+    setTimeout(() => { btn.textContent = label; }, 2200);
+  } finally {
+    btn.disabled = false;
+  }
+}
+document.getElementById('pdfBtn')?.addEventListener('click', exportPdf);
+
 /* --- language + theme -------------------------------------------------
    Same localStorage keys as the dashboard, so the choice carries across all
    three pages. Each translated node keeps its original English on the node
