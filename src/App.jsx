@@ -1,4 +1,4 @@
-import { memo, startTransition, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import { createContext, memo, startTransition, useCallback, useContext, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   ArrowLeft,
@@ -50,6 +50,7 @@ import {
   signInWithRedirect,
   signOut,
 } from 'firebase/auth';
+import { applyLang, applyTheme, makeT, readLang, readTheme } from './prefs';
 import chatgptricksProfileImage from './assets/chatgptricks-profile.jpg';
 import traselveloralProfileImage from './assets/traselveloreal-profile.jpg';
 
@@ -321,6 +322,60 @@ function useSectionFavicon(section) {
     link.href = emojiFaviconHref(config.emoji);
     document.title = `${config.title} · sentientdash.app`;
   }, [section]);
+}
+
+
+// ---------------------------------------------------------------------------
+// Language + theme
+// ---------------------------------------------------------------------------
+const PrefsContext = createContext({ lang: 'en', theme: 'dark', t: (x) => x, setLang: () => {}, setTheme: () => {} });
+const usePrefs = () => useContext(PrefsContext);
+
+function PrefsProvider({ children }) {
+  const [lang, setLangState] = useState(readLang);
+  const [theme, setThemeState] = useState(readTheme);
+
+  useEffect(() => { applyLang(lang); }, [lang]);
+  useEffect(() => { applyTheme(theme); }, [theme]);
+
+  const value = useMemo(() => ({
+    lang, theme, t: makeT(lang), setLang: setLangState, setTheme: setThemeState,
+  }), [lang, theme]);
+
+  return <PrefsContext.Provider value={value}>{children}</PrefsContext.Provider>;
+}
+
+// Two compact toggles. Language is a two-state switch rather than a dropdown
+// because there are exactly two options -- a select would be a click more for
+// the same result.
+function PrefToggles() {
+  const { lang, theme, setLang, setTheme } = usePrefs();
+  return (
+    <div className="pref-toggles">
+      <div className="lang-toggle" role="group" aria-label="Language">
+        {['en', 'es'].map((code) => (
+          <button
+            key={code}
+            type="button"
+            className={lang === code ? 'lang-option is-on' : 'lang-option'}
+            onClick={() => setLang(code)}
+            aria-pressed={lang === code}
+          >
+            {code === 'en' ? 'ENG' : 'ES'}
+          </button>
+        ))}
+      </div>
+      <button
+        type="button"
+        className="theme-toggle"
+        onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+        aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+        title={theme === 'dark' ? 'Light theme' : 'Dark theme'}
+      >
+        {theme === 'dark' ? '☀️' : '🌙'}
+      </button>
+    </div>
+  );
 }
 
 const IG_HANDLE = 'chatgptricks';
@@ -1025,6 +1080,7 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
   const [promoOnly, setPromoOnly] = useState(initialUrl.promo === '1');
   // HOT tab: false shows only what's hot now, true adds everything older.
   const [showHotHistory, setShowHotHistory] = useState(false);
+  const { t } = usePrefs();
   const topbarRef = useRef(null);
   const groupTabsRef = useRef(null);
   const leftPaneRef = useRef(null);
@@ -1490,11 +1546,11 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
                 <h1><Wordmark /></h1>
                 {!loading && !loadError ? (
                   <p className="results-count">
-                    <strong>{filtered.length.toLocaleString()}</strong> of {posts.length.toLocaleString()} posts
+                    <strong>{filtered.length.toLocaleString()}</strong> {t('of')} {posts.length.toLocaleString()} {t('posts')}
                     <span className="results-count-aside">
-                      {compactFormatter.format(combinedSummary.totalLikes ?? summary['Total likes'] ?? 0)} likes
+                      {compactFormatter.format(combinedSummary.totalLikes ?? summary['Total likes'] ?? 0)} {t('likes')}
                       {' · '}
-                      {compactFormatter.format(combinedSummary.averageLikes ?? summary['Average likes'] ?? 0)} avg
+                      {compactFormatter.format(combinedSummary.averageLikes ?? summary['Average likes'] ?? 0)} {t('avg')}
                     </span>
                   </p>
                 ) : <p className="results-count results-count-pending" aria-hidden="true" />}
@@ -1512,11 +1568,11 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
                   value={query}
                   disabled={loading || Boolean(loadError)}
                   onChange={(event) => setQuery(event.target.value)}
-                  aria-label="Search posts"
-                  placeholder="Captions, songs, or text inside a cover"
+                  aria-label={t('Search posts')}
+                  placeholder={t('Captions, songs, or text inside a cover')}
                 />
                 {query ? (
-                  <button className="search-clear" type="button" aria-label="Clear search" onClick={() => setQuery('')}>
+                  <button className="search-clear" type="button" aria-label={t('Clear search')} onClick={() => setQuery('')}>
                     <X size={15} />
                   </button>
                 ) : <kbd className="search-kbd">⌘K</kbd>}
@@ -1536,10 +1592,10 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
                   href={`${import.meta.env.BASE_URL}tracker.html`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  title="Follower growth per account"
+                  title={t('Follower growth per account')}
                 >
                   <TrendingUp size={15} />
-                  <span>Tracker</span>
+                  <span>{t('Tracker')}</span>
                   <ExternalLink size={12} className="tool-link-out" aria-hidden="true" />
                 </a>
                 <a
@@ -1547,12 +1603,14 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
                   href={`${import.meta.env.BASE_URL}insights.html`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  title="Aggregate analysis across all accounts"
+                  title={t('Aggregate analysis across all accounts')}
                 >
                   <BarChart3 size={15} />
-                  <span>Insights</span>
+                  <span>{t('Insights')}</span>
                   <ExternalLink size={12} className="tool-link-out" aria-hidden="true" />
                 </a>
+
+                <PrefToggles />
 
                 <span className="tool-divider" aria-hidden="true" />
 
@@ -1652,7 +1710,7 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
                   aria-expanded={mobileFiltersOpen}
                 >
                   <SlidersHorizontal size={14} />
-                  Filters
+                  {t('Filters')}
                   {activeFilterCount ? <b>{activeFilterCount}</b> : null}
                 </button>
 
@@ -1661,7 +1719,7 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
                   <FilterPopover
                     id="account"
                     icon={<AtSign size={13} />}
-                    label="Account"
+                    label={t('Account')}
                     summary={accountSummary}
                     isActive={Boolean(accountSummary)}
                     /* Wide enough for the multi-column roster. 340 gave it a
@@ -1682,7 +1740,7 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
                   <FilterPopover
                     id="type"
                     icon={<Filter size={13} />}
-                    label="Type"
+                    label={t('Type')}
                     summary={typeSummary}
                     isActive={Boolean(typeSummary)}
                     width={280}
@@ -1705,7 +1763,7 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
                     {/* Promo and Hidden are the same question as Type -- "which
                         posts do I want to see?" -- so they live here instead of
                         as two more pills competing for room on the tab row. */}
-                    <p className="popover-subhead">Flags</p>
+                    <p className="popover-subhead">{t('Flags')}</p>
                     <div className="chip-row">
                       <button
                         type="button"
@@ -1715,7 +1773,7 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
                         title={`Only posts carrying ${PROMO_HASHTAG} or flagged as promo by hand`}
                       >
                         <Megaphone size={12} />
-                        Promo
+                        {t('Promo')}
                       </button>
                       <button
                         type="button"
@@ -1726,7 +1784,7 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
                         title={hiddenCount ? 'Show the posts you have hidden, so you can bring them back' : 'Nothing hidden yet'}
                       >
                         {showHidden ? <Eye size={12} /> : <EyeOff size={12} />}
-                        Hidden
+                        {t('Hidden')}
                         <span>{hiddenCount}</span>
                       </button>
                     </div>
@@ -1736,25 +1794,25 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
                   <FilterPopover
                     id="date"
                     icon={<CalendarDays size={13} />}
-                    label="Date"
+                    label={t('Date')}
                     summary={dateSummary}
                     isActive={Boolean(dateSummary)}
                     width={280}
                   >
                     <div className="date-fields">
                       <label className="select-field">
-                        <span>Range</span>
+                        <span>{t('Range')}</span>
                         <select aria-label="Date range" value={datePreset} onChange={(event) => applyDatePreset(event.target.value)}>
                           {datePreset === 'custom' ? <option value="custom">Custom range</option> : null}
                           {datePresets.map((preset) => <option key={preset.value} value={preset.value}>{preset.label}</option>)}
                         </select>
                       </label>
                       <label className="date-field">
-                        <span>From</span>
+                        <span>{t('From')}</span>
                         <input type="date" aria-label="Date from" value={dateFrom} min={ranges.dateMin} max={ranges.dateMax} onChange={(e) => { setDatePreset('custom'); setDateFrom(e.target.value); }} />
                       </label>
                       <label className="date-field">
-                        <span>To</span>
+                        <span>{t('To')}</span>
                         <input type="date" aria-label="Date to" value={dateTo} min={ranges.dateMin} max={ranges.dateMax} onChange={(e) => { setDatePreset('custom'); setDateTo(e.target.value); }} />
                       </label>
                     </div>
@@ -1763,7 +1821,7 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
                   <FilterPopover
                     id="engagement"
                     icon={<SlidersHorizontal size={13} />}
-                    label="Engagement"
+                    label={t('Engagement')}
                     summary={engagementSummary}
                     isActive={minLikes > 0 || minComments > 0}
                     /* Seven tick labels ending in "100K+" need the room: at
@@ -1772,7 +1830,7 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
                   >
                     <div className="filter-engagement-inner">
                       <label className="range-field compact-range">
-                        <span>Likes</span>
+                        <span>{t('Likes')}</span>
                         <input
                           type="range"
                           aria-label="Minimum likes"
@@ -1818,7 +1876,7 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
                             slider's stops (e.g. 3,500), not to find posts with
                             exactly that many likes. */}
                         <label className="number-field">
-                          <span>Min likes</span>
+                          <span>{t('Min likes')}</span>
                           <input
                             aria-label="Minimum likes"
                             type="number"
@@ -1830,7 +1888,7 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
                           />
                         </label>
                         <label className="number-field">
-                          <span>Min comments</span>
+                          <span>{t('Min comments')}</span>
                           <input
                             aria-label="Minimum comments"
                             placeholder="0"
@@ -1848,7 +1906,7 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
                   <FilterPopover
                     id="sort"
                     icon={<ArrowUpDown size={13} />}
-                    label="Sort"
+                    label={t('Sort')}
                     summary={sortBy !== 'newest' ? SORT_OPTIONS.find((o) => o.value === sortBy)?.label : ''}
                     isActive={sortBy !== 'newest'}
                     width={240}
@@ -1876,7 +1934,7 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
                 {activeFilterCount ? (
                   <button type="button" className="filter-clear-pill" onClick={onReset}>
                     <RotateCcw size={13} />
-                    Clear
+                    {t('Clear')}
                     <b>{activeFilterCount}</b>
                   </button>
                 ) : null}
@@ -1885,8 +1943,8 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
                   className="tool-icon share-button"
                   type="button"
                   onClick={copyShareLink}
-                  title="Copy a link to this exact view"
-                  aria-label="Copy link to this view"
+                  title={t('Copy a link to this exact view')}
+                  aria-label={t('Copy link to this view')}
                 >
                   {shareCopied ? <Check size={15} /> : <Link2 size={15} />}
                 </button>
@@ -1920,7 +1978,7 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
                   ? 'Nothing is hot right now.'
                   : 'No posts match the current filters.'}</p>
                 <button className="ghost-button" onClick={onReset}>
-                  Clear filters
+                  {t('Clear filters')}
                 </button>
               </div>
             )}
@@ -1984,9 +2042,9 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
               <SelectedPost post={selected} />
             ) : (
               <div className="empty-state">
-                <p>No posts match the current filters.</p>
+                <p>{t('No posts match the current filters.')}</p>
                 <button className="ghost-button" onClick={onReset}>
-                  Clear filters
+                  {t('Clear filters')}
                 </button>
               </div>
             )}
@@ -1997,11 +2055,11 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
               <section className="panel caption-panel">
                 <div className="panel-header caption-header">
                   <div>
-                    <p className="section-label">Caption</p>
+                    <p className="section-label">{t('Caption')}</p>
                   </div>
                   <button className="ghost-button" onClick={() => copyCaption(selected.caption)}>
                     <Copy size={15} />
-                    Copy
+                    {t('Copy')}
                   </button>
                 </div>
                 <p>
@@ -2022,9 +2080,9 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
 
               <section className="panel stats-panel">
                 <Metric label="Likes" value={formatLikes(selected.likes)} />
-                <Metric label="Comments" value={compactFormatter.format(selected.comments)} />
-                <Metric label="Date" value={formatDate(selected.postDate)} />
-                <Metric label="Media" value={selected.video} />
+                <Metric label={t('Comments')} value={compactFormatter.format(selected.comments)} />
+                <Metric label={t('Date')} value={formatDate(selected.postDate)} />
+                <Metric label={t('Media')} value={selected.video} />
               </section>
 
               <SlideDownload post={selected} />
@@ -3919,11 +3977,11 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
             {importScope === 'range' ? (
               <div className="wizard-scope-dates">
                 <label className="modal-field">
-                  <span>From</span>
+                  <span>{t('From')}</span>
                   <input type="date" value={importFrom} onChange={(event) => setImportFrom(event.target.value)} />
                 </label>
                 <label className="modal-field">
-                  <span>To</span>
+                  <span>{t('To')}</span>
                   <input type="date" value={importTo} onChange={(event) => setImportTo(event.target.value)} />
                 </label>
               </div>
@@ -4577,4 +4635,12 @@ function App() {
   return <Dashboard userEmail={authUser.email} onSignOut={handleSignOut} onUnauthorized={handleUnauthorized} />;
 }
 
-export default App;
+// Language and theme wrap the whole app, including the sign-in gate -- the
+// toggles have to work before you're authenticated too.
+export default function AppWithPrefs() {
+  return (
+    <PrefsProvider>
+      <App />
+    </PrefsProvider>
+  );
+}

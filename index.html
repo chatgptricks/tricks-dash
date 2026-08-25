@@ -9,6 +9,21 @@
       content="A filterable dashboard of Sentient Agency Instagram posts with search, type filters, sorting, and a selected-post detail view."
     />
     <link rel="icon" type="image/png" href="./favicon.png" />
+    <script>
+      // Set the theme before first paint, so a light-mode user never sees a
+      // flash of the dark palette while the bundle loads.
+      (function () {
+        try {
+          var t = localStorage.getItem('sentient.theme');
+          if (t !== 'light' && t !== 'dark') {
+            t = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+          }
+          document.documentElement.setAttribute('data-theme', t);
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+      })();
+    </script>
     <script type="module" src="/src/main.jsx"></script>
   </head>
   <body>
