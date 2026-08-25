@@ -92,7 +92,7 @@ img {
   padding: 18px 22px;
   border: 1px solid var(--line);
   border-radius: calc(var(--radius-xl) + 6px);
-  background: rgba(8, 8, 8, 0.96);
+  background: rgba(var(--surface-1-rgb), 0.96);
   box-shadow: var(--shadow);
 }
 
@@ -307,7 +307,7 @@ img {
   padding: 18px 22px;
   border: 1px solid var(--line);
   border-radius: 14px;
-  background: rgba(8, 8, 8, 0.96);
+  background: rgba(var(--surface-1-rgb), 0.96);
   color: var(--muted-strong);
   font-weight: 700;
 }
@@ -363,7 +363,7 @@ img {
 
 .sidebar {
   padding: 18px;
-  background: rgba(8, 8, 8, 0.96);
+  background: rgba(var(--surface-1-rgb), 0.96);
   color: var(--text);
 }
 
@@ -379,7 +379,7 @@ img {
 }
 
 .detail {
-  background: #0e0e0e;
+  background: var(--surface-2);
   color: var(--text);
   padding: 18px;
 }
@@ -958,7 +958,7 @@ img {
   place-content: center;
   gap: 10px;
   text-align: center;
-  background: linear-gradient(180deg, #1a1a1a, var(--surface-2));
+  background: linear-gradient(180deg, var(--surface-3), var(--surface-2));
   color: var(--text);
 }
 
@@ -1376,7 +1376,7 @@ img {
 
 .metric {
   border-radius: 8px;
-  background: #101010;
+  background: var(--surface-3);
 }
 
 .ghost-button,
@@ -1790,7 +1790,7 @@ body {
   padding: 10px;
   border: 1px solid rgba(var(--edge), 0.14);
   border-radius: 14px;
-  background: rgba(3, 3, 3, 0.94);
+  background: rgba(var(--surface-0-rgb), 0.94);
   box-shadow: 0 30px 90px rgba(var(--shade), 0.6);
   backdrop-filter: blur(18px);
   opacity: 0;
@@ -1818,7 +1818,7 @@ body {
   padding: 0;
   border: 1px solid rgba(var(--edge), 0.16);
   border-radius: 999px;
-  background: rgba(8, 8, 8, 0.94);
+  background: rgba(var(--surface-1-rgb), 0.94);
   color: var(--text);
   box-shadow: var(--shadow);
 }
@@ -1956,7 +1956,7 @@ body {
   border: 1px solid rgba(var(--accent-rgb), 0.42);
   border-radius: 10px;
   background: rgba(var(--accent-rgb), 0.12);
-  color: #fff9b6;
+  color: var(--accent-ink);
   font-size: 12px;
   font-weight: 800;
   text-decoration: none;
@@ -2084,7 +2084,7 @@ body {
   align-content: center;
   min-width: 0;
   padding: 10px 12px;
-  background: #101010;
+  background: var(--surface-3);
 }
 
 .stats-panel .metric span {
@@ -2440,7 +2440,7 @@ body {
   border-color: rgba(var(--edge), 0.11);
   background:
     linear-gradient(135deg, rgba(var(--edge), 0.025), transparent 34%),
-    rgba(3, 3, 3, 0.97);
+    rgba(var(--surface-0-rgb), 0.97);
 }
 
 .filter-command-row {
@@ -3224,7 +3224,7 @@ body {
 .hot-badge-rate {
   padding-left: 5px;
   margin-left: 2px;
-  border-left: 1px solid rgba(11, 11, 11, 0.35);
+  border-left: 1px solid rgba(var(--shade), 0.35);
   font-weight: 800;
   opacity: 0.85;
 }
@@ -3232,7 +3232,7 @@ body {
 .hot-badge-age {
   padding-left: 5px;
   margin-left: 2px;
-  border-left: 1px solid rgba(11, 11, 11, 0.35);
+  border-left: 1px solid rgba(var(--shade), 0.35);
   font-weight: 700;
   opacity: 0.7;
 }
@@ -6350,6 +6350,8 @@ body {
      rgba(accent, a). Left as the literal neon they stayed fluorescent on a
      white page while the accent itself had already darkened. */
   --accent-rgb: 245, 255, 0;
+  --surface-0-rgb: 3, 3, 3;
+  --surface-1-rgb: 8, 8, 8;
 
   --bg: #000000;
   --surface-0: #030303;
@@ -6374,6 +6376,8 @@ body {
   --edge: 0, 0, 0;
   --shade: 15, 23, 42;
   --accent-rgb: 122, 106, 0;
+  --surface-0-rgb: 255, 255, 255;
+  --surface-1-rgb: 255, 255, 255;
 
   --bg: #f4f4f5;
   --surface-0: #ffffff;
