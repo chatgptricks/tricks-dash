@@ -3765,6 +3765,10 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
   // it just falls back to the initials placeholder used everywhere else.
   const [preview, setPreview] = useState(null); // { profile_pic_url, full_name, followers_count } | null
   const [previewStatus, setPreviewStatus] = useState('idle'); // idle | loading | error
+  // Every failure used to collapse into "couldn't find that account", so a
+  // rate-limit or a slow lookup was indistinguishable from a bad handle --
+  // and the advice it gave ("double-check the handle") was actively wrong.
+  const [previewError, setPreviewError] = useState('');
   const previewRequestRef = useRef(0);
 
   const cleanHandle = handle.trim().replace(/^@/, '');
@@ -3772,7 +3776,13 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
 
   useEffect(() => {
     setPreview(null);
-    if (cleanHandle.length < 2) {
+    setPreviewError('');
+    // Instagram handles are at least 3 characters, and the server allows only
+    // ten lookups a minute because each one costs an Apify credit. At a 700ms
+    // debounce, typing a ten-character handle could spend most of that budget
+    // on prefixes that were never going to resolve -- and then the real
+    // lookup came back 429 and was reported as "couldn't find that account".
+    if (cleanHandle.length < 3) {
       setPreviewStatus('idle');
       return undefined;
     }
@@ -3783,16 +3793,27 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
         const response = await apiFetch(`${API_BASE}/api/admin/accounts/preview?handle=${encodeURIComponent(cleanHandle)}`);
         if (previewRequestRef.current !== requestId) return; // stale -- handle changed since this fired
         if (!response.ok) {
+          const body = await response.json().catch(() => ({}));
           setPreviewStatus('error');
+          if (response.status === 429) {
+            setPreviewError('Too many lookups in a row. Wait a moment and try again.');
+          } else if (response.status === 404) {
+            setPreviewError(body.detail || "Couldn't find that account -- double-check the handle.");
+          } else {
+            setPreviewError(body.detail || `Lookup failed (${response.status}). The account may still be fine.`);
+          }
           return;
         }
         const data = await response.json();
         setPreview(data);
         setPreviewStatus('idle');
       } catch (error) {
-        if (previewRequestRef.current === requestId) setPreviewStatus('error');
+        if (previewRequestRef.current === requestId) {
+          setPreviewStatus('error');
+          setPreviewError('Network error during lookup. The account may still be fine.');
+        }
       }
-    }, 700);
+    }, 1100);
     return () => clearTimeout(timer);
   }, [cleanHandle]);
 
@@ -3921,7 +3942,9 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
                 {preview.private ? ' · Private' : ''}
               </p>
             ) : previewStatus === 'error' ? (
-              <p className="wizard-preview-meta wizard-preview-meta-error">Couldn't find that account -- double-check the handle.</p>
+              <p className="wizard-preview-meta wizard-preview-meta-error">
+                {previewError || "Couldn't find that account -- double-check the handle."}
+              </p>
             ) : null}
             <label className="modal-field">
               <span>Display label (optional)</span>
