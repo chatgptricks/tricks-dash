@@ -319,6 +319,24 @@ const minOf=a=>a.reduce((m,x)=>x<m?x:m,Infinity);
 
 const PALETTE=['#f5ff00','#4aa8ff','#ff6b35','#35c759','#c77dff','#ff9f0a','#00d4c8','#ff5c8a','#9ad34a'];
 const colorFor = name => PALETTE[ACCOUNTS.map(a=>a.handle).indexOf(name) % PALETTE.length] || '#888';
+/* The palette gives each account one identity colour across every chart, where
+   it is a fill and reads fine. As *text* on a white page several of those --
+   the neon, the green, the teal -- land under 2:1. Darkened only for light
+   mode, and only for text; chart fills keep the original. */
+function textColorFor(name){
+  const hex = colorFor(name);
+  if(document.documentElement.getAttribute('data-theme') !== 'light') return hex;
+  const n = parseInt(hex.slice(1), 16);
+  let [r,g,b] = [(n>>16)&255, (n>>8)&255, n&255];
+  const rel = (v)=>{v/=255; return v<=.03928?v/12.92:((v+.055)/1.055)**2.4;};
+  let guard = 0;
+  while(guard++ < 40){
+    const L = .2126*rel(r)+.7152*rel(g)+.0722*rel(b);
+    if((1.05)/(L+.05) >= 4.5) break;      // contrast against white
+    [r,g,b] = [r,g,b].map(v=>Math.max(0, Math.round(v*0.88)));
+  }
+  return '#' + [r,g,b].map(v=>v.toString(16).padStart(2,'0')).join('');
+}
 
 function destroyCharts(){ CHARTS.forEach(c=>{try{c.destroy()}catch(e){}}); CHARTS=[]; }
 
@@ -774,7 +792,7 @@ function sectionTop(P){
         <th>Date</th><th>Format</th><th>Likes</th><th>Views</th><th>Eng./view</th></tr></thead>
       <tbody>${rows.map((p,i)=>`<tr style="cursor:pointer" onclick="window.open('${p.u||'#'}','_blank')">
         <td style="text-align:left;color:var(--muted)">${i+1}</td>
-        <td style="text-align:left"><span style="color:${colorFor(p.a)}">@${p.a}</span></td>
+        <td style="text-align:left"><span style="color:${textColorFor(p.a)}">@${p.a}</span></td>
         <td style="text-align:left;max-width:340px;overflow:hidden;text-overflow:ellipsis;color:var(--muted-2)">${(p.ocr||'—').slice(0,90)}</td>
         <td>${new Date(p.ts).toISOString().slice(0,10)}</td>
         <td>${p.pt==='clips'?'Reel':p.t}</td>
