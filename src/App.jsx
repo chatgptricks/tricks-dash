@@ -992,42 +992,70 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
     }
 
     (async () => {
+      // The background endpoint, not the synchronous one. A full history
+      // import runs for minutes -- far longer than the proxy in front of the
+      // API will hold an idle connection -- so the blocking call died every
+      // time and left the account at zero posts with no explanation. This
+      // starts the work server-side and polls for the outcome, so closing the
+      // tab or losing the network no longer costs you the import.
+      const finish = (patch) =>
+        setBackgroundTasks((tasks) => tasks.map((task) => (task.id === id ? { ...task, ...patch } : task)));
+
       try {
         // 2000 stays the default for the other two modes; the wizard only
         // sends a number when you explicitly picked a post count.
         const params = { password, results_limit: String(account.resultsLimit || 2000) };
         if (account.dateFrom) params.date_from = account.dateFrom;
         if (account.dateTo) params.date_to = account.dateTo;
-        const response = await apiFetch(`${API_BASE}/api/admin/accounts/${encodeURIComponent(account.handle)}/backfill`, {
+        const response = await apiFetch(`${API_BASE}/api/admin/accounts/backfill-bg/${encodeURIComponent(account.handle)}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
           body: new URLSearchParams(params),
         });
-        const data = await response.json().catch(() => ({}));
+        const started = await response.json().catch(() => ({}));
         if (!response.ok) {
-          setBackgroundTasks((tasks) => tasks.map((task) => (task.id === id ? { ...task, phase: 'error', error: data.detail || 'Import failed.' } : task)));
+          finish({ phase: 'error', error: started.detail || 'Import failed to start.' });
           return;
         }
-        setBackgroundTasks((tasks) => tasks.map((task) => (task.id === id ? { ...task, phase: 'done', added: data.added ?? 0 } : task)));
-        await loadDashboard(undefined, { silent: true });
-        setTimeout(() => setBackgroundTasks((tasks) => tasks.filter((task) => task.id !== id)), 8000);
-      } catch (error) {
-        // A full-history scrape (up to 2000 posts) routinely outlives the
-        // browser's own patience -- the connection drops long before Apify
-        // finishes, but the server keeps running and the posts still land.
-        // Same caveat the admin panel's "Extract history" retry already
-        // handles -- don't report a false failure here, just keep polling
-        // the dashboard so the card resolves once the import actually lands.
-        setBackgroundTasks((tasks) => tasks.map((task) => (task.id === id ? { ...task, phase: 'unknown' } : task)));
+        if (started.already_running) {
+          finish({ phase: 'error', error: `Another import (@${started.handle}) is still running. Try again once it finishes.` });
+          return;
+        }
+
+        // Poll until the worker reports back. Generous ceiling: 2000 posts can
+        // take a good while, and giving up early is what made this look broken.
         let attempts = 0;
         const poll = setInterval(async () => {
           attempts += 1;
-          await loadDashboard(undefined, { silent: true });
-          if (attempts >= 6) {
+          try {
+            const statusResponse = await apiFetch(`${API_BASE}/api/admin/accounts/backfill-status`);
+            const status = await statusResponse.json().catch(() => ({}));
+            if (status.running) {
+              if (attempts >= 120) { // ~20 minutes
+                clearInterval(poll);
+                finish({ phase: 'unknown' });
+                setTimeout(() => setBackgroundTasks((tasks) => tasks.filter((task) => task.id !== id)), 10000);
+              }
+              return;
+            }
             clearInterval(poll);
-            setBackgroundTasks((tasks) => tasks.filter((task) => task.id !== id));
+            if (status.error) {
+              finish({ phase: 'error', error: status.error });
+              return;
+            }
+            finish({ phase: 'done', added: status.result?.added ?? 0 });
+            await loadDashboard(undefined, { silent: true });
+            setTimeout(() => setBackgroundTasks((tasks) => tasks.filter((task) => task.id !== id)), 8000);
+          } catch {
+            // A dropped poll is not a failed import -- the work is server-side.
+            if (attempts >= 120) {
+              clearInterval(poll);
+              finish({ phase: 'unknown' });
+            }
           }
-        }, 30000);
+        }, 10000);
+      } catch (error) {
+        finish({ phase: 'error', error: 'Could not reach the server to start the import.' });
       }
     })();
   }, [loadDashboard]);
@@ -3758,6 +3786,13 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
   // to type around. The value is only turned back into a number where it's
   // actually used.
   const { t } = usePrefs();
+  // The preview picture is a raw Instagram CDN url straight from the scraper,
+  // and those don't always render for us -- signed, short-lived, and subject to
+  // whatever hotlink rules the CDN is applying that day. The stored avatar the
+  // account gets later is served from our own backend, which is why the picture
+  // works everywhere else. A failure here is cosmetic, so fall back to the
+  // placeholder rather than leaving a broken-image icon in the form.
+  const [previewImageFailed, setPreviewImageFailed] = useState(false);
   const [hotThreshold, setHotThreshold] = useState('600');
   const hotThresholdValue = Math.max(0, Math.round(Number(hotThreshold) || 0));
   const [importScope, setImportScope] = useState('all'); // 'all' | 'range' | 'count'
@@ -3793,6 +3828,7 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
   useEffect(() => {
     setPreview(null);
     setPreviewError('');
+    setPreviewImageFailed(false);
     setPreviewStatus('idle');
     previewRequestRef.current += 1; // abandon anything still in flight
   }, [cleanHandle]);
@@ -3817,6 +3853,7 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
         }
         return;
       }
+      setPreviewImageFailed(false);
       setPreview(await response.json());
       setPreviewStatus('idle');
     } catch (error) {
@@ -3931,8 +3968,13 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
           <div className="wizard-panel">
             <div className="wizard-handle-row">
               <div className={previewStatus === 'loading' ? 'wizard-preview-avatar wizard-preview-loading' : 'wizard-preview-avatar'}>
-                {preview?.profile_pic_url ? (
-                  <img src={preview.profile_pic_url} alt="" referrerPolicy="no-referrer" />
+                {preview?.profile_pic_url && !previewImageFailed ? (
+                  <img
+                    src={preview.profile_pic_url}
+                    alt=""
+                    referrerPolicy="no-referrer"
+                    onError={() => setPreviewImageFailed(true)}
+                  />
                 ) : previewStatus === 'loading' ? (
                   <span className="wizard-preview-spinner" aria-hidden="true" />
                 ) : (
