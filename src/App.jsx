@@ -4337,75 +4337,188 @@ const PostCard = memo(function PostCard({ post, priority, selected, onSelect, on
   );
 });
 
-// Pulls every image in the open post down as one ZIP.
+// Opens a picker for the post's media, then downloads all of it or just the
+// items that were ticked.
 //
-// Replaces doing it by hand in DevTools. The backend does the fetching: the
-// Instagram CDN doesn't reliably allow cross-origin reads, so downloading the
-// slides from the browser would work for some posts and silently fail for
-// others. One ZIP rather than n files also avoids Chrome's "allow multiple
-// downloads?" prompt.
+// The server does the fetching: the Instagram CDN doesn't reliably allow
+// cross-origin reads, so downloading from the browser would work for some
+// posts and silently fail for others. It also means one ZIP instead of n
+// downloads that Chrome would prompt about -- except for a single item, which
+// comes back as itself, since a lone file in a ZIP is a wrapper you then have
+// to undo.
 function SlideDownload({ post }) {
   const { t } = usePrefs();
-  const [state, setState] = useState('idle'); // idle | working | done | error
+  const [open, setOpen] = useState(false);
+  const [items, setItems] = useState(null);
+  const [picked, setPicked] = useState(() => new Set());
+  const [state, setState] = useState('idle'); // idle | listing | working | error
   const [note, setNote] = useState('');
 
-  // A new post means the previous result no longer describes what's on screen.
+  // A new post invalidates everything the modal was showing.
   useEffect(() => {
-    setState('idle');
-    setNote('');
+    setOpen(false); setItems(null); setPicked(new Set()); setState('idle'); setNote('');
   }, [post.postKey]);
 
-  const download = async () => {
-    setState('working');
-    setNote('');
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [open]);
+
+  const mediaUrl = (extra = '') =>
+    `${API_BASE}/api/dashboard/posts/media`
+    + `?account=${encodeURIComponent(post.account || IG_HANDLE)}`
+    + `&shortcode=${encodeURIComponent(post.shortcode)}${extra}`;
+
+  const readError = async (response) => {
+    try { return (await response.json())?.detail || `HTTP ${response.status}`; }
+    catch { return `HTTP ${response.status}`; }
+  };
+
+  const openPicker = async () => {
+    setOpen(true);
+    if (items) return;
+    setState('listing'); setNote('');
     try {
-      const url = `${API_BASE}/api/dashboard/posts/media`
-        + `?account=${encodeURIComponent(post.account || IG_HANDLE)}`
-        + `&shortcode=${encodeURIComponent(post.shortcode)}`;
-      const response = await apiFetch(url);
-      if (!response.ok) {
-        let detail = `HTTP ${response.status}`;
-        try {
-          const body = await response.json();
-          if (body?.detail) detail = body.detail;
-        } catch { /* not JSON; keep the status */ }
-        throw new Error(detail);
-      }
-
-      const blob = await response.blob();
-      const count = response.headers.get('X-Slide-Count');
-      const source = response.headers.get('X-Media-Source');
-
-      // Anchor + object URL rather than window.open: this keeps the filename
-      // the server chose, and doesn't trip the popup blocker.
-      const href = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = href;
-      link.download = `${post.account || IG_HANDLE}-${post.shortcode}.zip`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      // Revoking immediately can cancel the download in some browsers.
-      setTimeout(() => URL.revokeObjectURL(href), 30000);
-
-      setState('done');
-      setNote(`${count || '?'} ${t(count === '1' ? 'file' : 'files')}${source === 'apify' ? ' · via Apify' : ''}`);
+      const response = await apiFetch(mediaUrl('&list=1'));
+      if (!response.ok) throw new Error(await readError(response));
+      const body = await response.json();
+      setItems(body.items || []);
+      setPicked(new Set((body.items || []).map((i) => i.index)));
+      setState('idle');
+      if (body.source === 'apify') setNote(t('Fetched via Apify'));
     } catch (error) {
-      setState('error');
-      setNote(error.message || 'Download failed');
+      setState('error'); setNote(error.message || t('Could not list the media'));
     }
   };
 
+  const download = async (indexes) => {
+    setState('working'); setNote('');
+    try {
+      const list = indexes && indexes.length ? indexes : null;
+      const response = await apiFetch(mediaUrl(list ? `&only=${list.join(',')}` : ''));
+      if (!response.ok) throw new Error(await readError(response));
+      const blob = await response.blob();
+      const disposition = response.headers.get('Content-Disposition') || '';
+      const named = /filename="([^"]+)"/.exec(disposition);
+      const href = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = href;
+      link.download = named ? named[1] : `${post.account || IG_HANDLE}-${post.shortcode}.zip`;
+      document.body.appendChild(link); link.click(); link.remove();
+      // Revoking immediately can cancel the download in some browsers.
+      setTimeout(() => URL.revokeObjectURL(href), 30000);
+      setState('idle');
+      setNote(`${t('Downloaded')} ${list ? list.length : (items?.length ?? '')} ${t(((list ? list.length : items?.length) === 1) ? 'file' : 'files')}`);
+    } catch (error) {
+      setState('error'); setNote(error.message || t('Download failed'));
+    }
+  };
+
+  const toggle = (index) => {
+    setPicked((prev) => {
+      const next = new Set(prev);
+      if (next.has(index)) next.delete(index); else next.add(index);
+      return next;
+    });
+  };
+
+  const allPicked = items && picked.size === items.length;
+
   return (
-    <section className="panel slide-download">
-      <button type="button" className="ghost-button" onClick={download} disabled={state === 'working'}>
-        <Download size={15} className={state === 'working' ? 'spin' : ''} />
-        {state === 'working' ? t('Fetching media…') : t('Download media')}
-      </button>
-      {note ? (
-        <p className={state === 'error' ? 'slide-download-note is-error' : 'slide-download-note'}>{note}</p>
+    <>
+      <section className="panel slide-download">
+        <button type="button" className="ghost-button" onClick={openPicker}>
+          <Download size={15} />
+          {t('Download media')}
+        </button>
+      </section>
+
+      {open ? createPortal(
+        <div className="media-modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) setOpen(false); }}>
+          <div className="media-modal" role="dialog" aria-modal="true" aria-label={t('Download media')}>
+            <header className="media-modal-head">
+              <p>{t('Download media')}<span>@{post.account || IG_HANDLE} · {post.shortcode}</span></p>
+              <button type="button" className="tool-icon" onClick={() => setOpen(false)} aria-label={t('Close')}>
+                <X size={15} />
+              </button>
+            </header>
+
+            {state === 'listing' ? (
+              <p className="media-modal-empty">{t('Fetching media…')}</p>
+            ) : items && items.length ? (
+              <>
+                <div className="media-grid">
+                  {items.map((item) => (
+                    <button
+                      key={item.index}
+                      type="button"
+                      className={picked.has(item.index) ? 'media-cell is-picked' : 'media-cell'}
+                      onClick={() => toggle(item.index)}
+                      aria-pressed={picked.has(item.index)}
+                    >
+                      {item.poster
+                        ? <img src={item.poster} alt="" loading="lazy" referrerPolicy="no-referrer" />
+                        : <span className="media-cell-blank">{item.kind === 'video' ? '▶' : '—'}</span>}
+                      <span className="media-cell-tag">{item.index}. {item.kind === 'video' ? t('Video') : t('Image')}</span>
+                      {/* One item is a common case -- grabbing just the third
+                          slide -- so it gets its own affordance rather than
+                          making you untick everything else. */}
+                      <span
+                        className="media-cell-solo"
+                        role="button"
+                        tabIndex={0}
+                        title={t('Download just this one')}
+                        onClick={(e) => { e.stopPropagation(); download([item.index]); }}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); download([item.index]); } }}
+                      >
+                        <Download size={12} />
+                      </span>
+                    </button>
+                  ))}
+                </div>
+
+                <footer className="media-modal-foot">
+                  <button
+                    type="button"
+                    className="text-button"
+                    onClick={() => setPicked(allPicked ? new Set() : new Set(items.map((i) => i.index)))}
+                  >
+                    {allPicked ? t('Deselect all') : t('Select all')}
+                  </button>
+                  <div className="media-modal-actions">
+                    <button
+                      type="button"
+                      className="ghost-button"
+                      disabled={state === 'working' || !picked.size}
+                      onClick={() => download([...picked].sort((a, b) => a - b))}
+                    >
+                      {state === 'working' ? t('Downloading…') : `${t('Download selected')} (${picked.size})`}
+                    </button>
+                    <button
+                      type="button"
+                      className="primary-button"
+                      disabled={state === 'working'}
+                      onClick={() => download(null)}
+                    >
+                      {t('Download all')}
+                    </button>
+                  </div>
+                </footer>
+              </>
+            ) : (
+              <p className="media-modal-empty">{note || t('No media found for this post.')}</p>
+            )}
+
+            {note && items && items.length
+              ? <p className={state === 'error' ? 'slide-download-note is-error' : 'slide-download-note'}>{note}</p>
+              : null}
+          </div>
+        </div>,
+        document.body,
       ) : null}
-    </section>
+    </>
   );
 }
 
