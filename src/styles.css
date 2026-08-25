@@ -6473,3 +6473,32 @@ body {
   border-color: rgba(var(--edge), 0.3);
   background: rgba(var(--edge), 0.06);
 }
+
+/* ---------------------------------------------------------------------------
+   Overlays that sit on top of post media.
+
+   These float over a photograph, not over a page surface, so they must not
+   follow the theme: the picture underneath is whatever it is in both modes.
+   Light mode gave the VIDEO pill black text (--text-strong flipped) while its
+   background stayed a dark translucent wash, so it rendered black-on-navy --
+   about 1.1:1, which is what made it look broken in the detail view.
+
+   Pinned to literal values on purpose. This is one of the few places where a
+   hardcoded colour is correct rather than an oversight.
+   --------------------------------------------------------------------------- */
+
+.media-badge,
+.post-media-topline,
+.promo-ribbon {
+  color: #ffffff;
+}
+
+.media-badge {
+  background: rgba(0, 0, 0, 0.6);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.media-badge svg,
+.post-media-topline svg {
+  color: #ffffff;
+}
