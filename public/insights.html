@@ -1002,7 +1002,10 @@ async function exportPdf(){
     }
 
     // one block per on-screen section: heading, then its charts
-    for(const sec of document.querySelectorAll('.wrap > section')){
+    // Every section, not '.wrap > section': they're rendered into an inner
+    // container, so the child combinator matched nothing and the report
+    // came out as just the header and KPIs.
+    for(const sec of document.querySelectorAll('section')){
       const h = sec.querySelector('h2');
       const canvases = [...sec.querySelectorAll('canvas')].filter(c => c.width && c.height);
       const table = sec.querySelector('table');
