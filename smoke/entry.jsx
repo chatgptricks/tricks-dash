@@ -230,6 +230,28 @@ const el = document.getElementById('root') || document.body.appendChild(document
   inter['reports the slide count'] = /3 images/.test(q('.slide-download-note')?.textContent || '');
   globalThis.fetch = realFetch; window.fetch = realFetch;
 
+
+  // ---- language + theme ----------------------------------------------------
+  inter['theme starts dark'] = document.documentElement.getAttribute('data-theme') === 'dark';
+  inter['lang toggle present'] = qa('.lang-option').map(b => b.textContent.trim()).join('/') === 'ENG/ES';
+  const sun = q('.theme-toggle');
+  inter['sun shown in dark'] = /\u2600/.test(sun?.textContent || '');
+  await click(sun);
+  inter['switches to light'] = document.documentElement.getAttribute('data-theme') === 'light';
+  inter['moon shown in light'] = /\uD83C\uDF19/.test(q('.theme-toggle')?.textContent || '');
+  inter['theme persisted'] = localStorage.getItem('sentient.theme') === 'light';
+  await click(q('.theme-toggle'));
+  inter['switches back to dark'] = document.documentElement.getAttribute('data-theme') === 'dark';
+
+  const es = qa('.lang-option').find(b => b.textContent.trim() === 'ES');
+  await click(es);
+  inter['html lang becomes es'] = document.documentElement.getAttribute('lang') === 'es';
+  inter['lang persisted'] = localStorage.getItem('sentient.lang') === 'es';
+  inter['UI translated'] = /Buscar posts|Textos, canciones/.test(document.body.innerHTML);
+  inter['filters translated'] = qa('.filter-trigger').some(b => /Cuenta|Fecha|Orden/.test(b.textContent));
+  await click(qa('.lang-option').find(b => b.textContent.trim() === 'ENG'));
+  inter['back to english'] = /Captions, songs/.test(document.body.innerHTML);
+
   console.log('\n=== INTERACTION CHECKS ===');
   for (const [k, v] of Object.entries(inter)) console.log(`${v ? 'PASS' : 'FAIL'}  ${k}`);
   Object.assign(checks, inter);

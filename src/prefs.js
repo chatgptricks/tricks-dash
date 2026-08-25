@@ -1,0 +1,155 @@
+// Language and theme, shared by the React dashboard.
+//
+// Both live in localStorage rather than the URL: they're about who is looking,
+// not about what is being looked at, so a shared ?tab=hot link shouldn't drag
+// the sender's language along with it.
+
+export const LANGS = ['en', 'es'];
+export const THEMES = ['dark', 'light'];
+
+const LANG_KEY = 'sentient.lang';
+const THEME_KEY = 'sentient.theme';
+
+export function readLang() {
+  try {
+    const saved = localStorage.getItem(LANG_KEY);
+    if (LANGS.includes(saved)) return saved;
+  } catch { /* private mode */ }
+  // Falls back to the browser, so a Spanish-speaking teammate gets Spanish on
+  // their first visit without having to find the toggle.
+  return (navigator.language || 'en').toLowerCase().startsWith('es') ? 'es' : 'en';
+}
+
+export function readTheme() {
+  try {
+    const saved = localStorage.getItem(THEME_KEY);
+    if (THEMES.includes(saved)) return saved;
+  } catch { /* private mode */ }
+  return window.matchMedia?.('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+}
+
+export function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  try { localStorage.setItem(THEME_KEY, theme); } catch { /* private mode */ }
+}
+
+export function applyLang(lang) {
+  document.documentElement.setAttribute('lang', lang);
+  try { localStorage.setItem(LANG_KEY, lang); } catch { /* private mode */ }
+}
+
+// ---------------------------------------------------------------------------
+// Strings
+//
+// Keyed by the English text so an untranslated string still renders as usable
+// English rather than a raw key like "filters.account" leaking into the UI.
+// ---------------------------------------------------------------------------
+
+const ES = {
+  // header
+  'Captions, songs, or text inside a cover': 'Textos, canciones o texto en la portada',
+  'Search posts': 'Buscar posts',
+  'Clear search': 'Limpiar búsqueda',
+  'posts': 'posts',
+  'of': 'de',
+  'likes': 'likes',
+  'avg': 'prom',
+  'Tracker': 'Tracker',
+  'Insights': 'Insights',
+  'Settings': 'Ajustes',
+  'Sign out': 'Cerrar sesión',
+  'Account': 'Cuenta',
+  'Follower growth per account': 'Crecimiento de seguidores por cuenta',
+  'Aggregate analysis across all accounts': 'Análisis agregado de todas las cuentas',
+  'Copy a link to this exact view': 'Copiar link a esta vista exacta',
+  'Copy link to this view': 'Copiar link a esta vista',
+
+  // filters
+  'Type': 'Tipo',
+  'Date': 'Fecha',
+  'Engagement': 'Engagement',
+  'Sort': 'Orden',
+  'Filters': 'Filtros',
+  'Clear': 'Limpiar',
+  'Flags': 'Marcas',
+  'Promo': 'Promo',
+  'Hidden': 'Ocultos',
+  'All': 'Todos',
+  'All posts': 'Todos',
+  'Carousel': 'Carrusel',
+  'Video': 'Video',
+  'Image': 'Imagen',
+  'Range': 'Rango',
+  'From': 'Desde',
+  'To': 'Hasta',
+  'All time': 'Todo el tiempo',
+  'Last 24 hours': 'Últimas 24 horas',
+  'Last 3 days': 'Últimos 3 días',
+  'Last 7 days': 'Últimos 7 días',
+  'Custom range': 'Rango personalizado',
+  'Min likes': 'Mín. likes',
+  'Min comments': 'Mín. comentarios',
+  'Minimum likes': 'Likes mínimos',
+  'Minimum comments': 'Comentarios mínimos',
+  'Most liked': 'Más likes',
+  'Most commented': 'Más comentados',
+  'Newest': 'Más nuevos',
+  'Oldest': 'Más viejos',
+  'Hot rate': 'Tasa hot',
+  'Search accounts': 'Buscar cuentas',
+  'Select all': 'Seleccionar todo',
+  'Add account': 'Agregar cuenta',
+  'No accounts in this group yet.': 'Todavía no hay cuentas en este grupo.',
+  'All accounts': 'Todas las cuentas',
+  'No accounts selected': 'Ninguna cuenta seleccionada',
+  'No accounts yet': 'Todavía no hay cuentas',
+
+  // tabs
+  'Sentient': 'Sentient',
+  'Competitors': 'Competidores',
+  'HOT': 'HOT',
+  'Create a custom list of accounts': 'Crear una lista propia de cuentas',
+  'Edit': 'Editar',
+  'Viewing hidden': 'Viendo ocultos',
+
+  // grid + rail
+  'Caption': 'Texto',
+  'Copy': 'Copiar',
+  'Copied': 'Copiado',
+  'Copy code': 'Copiar código',
+  'Likes': 'Likes',
+  'Comments': 'Comentarios',
+  'Media': 'Medio',
+  'comments': 'comentarios',
+  'Download images': 'Descargar imágenes',
+  'Fetching images…': 'Buscando imágenes…',
+  'image': 'imagen',
+  'images': 'imágenes',
+  'Load 60 more': 'Cargar 60 más',
+  'Showing': 'Mostrando',
+  'No posts match the current filters.': 'Ningún post coincide con los filtros.',
+  'Clear filters': 'Limpiar filtros',
+  'Original audio': 'Audio original',
+  'Show historical': 'Ver históricos',
+  'Hide historical': 'Ocultar históricos',
+  'Instagram': 'Instagram',
+  'Mark as promo': 'Marcar como promo',
+  'Remove promo': 'Quitar promo',
+  'Hide': 'Ocultar',
+  'Unhide': 'Mostrar',
+  'Reload': 'Recargar',
+
+  // auth
+  'Sign in with your Google account to continue.': 'Iniciá sesión con tu cuenta de Google para continuar.',
+  'Sign in with Google': 'Iniciar sesión con Google',
+  'Signing in…': 'Iniciando sesión…',
+  'Sign-in failed. Try again.': 'Falló el inicio de sesión. Probá de nuevo.',
+  'Loading the post library': 'Cargando la librería de posts',
+};
+
+export function makeT(lang) {
+  return function t(text) {
+    if (lang !== 'es') return text;
+    return ES[text] ?? text;
+  };
+}
