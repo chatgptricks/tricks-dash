@@ -3751,7 +3751,13 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
   const [handle, setHandle] = useState('');
   const [label, setLabel] = useState('');
   const [group, setGroup] = useState('competitors');
-  const [hotThreshold, setHotThreshold] = useState(600);
+  // Held as text, not a number. Coercing on every keystroke meant clearing the
+  // field ran Number('') -> 0, so the box refilled itself with a 0 you then had
+  // to type around. The value is only turned back into a number where it's
+  // actually used.
+  const { t } = usePrefs();
+  const [hotThreshold, setHotThreshold] = useState('600');
+  const hotThresholdValue = Math.max(0, Math.round(Number(hotThreshold) || 0));
   const [importScope, setImportScope] = useState('all'); // 'all' | 'range'
   const [importFrom, setImportFrom] = useState('');
   const [importTo, setImportTo] = useState('');
@@ -3847,7 +3853,7 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
           handle: cleanHandle,
           label: label.trim() || cleanHandle,
           group,
-          hot_threshold: String(hotThreshold),
+          hot_threshold: String(hotThresholdValue),
         }),
       });
       if (createResponse.status === 401) {
@@ -3988,7 +3994,18 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
                 type="number"
                 min={0}
                 value={hotThreshold}
-                onChange={(event) => setHotThreshold(clampNumber(event.target.value, 0))}
+                onChange={(event) => setHotThreshold(event.target.value)}
+                onBlur={() => {
+                  // Leaving it blank has to resolve to something; the field is
+                  // required downstream, so it lands on the value it started at
+                  // rather than a silent 0 that would mark every post HOT.
+                  const parsed = Number(hotThreshold);
+                  if (hotThreshold.trim() === '' || !Number.isFinite(parsed) || parsed < 0) {
+                    setHotThreshold('600');
+                  } else {
+                    setHotThreshold(String(Math.round(parsed)));
+                  }
+                }}
               />
             </label>
             <div className="modal-field">
@@ -4044,7 +4061,7 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
               <div>
                 <p className="wizard-summary-handle">@{cleanHandle || 'handle'}</p>
                 <p className="wizard-summary-meta">
-                  {ACCOUNT_GROUP_OPTIONS.find((option) => option.value === group)?.label} · HOT at {hotThreshold}+ likes/hr
+                  {ACCOUNT_GROUP_OPTIONS.find((option) => option.value === group)?.label} · HOT at {hotThresholdValue}+ likes/hr
                 </p>
                 <p className="wizard-summary-meta">
                   {importScope === 'range'

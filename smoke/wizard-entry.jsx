@@ -56,6 +56,41 @@ const el = document.getElementById('root');
   await act(async () => { await new Promise(r => setTimeout(r, 400)); });
   ok['Check button fires one more'] = previewCalls === 2;
 
+
+  // --- HOT threshold field --------------------------------------------------
+  // Move to step 2, where the threshold lives.
+  const next = [...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Next');
+  if (next) await act(async () => { next.dispatchEvent(new window.MouseEvent('click', { bubbles: true })); });
+  await act(async () => { await new Promise(r => setTimeout(r, 250)); });
+  const num = [...document.querySelectorAll('.modal-field input[type=number]')][0];
+  ok['threshold field found'] = Boolean(num);
+  ok['starts at 600'] = num?.value === '600';
+
+  const setV = (v) => act(async () => { setter.call(num, v); num.dispatchEvent(new window.Event('input', { bubbles: true })); });
+  await setV('');
+  ok['clearing leaves it empty'] = num.value === '';
+  await setV('1200');
+  ok['typing gives exactly what you typed'] = num.value === '1200';
+  await act(async () => { num.dispatchEvent(new window.FocusEvent('focusout', { bubbles: true })); });
+  ok['blur keeps a valid number'] = num.value === '1200';
+  await setV('');
+  await act(async () => { num.dispatchEvent(new window.FocusEvent('focusout', { bubbles: true })); });
+  ok['blank on blur falls back, not to 0'] = num.value === '600';
+
+
+  // --- Date range toggle ----------------------------------------------------
+  const crashes = [];
+  window.addEventListener('error', (e) => crashes.push(e.message));
+  const rangeBtn = [...document.querySelectorAll('.wizard-scope-option')].find(b => /Date range/.test(b.textContent));
+  ok['Date range button exists'] = Boolean(rangeBtn);
+  if (rangeBtn) await act(async () => { rangeBtn.dispatchEvent(new window.MouseEvent('click', { bubbles: true })); });
+  await act(async () => { await new Promise(r => setTimeout(r, 300)); });
+  const dates = [...document.querySelectorAll('.wizard-scope-dates input[type=date]')];
+  ok['two date inputs appear'] = dates.length === 2;
+  ok['wizard still rendered'] = Boolean(document.querySelector('.wizard-panel'));
+  ok['no crash on Date range'] = crashes.length === 0;
+  if (crashes.length) console.log('   crash:', crashes[0]);
+
   for (const [k,v] of Object.entries(ok)) console.log(`${v?'PASS':'FAIL'}  ${k}`);
   process.exit(Object.values(ok).every(Boolean) ? 0 : 1);
  } catch (e) { console.log('HARNESS ERROR:', e && e.message); process.exit(1); }
