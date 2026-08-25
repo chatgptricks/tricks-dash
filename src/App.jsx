@@ -2839,6 +2839,7 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
   const [avatarHandle, setAvatarHandle] = useState('');
   const [lifecycleHandle, setLifecycleHandle] = useState('');
   const [importFrom, setImportFrom] = useState({});
+  const [importCount, setImportCount] = useState({});
   const [importing, setImporting] = useState('');
   const [importNotice, setImportNotice] = useState({});
 
@@ -3084,10 +3085,11 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
 
   const runImport = async (handle) => {
     const from = importFrom[handle];
-    if (!from) {
-      setImportNotice((prev) => ({ ...prev, [handle]: 'Pick a date.' }));
-      return;
-    }
+    // Count defaults to 2000 (same default the wizard uses) rather than
+    // requiring one -- a date alone is still a valid request ("everything
+    // since X"), same as before this field existed.
+    const rawCount = importCount[handle];
+    const count = Math.max(1, Math.min(5000, Math.round(Number(rawCount) || 2000)));
     setImporting(handle);
     setImportNotice((prev) => ({ ...prev, [handle]: 'Starting…' }));
     // Uses the background endpoint, not the synchronous one: a full-history
@@ -3097,10 +3099,12 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
     // left the account exactly where it started with no real error shown --
     // "Extraction failed" was actually "the request never got a response."
     try {
+      const params = { password, results_limit: String(count) };
+      if (from) params.date_from = from;
       const response = await apiFetch(`${API_BASE}/api/admin/accounts/backfill-bg/${encodeURIComponent(handle)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ password, date_from: from, results_limit: '2000' }),
+        body: new URLSearchParams(params),
       });
       const started = await response.json().catch(() => ({}));
       if (!response.ok) {
@@ -3443,7 +3447,26 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
                                   setImportFrom((prev) => ({ ...prev, [account.handle]: event.target.value }))
                                 }
                                 aria-label={`Extract from for ${account.handle}`}
+                                title="Optional: only posts from this date on"
                               />
+                              <input
+                                type="number"
+                                min={1}
+                                max={5000}
+                                placeholder="2000"
+                                value={importCount[account.handle] ?? ''}
+                                onChange={(event) =>
+                                  setImportCount((prev) => ({ ...prev, [account.handle]: event.target.value }))
+                                }
+                                aria-label={`Number of posts to extract for ${account.handle}`}
+                                title="How many posts to pull (default 2000)"
+                                className="account-manage-import-count"
+                              />
+                              <span className="account-manage-import-cost">
+                                ~${(
+                                  Math.max(1, Math.min(5000, Math.round(Number(importCount[account.handle]) || 2000))) * 0.0023
+                                ).toFixed(2)}
+                              </span>
                               <button
                                 type="button"
                                 className="ghost-button"
