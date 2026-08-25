@@ -4345,6 +4345,7 @@ const PostCard = memo(function PostCard({ post, priority, selected, onSelect, on
 // others. One ZIP rather than n files also avoids Chrome's "allow multiple
 // downloads?" prompt.
 function SlideDownload({ post }) {
+  const { t } = usePrefs();
   const [state, setState] = useState('idle'); // idle | working | done | error
   const [note, setNote] = useState('');
 
@@ -4388,7 +4389,7 @@ function SlideDownload({ post }) {
       setTimeout(() => URL.revokeObjectURL(href), 30000);
 
       setState('done');
-      setNote(`${count || '?'} image${count === '1' ? '' : 's'}${source === 'apify' ? ' · via Apify' : ''}`);
+      setNote(`${count || '?'} ${t(count === '1' ? 'file' : 'files')}${source === 'apify' ? ' · via Apify' : ''}`);
     } catch (error) {
       setState('error');
       setNote(error.message || 'Download failed');
@@ -4399,7 +4400,7 @@ function SlideDownload({ post }) {
     <section className="panel slide-download">
       <button type="button" className="ghost-button" onClick={download} disabled={state === 'working'}>
         <Download size={15} className={state === 'working' ? 'spin' : ''} />
-        {state === 'working' ? 'Fetching images…' : 'Download images'}
+        {state === 'working' ? t('Fetching media…') : t('Download media')}
       </button>
       {note ? (
         <p className={state === 'error' ? 'slide-download-note is-error' : 'slide-download-note'}>{note}</p>

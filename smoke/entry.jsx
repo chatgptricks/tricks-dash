@@ -202,7 +202,7 @@ const el = document.getElementById('root') || document.body.appendChild(document
   console.log('RAIL:', (q('.right-rail')?.className) || 'NO RAIL', '| panels:', qa('.right-rail .panel').map(n=>n.className).join(' , ') || 'none', '| detail html:', (q('.panel.detail')?.innerHTML || '').slice(0,120));
   const dl = qa('.slide-download button')[0];
   inter['download button in rail'] = Boolean(dl);
-  inter['download button labelled'] = /Download images/.test(dl?.textContent || '');
+  inter['download button labelled'] = /Download media/.test(dl?.textContent || '');
   let called = null;
   const realFetch = globalThis.fetch;
   // apiFetch goes through window.fetch, so stubbing globalThis alone misses it.
@@ -227,7 +227,7 @@ const el = document.getElementById('root') || document.body.appendChild(document
   inter['calls the media endpoint'] = Boolean(called && /account=/.test(called) && /shortcode=/.test(called));
   await act(async () => { await new Promise(r => setTimeout(r, 400)); });
   console.log('NOTE:', JSON.stringify(q('.slide-download-note')?.textContent || null));
-  inter['reports the slide count'] = /3 images/.test(q('.slide-download-note')?.textContent || '');
+  inter['reports the file count'] = /3 files/.test(q('.slide-download-note')?.textContent || '');
   globalThis.fetch = realFetch; window.fetch = realFetch;
 
 
