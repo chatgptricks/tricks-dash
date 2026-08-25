@@ -15,7 +15,7 @@
 #authGate .card{width:100%;max-width:340px;padding:30px 26px;border:1px solid rgba(var(--edge),.1);
   border-radius:8px;background:#0d0d0d;text-align:center}
 #authGate h1{margin:0 0 8px;font-size:19px;font-weight:900;color:#f5f5f5}
-#authGate p{margin:0 0 18px;color:#b5b5b5;font-size:13px;line-height:1.5}
+#authGate p{margin:0 0 18px;color:var(--muted-2);font-size:13px;line-height:1.5}
 #authGate button{width:100%;height:34px;border:1px solid rgba(var(--accent-rgb),.5);border-radius:8px;
   background:rgba(var(--accent-rgb),.14);color:var(--accent-ink);font-size:12px;font-weight:800;cursor:pointer}
 #authGate button:hover{background:rgba(var(--accent-rgb),.22)}
@@ -26,6 +26,9 @@
   --bg:#000; --panel:#0b0b0b; --panel-2:#101010; --line:rgba(var(--edge),.09);
   --text:#f5f5f5; --muted:#8a8a8a; --muted-2:#b5b5b5; --accent:#f5ff00; --accent-text:#f5ff00; --accent-ink:#fffce0;
   --good:#35c759; --warn:#ff9f0a; --hot:#ff6b35; --cool:#4aa8ff;
+  --pill-s-fg:#8fc9ff; --pill-s-bg:rgba(74,168,255,.15);
+  --pill-c-fg:#ffa480; --pill-c-bg:rgba(255,107,53,.15);
+  --pos:#48d18b; --neg:#ff6b6b; --cloud:#9ad34a;
 }
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--text);
@@ -89,12 +92,12 @@ a{color:inherit}
 .side-name strong{font-size:11px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .side-name em{font-style:normal;color:var(--muted);font-size:9px}
 .side-delta{flex:none;font-size:10px;font-weight:800}
-.side-delta.up{color:#48d18b}.side-delta.down{color:#ff6b6b}.side-delta.flat{color:var(--muted)}
+.side-delta.up{color:var(--pos)}.side-delta.down{color:var(--neg)}.side-delta.flat{color:var(--muted)}
 
 /* Daily change is the headline number; the running total sits to its right,
    deliberately quieter, because it barely moves day to day. */
 .hist-daily{font-size:15px;font-weight:800;letter-spacing:-.01em}
-.hist-daily.up{color:#48d18b}.hist-daily.down{color:#ff6b6b}.hist-daily.flat{color:var(--muted)}
+.hist-daily.up{color:var(--pos)}.hist-daily.down{color:var(--neg)}.hist-daily.flat{color:var(--muted)}
 .hist-total{color:var(--muted-strong);font-size:12px;font-weight:600}
 .hist-secondary{opacity:.72}
 
@@ -134,11 +137,11 @@ tbody tr:hover{background:rgba(var(--edge),.03)}
 .acct-name{display:flex;flex-direction:column;gap:2px;min-width:0}
 .acct-name strong{font-size:12px;font-weight:700;color:var(--text)}
 .pill{display:inline-block;padding:2px 7px;border-radius:999px;font-size:9px;font-weight:800;width:fit-content}
-.pill.s{background:rgba(74,168,255,.15);color:#8fc9ff}
-.pill.c{background:rgba(255,107,53,.15);color:#ffa480}
+.pill.s{background:var(--pill-s-bg);color:var(--pill-s-fg)}
+.pill.c{background:var(--pill-c-bg);color:var(--pill-c-fg)}
 .delta{font-weight:700}
 .delta.up{color:var(--good)}
-.delta.down{color:#ff6b6b}
+.delta.down{color:var(--neg)}
 .delta.flat{color:var(--muted)}
 .na{color:var(--muted)}
 .rank-num{color:var(--muted);font-weight:700}
@@ -170,7 +173,7 @@ table.hist-table td{text-align:left;padding:11px 8px;white-space:nowrap}
 .hist-val{font-weight:700;color:var(--text)}
 .hist-pill{display:inline-block;margin-left:7px;padding:1px 6px;border-radius:6px;font-size:10px;font-weight:800}
 .hist-pill.up{background:rgba(53,199,89,.16);color:var(--good)}
-.hist-pill.down{background:rgba(255,107,107,.16);color:#ff6b6b}
+.hist-pill.down{background:rgba(255,107,107,.16);color:var(--neg)}
 
 /* --- themes -------------------------------------------------------------
    Same channel approach as the dashboard: --edge is the border/hover channel
@@ -187,6 +190,9 @@ table.hist-table td{text-align:left;padding:11px 8px;white-space:nowrap}
   --text:#18181b; --muted:#6b6b70; --muted-2:#3f3f46;
   --accent:#c3c702; --accent-text:#c3c702; --accent-ink:#2e2f00;
   --good:#137a35; --warn:#8a5a00; --hot:#b8431a; --cool:#1668b8;
+  --pill-s-fg:#0b5ea8; --pill-s-bg:rgba(74,168,255,.18);
+  --pill-c-fg:#a33c12; --pill-c-bg:rgba(255,107,53,.18);
+  --pos:#0f7a3d; --neg:#b3261e; --cloud:#4a6b12;
 }
 :root[data-theme='light'] #authGate{background:#f4f4f5}
 :root[data-theme='light'] #authGate .card{background:#fff}
@@ -588,6 +594,12 @@ async function renderDetail(handle){
     </div>
 
     <section>
+      <h2>Historical Stats</h2>
+      <p class="sub">Last ${Math.min(hist.length,15)} day${Math.min(hist.length,15)===1?'':'s'} of recorded snapshots, oldest first. "Followers +/-" is that day's change -- the running total sits beside it for reference. Engagement rate is that day's average likes divided by that day's follower count, shown only for days with a post.</p>
+      ${renderHistoricalStats(hist)}
+    </section>
+
+    <section>
       <h2>Follower growth</h2>
       <p class="sub">${hist.length>1?'One point per recorded snapshot -- daily, starting the day this account began being tracked.':'Only one snapshot recorded so far -- this chart fills in day by day. There is no way to recover Instagram’s past follower counts.'}</p>
       <div class="chartbox"><canvas id="cFollowers"></canvas></div>
@@ -597,12 +609,6 @@ async function renderDetail(handle){
       <h2>Engagement trend <span class="tag">weekly avg likes</span></h2>
       <p class="sub">From the post history already on hand -- this goes back as far as we've backfilled the account's posts, independent of the follower-snapshot start date above.</p>
       <div class="chartbox"><canvas id="cEngagement"></canvas></div>
-    </section>
-
-    <section>
-      <h2>Historical Stats</h2>
-      <p class="sub">Last ${Math.min(hist.length,15)} day${Math.min(hist.length,15)===1?'':'s'} of recorded snapshots, oldest first. "Followers +/-" is that day's change -- the running total sits beside it for reference. Engagement rate is that day's average likes divided by that day's follower count, shown only for days with a post.</p>
-      ${renderHistoricalStats(hist)}
     </section>
   `;
   $('#backBtn').onclick = () => { writeAcc(''); render(); };
