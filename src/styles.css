@@ -6666,3 +6666,20 @@ body {
   font-size: 13px;
   text-align: center;
 }
+
+/* Handle field + its explicit lookup button. */
+.wizard-handle-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wizard-handle-input input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.wizard-handle-input .ghost-button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}

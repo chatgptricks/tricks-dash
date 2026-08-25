@@ -1,0 +1,62 @@
+import { createRoot } from 'react-dom/client';
+import { act } from 'react';
+import App from '../src/App.jsx';
+
+let previewCalls = 0;
+const stub = async (u) => {
+  const s = String(u);
+  if (s.includes('/accounts/preview')) {
+    previewCalls++;
+    return { ok: true, status: 200, json: async () => ({ handle: 'technology', full_name: 'Technology', followers_count: 9002762, profile_pic_url: null }) };
+  }
+  if (s.includes('/api/dashboard/posts')) return { ok: true, status: 200, json: async () => ({ posts: [], summary: {}, ranges: {} }) };
+  if (s.includes('/api/dashboard/accounts')) return { ok: true, status: 200, json: async () => ({ accounts: [] }) };
+  if (s.includes('/api/dashboard/lists')) return { ok: true, status: 200, json: async () => ({ lists: [] }) };
+  if (s.includes('/api/dashboard/me')) return { ok: true, status: 200, json: async () => ({ is_admin: true }) };
+  return { ok: true, status: 200, json: async () => ({}) };
+};
+globalThis.fetch = stub; window.fetch = stub;
+
+const el = document.getElementById('root');
+(async () => {
+ try {
+  const root = createRoot(el);
+  await act(async () => { root.render(<App />); });
+  await act(async () => { await new Promise(r => setTimeout(r, 400)); });
+
+  const openBtn = [...document.querySelectorAll('button')].find(b => /Add account/i.test(b.getAttribute('title') || b.textContent));
+  const ok = {};
+  // The wizard lives behind the account popover; drive it directly instead.
+  const acct = [...document.querySelectorAll('.filter-trigger')].find(b => /Account/.test(b.textContent));
+  if (acct) await act(async () => { acct.dispatchEvent(new window.MouseEvent('click', { bubbles: true })); });
+  await act(async () => { await new Promise(r => setTimeout(r, 200)); });
+  const addBtn = [...document.querySelectorAll('.account-multiselect-add')][0];
+  if (addBtn) await act(async () => { addBtn.dispatchEvent(new window.MouseEvent('click', { bubbles: true })); });
+  await act(async () => { await new Promise(r => setTimeout(r, 300)); });
+
+  const input = document.querySelector('.wizard-handle-input input');
+  ok['wizard opens'] = Boolean(input);
+  ok['has a Check button'] = Boolean([...document.querySelectorAll('.wizard-handle-input button')].length);
+
+  const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+  for (const v of ['t','te','tec','tech','techn','techno','technol','technolo','technolog','technology']) {
+    await act(async () => { setter.call(input, v); input.dispatchEvent(new window.Event('input', { bubbles: true })); });
+  }
+  await act(async () => { await new Promise(r => setTimeout(r, 2000)); });
+  ok['typing fires no lookups'] = previewCalls === 0;
+  console.log('   lookups after typing 10 chars:', previewCalls);
+
+  await act(async () => { input.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); });
+  await act(async () => { await new Promise(r => setTimeout(r, 400)); });
+  ok['Enter fires exactly one'] = previewCalls === 1;
+  ok['shows the result'] = /Technology|9M|9,002,762/.test(document.body.textContent);
+
+  const check = [...document.querySelectorAll('.wizard-handle-input button')][0];
+  await act(async () => { check.dispatchEvent(new window.MouseEvent('click', { bubbles: true })); });
+  await act(async () => { await new Promise(r => setTimeout(r, 400)); });
+  ok['Check button fires one more'] = previewCalls === 2;
+
+  for (const [k,v] of Object.entries(ok)) console.log(`${v?'PASS':'FAIL'}  ${k}`);
+  process.exit(Object.values(ok).every(Boolean) ? 0 : 1);
+ } catch (e) { console.log('HARNESS ERROR:', e && e.message); process.exit(1); }
+})();
