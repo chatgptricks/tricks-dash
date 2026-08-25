@@ -2180,7 +2180,7 @@ body {
 
 .caption-panel .song-line svg {
   flex-shrink: 0;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .caption-panel .song-line span {
@@ -4029,7 +4029,7 @@ body {
 .wizard-step-done .wizard-step-dot {
   border-color: rgba(var(--accent-rgb), 0.4);
   background: rgba(var(--accent-rgb), 0.08);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .wizard-panel {
@@ -4759,7 +4759,7 @@ body {
 }
 
 .settings-import-notice {
-  color: var(--accent);
+  color: var(--accent-text);
   font-size: 9px;
   font-weight: 700;
   text-transform: none;
@@ -4804,7 +4804,7 @@ body {
 
 .settings-notice {
   margin: 0;
-  color: var(--accent);
+  color: var(--accent-text);
   font-size: 11px;
   font-weight: 700;
 }
@@ -5125,7 +5125,7 @@ body {
 
 .group-tab-add:hover,
 .group-tab-edit:hover {
-  color: var(--accent);
+  color: var(--accent-text);
   border-color: rgba(var(--accent-rgb), 0.35);
 }
 
@@ -5202,7 +5202,7 @@ body {
 .hidden-toggle-on {
   border-color: rgba(var(--accent-rgb), 0.45);
   background: rgba(var(--accent-rgb), 0.08);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .hidden-toggle span {
@@ -5252,7 +5252,7 @@ body {
 }
 
 .wordmark-accent {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 /* The TLD is part of the name but shouldn't compete with it. */
@@ -5494,7 +5494,7 @@ body {
   border: 1px solid rgba(var(--accent-rgb), 0.35);
   border-radius: 50%;
   background: rgba(var(--accent-rgb), 0.14);
-  color: var(--accent);
+  color: var(--accent-text);
   font-size: 13px;
   font-weight: 700;
   font-family: inherit;
@@ -5599,7 +5599,7 @@ body {
 .filter-trigger-active {
   border-color: rgba(var(--accent-rgb), 0.5);
   background: rgba(var(--accent-rgb), 0.1);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .filter-trigger-label {
@@ -5713,7 +5713,7 @@ body {
 
 .sort-option-active {
   background: rgba(var(--accent-rgb), 0.12);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 /* --- active filter chips ----------------------------------------------- */
@@ -5734,7 +5734,7 @@ body {
   border: 1px solid rgba(var(--accent-rgb), 0.4);
   border-radius: 999px;
   background: rgba(var(--accent-rgb), 0.1);
-  color: var(--accent);
+  color: var(--accent-text);
   font-size: 12px;
   font-family: inherit;
   max-width: 260px;
@@ -5834,7 +5834,7 @@ body {
 
   .filter-sheet-toggle-open {
     border-color: rgba(var(--accent-rgb), 0.5);
-    color: var(--accent);
+    color: var(--accent-text);
   }
 
   .filter-triggers {
@@ -6363,6 +6363,7 @@ body {
   --text-strong: #ffffff;
 
   --accent: #f5ff00;
+  --accent-text: #f5ff00;
   --accent-ink: #fffce0;
 }
 
@@ -6375,7 +6376,7 @@ body {
   --ink: 20, 20, 20;
   --edge: 0, 0, 0;
   --shade: 15, 23, 42;
-  --accent-rgb: 122, 106, 0;
+  --accent-rgb: 195, 199, 2;
   --surface-0-rgb: 255, 255, 255;
   --surface-1-rgb: 255, 255, 255;
 
@@ -6391,15 +6392,18 @@ body {
   /* The neon accent is ~1.1:1 on white -- effectively invisible. This is the
      same hue held at a luminance that actually reads, so active pills and
      links stay recognisably the brand colour without being unreadable. */
-  --accent: #7a6a00;
-  --accent-ink: #3d3600;
+  --accent: #c3c702;
+  /* Same hue at L22% -- 4.87:1 on the page background. The fill value
+     itself is 1.8:1 as text, so it can only ever be a background. */
+  --accent-text: #6d6f01;
+  --accent-ink: #2e2f00;
 
   --line: rgba(0, 0, 0, 0.12);
   --panel: #ffffff;
   --panel-strong: #f1f1f2;
   --muted: #6b6b70;
   --muted-strong: #3f3f46;
-  --accent-soft: rgba(122, 106, 0, 0.14);
+  --accent-soft: rgba(195, 199, 2, 0.18);
   --shadow: 0 18px 50px rgba(15, 23, 42, 0.12);
 }
 
