@@ -212,6 +212,10 @@ table.hist-table td{text-align:left;padding:11px 8px;white-space:nowrap}
   border:1px solid var(--line);border-radius:8px;background:none;font-size:14px;
   line-height:1;cursor:pointer}
 .theme-toggle:hover{border-color:rgba(var(--edge),.3);background:rgba(var(--edge),.06)}
+
+.avatar-fallback{display:inline-flex;align-items:center;justify-content:center;
+  background:rgba(var(--edge),.1);color:var(--muted-2);font-weight:800;
+  font-size:9px;letter-spacing:0;text-transform:uppercase}
 </style>
 </head>
 <body>
@@ -250,6 +254,16 @@ table.hist-table td{text-align:left;padding:11px 8px;white-space:nowrap}
 
 <script>
 const API = 'https://cortex-api-db2e.onrender.com';
+/* A missing avatar used to set visibility:hidden, which leaves an invisible
+   gap -- the row still reserves the space but shows nothing, so it reads as a
+   rendering bug rather than "no picture on file". Swap in the initial instead,
+   keeping the same circle so the row never shifts. */
+function avFail(img, handle){
+  const span = document.createElement('span');
+  span.className = img.className + ' avatar-fallback';
+  span.textContent = (handle || '?').replace(/^@/, '').charAt(0).toUpperCase();
+  img.replaceWith(span);
+}
 const $ = s => document.querySelector(s);
 // Abbreviated form is kept only for the chart y-axis (readability at a
 // glance); every number a person actually reads as "how many followers"
@@ -360,7 +374,7 @@ function renderSidebar(){
       <button class="side-star ${favs.has(r.handle)?'on':''}" data-fav="${r.handle}"
               title="${favs.has(r.handle)?'Remove from favourites':'Add to favourites'}" aria-label="Toggle favourite">★</button>
       <img class="side-avatar" src="${API}/api/dashboard/avatar/${encodeURIComponent(r.handle)}"
-           referrerpolicy="no-referrer" onerror="this.style.visibility='hidden'">
+           referrerpolicy="no-referrer" onerror="avFail(this,'${r.handle}')">
       <span class="side-name">
         <strong>@${r.handle}</strong>
         <em>${r.followers!=null?fmt(r.followers):'—'}</em>
@@ -471,7 +485,7 @@ function renderLeaderboard(){
           <tr data-handle="${r.handle}">
             <td class="rank-num">${r.rank_by_followers ?? '—'}</td>
             <td><div class="acct-cell">
-              <img class="acct-avatar" src="${API}/api/dashboard/avatar/${encodeURIComponent(r.handle)}" referrerpolicy="no-referrer" onerror="this.style.visibility='hidden'">
+              <img class="acct-avatar" src="${API}/api/dashboard/avatar/${encodeURIComponent(r.handle)}" referrerpolicy="no-referrer" onerror="avFail(this,'${r.handle}')">
               <div class="acct-name"><strong>@${r.handle}${r.verified?' <span title="Verified" style="color:#4aa8ff">✓</span>':''}${r.private?' <span class="na" title="Private account">🔒</span>':''}</strong>
                 <span class="na" style="font-size:10px">${r.full_name && r.full_name.toLowerCase()!==r.handle.toLowerCase() ? r.full_name : ' '}</span>
                 <span class="pill ${r.group==='sentient'?'s':'c'}">${r.group==='sentient'?'ours':'competitor'}</span>
@@ -573,7 +587,7 @@ async function renderDetail(handle){
   $('#app').innerHTML = `
     <button class="linkbtn" id="backBtn" style="margin-bottom:14px">← All accounts</button>
     <div class="detail-head">
-      <img src="${API}/api/dashboard/avatar/${encodeURIComponent(handle)}" referrerpolicy="no-referrer" onerror="this.style.visibility='hidden'">
+      <img src="${API}/api/dashboard/avatar/${encodeURIComponent(handle)}" referrerpolicy="no-referrer" onerror="avFail(this,'${handle}')">
       <div>
         <h2>@${handle}${row.verified?' <span title="Verified" style="color:#4aa8ff;font-size:14px">✓</span>':''}${row.private?' <span class="na" title="Private account" style="font-size:13px">🔒</span>':''}</h2>
         ${row.full_name && row.full_name.toLowerCase()!==handle.toLowerCase() ? `<span>${row.full_name} · </span>` : ''}
