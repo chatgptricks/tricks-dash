@@ -17,13 +17,13 @@
   border-radius:8px;background:#0d0d0d;text-align:center}
 #authGate h1{margin:0 0 8px;font-size:19px;font-weight:900;color:#f5f5f5}
 #authGate p{margin:0 0 18px;color:#b5b5b5;font-size:13px;line-height:1.5}
-#authGate button{width:100%;height:34px;border:1px solid rgba(245,255,0,.5);border-radius:8px;
-  background:rgba(245,255,0,.14);color:#fffce0;font-size:12px;font-weight:800;cursor:pointer}
-#authGate button:hover{background:rgba(245,255,0,.22)}
+#authGate button{width:100%;height:34px;border:1px solid rgba(var(--accent-rgb),.5);border-radius:8px;
+  background:rgba(var(--accent-rgb),.14);color:#fffce0;font-size:12px;font-weight:800;cursor:pointer}
+#authGate button:hover{background:rgba(var(--accent-rgb),.22)}
 #authGate.hidden{display:none}
 :root{
   color-scheme:dark;
-  --edge:255,255,255; --ink:245,245,245; --shade:0,0,0;
+  --edge:255,255,255; --ink:245,245,245; --shade:0,0,0; --accent-rgb:245,255,0;
   --bg:#000; --panel:#0b0b0b; --panel-2:#101010; --line:rgba(var(--edge),.09);
   --text:#f5f5f5; --muted:#8a8a8a; --muted-2:#b5b5b5; --accent:#f5ff00;
   --good:#35c759; --warn:#ff9f0a; --hot:#ff6b35; --cool:#4aa8ff;
@@ -47,7 +47,7 @@ a{color:inherit}
 .linkbtn{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 13px;
   border:1px solid var(--line);border-radius:8px;background:var(--panel-2);color:var(--muted-2);
   font-size:11px;font-weight:700;text-decoration:none;cursor:pointer}
-.linkbtn:hover{border-color:rgba(245,255,0,.4);color:var(--text)}
+.linkbtn:hover{border-color:rgba(var(--accent-rgb),.4);color:var(--text)}
 
 /* filters */
 .filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:8px;
@@ -56,11 +56,11 @@ a{color:inherit}
 .f>label{color:var(--muted);font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
 .f select,.f input{height:32px;padding:0 9px;border:1px solid var(--line);border-radius:7px;
   background:rgba(var(--edge),.04);color:var(--text);font-size:12px;outline:none;width:100%}
-.f select:focus,.f input:focus{border-color:rgba(245,255,0,.6)}
+.f select:focus,.f input:focus{border-color:rgba(var(--accent-rgb),.6)}
 .chips{display:flex;flex-wrap:wrap;gap:5px}
 .chip{padding:5px 10px;border:1px solid var(--line);border-radius:999px;background:var(--panel-2);
   color:var(--muted-2);font-size:10px;font-weight:700;cursor:pointer;user-select:none}
-.chip.on{border-color:rgba(245,255,0,.55);background:rgba(245,255,0,.12);color:#fffce0}
+.chip.on{border-color:rgba(var(--accent-rgb),.55);background:rgba(var(--accent-rgb),.12);color:#fffce0}
 .f-wide{grid-column:1/-1}
 
 /* kpis */
@@ -75,7 +75,7 @@ a{color:inherit}
 section{border:1px solid var(--line);border-radius:12px;background:var(--panel);
   padding:16px 18px;margin-bottom:14px}
 section>h2{margin:0 0 4px;font-size:14px;font-weight:800;letter-spacing:-.01em}
-section>h2 .tag{margin-left:8px;padding:2px 7px;border-radius:999px;background:rgba(245,255,0,.12);
+section>h2 .tag{margin-left:8px;padding:2px 7px;border-radius:999px;background:rgba(var(--accent-rgb),.12);
   color:var(--accent);font-size:9px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
 section>p.sub{margin:0 0 14px;color:var(--muted);font-size:11px;line-height:1.5}
 /* minmax(0,1fr) and min-width:0 are not cosmetic here: a plain `1fr` resolves
@@ -123,8 +123,8 @@ tbody tr:hover{background:rgba(var(--edge),.03)}
 
 .empty{padding:26px;text-align:center;color:var(--muted);font-size:12px}
 .loading{padding:60px;text-align:center;color:var(--muted)}
-.note{margin-top:10px;padding:9px 11px;border-left:2px solid rgba(245,255,0,.4);
-  background:rgba(245,255,0,.04);color:var(--muted-2);font-size:11px;line-height:1.55;border-radius:0 6px 6px 0}
+.note{margin-top:10px;padding:9px 11px;border-left:2px solid rgba(var(--accent-rgb),.4);
+  background:rgba(var(--accent-rgb),.04);color:var(--muted-2);font-size:11px;line-height:1.55;border-radius:0 6px 6px 0}
 .note b{color:var(--text)}
 
 /* --- themes -------------------------------------------------------------
@@ -136,7 +136,7 @@ tbody tr:hover{background:rgba(var(--edge),.03)}
    ------------------------------------------------------------------------ */
 :root[data-theme='light']{
   color-scheme:light;
-  --edge:0,0,0; --ink:20,20,20; --shade:15,23,42;
+  --edge:0,0,0; --ink:20,20,20; --shade:15,23,42; --accent-rgb:122,106,0;
   --bg:#f4f4f5; --panel:#ffffff; --panel-2:#f1f1f2;
   --line:rgba(0,0,0,.12);
   --text:#18181b; --muted:#6b6b70; --muted-2:#3f3f46;
@@ -684,7 +684,7 @@ function sectionTiming(){return `
   <h2>When to post <span class="tag">timing</span></h2>
   <p class="sub">Performance by publish day and hour (UTC), measured as the <b>median relative index</b>: how many times a typical post in that slot performs versus what's normal for its own account, so neither a big account nor one viral post drowns out the signal. Brighter = better.</p>
   <div id="heat"></div>
-  <div class="legend"><span>worse</span><i style="background:rgba(245,255,0,.12)"></i><i style="background:rgba(245,255,0,.35)"></i><i style="background:rgba(245,255,0,.6)"></i><i style="background:rgba(245,255,0,.9)"></i><span>better</span>
+  <div class="legend"><span>worse</span><i style="background:rgba(var(--accent-rgb),.12)"></i><i style="background:rgba(var(--accent-rgb),.35)"></i><i style="background:rgba(var(--accent-rgb),.6)"></i><i style="background:rgba(var(--accent-rgb),.9)"></i><span>better</span>
     <span style="margin-left:14px"><i style="background:rgba(var(--edge),.07)"></i> too few posts</span>
     <span style="margin-left:14px"><i style="background:rgba(var(--edge),.03)"></i> never posted</span></div>
   <div class="grid2" style="margin-top:16px">
@@ -724,7 +724,7 @@ function drawTiming(P){
         html+=`<div class="cell" title="${DOW[d]} ${h}:00 · only ${v.length} post, not enough to conclude"
           style="background:rgba(var(--edge),.07)"></div>`; continue; }
       html+=`<div class="cell" title="${DOW[d]} ${h}:00 · median ${xf(med(v))} its normal · ${v.length} posts"
-        style="background:rgba(245,255,0,${(0.08+rank[key]*0.85).toFixed(2)})"></div>`;
+        style="background:rgba(var(--accent-rgb),${(0.08+rank[key]*0.85).toFixed(2)})"></div>`;
     }
   }
   $('#heat').innerHTML=html+'</div>';
