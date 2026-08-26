@@ -3337,6 +3337,16 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
     return String(n);
   };
 
+  // Plain date (no time) for "oldest post on file" -- this is how far back a
+  // history backfill actually reached for that account, which is otherwise
+  // invisible unless you go dig through the raw data.
+  const fmtOldestPost = (iso) => {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '—';
+    return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  };
+
   return (
     <div className="admin-page">
       <header className="admin-page-header">
@@ -3560,6 +3570,9 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
                                         >
                                           {savingHandle === account.handle ? '…' : 'Save'}
                                         </button>
+                                        <span className="account-manage-oldest-post" title="Published date of the oldest post we have on file for this account">
+                                          Oldest post: {fmtOldestPost(account.oldest_post_at)}
+                                        </span>
                                       </div>
 
                                       <div className="account-manage-actions">
