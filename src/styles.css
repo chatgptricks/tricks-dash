@@ -4866,30 +4866,211 @@ body {
   gap: 6px;
 }
 
-/* One editable card per active account: avatar/handle up top, then the
-   label/category/threshold row, then the action row (avatar refresh,
-   activate toggle, history import). Stacked rather than the old single-line
-   .settings-row because there's simply too many controls to fit one row. */
-.account-manage-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-  gap: 14px;
-  align-items: start;
+/* Accounts table: replaced the old one-card-per-account grid (31 nearly
+   identical cards to scroll through) with a sortable/searchable table plus
+   a per-row detail panel that opens on click. Scans far faster at this
+   roster size, and leaves room to grow (more columns) without every row
+   getting taller. */
+.accounts-count {
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 700;
 }
 
-.account-manage-card {
-  display: grid;
-  gap: 10px;
-  padding: 12px;
-  border: 1px solid rgba(var(--edge), 0.07);
-  border-radius: 10px;
-  background: var(--surface-1);
-}
-
-.account-manage-top {
+.accounts-toolbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
+  margin: 10px 0 14px;
+}
+
+.accounts-search {
+  flex: 1 1 240px;
+  min-width: 180px;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid rgba(var(--edge), 0.12);
+  border-radius: 8px;
+  background: rgba(var(--edge), 0.04);
+  color: var(--text-strong);
+  font-size: 13px;
+}
+
+.accounts-status-filter {
+  display: flex;
+  gap: 6px;
+}
+
+.chip-button {
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(var(--edge), 0.12);
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.chip-button.active {
+  background: rgba(var(--accent-rgb), 0.16);
+  border-color: rgba(var(--accent-rgb), 0.4);
+  color: var(--accent-ink);
+}
+
+.accounts-table-wrap {
+  overflow-x: auto;
+  border: 1px solid rgba(var(--edge), 0.08);
+  border-radius: 10px;
+}
+
+.accounts-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.accounts-table thead th {
+  text-align: left;
+  padding: 9px 12px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+  border-bottom: 1px solid rgba(var(--edge), 0.1);
+  white-space: nowrap;
+}
+
+.accounts-th-sortable {
+  cursor: pointer;
+  user-select: none;
+  display: table-cell;
+}
+
+.accounts-th-sortable svg {
+  vertical-align: -1px;
+  margin-left: 3px;
+  opacity: 0.6;
+}
+
+.accounts-th-sortable svg.flip {
+  transform: scaleY(-1);
+}
+
+.accounts-table tbody td {
+  padding: 9px 12px;
+  border-bottom: 1px solid rgba(var(--edge), 0.06);
+  color: var(--text-strong);
+}
+
+.accounts-row {
+  cursor: pointer;
+}
+
+.accounts-row:hover {
+  background: rgba(var(--edge), 0.04);
+}
+
+.accounts-row.open {
+  background: rgba(var(--accent-rgb), 0.06);
+}
+
+.accounts-row.inactive {
+  opacity: 0.55;
+}
+
+.accounts-cell-handle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 160px;
+}
+
+.accounts-handle-text {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.accounts-handle-text strong {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.account-manage-avatar.accounts-avatar-sm {
+  width: 24px;
+  height: 24px;
+  font-size: 9px;
+}
+
+.status-pill-active {
+  background: rgba(70, 200, 130, 0.15);
+  color: #3fbf7f;
+}
+
+.status-pill-inactive {
+  background: rgba(var(--edge), 0.1);
+  color: var(--muted);
+}
+
+.accounts-detail-row td {
+  padding: 0;
+  border-bottom: 1px solid rgba(var(--edge), 0.1);
+}
+
+.account-manage-detail {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  background: rgba(var(--edge), 0.03);
+  cursor: default;
+}
+
+.hot-suggestion {
+  margin-top: 4px;
+  align-self: flex-start;
+  border: none;
+  background: none;
+  padding: 0;
+  font-size: 10px;
+  color: var(--accent-ink);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.accounts-table-empty {
+  text-align: center;
+  color: var(--muted);
+  padding: 24px 12px !important;
+}
+
+@media (max-width: 720px) {
+  .accounts-table thead {
+    display: none;
+  }
+
+  .accounts-table, .accounts-table tbody, .accounts-table tr, .accounts-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .accounts-row {
+    padding: 8px 0;
+  }
+
+  .accounts-table tbody td {
+    border-bottom: none;
+    padding: 2px 12px;
+  }
+
+  .accounts-cell-handle {
+    padding-top: 8px !important;
+  }
 }
 
 .account-manage-avatar {
@@ -4911,19 +5092,6 @@ body {
   width: 100%;
   height: 100%;
   object-fit: cover;
-}
-
-.account-manage-id {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-.account-manage-id strong {
-  color: var(--text);
-  font-size: 13px;
-  font-weight: 800;
 }
 
 .status-pill {
@@ -5024,7 +5192,7 @@ body {
 
 .account-manage-import-cost {
   font-size: 10px;
-  color: var(--text-dim);
+  color: var(--muted);
   white-space: nowrap;
 }
 

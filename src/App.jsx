@@ -1,4 +1,4 @@
-import { createContext, memo, startTransition, useCallback, useContext, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, createContext, memo, startTransition, useCallback, useContext, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   ArrowLeft,
@@ -2841,6 +2841,13 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
   const [roster, setRoster] = useState(accounts);
   const [edits, setEdits] = useState({});
   const [savingHandle, setSavingHandle] = useState('');
+  // Accounts table: search/sort/status-filter and which row's detail panel
+  // is open. One redesign pass replacing 31 nearly-identical cards -- a
+  // sortable, searchable table scans far faster than scrolling cards.
+  const [accountSearch, setAccountSearch] = useState('');
+  const [accountStatusFilter, setAccountStatusFilter] = useState('active');
+  const [accountSort, setAccountSort] = useState({ key: 'handle', dir: 'asc' });
+  const [expandedHandle, setExpandedHandle] = useState('');
   const [avatarHandle, setAvatarHandle] = useState('');
   const [lifecycleHandle, setLifecycleHandle] = useState('');
   const [importFrom, setImportFrom] = useState({});
@@ -3286,8 +3293,49 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
     }
   };
 
-  const activeRoster = roster.filter((account) => account.is_active !== false);
-  const inactiveRoster = roster.filter((account) => account.is_active === false);
+  const ACCOUNT_SORT_COLUMNS = {
+    handle: (a) => a.handle || '',
+    group: (a) => a.group || '',
+    followers: (a) => a.followers,
+    avg_likes: (a) => a.avg_likes,
+    hot_threshold: (a) => a.hot_threshold,
+    is_active: (a) => (a.is_active ? 1 : 0),
+  };
+
+  const visibleRoster = roster.filter((account) => {
+    if (accountStatusFilter === 'active' && account.is_active === false) return false;
+    if (accountStatusFilter === 'inactive' && account.is_active !== false) return false;
+    const q = accountSearch.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      account.handle.toLowerCase().includes(q) ||
+      (account.label || '').toLowerCase().includes(q) ||
+      (account.group || '').toLowerCase().includes(q)
+    );
+  });
+
+  const sortedRoster = [...visibleRoster].sort((a, b) => {
+    const getValue = ACCOUNT_SORT_COLUMNS[accountSort.key] || ACCOUNT_SORT_COLUMNS.handle;
+    const mul = accountSort.dir === 'asc' ? 1 : -1;
+    const av = getValue(a);
+    const bv = getValue(b);
+    if (av == null && bv == null) return 0;
+    if (av == null) return 1; // unknowns sort last regardless of direction
+    if (bv == null) return -1;
+    if (typeof av === 'string') return av.localeCompare(bv) * mul;
+    return (av - bv) * mul;
+  });
+
+  const toggleAccountSort = (key) => {
+    setAccountSort((prev) => (prev.key === key ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' }));
+  };
+
+  const fmtCompact = (n) => {
+    if (n == null) return '—';
+    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+    if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+    return String(n);
+  };
 
   return (
     <div className="admin-page">
@@ -3337,190 +3385,262 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
           {tab === 'accounts' ? (
               <>
                 <section className="settings-section">
-                  <h3>Manage accounts</h3>
-                  <p className="wizard-hint">
-                    Category, display label, HOT threshold and profile picture -- all editable per account. Changes
-                    are picked up by the public dashboard on its next load.
-                  </p>
-                  <div className="account-manage-list">
-                    {activeRoster.map((account) => {
-                      const edit = edits[account.handle] || { label: '', group: account.group, hot_threshold: '' };
-                      return (
-                        <div className="account-manage-card" key={account.handle}>
-                          <div className="account-manage-top">
-                            <div className="account-manage-avatar" aria-hidden="true">
-                              {ACCOUNT_PROFILE_IMAGES[account.handle] ? (
-                                <img src={ACCOUNT_PROFILE_IMAGES[account.handle]} alt="" />
-                              ) : account.has_avatar ? (
-                                <img
-                                  src={`${API_BASE}/api/dashboard/avatar/${encodeURIComponent(account.handle)}`}
-                                  alt=""
-                                  referrerPolicy="no-referrer"
-                                />
-                              ) : (
-                                <span>{account.handle.slice(0, 2).toUpperCase()}</span>
-                              )}
-                            </div>
-                            <div className="account-manage-id">
-                              <strong>@{account.handle}</strong>
-                              {account.is_canonical ? <span className="status-pill status-pill-canonical">Canonical</span> : null}
-                            </div>
-                          </div>
-
-                          <div className="account-manage-fields">
-                            <label className="account-manage-field">
-                              <span>Label</span>
-                              <input
-                                type="text"
-                                value={edit.label}
-                                placeholder={account.handle}
-                                onChange={(event) =>
-                                  setEdits((prev) => ({
-                                    ...prev,
-                                    [account.handle]: { ...prev[account.handle], label: event.target.value },
-                                  }))
-                                }
-                              />
-                            </label>
-                            <label className="account-manage-field">
-                              <span>Category</span>
-                              <select
-                                value={edit.group}
-                                onChange={(event) =>
-                                  setEdits((prev) => ({
-                                    ...prev,
-                                    [account.handle]: { ...prev[account.handle], group: event.target.value },
-                                  }))
-                                }
-                              >
-                                {ACCOUNT_GROUP_OPTIONS.map((option) => (
-                                  <option key={option.value} value={option.value}>
-                                    {option.label}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-                            <label className="account-manage-field account-manage-field-narrow">
-                              <span>HOT /hr</span>
-                              <input
-                                type="number"
-                                min={1}
-                                value={edit.hot_threshold}
-                                onChange={(event) =>
-                                  setEdits((prev) => ({
-                                    ...prev,
-                                    [account.handle]: { ...prev[account.handle], hot_threshold: event.target.value },
-                                  }))
-                                }
-                              />
-                            </label>
-                            <button
-                              type="button"
-                              className="ghost-button primary"
-                              onClick={() => saveAccount(account)}
-                              disabled={savingHandle === account.handle || !isDirty(account)}
-                            >
-                              {savingHandle === account.handle ? '…' : 'Save'}
-                            </button>
-                          </div>
-
-                          <div className="account-manage-actions">
-                            <button
-                              type="button"
-                              className="ghost-button"
-                              onClick={() => refreshAvatar(account.handle)}
-                              disabled={avatarHandle === account.handle}
-                            >
-                              <ImagePlus size={13} />
-                              {avatarHandle === account.handle ? 'Refreshing…' : 'Refresh avatar'}
-                            </button>
-                            <button
-                              type="button"
-                              className="ghost-button ghost-button-danger"
-                              onClick={() => toggleActive(account)}
-                              disabled={lifecycleHandle === account.handle || account.is_canonical}
-                              title={account.is_canonical ? 'The canonical account cannot be deactivated.' : undefined}
-                            >
-                              <Power size={13} />
-                              {lifecycleHandle === account.handle ? '…' : 'Deactivate'}
-                            </button>
-                            <div className="account-manage-import">
-                              <input
-                                type="date"
-                                value={importFrom[account.handle] ?? ''}
-                                onChange={(event) =>
-                                  setImportFrom((prev) => ({ ...prev, [account.handle]: event.target.value }))
-                                }
-                                aria-label={`Extract from for ${account.handle}`}
-                                title="Optional: only posts from this date on"
-                              />
-                              <input
-                                type="number"
-                                min={1}
-                                max={5000}
-                                placeholder="2000"
-                                value={importCount[account.handle] ?? ''}
-                                onChange={(event) =>
-                                  setImportCount((prev) => ({ ...prev, [account.handle]: event.target.value }))
-                                }
-                                aria-label={`Number of posts to extract for ${account.handle}`}
-                                title="How many posts to pull (default 2000)"
-                                className="account-manage-import-count"
-                              />
-                              <span className="account-manage-import-cost">
-                                ~${(
-                                  Math.max(1, Math.min(5000, Math.round(Number(importCount[account.handle]) || 2000))) * 0.0023
-                                ).toFixed(2)}
-                              </span>
-                              <button
-                                type="button"
-                                className="ghost-button"
-                                onClick={() => runImport(account.handle)}
-                                disabled={importing === account.handle}
-                              >
-                                {importing === account.handle ? '…' : 'Extract history'}
-                              </button>
-                            </div>
-                          </div>
-                          {importNotice[account.handle] ? (
-                            <p className="settings-import-notice">{importNotice[account.handle]}</p>
-                          ) : null}
-                        </div>
-                      );
-                    })}
+                  <div className="settings-section-head">
+                    <h3>Manage accounts</h3>
+                    <span className="accounts-count">{sortedRoster.length} of {roster.length}</span>
                   </div>
-                </section>
+                  <p className="wizard-hint">
+                    Click a row to edit its label, category, HOT threshold, or avatar, or pull more history.
+                    "Suggested" is each account's all-time average likes, rounded up to the nearest hundred.
+                  </p>
 
-                {inactiveRoster.length ? (
-                  <section className="settings-section">
-                    <h3>Inactive accounts</h3>
-                    <p className="wizard-hint">
-                      Hidden from the public dashboard and skipped by the scheduler. Post history is untouched --
-                      reactivating brings everything straight back.
-                    </p>
-                    <div className="settings-table">
-                      {inactiveRoster.map((account) => (
-                        <div className="settings-row" key={account.handle}>
-                          <div className="settings-row-account">
-                            <strong>@{account.handle}</strong>
-                            <span>{account.group}</span>
-                          </div>
-                          <div className="settings-row-controls">
-                            <button
-                              type="button"
-                              className="ghost-button"
-                              onClick={() => toggleActive(account)}
-                              disabled={lifecycleHandle === account.handle}
-                            >
-                              <Power size={13} />
-                              {lifecycleHandle === account.handle ? '…' : 'Reactivate'}
-                            </button>
-                          </div>
-                        </div>
+                  <div className="accounts-toolbar">
+                    <input
+                      type="text"
+                      className="accounts-search"
+                      placeholder="Search by handle, label, or category…"
+                      value={accountSearch}
+                      onChange={(event) => setAccountSearch(event.target.value)}
+                    />
+                    <div className="accounts-status-filter">
+                      {[
+                        { value: 'active', label: 'Active' },
+                        { value: 'inactive', label: 'Inactive' },
+                        { value: 'all', label: 'All' },
+                      ].map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          className={`chip-button${accountStatusFilter === option.value ? ' active' : ''}`}
+                          onClick={() => setAccountStatusFilter(option.value)}
+                        >
+                          {option.label}
+                        </button>
                       ))}
                     </div>
-                  </section>
-                ) : null}
+                  </div>
+
+                  <div className="accounts-table-wrap">
+                    <table className="accounts-table">
+                      <thead>
+                        <tr>
+                          {[
+                            { key: 'handle', label: 'Account' },
+                            { key: 'group', label: 'Category' },
+                            { key: 'followers', label: 'Followers' },
+                            { key: 'avg_likes', label: 'Avg likes' },
+                            { key: 'hot_threshold', label: 'HOT /hr' },
+                            { key: 'is_active', label: 'Status' },
+                          ].map((col) => (
+                            <th key={col.key} className="accounts-th-sortable" onClick={() => toggleAccountSort(col.key)}>
+                              {col.label}
+                              {accountSort.key === col.key ? (
+                                <ArrowUpDown size={11} className={accountSort.dir === 'desc' ? 'flip' : ''} />
+                              ) : null}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sortedRoster.map((account) => {
+                          const isOpen = expandedHandle === account.handle;
+                          const edit = edits[account.handle] || { label: '', group: account.group, hot_threshold: '' };
+                          const isInactive = account.is_active === false;
+                          return (
+                            <Fragment key={account.handle}>
+                              <tr
+                                className={`accounts-row${isOpen ? ' open' : ''}${isInactive ? ' inactive' : ''}`}
+                                onClick={() => setExpandedHandle(isOpen ? '' : account.handle)}
+                              >
+                                <td className="accounts-cell-handle">
+                                  <span className="account-manage-avatar accounts-avatar-sm" aria-hidden="true">
+                                    {ACCOUNT_PROFILE_IMAGES[account.handle] ? (
+                                      <img src={ACCOUNT_PROFILE_IMAGES[account.handle]} alt="" />
+                                    ) : account.has_avatar ? (
+                                      <img
+                                        src={`${API_BASE}/api/dashboard/avatar/${encodeURIComponent(account.handle)}`}
+                                        alt=""
+                                        referrerPolicy="no-referrer"
+                                      />
+                                    ) : (
+                                      <span>{account.handle.slice(0, 2).toUpperCase()}</span>
+                                    )}
+                                  </span>
+                                  <span className="accounts-handle-text">
+                                    <strong>@{account.handle}</strong>
+                                    {account.is_canonical ? (
+                                      <span className="status-pill status-pill-canonical">Canonical</span>
+                                    ) : null}
+                                  </span>
+                                </td>
+                                <td>{ACCOUNT_GROUP_OPTIONS.find((option) => option.value === account.group)?.label || account.group}</td>
+                                <td>{fmtCompact(account.followers)}</td>
+                                <td>{fmtCompact(account.avg_likes)}</td>
+                                <td>{account.hot_threshold ?? '—'}</td>
+                                <td>
+                                  <span className={`status-pill ${isInactive ? 'status-pill-inactive' : 'status-pill-active'}`}>
+                                    {isInactive ? 'Inactive' : 'Active'}
+                                  </span>
+                                </td>
+                              </tr>
+                              {isOpen ? (
+                                <tr className="accounts-detail-row">
+                                  <td colSpan={6}>
+                                    <div className="account-manage-detail" onClick={(event) => event.stopPropagation()}>
+                                      <div className="account-manage-fields">
+                                        <label className="account-manage-field">
+                                          <span>Label</span>
+                                          <input
+                                            type="text"
+                                            value={edit.label}
+                                            placeholder={account.handle}
+                                            onChange={(event) =>
+                                              setEdits((prev) => ({
+                                                ...prev,
+                                                [account.handle]: { ...prev[account.handle], label: event.target.value },
+                                              }))
+                                            }
+                                          />
+                                        </label>
+                                        <label className="account-manage-field">
+                                          <span>Category</span>
+                                          <select
+                                            value={edit.group}
+                                            onChange={(event) =>
+                                              setEdits((prev) => ({
+                                                ...prev,
+                                                [account.handle]: { ...prev[account.handle], group: event.target.value },
+                                              }))
+                                            }
+                                          >
+                                            {ACCOUNT_GROUP_OPTIONS.map((option) => (
+                                              <option key={option.value} value={option.value}>
+                                                {option.label}
+                                              </option>
+                                            ))}
+                                          </select>
+                                        </label>
+                                        <label className="account-manage-field account-manage-field-narrow">
+                                          <span>HOT /hr</span>
+                                          <input
+                                            type="number"
+                                            min={1}
+                                            value={edit.hot_threshold}
+                                            onChange={(event) =>
+                                              setEdits((prev) => ({
+                                                ...prev,
+                                                [account.handle]: { ...prev[account.handle], hot_threshold: event.target.value },
+                                              }))
+                                            }
+                                          />
+                                          {account.suggested_hot_threshold ? (
+                                            <button
+                                              type="button"
+                                              className="hot-suggestion"
+                                              title={`Based on ${account.avg_likes_sample_size} post(s)' average likes`}
+                                              onClick={() =>
+                                                setEdits((prev) => ({
+                                                  ...prev,
+                                                  [account.handle]: {
+                                                    ...prev[account.handle],
+                                                    hot_threshold: String(account.suggested_hot_threshold),
+                                                  },
+                                                }))
+                                              }
+                                            >
+                                              Suggested: {account.suggested_hot_threshold.toLocaleString()}
+                                            </button>
+                                          ) : null}
+                                        </label>
+                                        <button
+                                          type="button"
+                                          className="ghost-button primary"
+                                          onClick={() => saveAccount(account)}
+                                          disabled={savingHandle === account.handle || !isDirty(account)}
+                                        >
+                                          {savingHandle === account.handle ? '…' : 'Save'}
+                                        </button>
+                                      </div>
+
+                                      <div className="account-manage-actions">
+                                        <button
+                                          type="button"
+                                          className="ghost-button"
+                                          onClick={() => refreshAvatar(account.handle)}
+                                          disabled={avatarHandle === account.handle}
+                                        >
+                                          <ImagePlus size={13} />
+                                          {avatarHandle === account.handle ? 'Refreshing…' : 'Refresh avatar'}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className="ghost-button ghost-button-danger"
+                                          onClick={() => toggleActive(account)}
+                                          disabled={lifecycleHandle === account.handle || account.is_canonical}
+                                          title={account.is_canonical ? 'The canonical account cannot be deactivated.' : undefined}
+                                        >
+                                          <Power size={13} />
+                                          {lifecycleHandle === account.handle ? '…' : isInactive ? 'Reactivate' : 'Deactivate'}
+                                        </button>
+                                        {!isInactive ? (
+                                          <div className="account-manage-import">
+                                            <input
+                                              type="date"
+                                              value={importFrom[account.handle] ?? ''}
+                                              onChange={(event) =>
+                                                setImportFrom((prev) => ({ ...prev, [account.handle]: event.target.value }))
+                                              }
+                                              aria-label={`Extract from for ${account.handle}`}
+                                              title="Optional: only posts from this date on"
+                                            />
+                                            <input
+                                              type="number"
+                                              min={1}
+                                              max={5000}
+                                              placeholder="2000"
+                                              value={importCount[account.handle] ?? ''}
+                                              onChange={(event) =>
+                                                setImportCount((prev) => ({ ...prev, [account.handle]: event.target.value }))
+                                              }
+                                              aria-label={`Number of posts to extract for ${account.handle}`}
+                                              title="How many posts to pull (default 2000)"
+                                              className="account-manage-import-count"
+                                            />
+                                            <span className="account-manage-import-cost">
+                                              ~${(
+                                                Math.max(1, Math.min(5000, Math.round(Number(importCount[account.handle]) || 2000))) * 0.0023
+                                              ).toFixed(2)}
+                                            </span>
+                                            <button
+                                              type="button"
+                                              className="ghost-button"
+                                              onClick={() => runImport(account.handle)}
+                                              disabled={importing === account.handle}
+                                            >
+                                              {importing === account.handle ? '…' : 'Extract history'}
+                                            </button>
+                                          </div>
+                                        ) : null}
+                                      </div>
+                                      {importNotice[account.handle] ? (
+                                        <p className="settings-import-notice">{importNotice[account.handle]}</p>
+                                      ) : null}
+                                    </div>
+                                  </td>
+                                </tr>
+                              ) : null}
+                            </Fragment>
+                          );
+                        })}
+                        {!sortedRoster.length ? (
+                          <tr>
+                            <td colSpan={6} className="accounts-table-empty">No accounts match.</td>
+                          </tr>
+                        ) : null}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
               </>
             ) : tab === 'system' ? (
               <div className="settings-list-width">
