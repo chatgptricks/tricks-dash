@@ -129,6 +129,11 @@ async function apiFetch(url, options = {}) {
     try {
       const token = await firebaseAuth.currentUser.getIdToken();
       headers.set('Authorization', `Bearer ${token}`);
+      // Mirrors tracker.html/insights.html: keeps a live token on window so
+      // ad-hoc admin/debug calls against this API (e.g. from devtools) don't
+      // need their own sign-in flow. Refreshed on every request this app
+      // already makes, so it stays current without extra network calls.
+      window.__firebaseIdToken = token;
     } catch (error) {
       // Fall through and let the request go out unauthenticated -- the
       // backend will bounce it with a 401 and the login gate will catch it.
@@ -4930,6 +4935,11 @@ function App() {
     const unsubscribe = onAuthStateChanged(firebaseAuth, (user) => {
       setAuthUser(user);
       setUnauthorized(false);
+      if (user) {
+        user.getIdToken().then((token) => { window.__firebaseIdToken = token; }).catch(() => {});
+      } else {
+        window.__firebaseIdToken = null;
+      }
     });
     return unsubscribe;
   }, []);
