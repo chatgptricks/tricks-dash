@@ -971,6 +971,7 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
         startedAt: Date.now(),
         added: 0,
         error: null,
+        serverProgress: { phase: 'queued' },
       },
     ]);
 
@@ -1029,6 +1030,8 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
 
         // Poll until the worker reports back. Generous ceiling: 2000 posts can
         // take a good while, and giving up early is what made this look broken.
+        // 4s (rather than 10s) so the phase/counts below feel live rather than
+        // stepping in visible jumps.
         let attempts = 0;
         const poll = setInterval(async () => {
           attempts += 1;
@@ -1036,7 +1039,8 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
             const statusResponse = await apiFetch(`${API_BASE}/api/admin/accounts/backfill-status`);
             const status = await statusResponse.json().catch(() => ({}));
             if (status.running) {
-              if (attempts >= 120) { // ~20 minutes
+              finish({ serverProgress: status.progress || null });
+              if (attempts >= 300) { // ~20 minutes
                 clearInterval(poll);
                 finish({ phase: 'unknown' });
                 setTimeout(() => setBackgroundTasks((tasks) => tasks.filter((task) => task.id !== id)), 10000);
@@ -1048,17 +1052,17 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
               finish({ phase: 'error', error: status.error });
               return;
             }
-            finish({ phase: 'done', added: status.result?.added ?? 0 });
+            finish({ phase: 'done', added: status.result?.added ?? 0, serverProgress: null });
             await loadDashboard(undefined, { silent: true });
             setTimeout(() => setBackgroundTasks((tasks) => tasks.filter((task) => task.id !== id)), 8000);
           } catch {
             // A dropped poll is not a failed import -- the work is server-side.
-            if (attempts >= 120) {
+            if (attempts >= 300) {
               clearInterval(poll);
               finish({ phase: 'unknown' });
             }
           }
-        }, 10000);
+        }, 4000);
       } catch (error) {
         finish({ phase: 'error', error: 'Could not reach the server to start the import.' });
       }
@@ -3135,7 +3139,9 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
 
       // Poll until the worker reports back. 2000 posts from an old date can
       // take a good while -- giving up early is what made this look broken
-      // in the first place.
+      // in the first place. 4s (not 10s) so the phase text below tracks the
+      // real work closely instead of stepping in visible jumps.
+      const pollStartedAt = Date.now();
       let attempts = 0;
       const poll = setInterval(async () => {
         attempts += 1;
@@ -3143,7 +3149,10 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
           const statusResponse = await apiFetch(`${API_BASE}/api/admin/accounts/backfill-status`);
           const status = await statusResponse.json().catch(() => ({}));
           if (status.running) {
-            if (attempts >= 120) { // ~20 minutes
+            const elapsedSec = Math.round((Date.now() - pollStartedAt) / 1000);
+            const live = describeBackfillProgress(status.progress, elapsedSec);
+            setImportNotice((prev) => ({ ...prev, [handle]: live.text || `Importing… ${elapsedSec}s` }));
+            if (attempts >= 300) { // ~20 minutes
               clearInterval(poll);
               setImportNotice((prev) => ({
                 ...prev,
@@ -3166,7 +3175,7 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
           // Transient poll failure -- next tick tries again, importing stays
           // true so the button shows busy rather than falsely idle.
         }
-      }, 10000);
+      }, 4000);
     } catch (error) {
       setImportNotice((prev) => ({ ...prev, [handle]: 'Network error starting the import.' }));
       setImporting('');
@@ -4384,12 +4393,55 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
   );
 }
 
+// Turns the backend's on_progress phase (see apify_sync.py's run_backfill:
+// starting the Apify run, waiting on the scrape, downloading the dataset,
+// saving each post's cover) into an actual sentence, plus a real completion
+// percentage once the "inserting" phase gives us a done/total count --
+// replacing what used to be a single opaque "Importing…" spinner for what
+// can be a many-minutes-long import with nothing else shown.
+function describeBackfillProgress(progress, elapsedSec) {
+  const phase = progress?.phase;
+  switch (phase) {
+    case 'queued':
+      return { text: 'Queued…', percent: null };
+    case 'preparing':
+      return { text: 'Preparing the request…', percent: null };
+    case 'starting_apify_run':
+      return { text: 'Starting the Instagram scraper…', percent: null };
+    case 'waiting_apify': {
+      const secs = progress.elapsed_seconds ?? elapsedSec ?? 0;
+      const status = progress.run_status;
+      const statusLabel =
+        status === 'RUNNING' ? 'is scraping Instagram' : status === 'READY' ? 'is starting up' : `reported "${status || 'unknown'}"`;
+      return { text: `Apify ${statusLabel}… ${secs}s`, percent: null };
+    }
+    case 'fetching_dataset':
+      return { text: 'Downloading the scraped posts…', percent: null };
+    case 'dataset_ready':
+      return { text: `Got ${progress.fetched ?? 0} posts from Instagram, checking what's new…`, percent: null };
+    case 'matching':
+      return { text: `Comparing ${progress.fetched ?? 0} posts against what we already have…`, percent: null };
+    case 'inserting': {
+      const total = progress.total ?? 0;
+      const done = progress.done ?? 0;
+      const failed = progress.failed ?? 0;
+      if (!total) {
+        const already = typeof progress.already_had === 'number' ? ` (${progress.already_had} already saved)` : '';
+        return { text: `No new posts to save${already}.`, percent: 100 };
+      }
+      const percent = Math.max(0, Math.min(100, Math.round((done / total) * 100)));
+      const failedNote = failed ? `, ${failed} failed` : '';
+      return { text: `Saving posts: ${done}/${total}${failedNote}`, percent };
+    }
+    default:
+      return { text: null, percent: null };
+  }
+}
+
 // Floating, non-blocking progress widget for in-flight account imports.
 // Rendered as a fixed stack in the corner so the rest of the dashboard
 // (tabs, filters, gallery) stays fully usable while an Apify backfill
-// (which can take a minute or more) runs. There's no true progress
-// percentage available from the backend for a single blocking import call,
-// so the bar is an indeterminate sweep with an elapsed timer for feedback.
+// (which can take a minute or more) runs.
 function BackgroundTaskStack({ tasks, onDismiss }) {
   const [now, setNow] = useState(Date.now());
   const hasActive = tasks.some((task) => task.phase === 'importing' || task.phase === 'unknown');
@@ -4407,6 +4459,7 @@ function BackgroundTaskStack({ tasks, onDismiss }) {
       {tasks.map((task) => {
         const elapsedSec = Math.max(0, Math.round((now - task.startedAt) / 1000));
         const initials = (task.label || task.handle || '?').slice(0, 2).toUpperCase();
+        const live = task.phase === 'importing' ? describeBackfillProgress(task.serverProgress, elapsedSec) : null;
         return (
           <div key={task.id} className={`bg-task-card bg-task-${task.phase}`}>
             <div className="bg-task-avatar" aria-hidden="true">
@@ -4420,13 +4473,17 @@ function BackgroundTaskStack({ tasks, onDismiss }) {
                 </button>
               </div>
               <p className="bg-task-status">
-                {task.phase === 'importing' ? `Importing post history… ${elapsedSec}s` : null}
+                {task.phase === 'importing' ? live?.text || `Importing post history… ${elapsedSec}s` : null}
                 {task.phase === 'unknown' ? 'Still running on the server -- large imports can take a few minutes. Posts will appear on their own.' : null}
                 {task.phase === 'done' ? `Imported ${task.added} post${task.added === 1 ? '' : 's'}` : null}
                 {task.phase === 'error' ? task.error || 'Import failed.' : null}
               </p>
               <div className="bg-task-progress">
-                <div className={`bg-task-progress-fill bg-task-progress-${task.phase}`} />
+                {task.phase === 'importing' && live?.percent != null ? (
+                  <div className="bg-task-progress-fill bg-task-progress-real" style={{ width: `${live.percent}%` }} />
+                ) : (
+                  <div className={`bg-task-progress-fill bg-task-progress-${task.phase}`} />
+                )}
               </div>
             </div>
           </div>

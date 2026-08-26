@@ -4345,6 +4345,12 @@ body {
   }
 }
 
+.bg-task-progress-real {
+  left: 0;
+  background: var(--accent);
+  transition: width 0.4s ease;
+}
+
 .bg-task-progress-done {
   left: 0;
   right: 0;
