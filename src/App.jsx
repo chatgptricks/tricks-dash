@@ -3306,6 +3306,7 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
     handle: (a) => a.handle || '',
     group: (a) => a.group || '',
     followers: (a) => a.followers,
+    total_posts: (a) => a.total_posts,
     avg_likes: (a) => a.avg_likes,
     hot_threshold: (a) => a.hot_threshold,
     is_active: (a) => (a.is_active ? 1 : 0),
@@ -3448,6 +3449,7 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
                             { key: 'handle', label: 'Account' },
                             { key: 'group', label: 'Category' },
                             { key: 'followers', label: 'Followers' },
+                            { key: 'total_posts', label: 'Posts' },
                             { key: 'avg_likes', label: 'Avg 1h likes' },
                             { key: 'hot_threshold', label: 'HOT /hr' },
                             { key: 'is_active', label: 'Status' },
@@ -3495,6 +3497,7 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
                                 </td>
                                 <td>{ACCOUNT_GROUP_OPTIONS.find((option) => option.value === account.group)?.label || account.group}</td>
                                 <td>{fmtCompact(account.followers)}</td>
+                                <td>{fmtCompact(account.total_posts)}</td>
                                 <td>{fmtCompact(account.avg_likes)}</td>
                                 <td>{account.hot_threshold ?? '—'}</td>
                                 <td>
@@ -3505,7 +3508,7 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
                               </tr>
                               {isOpen ? (
                                 <tr className="accounts-detail-row">
-                                  <td colSpan={6}>
+                                  <td colSpan={7}>
                                     <div className="account-manage-detail" onClick={(event) => event.stopPropagation()}>
                                       <div className="account-manage-fields">
                                         <label className="account-manage-field">
@@ -3657,7 +3660,7 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
                         })}
                         {!sortedRoster.length ? (
                           <tr>
-                            <td colSpan={6} className="accounts-table-empty">No accounts match.</td>
+                            <td colSpan={7} className="accounts-table-empty">No accounts match.</td>
                           </tr>
                         ) : null}
                       </tbody>
