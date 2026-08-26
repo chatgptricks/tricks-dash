@@ -3401,7 +3401,8 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
                   </div>
                   <p className="wizard-hint">
                     Click a row to edit its label, category, HOT threshold, or avatar, or pull more history.
-                    "Suggested" is each account's all-time average likes, rounded up to the nearest hundred.
+                    "Suggested" is the account's average first-hour likes (the same number the HOT check
+                    itself compares against), rounded up to the nearest hundred.
                   </p>
 
                   <div className="accounts-toolbar">
@@ -3438,7 +3439,7 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
                             { key: 'handle', label: 'Account' },
                             { key: 'group', label: 'Category' },
                             { key: 'followers', label: 'Followers' },
-                            { key: 'avg_likes', label: 'Avg likes' },
+                            { key: 'avg_likes', label: 'Avg 1h likes' },
                             { key: 'hot_threshold', label: 'HOT /hr' },
                             { key: 'is_active', label: 'Status' },
                           ].map((col) => (
@@ -3547,7 +3548,7 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
                                             <button
                                               type="button"
                                               className="hot-suggestion"
-                                              title={`Based on ${account.avg_likes_sample_size} post(s)' average likes`}
+                                              title={`Based on ${account.avg_likes_sample_size} post(s)' first-hour likes`}
                                               onClick={() =>
                                                 setEdits((prev) => ({
                                                   ...prev,
