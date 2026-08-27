@@ -2,10 +2,12 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { createRequire } from 'node:module';
 import { createReadStream, existsSync, statSync } from 'node:fs';
-import { basename, extname, join } from 'node:path';
+import { basename, dirname, extname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const coverCache = new Map();
 const require = createRequire(import.meta.url);
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const imageTypes = new Map([
   ['.jpg', 'image/jpeg'],
@@ -268,5 +270,13 @@ export default defineConfig({
   preview: {
     host: '0.0.0.0',
     port: 4175,
+  },
+  build: {
+    rollupOptions: {
+      input: {
+        dashboard: resolve(__dirname, 'index.html'),
+        queue: resolve(__dirname, 'queue.html'),
+      },
+    },
   },
 });

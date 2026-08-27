@@ -6543,6 +6543,275 @@ body {
   accent-color: var(--accent);
 }
 
+/* Queue entry point + assignment composer. Kept in the dashboard stylesheet
+   because this dialog is launched from a post card; queue.html has its own
+   self-contained board styles. */
+.tool-link-queue {
+  position: relative;
+}
+
+.queue-pending-badge {
+  display: grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  margin-left: -2px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #171900;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.queue-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: grid;
+  place-items: center;
+  padding: 22px;
+  background: rgba(var(--shade), 0.66);
+  backdrop-filter: blur(5px);
+}
+
+.queue-assign-modal {
+  width: min(620px, 100%);
+  max-height: min(850px, calc(100vh - 44px));
+  overflow-y: auto;
+  padding: 18px;
+  border: 1px solid rgba(var(--edge), 0.16);
+  border-radius: 16px;
+  background: var(--surface-1);
+  box-shadow: 0 30px 90px rgba(var(--shade), 0.72);
+}
+
+.queue-assign-head,
+.queue-assign-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.queue-assign-head {
+  margin-bottom: 14px;
+}
+
+.queue-assign-head h2 {
+  margin: 2px 0 0;
+  color: var(--text-strong);
+  font-size: 20px;
+}
+
+.queue-assign-post {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 10px;
+  margin-bottom: 16px;
+  border: 1px solid rgba(var(--edge), 0.1);
+  border-radius: 11px;
+  background: rgba(var(--edge), 0.035);
+}
+
+.queue-assign-post img,
+.queue-assign-cover-fallback {
+  flex: 0 0 auto;
+  width: 46px;
+  height: 46px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: rgba(var(--edge), 0.08);
+}
+
+.queue-assign-cover-fallback {
+  display: grid;
+  place-items: center;
+  color: rgba(var(--ink), 0.5);
+}
+
+.queue-assign-post strong {
+  display: block;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.queue-assign-post p {
+  display: -webkit-box;
+  margin: 4px 0 0;
+  overflow: hidden;
+  color: rgba(var(--ink), 0.55);
+  font-size: 12px;
+  line-height: 1.4;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.queue-assign-fieldset {
+  min-width: 0;
+  padding: 0;
+  margin: 0 0 14px;
+  border: 0;
+}
+
+.queue-assign-fieldset legend,
+.queue-assign-note > span,
+.queue-assign-grid > label > span {
+  display: block;
+  margin-bottom: 6px;
+  color: rgba(var(--ink), 0.55);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.queue-assign-fieldset i,
+.queue-assign-note i {
+  color: rgba(var(--ink), 0.35);
+  font-style: normal;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.queue-user-picker {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.queue-user-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 38px;
+  padding: 7px 8px;
+  border: 1px solid rgba(var(--edge), 0.1);
+  border-radius: 8px;
+  color: rgba(var(--ink), 0.72);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.queue-user-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.queue-user-option.is-selected {
+  border-color: rgba(var(--accent-rgb), 0.48);
+  background: rgba(var(--accent-rgb), 0.1);
+  color: var(--accent-ink);
+}
+
+.queue-user-initial {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: rgba(var(--edge), 0.1);
+  color: var(--text);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.queue-user-option > span:nth-child(3) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.queue-user-option em {
+  margin-left: auto;
+  color: rgba(var(--ink), 0.4);
+  font-size: 9px;
+  font-style: normal;
+}
+
+.queue-assign-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 9px;
+  margin-bottom: 14px;
+}
+
+.queue-assign-grid select,
+.queue-assign-grid input,
+.queue-assign-note textarea {
+  width: 100%;
+  border: 1px solid rgba(var(--edge), 0.14);
+  border-radius: 8px;
+  background: rgba(var(--edge), 0.045);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+}
+
+.queue-assign-grid select,
+.queue-assign-grid input {
+  height: 35px;
+  padding: 0 9px;
+}
+
+.queue-assign-note {
+  display: block;
+  margin-bottom: 14px;
+}
+
+.queue-assign-note textarea {
+  min-height: 78px;
+  padding: 9px;
+  resize: vertical;
+}
+
+.queue-tag-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.queue-tag-option {
+  padding: 5px 9px;
+  border: 1px solid rgba(var(--edge), 0.13);
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(var(--ink), 0.62);
+  font-family: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.queue-tag-option.is-selected {
+  border-color: rgba(var(--accent-rgb), 0.48);
+  background: rgba(var(--accent-rgb), 0.11);
+  color: var(--accent-ink);
+}
+
+.queue-assign-error {
+  margin: -4px 0 12px;
+  color: #ff9b9b;
+  font-size: 12px;
+}
+
+.queue-assign-actions {
+  justify-content: flex-end;
+  padding-top: 14px;
+  border-top: 1px solid rgba(var(--edge), 0.09);
+}
+
+@media (max-width: 580px) {
+  .queue-modal-backdrop { padding: 10px; }
+  .queue-assign-modal { padding: 14px; }
+  .queue-user-picker,
+  .queue-assign-grid { grid-template-columns: 1fr; }
+}
+
 /* ---------------------------------------------------------------------------
    Six cards per row.
 
