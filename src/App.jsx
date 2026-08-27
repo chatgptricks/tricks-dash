@@ -3411,7 +3411,7 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
                             { key: 'group', label: 'Category' },
                             { key: 'followers', label: 'Followers' },
                             { key: 'total_posts', label: 'Posts' },
-                            { key: 'avg_likes', label: 'Avg 1h likes' },
+                            { key: 'avg_likes', label: 'Avg 1h likes (30d)' },
                             { key: 'hot_threshold', label: 'HOT /hr' },
                             { key: 'is_active', label: 'Status' },
                           ].map((col) => (
@@ -3521,7 +3521,7 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
                                             <button
                                               type="button"
                                               className="hot-suggestion"
-                                              title={`Based on ${account.avg_likes_sample_size} post(s)' first-hour likes`}
+                                              title={`Based on ${account.avg_likes_sample_size} post(s)' first-hour likes, last 30 days`}
                                               onClick={() =>
                                                 setEdits((prev) => ({
                                                   ...prev,
