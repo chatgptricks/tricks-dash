@@ -815,7 +815,7 @@ window.__startInsightsBoot = boot;
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
 import {
   getAuth, GoogleAuthProvider, getRedirectResult, onAuthStateChanged,
-  signInWithPopup, signInWithRedirect, signOut,
+  signInWithPopup, signInWithRedirect, signInWithCustomToken, signOut,
 } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js';
 
 const firebaseConfig = {
@@ -829,6 +829,52 @@ const firebaseConfig = {
 const auth = getAuth(initializeApp(firebaseConfig));
 const provider = new GoogleAuthProvider();
 provider.setCustomParameters({ prompt: 'select_account' });
+
+// Single sign-on across *.sentientdash.app -- see src/sso.js for the full
+// writeup. This is a vanilla-JS copy of the same cookie bootstrap since this
+// page is a standalone static file, not part of the Vite React bundle.
+const SSO_API = 'https://cortex-api-db2e.onrender.com';
+const SSO_COOKIE = 'sentient_sso';
+function ssoCookieDomain() { return location.hostname.endsWith('sentientdash.app') ? '.sentientdash.app' : ''; }
+function ssoReadCookie() {
+  const match = document.cookie.match(new RegExp('(?:^|; )' + SSO_COOKIE + '=([^;]*)'));
+  return match ? decodeURIComponent(match[1]) : null;
+}
+function ssoWriteCookie(value, maxAgeSeconds) {
+  const domain = ssoCookieDomain();
+  let cookie = SSO_COOKIE + '=' + encodeURIComponent(value) + '; path=/; max-age=' + maxAgeSeconds + '; secure; samesite=lax';
+  if (domain) cookie += '; domain=' + domain;
+  document.cookie = cookie;
+}
+function ssoClearCookie() {
+  const domain = ssoCookieDomain();
+  let cookie = SSO_COOKIE + '=; path=/; max-age=0; secure; samesite=lax';
+  if (domain) cookie += '; domain=' + domain;
+  document.cookie = cookie;
+}
+async function ssoPublishCookie() {
+  const user = auth.currentUser;
+  if (!user) return;
+  try {
+    const idToken = await user.getIdToken();
+    const response = await fetch(SSO_API + '/api/auth/custom-token', { method: 'POST', headers: { Authorization: 'Bearer ' + idToken } });
+    if (!response.ok) return;
+    const body = await response.json();
+    if (body.customToken) ssoWriteCookie(body.customToken, 45 * 60);
+  } catch (err) { /* best-effort */ }
+}
+async function ssoTrySignIn() {
+  const token = ssoReadCookie();
+  if (!token) return false;
+  try { await signInWithCustomToken(auth, token); } catch (err) { ssoClearCookie(); }
+  return true;
+}
+let ssoRefreshTimer = null;
+function ssoStartRefresh() {
+  ssoPublishCookie();
+  if (ssoRefreshTimer) clearInterval(ssoRefreshTimer);
+  ssoRefreshTimer = setInterval(ssoPublishCookie, 20 * 60 * 1000);
+}
 
 // Popup first (keeps us first-party); full-page redirect when the browser
 // won't give us a popup, which is the common case on mobile.
@@ -873,12 +919,31 @@ let booted = false;
 window.__onInsightsUnauthorized = () => {
   gateText.textContent = (auth.currentUser?.email || 'This Google account') + ' isn’t authorized for Sentient Dash.';
   gateBtn.textContent = 'Sign out';
-  gateBtn.onclick = () => signOut(auth);
+  gateBtn.onclick = () => { ssoClearCookie(); signOut(auth); };
   gate.classList.remove('hidden');
 };
 
 // Picks the user back up when the redirect fallback returns them here.
 getRedirectResult(auth).catch((err) => { gateText.textContent = describeSignInError(err); });
+
+function showSignInGate() {
+  gateText.textContent = 'Sign in with your Google account to continue.';
+  gateBtn.textContent = 'Sign in with Google';
+  gateBtn.onclick = runSignIn;
+  gate.classList.remove('hidden');
+}
+
+// Same-session-everywhere: try the shared cookie (minted by the main
+// dashboard or Queue board) before ever showing the Google gate here. If it
+// turns out there was no cookie (or it didn't work), and Firebase still
+// hasn't produced a signed-in user by the time the check finishes, show the
+// gate ourselves -- onAuthStateChanged won't fire again on its own if the
+// state never actually changed.
+let ssoChecked = false;
+ssoTrySignIn().finally(() => {
+  ssoChecked = true;
+  if (!auth.currentUser) showSignInGate();
+});
 
 async function runSignIn() {
   gateBtn.disabled = true;
@@ -890,14 +955,13 @@ async function runSignIn() {
 onAuthStateChanged(auth, async (user) => {
   if (!user) {
     booted = false;
-    gateText.textContent = 'Sign in with your Google account to continue.';
-    gateBtn.textContent = 'Sign in with Google';
-    gateBtn.onclick = runSignIn;
-    gate.classList.remove('hidden');
+    if (!ssoChecked) return; // give the silent cookie sign-in a chance first
+    showSignInGate();
     return;
   }
   window.__firebaseIdToken = await user.getIdToken();
   gate.classList.add('hidden');
+  ssoStartRefresh();
   if (!booted) {
     booted = true;
     window.__startInsightsBoot();

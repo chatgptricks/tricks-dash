@@ -1,0 +1,485 @@
+// The "open a post and deep-dive" pieces -- cover art, caption, stats, song,
+// Instagram link, and the media-download modal (with its Google Lens
+// reverse-image-search icon). Shared by the main dashboard's right rail
+// (App.jsx) and the Queue board's own detail sidebar (queue.jsx) so both
+// surfaces show and do exactly the same things for a post, with one place to
+// fix bugs or add features instead of two copies drifting apart.
+import { createPortal } from 'react-dom';
+import { memo, useEffect, useMemo, useState } from 'react';
+import { Copy, Download, ExternalLink, Eye, Flame, Music2, Video, X } from 'lucide-react';
+import { usePrefs } from './prefsContext';
+import { API_BASE, IG_HANDLE, apiFetch } from './api';
+
+// Small, self-contained duplicates of formatting helpers that also live in
+// App.jsx (used pervasively there for filters/sorting, not just this panel).
+// Cheap pure functions -- not worth a shared import just to avoid a few
+// duplicated lines on each side.
+const compactFormatter = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 });
+const dateFormatter = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+const UNKNOWN_LIKES_MAX = 3;
+
+export function formatLikes(value) {
+  if (value === null || value === undefined || Number(value) <= UNKNOWN_LIKES_MAX) return '—';
+  return compactFormatter.format(value);
+}
+
+export function formatDate(iso) {
+  if (!iso) return '—';
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? '—' : dateFormatter.format(date);
+}
+
+function formatElapsed(timestampMs) {
+  if (!Number.isFinite(timestampMs)) return null;
+  const diffMs = Date.now() - timestampMs;
+  if (diffMs < 0) return null;
+  const minutes = Math.floor(diffMs / 60000);
+  if (minutes < 60) return `${Math.max(minutes, 1)}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.floor(hours / 24);
+  return `${days}d`;
+}
+
+function typeLabel(value) {
+  const text = String(value ?? '');
+  if (text.startsWith('Carousel')) return 'Carousel';
+  if (text.startsWith('Video')) return 'Video';
+  return 'Image';
+}
+
+export function posterTheme(type) {
+  if (typeLabel(type) === 'Video') return 'theme-video';
+  if (typeLabel(type) === 'Image') return 'theme-image';
+  return 'theme-carousel';
+}
+
+function coverSources(post) {
+  if (!post.coverUrl) return [];
+  if (post.coverUrl.startsWith('http')) return [post.coverUrl];
+  // Both accounts serve covers live from the Cortex backend now
+  // (/api/tricks-dash/covers/{id} and /api/traselveloreal/covers/{id}).
+  return [`${API_BASE}${post.coverUrl}`];
+}
+
+// Five escalating tiers matching the account thresholds worth calling out:
+// 1x (just qualifies), 2x, 3x, 5x, 8x. Every step up is visibly bigger,
+// brighter, and busier than the last.
+export function hotTier(multiplier) {
+  const value = Number.isFinite(multiplier) ? multiplier : 1;
+  if (value >= 8) return 5;
+  if (value >= 5) return 4;
+  if (value >= 3) return 3;
+  if (value >= 2) return 2;
+  return 1;
+}
+
+// Card-level effects (beyond the badge itself), scaled to how far over the
+// per-hour threshold the post's first hour landed. Only ever applied while
+// the post is still pinned (i.e. still inside its active HOT window).
+// Tier 1 (1x) is badge-only; tiers 2-5 (2x/3x/5x/8x) each step up the
+// animated glowing border's color, speed, and halo strength.
+export function hotEffects(post) {
+  if (!post.showsHotBadge) return { className: '', showBorder: false };
+  const tier = hotTier(post.hotMultiplier);
+  const tierClass = tier >= 2 ? `post-card-tier-${tier}` : '';
+  return {
+    className: tierClass ? ` ${tierClass}` : '',
+    showBorder: tier >= 2,
+  };
+}
+
+export const HotBadge = memo(function HotBadge({ post, large = false }) {
+  const tier = hotTier(post.hotMultiplier);
+  const hasRate = Number.isFinite(post.hotMultiplier);
+  const age = formatElapsed(post.timestamp);
+  const label = [
+    hasRate ? `${post.hotMultiplier.toFixed(1)}x the rate threshold` : 'Went viral in its first hour',
+    age ? `posted ${age} ago` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
+  // Cap rendered flame icons at 3 so tier 4/5 badges don't get comically
+  // wide -- the rest of the escalation (size, color, pulse speed) still
+  // comes through via the hot-tier-N class.
+  const flameCount = Math.min(tier, 3);
+
+  return (
+    <div className={`hot-badge hot-tier-${tier}${large ? ' hot-badge-large' : ''}`} title={label}>
+      {Array.from({ length: flameCount }).map((_, index) => (
+        <Flame key={index} size={large ? 14 : 12} />
+      ))}
+      <span>HOT</span>
+      {hasRate ? <b className="hot-badge-rate">{post.hotMultiplier.toFixed(1)}x</b> : null}
+      {age ? <b className="hot-badge-age">{age}</b> : null}
+    </div>
+  );
+});
+
+export const CoverImage = memo(function CoverImage({ className, post, priority = false, children }) {
+  const sources = useMemo(() => coverSources(post), [post]);
+  const [sourceIndex, setSourceIndex] = useState(0);
+
+  useEffect(() => {
+    setSourceIndex(0);
+  }, [post.shortcode, sources.length]);
+
+  const activeSource = sources[sourceIndex];
+
+  return (
+    <div className={className}>
+      {activeSource ? (
+        <img
+          className="cover-image"
+          src={activeSource}
+          alt={post.shortcode}
+          loading={priority ? 'eager' : 'lazy'}
+          decoding="async"
+          fetchPriority={priority ? 'high' : 'auto'}
+          referrerPolicy="no-referrer"
+          onError={() => {
+            setSourceIndex((current) => Math.min(current + 1, sources.length));
+          }}
+        />
+      ) : (
+        <div className="cover-fallback">
+          <div>{post.postType || post.type}</div>
+          <strong>{post.shortcode}</strong>
+        </div>
+      )}
+      {children}
+    </div>
+  );
+});
+
+export function InstagramLink({ post, onClick, compact = false }) {
+  if (!post.permalink) return null;
+
+  return (
+    <a
+      className={compact ? 'instagram-link compact' : 'instagram-link'}
+      href={post.permalink}
+      target="_blank"
+      rel="noreferrer"
+      onClick={onClick}
+    >
+      <ExternalLink size={compact ? 12 : 14} />
+      Instagram
+    </a>
+  );
+}
+
+export function SongLine({ url, children }) {
+  const content = (
+    <>
+      <Music2 size={14} />
+      <span>{children}</span>
+    </>
+  );
+  return url ? (
+    <a className="song-line" href={url} target="_blank" rel="noreferrer" title="Open this sound on Instagram">
+      {content}
+    </a>
+  ) : (
+    <p className="song-line">{content}</p>
+  );
+}
+
+export function Metric({ label, value }) {
+  return (
+    <div className="metric">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+export const SelectedPost = memo(function SelectedPost({ post }) {
+  const preview = (
+    <CoverImage className={`selected-post-media ${posterTheme(post.type)}`} post={post} priority>
+      {post.isVideo ? (
+        <div className="media-badge">
+          <Video size={13} />
+          Video
+        </div>
+      ) : null}
+      {post.showsHotBadge ? <HotBadge post={post} large /> : null}
+    </CoverImage>
+  );
+
+  const selectedEffects = hotEffects(post);
+
+  return (
+    <article className={`selected-post${selectedEffects.className}`}>
+      {selectedEffects.showBorder ? <span className="hot-border" aria-hidden="true" /> : null}
+      {post.permalink ? (
+        <a
+          className="selected-post-link"
+          href={post.permalink}
+          target="_blank"
+          rel="noreferrer"
+          aria-label={`Open ${post.shortcode} on Instagram`}
+        >
+          {preview}
+        </a>
+      ) : preview}
+    </article>
+  );
+});
+
+export function SlideDownload({ post }) {
+  const { t } = usePrefs();
+  const [open, setOpen] = useState(false);
+  const [items, setItems] = useState(null);
+  const [picked, setPicked] = useState(() => new Set());
+  const [state, setState] = useState('idle'); // idle | listing | working | error
+  const [note, setNote] = useState('');
+
+  // A new post invalidates everything the modal was showing.
+  useEffect(() => {
+    setOpen(false); setItems(null); setPicked(new Set()); setState('idle'); setNote('');
+  }, [post.postKey]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [open]);
+
+  const mediaUrl = (extra = '') =>
+    `${API_BASE}/api/dashboard/posts/media`
+    + `?account=${encodeURIComponent(post.account || IG_HANDLE)}`
+    + `&shortcode=${encodeURIComponent(post.shortcode)}${extra}`;
+
+  const readError = async (response) => {
+    try { return (await response.json())?.detail || `HTTP ${response.status}`; }
+    catch { return `HTTP ${response.status}`; }
+  };
+
+  const openPicker = async () => {
+    setOpen(true);
+    if (items) return;
+    setState('listing'); setNote('');
+    try {
+      const response = await apiFetch(mediaUrl('&list=1'));
+      if (!response.ok) throw new Error(await readError(response));
+      const body = await response.json();
+      setItems(body.items || []);
+      setPicked(new Set((body.items || []).map((i) => i.index)));
+      setState('idle');
+      if (body.source === 'apify') setNote(t('Fetched via Apify'));
+    } catch (error) {
+      setState('error'); setNote(error.message || t('Could not list the media'));
+    }
+  };
+
+  const download = async (indexes) => {
+    setState('working'); setNote('');
+    try {
+      const list = indexes && indexes.length ? indexes : null;
+      const response = await apiFetch(mediaUrl(list ? `&only=${list.join(',')}` : ''));
+      if (!response.ok) throw new Error(await readError(response));
+      const blob = await response.blob();
+      const disposition = response.headers.get('Content-Disposition') || '';
+      const named = /filename="([^"]+)"/.exec(disposition);
+      const href = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = href;
+      link.download = named ? named[1] : `${post.account || IG_HANDLE}-${post.shortcode}.zip`;
+      document.body.appendChild(link); link.click(); link.remove();
+      // Revoking immediately can cancel the download in some browsers.
+      setTimeout(() => URL.revokeObjectURL(href), 30000);
+      setState('idle');
+      setNote(`${t('Downloaded')} ${list ? list.length : (items?.length ?? '')} ${t(((list ? list.length : items?.length) === 1) ? 'file' : 'files')}`);
+    } catch (error) {
+      setState('error'); setNote(error.message || t('Download failed'));
+    }
+  };
+
+  const toggle = (index) => {
+    setPicked((prev) => {
+      const next = new Set(prev);
+      if (next.has(index)) next.delete(index); else next.add(index);
+      return next;
+    });
+  };
+
+  const allPicked = items && picked.size === items.length;
+
+  return (
+    <>
+      <section className="panel slide-download">
+        <button type="button" className="ghost-button" onClick={openPicker}>
+          <Download size={15} />
+          {t('Download media')}
+        </button>
+      </section>
+
+      {open ? createPortal(
+        <div className="media-modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) setOpen(false); }}>
+          <div className="media-modal" role="dialog" aria-modal="true" aria-label={t('Download media')}>
+            <header className="media-modal-head">
+              <p>{t('Download media')}<span>@{post.account || IG_HANDLE} · {post.shortcode}</span></p>
+              <button type="button" className="tool-icon" onClick={() => setOpen(false)} aria-label={t('Close')}>
+                <X size={15} />
+              </button>
+            </header>
+
+            {state === 'listing' ? (
+              <p className="media-modal-empty">{t('Fetching media…')}</p>
+            ) : items && items.length ? (
+              <>
+                <div className="media-grid">
+                  {items.map((item) => (
+                    <button
+                      key={item.index}
+                      type="button"
+                      className={picked.has(item.index) ? 'media-cell is-picked' : 'media-cell'}
+                      onClick={() => toggle(item.index)}
+                      aria-pressed={picked.has(item.index)}
+                    >
+                      {item.poster
+                        ? <img src={item.poster} alt="" loading="lazy" referrerPolicy="no-referrer" />
+                        : <span className="media-cell-blank">{item.kind === 'video' ? '▶' : '—'}</span>}
+                      <span className="media-cell-tag">{item.index}. {item.kind === 'video' ? t('Video') : t('Image')}</span>
+                      {/* One item is a common case -- grabbing just the third
+                          slide -- so it gets its own affordance rather than
+                          making you untick everything else. */}
+                      <span
+                        className="media-cell-solo"
+                        role="button"
+                        tabIndex={0}
+                        title={t('Download just this one')}
+                        onClick={(e) => { e.stopPropagation(); download([item.index]); }}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); download([item.index]); } }}
+                      >
+                        <Download size={12} />
+                      </span>
+                      {/* Reverse-image search to trace a slide back to its
+                          original source (a lot of these covers are reposts).
+                          Lens needs a URL it can fetch itself, so this only
+                          shows up for slides that actually have a poster --
+                          nothing to look up on a blank placeholder. */}
+                      {item.poster ? (
+                        <span
+                          className="media-cell-lens"
+                          role="button"
+                          tabIndex={0}
+                          title={t('Find with Google Lens')}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            window.open(
+                              `https://lens.google.com/uploadbyurl?url=${encodeURIComponent(item.poster)}`,
+                              '_blank',
+                              'noopener,noreferrer',
+                            );
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.stopPropagation();
+                              window.open(
+                                `https://lens.google.com/uploadbyurl?url=${encodeURIComponent(item.poster)}`,
+                                '_blank',
+                                'noopener,noreferrer',
+                              );
+                            }
+                          }}
+                        >
+                          <Eye size={12} />
+                        </span>
+                      ) : null}
+                    </button>
+                  ))}
+                </div>
+
+                <footer className="media-modal-foot">
+                  <button
+                    type="button"
+                    className="text-button"
+                    onClick={() => setPicked(allPicked ? new Set() : new Set(items.map((i) => i.index)))}
+                  >
+                    {allPicked ? t('Deselect all') : t('Select all')}
+                  </button>
+                  <div className="media-modal-actions">
+                    <button
+                      type="button"
+                      className="ghost-button"
+                      disabled={state === 'working' || !picked.size}
+                      onClick={() => download([...picked].sort((a, b) => a - b))}
+                    >
+                      {state === 'working' ? t('Downloading…') : `${t('Download selected')} (${picked.size})`}
+                    </button>
+                    <button
+                      type="button"
+                      className="primary-button"
+                      disabled={state === 'working'}
+                      onClick={() => download(null)}
+                    >
+                      {t('Download all')}
+                    </button>
+                  </div>
+                </footer>
+              </>
+            ) : (
+              <p className="media-modal-empty">{note || t('No media found for this post.')}</p>
+            )}
+
+            {note && items && items.length
+              ? <p className={state === 'error' ? 'slide-download-note is-error' : 'slide-download-note'}>{note}</p>
+              : null}
+          </div>
+        </div>,
+        document.body,
+      ) : null}
+    </>
+  );
+}
+
+// Deep-dive content below the cover art -- caption + song, stats, download
+// button -- for whatever container wants to show it (App.jsx's right rail,
+// queue.jsx's own sidebar). Deliberately does NOT render the cover/SelectedPost
+// or the outer <aside>/close-button chrome: callers render SelectedPost
+// themselves (App.jsx already needs its own not-selected empty state there),
+// this just covers the part that's otherwise identical on both pages.
+export function PostDetailPanel({ post, captionExtra = null }) {
+  const { t } = usePrefs();
+  if (!post) return null;
+  return (
+    <>
+      <section className="panel caption-panel">
+        <div className="panel-header caption-header">
+          <div>
+            <p className="section-label">{t('Caption')}</p>
+          </div>
+          <button className="ghost-button" onClick={() => navigator.clipboard.writeText(post.caption || '')}>
+            <Copy size={15} />
+            {t('Copy')}
+          </button>
+        </div>
+        <p>
+          <strong>{post.account || IG_HANDLE}</strong> {post.caption}
+        </p>
+        {post.musicSong ? (
+          <SongLine url={post.musicUrl}>
+            {post.musicSong}
+            {post.musicArtist ? ` — ${post.musicArtist}` : ''}
+          </SongLine>
+        ) : post.usesOriginalAudio ? (
+          <SongLine url={post.musicUrl}>Original audio</SongLine>
+        ) : null}
+        {captionExtra}
+      </section>
+
+      <section className="panel stats-panel">
+        <Metric label="Likes" value={formatLikes(post.likes)} />
+        <Metric label={t('Comments')} value={compactFormatter.format(post.comments || 0)} />
+        <Metric label={t('Date')} value={formatDate(post.postDate || post.publishedAt)} />
+        <Metric label={t('Media')} value={post.postType || post.type} />
+      </section>
+
+      <SlideDownload post={post} />
+    </>
+  );
+}

@@ -1,4 +1,4 @@
-import { Fragment, createContext, memo, startTransition, useCallback, useContext, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, memo, startTransition, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   ArrowLeft,
@@ -9,8 +9,6 @@ import {
   Check,
   CalendarDays,
   ChevronDown,
-  Copy,
-  Download,
   ExternalLink,
   Filter,
   Flame,
@@ -23,7 +21,6 @@ import {
   MessageCircle,
   MessageSquare,
   MoreHorizontal,
-  Music2,
   Plus,
   Power,
   Eye,
@@ -42,32 +39,21 @@ import {
 } from 'lucide-react';
 import { browserPopupRedirectResolver, getRedirectResult, onAuthStateChanged, signOut } from 'firebase/auth';
 import { describeSignInError, firebaseAuth, startGoogleSignIn } from './firebase';
-import { applyLang, applyTheme, makeT, readLang, readTheme } from './prefs';
+import { clearSsoCookie, startSsoRefresh, trySsoSignIn } from './sso';
+import { PrefsProvider, usePrefs } from './prefsContext';
+import { API_BASE, IG_HANDLE, apiFetch } from './api';
+import {
+  CoverImage,
+  HotBadge,
+  InstagramLink,
+  PostDetailPanel,
+  SelectedPost,
+  hotEffects,
+  hotTier,
+  posterTheme,
+} from './postDetail';
 import chatgptricksProfileImage from './assets/chatgptricks-profile.jpg';
 import traselveloralProfileImage from './assets/traselveloreal-profile.jpg';
-
-// Drop-in replacement for apiFetch() that attaches the signed-in user's Firebase
-// ID token to every call. getIdToken() returns the cached token and only
-// hits the network to refresh it when it's actually close to expiring, so
-// this doesn't add a round-trip to normal usage.
-async function apiFetch(url, options = {}) {
-  const headers = new Headers(options.headers || {});
-  if (firebaseAuth.currentUser) {
-    try {
-      const token = await firebaseAuth.currentUser.getIdToken();
-      headers.set('Authorization', `Bearer ${token}`);
-      // Mirrors tracker.html/insights.html: keeps a live token on window so
-      // ad-hoc admin/debug calls against this API (e.g. from devtools) don't
-      // need their own sign-in flow. Refreshed on every request this app
-      // already makes, so it stays current without extra network calls.
-      window.__firebaseIdToken = token;
-    } catch (error) {
-      // Fall through and let the request go out unauthenticated -- the
-      // backend will bounce it with a 401 and the login gate will catch it.
-    }
-  }
-  return window.fetch(url, { ...options, headers });
-}
 
 // Frontend-only fallback for the ~16 legacy endpoints that still check a
 // shared password server-side. Firebase is now the real security boundary
@@ -260,23 +246,6 @@ function useSectionFavicon(section) {
 // ---------------------------------------------------------------------------
 // Language + theme
 // ---------------------------------------------------------------------------
-const PrefsContext = createContext({ lang: 'en', theme: 'dark', t: (x) => x, setLang: () => {}, setTheme: () => {} });
-const usePrefs = () => useContext(PrefsContext);
-
-function PrefsProvider({ children }) {
-  const [lang, setLangState] = useState(readLang);
-  const [theme, setThemeState] = useState(readTheme);
-
-  useEffect(() => { applyLang(lang); }, [lang]);
-  useEffect(() => { applyTheme(theme); }, [theme]);
-
-  const value = useMemo(() => ({
-    lang, theme, t: makeT(lang), setLang: setLangState, setTheme: setThemeState,
-  }), [lang, theme]);
-
-  return <PrefsContext.Provider value={value}>{children}</PrefsContext.Provider>;
-}
-
 // Two compact toggles. Language is a two-state switch rather than a dropdown
 // because there are exactly two options -- a select would be a click more for
 // the same result.
@@ -310,8 +279,6 @@ function PrefToggles() {
   );
 }
 
-const IG_HANDLE = 'chatgptricks';
-const API_BASE = (import.meta.env.VITE_API_BASE || 'https://cortex-api-db2e.onrender.com').replace(/\/$/, '');
 const PREDICT_URL = 'https://chatgptricks.github.io/cortex/';
 // How long a HOT post keeps showing its badge. Deliberately the SAME window as
 // the HOT tab: a badge that outlived the tab meant a post could look hot in the
@@ -575,20 +542,6 @@ function normalizePost(post) {
       .join(' '),
     timestamp,
   };
-}
-
-function posterTheme(type) {
-  if (typeLabel(type) === 'Video') return 'theme-video';
-  if (typeLabel(type) === 'Image') return 'theme-image';
-  return 'theme-carousel';
-}
-
-function coverSources(post) {
-  if (!post.coverUrl) return [];
-  if (post.coverUrl.startsWith('http')) return [post.coverUrl];
-  // Both accounts serve covers live from the Cortex backend now
-  // (/api/tricks-dash/covers/{id} and /api/traselveloreal/covers/{id}).
-  return [`${API_BASE}${post.coverUrl}`];
 }
 
 function matchesSearch(post, query) {
@@ -1477,10 +1430,6 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
     return data;
   }, [patchPost]);
 
-  const copyCaption = useCallback(async (caption) => {
-    await navigator.clipboard.writeText(caption);
-  }, []);
-
   const closeSidebar = useCallback(() => {
     setIsSidebarOpen(false);
   }, []);
@@ -2044,43 +1993,16 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
           </section>
 
           {selected ? (
-            <>
-              <section className="panel caption-panel">
-                <div className="panel-header caption-header">
-                  <div>
-                    <p className="section-label">{t('Caption')}</p>
-                  </div>
-                  <button className="ghost-button" onClick={() => copyCaption(selected.caption)}>
-                    <Copy size={15} />
-                    {t('Copy')}
-                  </button>
-                </div>
-                <p>
-                  <strong>{selected.account || IG_HANDLE}</strong> {selected.caption}
-                </p>
-                {selected.musicSong ? (
-                  <SongLine url={selected.musicUrl}>
-                    {selected.musicSong}
-                    {selected.musicArtist ? ` — ${selected.musicArtist}` : ''}
-                  </SongLine>
-                ) : selected.usesOriginalAudio ? (
-                  <SongLine url={selected.musicUrl}>Original audio</SongLine>
-                ) : null}
-                {selected.account === 'chatgptricks' ? (
+            <PostDetailPanel
+              post={selected}
+              captionExtra={
+                selected.account === 'chatgptricks' ? (
                   <CanvaLine url={canvaLinkForPost(selected.postDate)} />
-                ) : null}
-              </section>
-
-              <section className="panel stats-panel">
-                <Metric label="Likes" value={formatLikes(selected.likes)} />
-                <Metric label={t('Comments')} value={compactFormatter.format(selected.comments)} />
-                <Metric label={t('Date')} value={formatDate(selected.postDate)} />
-                <Metric label={t('Media')} value={selected.video} />
-              </section>
-
-              <SlideDownload post={selected} />
-            </>
+                ) : null
+              }
+            />
           ) : null}
+
         </aside> : null}
       </main>
 
@@ -2127,22 +2049,6 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
 // audio_id, which resolves to that sound's page on Instagram (every reel that
 // used the exact same clip). Renders as a link when we have that id, plain
 // text otherwise (older rows scraped before audio_id was captured).
-function SongLine({ url, children }) {
-  const content = (
-    <>
-      <Music2 size={14} />
-      <span>{children}</span>
-    </>
-  );
-  return url ? (
-    <a className="song-line" href={url} target="_blank" rel="noreferrer" title="Open this sound on Instagram">
-      {content}
-    </a>
-  ) : (
-    <p className="song-line">{content}</p>
-  );
-}
-
 // chatgptricks-only: the monthly Canva design doc this post's cover most
 // likely came from (see CANVA_DESIGNS / canvaLinkForPost above). No link for
 // months not yet in the list rather than a dead/guessed URL.
@@ -2153,15 +2059,6 @@ function CanvaLine({ url }) {
       <ExternalLink size={14} />
       <span>Open Canva design doc</span>
     </a>
-  );
-}
-
-function Metric({ label, value }) {
-  return (
-    <div className="metric">
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
   );
 }
 
@@ -4608,39 +4505,6 @@ function BackgroundTaskStack({ tasks, onDismiss }) {
   );
 }
 
-const SelectedPost = memo(function SelectedPost({ post }) {
-  const preview = (
-    <CoverImage className={`selected-post-media ${posterTheme(post.type)}`} post={post} priority>
-      {post.isVideo ? (
-        <div className="media-badge">
-          <Video size={13} />
-          Video
-        </div>
-      ) : null}
-      {post.showsHotBadge ? <HotBadge post={post} large /> : null}
-    </CoverImage>
-  );
-
-  const selectedEffects = hotEffects(post);
-
-  return (
-    <article className={`selected-post${selectedEffects.className}`}>
-      {selectedEffects.showBorder ? <span className="hot-border" aria-hidden="true" /> : null}
-      {post.permalink ? (
-        <a
-          className="selected-post-link"
-          href={post.permalink}
-          target="_blank"
-          rel="noreferrer"
-          aria-label={`Open ${post.shortcode} on Instagram`}
-        >
-          {preview}
-        </a>
-      ) : preview}
-    </article>
-  );
-});
-
 // The card menu opens this small assignment composer rather than attempting
 // to turn the menu itself into a form. Assigning a post is the only required
 // action; every bit of task metadata is optional and belongs to each person’s
@@ -5035,366 +4899,6 @@ const PostCard = memo(function PostCard({ post, priority, selected, onSelect, on
   );
 });
 
-// Opens a picker for the post's media, then downloads all of it or just the
-// items that were ticked.
-//
-// The server does the fetching: the Instagram CDN doesn't reliably allow
-// cross-origin reads, so downloading from the browser would work for some
-// posts and silently fail for others. It also means one ZIP instead of n
-// downloads that Chrome would prompt about -- except for a single item, which
-// comes back as itself, since a lone file in a ZIP is a wrapper you then have
-// to undo.
-function SlideDownload({ post }) {
-  const { t } = usePrefs();
-  const [open, setOpen] = useState(false);
-  const [items, setItems] = useState(null);
-  const [picked, setPicked] = useState(() => new Set());
-  const [state, setState] = useState('idle'); // idle | listing | working | error
-  const [note, setNote] = useState('');
-
-  // A new post invalidates everything the modal was showing.
-  useEffect(() => {
-    setOpen(false); setItems(null); setPicked(new Set()); setState('idle'); setNote('');
-  }, [post.postKey]);
-
-  useEffect(() => {
-    if (!open) return undefined;
-    const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [open]);
-
-  const mediaUrl = (extra = '') =>
-    `${API_BASE}/api/dashboard/posts/media`
-    + `?account=${encodeURIComponent(post.account || IG_HANDLE)}`
-    + `&shortcode=${encodeURIComponent(post.shortcode)}${extra}`;
-
-  const readError = async (response) => {
-    try { return (await response.json())?.detail || `HTTP ${response.status}`; }
-    catch { return `HTTP ${response.status}`; }
-  };
-
-  const openPicker = async () => {
-    setOpen(true);
-    if (items) return;
-    setState('listing'); setNote('');
-    try {
-      const response = await apiFetch(mediaUrl('&list=1'));
-      if (!response.ok) throw new Error(await readError(response));
-      const body = await response.json();
-      setItems(body.items || []);
-      setPicked(new Set((body.items || []).map((i) => i.index)));
-      setState('idle');
-      if (body.source === 'apify') setNote(t('Fetched via Apify'));
-    } catch (error) {
-      setState('error'); setNote(error.message || t('Could not list the media'));
-    }
-  };
-
-  const download = async (indexes) => {
-    setState('working'); setNote('');
-    try {
-      const list = indexes && indexes.length ? indexes : null;
-      const response = await apiFetch(mediaUrl(list ? `&only=${list.join(',')}` : ''));
-      if (!response.ok) throw new Error(await readError(response));
-      const blob = await response.blob();
-      const disposition = response.headers.get('Content-Disposition') || '';
-      const named = /filename="([^"]+)"/.exec(disposition);
-      const href = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = href;
-      link.download = named ? named[1] : `${post.account || IG_HANDLE}-${post.shortcode}.zip`;
-      document.body.appendChild(link); link.click(); link.remove();
-      // Revoking immediately can cancel the download in some browsers.
-      setTimeout(() => URL.revokeObjectURL(href), 30000);
-      setState('idle');
-      setNote(`${t('Downloaded')} ${list ? list.length : (items?.length ?? '')} ${t(((list ? list.length : items?.length) === 1) ? 'file' : 'files')}`);
-    } catch (error) {
-      setState('error'); setNote(error.message || t('Download failed'));
-    }
-  };
-
-  const toggle = (index) => {
-    setPicked((prev) => {
-      const next = new Set(prev);
-      if (next.has(index)) next.delete(index); else next.add(index);
-      return next;
-    });
-  };
-
-  const allPicked = items && picked.size === items.length;
-
-  return (
-    <>
-      <section className="panel slide-download">
-        <button type="button" className="ghost-button" onClick={openPicker}>
-          <Download size={15} />
-          {t('Download media')}
-        </button>
-      </section>
-
-      {open ? createPortal(
-        <div className="media-modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) setOpen(false); }}>
-          <div className="media-modal" role="dialog" aria-modal="true" aria-label={t('Download media')}>
-            <header className="media-modal-head">
-              <p>{t('Download media')}<span>@{post.account || IG_HANDLE} · {post.shortcode}</span></p>
-              <button type="button" className="tool-icon" onClick={() => setOpen(false)} aria-label={t('Close')}>
-                <X size={15} />
-              </button>
-            </header>
-
-            {state === 'listing' ? (
-              <p className="media-modal-empty">{t('Fetching media…')}</p>
-            ) : items && items.length ? (
-              <>
-                <div className="media-grid">
-                  {items.map((item) => (
-                    <button
-                      key={item.index}
-                      type="button"
-                      className={picked.has(item.index) ? 'media-cell is-picked' : 'media-cell'}
-                      onClick={() => toggle(item.index)}
-                      aria-pressed={picked.has(item.index)}
-                    >
-                      {item.poster
-                        ? <img src={item.poster} alt="" loading="lazy" referrerPolicy="no-referrer" />
-                        : <span className="media-cell-blank">{item.kind === 'video' ? '▶' : '—'}</span>}
-                      <span className="media-cell-tag">{item.index}. {item.kind === 'video' ? t('Video') : t('Image')}</span>
-                      {/* One item is a common case -- grabbing just the third
-                          slide -- so it gets its own affordance rather than
-                          making you untick everything else. */}
-                      <span
-                        className="media-cell-solo"
-                        role="button"
-                        tabIndex={0}
-                        title={t('Download just this one')}
-                        onClick={(e) => { e.stopPropagation(); download([item.index]); }}
-                        onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); download([item.index]); } }}
-                      >
-                        <Download size={12} />
-                      </span>
-                      {/* Reverse-image search to trace a slide back to its
-                          original source (a lot of these covers are reposts).
-                          Lens needs a URL it can fetch itself, so this only
-                          shows up for slides that actually have a poster --
-                          nothing to look up on a blank placeholder. */}
-                      {item.poster ? (
-                        <span
-                          className="media-cell-lens"
-                          role="button"
-                          tabIndex={0}
-                          title={t('Find with Google Lens')}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            window.open(
-                              `https://lens.google.com/uploadbyurl?url=${encodeURIComponent(item.poster)}`,
-                              '_blank',
-                              'noopener,noreferrer',
-                            );
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.stopPropagation();
-                              window.open(
-                                `https://lens.google.com/uploadbyurl?url=${encodeURIComponent(item.poster)}`,
-                                '_blank',
-                                'noopener,noreferrer',
-                              );
-                            }
-                          }}
-                        >
-                          <Eye size={12} />
-                        </span>
-                      ) : null}
-                    </button>
-                  ))}
-                </div>
-
-                <footer className="media-modal-foot">
-                  <button
-                    type="button"
-                    className="text-button"
-                    onClick={() => setPicked(allPicked ? new Set() : new Set(items.map((i) => i.index)))}
-                  >
-                    {allPicked ? t('Deselect all') : t('Select all')}
-                  </button>
-                  <div className="media-modal-actions">
-                    <button
-                      type="button"
-                      className="ghost-button"
-                      disabled={state === 'working' || !picked.size}
-                      onClick={() => download([...picked].sort((a, b) => a - b))}
-                    >
-                      {state === 'working' ? t('Downloading…') : `${t('Download selected')} (${picked.size})`}
-                    </button>
-                    <button
-                      type="button"
-                      className="primary-button"
-                      disabled={state === 'working'}
-                      onClick={() => download(null)}
-                    >
-                      {t('Download all')}
-                    </button>
-                  </div>
-                </footer>
-              </>
-            ) : (
-              <p className="media-modal-empty">{note || t('No media found for this post.')}</p>
-            )}
-
-            {note && items && items.length
-              ? <p className={state === 'error' ? 'slide-download-note is-error' : 'slide-download-note'}>{note}</p>
-              : null}
-          </div>
-        </div>,
-        document.body,
-      ) : null}
-    </>
-  );
-}
-
-function InstagramLink({ post, onClick, compact = false }) {
-  if (!post.permalink) return null;
-
-  return (
-    <a
-      className={compact ? 'instagram-link compact' : 'instagram-link'}
-      href={post.permalink}
-      target="_blank"
-      rel="noreferrer"
-      onClick={onClick}
-    >
-      <ExternalLink size={compact ? 12 : 14} />
-      Instagram
-    </a>
-  );
-}
-
-// Five escalating tiers matching the account thresholds worth calling out:
-// 1x (just qualifies), 2x, 3x, 5x, 8x. Every step up is visibly bigger,
-// brighter, and busier than the last.
-function hotTier(multiplier) {
-  const value = Number.isFinite(multiplier) ? multiplier : 1;
-  if (value >= 8) return 5;
-  if (value >= 5) return 4;
-  if (value >= 3) return 3;
-  if (value >= 2) return 2;
-  return 1;
-}
-
-// Card-level effects (beyond the badge itself), scaled to how far over the
-// per-hour threshold the post's first hour landed. Only ever applied while
-// the post is still pinned (i.e. still inside its active HOT window).
-// Tier 1 (1x) is badge-only; tiers 2-5 (2x/3x/5x/8x) each step up the
-// animated glowing border's color, speed, and halo strength.
-function hotEffects(post) {
-  if (!post.showsHotBadge) return { className: '', showBorder: false };
-  const tier = hotTier(post.hotMultiplier);
-  const tierClass = tier >= 2 ? `post-card-tier-${tier}` : '';
-  return {
-    className: tierClass ? ` ${tierClass}` : '',
-    showBorder: tier >= 2,
-  };
-}
-
-const HotBadge = memo(function HotBadge({ post, large = false }) {
-  const tier = hotTier(post.hotMultiplier);
-  const hasRate = Number.isFinite(post.hotMultiplier);
-  const age = formatElapsed(post.timestamp);
-  const label = [
-    hasRate ? `${post.hotMultiplier.toFixed(1)}x the rate threshold` : 'Went viral in its first hour',
-    age ? `posted ${age} ago` : null,
-  ]
-    .filter(Boolean)
-    .join(' · ');
-
-  // Cap rendered flame icons at 3 so tier 4/5 badges don't get comically
-  // wide -- the rest of the escalation (size, color, pulse speed) still
-  // comes through via the hot-tier-N class.
-  const flameCount = Math.min(tier, 3);
-
-  return (
-    <div className={`hot-badge hot-tier-${tier}${large ? ' hot-badge-large' : ''}`} title={label}>
-      {Array.from({ length: flameCount }).map((_, index) => (
-        <Flame key={index} size={large ? 14 : 12} />
-      ))}
-      <span>HOT</span>
-      {hasRate ? <b className="hot-badge-rate">{post.hotMultiplier.toFixed(1)}x</b> : null}
-      {age ? <b className="hot-badge-age">{age}</b> : null}
-    </div>
-  );
-});
-
-// Sits directly left of the post-menu button. A conic-gradient pie rather
-// than an SVG/icon set: the filled wedge is just one angle, so a continuous
-// fraction draws as easily as a stepped one -- no extra markup either way.
-const FreshnessRing = memo(function FreshnessRing({ timestamp }) {
-  const fraction = freshnessFraction(timestamp);
-  // Without this the ring only visibly moves when something else causes the
-  // card to re-render (the 3-minute poll, a filter change) -- ticking on its
-  // own timer is what makes a continuous fraction actually read as a live
-  // clock rather than a value that happens to be more precise. Scoped to
-  // just this instance and only while there's still a ring to drain, so it
-  // costs nothing for the vast majority of posts that are already stale.
-  const [, forceTick] = useState(0);
-  useEffect(() => {
-    if (fraction <= 0) return undefined;
-    const timer = setInterval(() => forceTick((n) => n + 1), 30000);
-    return () => clearInterval(timer);
-  }, [fraction > 0]);
-  if (fraction <= 0) return null;
-  const filledDeg = fraction * 360;
-  const hoursLeft = FRESHNESS_WINDOW_HOURS - (Date.now() - timestamp) / 3600000;
-  const leftLabel = hoursLeft >= 1 ? `${hoursLeft.toFixed(1)}h` : `${Math.max(1, Math.round(hoursLeft * 60))}m`;
-  return (
-    <span
-      className="freshness-ring"
-      style={{
-        background: `conic-gradient(var(--accent) 0deg ${filledDeg}deg, rgba(255,255,255,.16) ${filledDeg}deg 360deg)`,
-      }}
-      role="img"
-      aria-label={`New post, fading over its first ${FRESHNESS_WINDOW_HOURS} hours -- about ${leftLabel} left`}
-      title={`New post · fades out over its first ${FRESHNESS_WINDOW_HOURS}h (~${leftLabel} left)`}
-    />
-  );
-});
-
-const CoverImage = memo(function CoverImage({ className, post, priority = false, children }) {
-  const sources = useMemo(() => coverSources(post), [post]);
-  const [sourceIndex, setSourceIndex] = useState(0);
-
-  useEffect(() => {
-    setSourceIndex(0);
-  }, [post.shortcode, sources.length]);
-
-  const activeSource = sources[sourceIndex];
-
-  return (
-    <div className={className}>
-      {activeSource ? (
-        <img
-          className="cover-image"
-          src={activeSource}
-          alt={post.shortcode}
-          loading={priority ? 'eager' : 'lazy'}
-          decoding="async"
-          fetchPriority={priority ? 'high' : 'auto'}
-          referrerPolicy="no-referrer"
-          onError={() => {
-            setSourceIndex((current) => Math.min(current + 1, sources.length));
-          }}
-        />
-      ) : (
-        <div className="cover-fallback">
-          <div>{post.postType}</div>
-          <strong>{post.shortcode}</strong>
-        </div>
-      )}
-      {children}
-    </div>
-  );
-});
-
 function LoginScreen({ notice }) {
   const [signingIn, setSigningIn] = useState(false);
   const [error, setError] = useState('');
@@ -5443,6 +4947,10 @@ function App() {
   const [authUser, setAuthUser] = useState(undefined); // undefined = loading, null = signed out
   const [unauthorized, setUnauthorized] = useState(false);
   const [authNotice, setAuthNotice] = useState('');
+  // Whether we've finished trying the cross-subdomain SSO cookie -- gates the
+  // login screen so a returning visitor never sees a flash of "sign in" while
+  // the silent signInWithCustomToken() exchange is still in flight.
+  const [ssoChecked, setSsoChecked] = useState(false);
 
   // Picks the user back up after the mobile redirect fallback sends them
   // through Google and back. Resolves to null on a normal (non-redirect) load.
@@ -5450,6 +4958,13 @@ function App() {
     getRedirectResult(firebaseAuth, browserPopupRedirectResolver).catch((err) => {
       setAuthNotice(describeSignInError(err));
     });
+  }, []);
+
+  // Same-session-everywhere: if this origin has no local Firebase session but
+  // the shared .sentientdash.app cookie has one, silently adopt it instead of
+  // making the user sign in again on every subdomain/page.
+  useEffect(() => {
+    trySsoSignIn().finally(() => setSsoChecked(true));
   }, []);
 
   useEffect(() => {
@@ -5465,7 +4980,14 @@ function App() {
     return unsubscribe;
   }, []);
 
+  // Keeps the shared SSO cookie fresh for as long as this tab stays signed in.
+  useEffect(() => {
+    if (!authUser) return undefined;
+    return startSsoRefresh();
+  }, [authUser]);
+
   const handleSignOut = useCallback(() => {
+    clearSsoCookie();
     signOut(firebaseAuth);
   }, []);
 
@@ -5473,7 +4995,7 @@ function App() {
     setUnauthorized(true);
   }, []);
 
-  if (authUser === undefined) {
+  if (authUser === undefined || (!authUser && !ssoChecked)) {
     return <div className="auth-screen" />;
   }
   if (!authUser) {
