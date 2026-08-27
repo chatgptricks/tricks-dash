@@ -116,7 +116,6 @@ const ES = {
   'Caption': 'Texto',
   'Copy': 'Copiar',
   'Copied': 'Copiado',
-  'Copy code': 'Copiar código',
   'Likes': 'Likes',
   'Comments': 'Comentarios',
   'Media': 'Medio',

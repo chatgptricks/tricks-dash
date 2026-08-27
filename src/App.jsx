@@ -18,6 +18,7 @@ import {
   Heart,
   ImagePlus,
   Link2,
+  ListTodo,
   LogOut,
   MessageCircle,
   MessageSquare,
@@ -39,85 +40,11 @@ import {
   X,
   Video,
 } from 'lucide-react';
-import { initializeApp } from 'firebase/app';
-import {
-  GoogleAuthProvider,
-  browserPopupRedirectResolver,
-  getAuth,
-  getRedirectResult,
-  onAuthStateChanged,
-  signInWithPopup,
-  signInWithRedirect,
-  signOut,
-} from 'firebase/auth';
+import { browserPopupRedirectResolver, getRedirectResult, onAuthStateChanged, signOut } from 'firebase/auth';
+import { describeSignInError, firebaseAuth, startGoogleSignIn } from './firebase';
 import { applyLang, applyTheme, makeT, readLang, readTheme } from './prefs';
 import chatgptricksProfileImage from './assets/chatgptricks-profile.jpg';
 import traselveloralProfileImage from './assets/traselveloreal-profile.jpg';
-
-// ---------------------------------------------------------------------------
-// Auth (Firebase Google Sign-In)
-//
-// Sentient Dash used to be public-read, gated only by a shared admin password
-// for writes. It's now fully private: every visitor has to sign in with a
-// Google account on the backend's allowlist before seeing anything. Firebase
-// only handles "is this a real Google account" -- the actual allow/deny
-// decision happens server-side (ALLOWED_EMAILS), so the frontend never needs
-// to know the list itself.
-// ---------------------------------------------------------------------------
-const firebaseConfig = {
-  apiKey: 'AIzaSyDrtLGrnRJ3cj64sJ6Ykn-yRGtemybzoN0',
-  authDomain: 'sentient-dash.firebaseapp.com',
-  projectId: 'sentient-dash',
-  storageBucket: 'sentient-dash.firebasestorage.app',
-  messagingSenderId: '74046012975',
-  appId: '1:74046012975:web:02013849972baca1f950da',
-};
-const firebaseApp = initializeApp(firebaseConfig);
-const firebaseAuth = getAuth(firebaseApp);
-const googleProvider = new GoogleAuthProvider();
-googleProvider.setCustomParameters({ prompt: 'select_account' });
-
-// Sign-in that survives mobile browsers.
-//
-// Popup is still the happy path: it keeps the user on our origin, so Firebase's
-// session state stays first-party. But mobile browsers block popups far more
-// aggressively than desktop (and some in-app webviews have no window.open at
-// all), so when the popup can't open we fall back to a full-page redirect.
-// getRedirectResult() below picks the user back up when they come back.
-const POPUP_FALLBACK_CODES = new Set([
-  'auth/popup-blocked',
-  'auth/operation-not-supported-in-this-environment',
-  'auth/web-storage-unsupported',
-  'auth/internal-error',
-]);
-
-async function startGoogleSignIn() {
-  try {
-    await signInWithPopup(firebaseAuth, googleProvider, browserPopupRedirectResolver);
-    return null;
-  } catch (err) {
-    const code = err?.code || '';
-    if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
-      return null; // user backed out on purpose
-    }
-    if (POPUP_FALLBACK_CODES.has(code)) {
-      await signInWithRedirect(firebaseAuth, googleProvider, browserPopupRedirectResolver);
-      return null; // page is navigating away
-    }
-    return err;
-  }
-}
-
-function describeSignInError(err) {
-  const code = err?.code || '';
-  if (code === 'auth/unauthorized-domain') {
-    return `This domain (${typeof window !== 'undefined' ? window.location.hostname : ''}) isn't authorized in Firebase yet.`;
-  }
-  if (code === 'auth/network-request-failed') {
-    return 'Network error reaching Google. Check your connection and try again.';
-  }
-  return code ? `Sign-in failed (${code}). Try again.` : 'Sign-in failed. Try again.';
-}
 
 // Drop-in replacement for apiFetch() that attaches the signed-in user's Firebase
 // ID token to every call. getIdToken() returns the cached token and only
@@ -770,10 +697,29 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
   // Settings. This is purely a UI convenience -- the backend rejects
   // /api/admin/* for non-admins regardless of what this flag says.
   const [isAdmin, setIsAdmin] = useState(false);
+  const [queuePendingCount, setQueuePendingCount] = useState(0);
+  const [assignmentPost, setAssignmentPost] = useState(null);
   const posts = useMemo(() => dashboard.posts.map(normalizePost), [dashboard.posts]);
   const summary = dashboard.summary;
   const ranges = useMemo(() => calculateRanges(posts), [posts]);
   const datePresets = useMemo(() => buildDatePresets(ranges), [ranges]);
+
+  const refreshQueueSummary = useCallback(async () => {
+    try {
+      const response = await apiFetch(`${API_BASE}/api/dashboard/queue/summary`);
+      if (!response.ok) return;
+      const summary = await response.json();
+      setQueuePendingCount(Number(summary.pending) || 0);
+    } catch {
+      // Queue is an extra workspace tool. A temporary failure must never
+      // block the post library, and a retry happens on the next dashboard
+      // refresh or when an assignment is saved.
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshQueueSummary();
+  }, [refreshQueueSummary, userEmail]);
 
   const loadDashboard = useCallback(async (signal, { silent = false } = {}) => {
     try {
@@ -1634,6 +1580,18 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
                   <ExternalLink size={12} className="tool-link-out" aria-hidden="true" />
                 </a>
                 <a
+                  className="tool-link tool-link-queue"
+                  href={`${import.meta.env.BASE_URL}queue.html`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="Open your assigned post queue"
+                >
+                  <ListTodo size={15} />
+                  <span>Queue</span>
+                  {queuePendingCount ? <b className="queue-pending-badge">{queuePendingCount > 99 ? '99+' : queuePendingCount}</b> : null}
+                  <ExternalLink size={12} className="tool-link-out" aria-hidden="true" />
+                </a>
+                <a
                   className="tool-link"
                   href={`${import.meta.env.BASE_URL}insights.html`}
                   target="_blank"
@@ -2003,6 +1961,7 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
                     onSelect={selectPost}
                     onFlags={setPostFlags}
                     onReload={reloadPost}
+                    onAssign={setAssignmentPost}
                   />
                 ))}
               </div>
@@ -2142,6 +2101,19 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
             setShowAddAccount(false);
             loadDashboard(undefined, { silent: true });
             startBackgroundBackfill(account, password);
+          }}
+        />
+      ) : null}
+
+      {assignmentPost ? (
+        <AssignPostModal
+          post={assignmentPost}
+          userEmail={userEmail}
+          isAdmin={isAdmin}
+          onClose={() => setAssignmentPost(null)}
+          onAssigned={() => {
+            refreshQueueSummary();
+            setAssignmentPost(null);
           }}
         />
       ) : null}
@@ -4669,11 +4641,189 @@ const SelectedPost = memo(function SelectedPost({ post }) {
   );
 });
 
+// The card menu opens this small assignment composer rather than attempting
+// to turn the menu itself into a form. Assigning a post is the only required
+// action; every bit of task metadata is optional and belongs to each person’s
+// independent Queue task on the backend.
+function AssignPostModal({ post, userEmail, isAdmin, onClose, onAssigned }) {
+  const [users, setUsers] = useState([]);
+  const [selected, setSelected] = useState(() => new Set(isAdmin ? [] : [userEmail]));
+  const [status, setStatus] = useState('queue');
+  const [note, setNote] = useState('');
+  const [priority, setPriority] = useState('');
+  const [dueDate, setDueDate] = useState('');
+  const [tags, setTags] = useState(() => new Set());
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const response = await apiFetch(`${API_BASE}/api/dashboard/queue/users`);
+        if (!response.ok) throw new Error('Could not load the team roster.');
+        const data = await response.json();
+        if (!cancelled) setUsers(Array.isArray(data.users) ? data.users : []);
+      } catch (reason) {
+        if (!cancelled) setError(reason.message || 'Could not load the team roster.');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    const onKey = (event) => {
+      if (event.key === 'Escape' && !saving) onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose, saving]);
+
+  const toggleUser = (email) => {
+    if (!isAdmin && email !== userEmail) return;
+    setSelected((current) => {
+      const next = new Set(current);
+      if (next.has(email)) next.delete(email);
+      else next.add(email);
+      return next;
+    });
+  };
+
+  const toggleTag = (tag) => {
+    setTags((current) => {
+      const next = new Set(current);
+      if (next.has(tag)) next.delete(tag);
+      else next.add(tag);
+      return next;
+    });
+  };
+
+  const submit = async (event) => {
+    event.preventDefault();
+    if (!selected.size) {
+      setError('Choose at least one person to create a Queue task.');
+      return;
+    }
+    setSaving(true);
+    setError('');
+    try {
+      const body = new FormData();
+      body.append('account', post.account);
+      body.append('shortcode', post.shortcode);
+      body.append('assignees', [...selected].join(','));
+      body.append('status', status);
+      body.append('note', note);
+      body.append('priority', priority);
+      body.append('due_date', dueDate);
+      body.append('tags', [...tags].join(','));
+      const response = await apiFetch(`${API_BASE}/api/dashboard/queue/assign`, { method: 'POST', body });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || 'Could not save this Queue assignment.');
+      onAssigned();
+    } catch (reason) {
+      setError(reason.message || 'Could not save this Queue assignment.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const tagOptions = ['content', 'design', 'copy', 'research', 'review', 'repurpose'];
+  const cover = post.coverUrl ? (post.coverUrl.startsWith('http') ? post.coverUrl : `${API_BASE}${post.coverUrl}`) : '';
+
+  return (
+    <div className="queue-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) onClose(); }}>
+      <form className="queue-assign-modal" onSubmit={submit} aria-labelledby="queue-assign-title">
+        <div className="queue-assign-head">
+          <div>
+            <p className="section-label">Queue</p>
+            <h2 id="queue-assign-title">Assign post</h2>
+          </div>
+          <button type="button" className="icon-button" aria-label="Close assignment dialog" onClick={onClose} disabled={saving}>
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="queue-assign-post">
+          {cover ? <img src={cover} alt="" /> : <div className="queue-assign-cover-fallback">@</div>}
+          <div>
+            <strong>@{post.account}</strong>
+            <p>{post.headline || post.excerpt || post.caption || 'Instagram post'}</p>
+          </div>
+        </div>
+
+        <fieldset className="queue-assign-fieldset">
+          <legend>Assign to</legend>
+          <div className="queue-user-picker">
+            {users.map((user) => (
+              <label className={selected.has(user.email) ? 'queue-user-option is-selected' : 'queue-user-option'} key={user.email}>
+                <input type="checkbox" checked={selected.has(user.email)} onChange={() => toggleUser(user.email)} />
+                <span className="queue-user-initial">{user.email.charAt(0).toUpperCase()}</span>
+                <span>{user.email}</span>
+                {user.role === 'admin' ? <em>Admin</em> : null}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+
+        <div className="queue-assign-grid">
+          <label>
+            <span>Status</span>
+            <select value={status} onChange={(event) => setStatus(event.target.value)}>
+              <option value="queue">Queue</option>
+              <option value="in_progress">In progress</option>
+              <option value="posted">Posted</option>
+            </select>
+          </label>
+          <label>
+            <span>Priority</span>
+            <select value={priority} onChange={(event) => setPriority(event.target.value)}>
+              <option value="">No priority</option>
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+              <option value="urgent">Urgent</option>
+            </select>
+          </label>
+          <label>
+            <span>Due date</span>
+            <input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} />
+          </label>
+        </div>
+
+        <label className="queue-assign-note">
+          <span>Brief or note <i>optional</i></span>
+          <textarea value={note} onChange={(event) => setNote(event.target.value)} placeholder="What should this person do with this post?" rows={3} />
+        </label>
+
+        <fieldset className="queue-assign-fieldset queue-tag-fieldset">
+          <legend>Tags <i>optional</i></legend>
+          <div className="queue-tag-picker">
+            {tagOptions.map((tag) => (
+              <button type="button" key={tag} className={tags.has(tag) ? 'queue-tag-option is-selected' : 'queue-tag-option'} onClick={() => toggleTag(tag)}>
+                {tag}
+              </button>
+            ))}
+          </div>
+        </fieldset>
+
+        {error ? <p className="queue-assign-error" role="alert">{error}</p> : null}
+        <div className="queue-assign-actions">
+          <button type="button" className="ghost-button" onClick={onClose} disabled={saving}>Cancel</button>
+          <button type="submit" className="primary-button" disabled={saving || !users.length}>
+            <ListTodo size={15} />
+            {saving ? 'Saving…' : `Add to Queue${selected.size > 1 ? ` (${selected.size})` : ''}`}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 // The card's ... menu. Positioned absolutely inside the card header rather
 // than portaled: the header isn't inside an overflow-hidden container, so a
 // plain absolute panel is enough and avoids the fixed-position bookkeeping
 // the account dropdown needs.
-function PostMenu({ post, isPromo, onFlags, onReload }) {
+function PostMenu({ post, isPromo, onFlags, onReload, onAssign }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState('');
   const [note, setNote] = useState('');
@@ -4740,6 +4890,18 @@ function PostMenu({ post, isPromo, onFlags, onReload }) {
           <button
             type="button"
             role="menuitem"
+            onClick={(event) => {
+              event.stopPropagation();
+              setOpen(false);
+              onAssign(post);
+            }}
+          >
+            <ListTodo size={13} />
+            Assign to Queue
+          </button>
+          <button
+            type="button"
+            role="menuitem"
             onClick={(event) => run(event, 'promo', () => onFlags(post, { is_promo: !post.isPromo }))}
             disabled={Boolean(busy)}
           >
@@ -4776,7 +4938,7 @@ function PostMenu({ post, isPromo, onFlags, onReload }) {
   );
 }
 
-const PostCard = memo(function PostCard({ post, priority, selected, onSelect, onFlags, onReload }) {
+const PostCard = memo(function PostCard({ post, priority, selected, onSelect, onFlags, onReload, onAssign }) {
   const [avatarFailed, setAvatarFailed] = useState(false);
   const handleClick = () => onSelect(post.postKey);
   const handleKeyDown = (event) => {
@@ -4822,7 +4984,7 @@ const PostCard = memo(function PostCard({ post, priority, selected, onSelect, on
         </div>
         <div className="post-header-actions">
           <FreshnessRing timestamp={post.timestamp} />
-          <PostMenu post={post} isPromo={isPromo} onFlags={onFlags} onReload={onReload} />
+          <PostMenu post={post} isPromo={isPromo} onFlags={onFlags} onReload={onReload} onAssign={onAssign} />
         </div>
       </div>
 
