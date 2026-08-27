@@ -4708,6 +4708,32 @@ body {
   gap: 12px;
 }
 
+.custom-alert-form {
+  display: grid;
+  gap: 8px;
+}
+
+.custom-alert-title,
+.custom-alert-message {
+  padding: 8px 12px;
+  border: 1px solid rgba(var(--edge), 0.12);
+  border-radius: 8px;
+  background: rgba(var(--edge), 0.04);
+  color: var(--text-strong);
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.custom-alert-title {
+  height: 34px;
+}
+
+.custom-alert-message {
+  resize: vertical;
+  min-height: 64px;
+  line-height: 1.4;
+}
+
 .settings-refresh {
   display: inline-flex;
   align-items: center;
