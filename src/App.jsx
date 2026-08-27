@@ -1485,10 +1485,6 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
     [posts],
   );
 
-  const copyShortcode = useCallback(async (shortcode) => {
-    await navigator.clipboard.writeText(shortcode);
-  }, []);
-
   // Patch one post in place. The dashboard payload is tens of thousands of
   // posts, so re-fetching the whole thing to reflect a single flag would be
   // both slow and visually jarring (scroll position, image reloads).
@@ -2005,7 +2001,6 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
                     priority={index < 6}
                     selected={selected?.postKey === post.postKey}
                     onSelect={selectPost}
-                    onCopy={copyShortcode}
                     onFlags={setPostFlags}
                     onReload={reloadPost}
                   />
@@ -4781,7 +4776,7 @@ function PostMenu({ post, isPromo, onFlags, onReload }) {
   );
 }
 
-const PostCard = memo(function PostCard({ post, priority, selected, onSelect, onCopy, onFlags, onReload }) {
+const PostCard = memo(function PostCard({ post, priority, selected, onSelect, onFlags, onReload }) {
   const [avatarFailed, setAvatarFailed] = useState(false);
   const handleClick = () => onSelect(post.postKey);
   const handleKeyDown = (event) => {
@@ -4793,11 +4788,6 @@ const PostCard = memo(function PostCard({ post, priority, selected, onSelect, on
   const stopAction = (event) => {
     event.stopPropagation();
   };
-  const copyPost = (event) => {
-    event.stopPropagation();
-    onCopy(post.shortcode);
-  };
-
   const effects = hotEffects(post);
   const cardClassName = `post-card${selected ? ' selected' : ''}${effects.className}${post.hidden ? ' post-card-hidden' : ''}`;
   // Promo is either detected from the caption hashtag or set explicitly on
@@ -4877,9 +4867,6 @@ const PostCard = memo(function PostCard({ post, priority, selected, onSelect, on
           <span>{compactFormatter.format(post.comments)} comments</span>
           <span>{formatDate(post.postDate)}</span>
           <InstagramLink post={post} onClick={stopAction} compact />
-          <button className="text-button" onClick={copyPost}>
-            Copy code
-          </button>
         </div>
       </div>
     </article>
