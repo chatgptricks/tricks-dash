@@ -87,6 +87,10 @@ a{color:inherit}
 .side-star:hover{color:rgba(var(--accent-rgb),.6)}
 .side-star.on{color:var(--accent-text)}
 
+.side-item[draggable="true"]{cursor:grab}
+.side-item.dragging{opacity:.35}
+.side-item.drag-over{border-color:rgba(var(--accent-rgb),.5);background:rgba(var(--accent-rgb),.08)}
+
 .side-avatar{flex:none;width:22px;height:22px;border-radius:50%;object-fit:cover;background:rgba(var(--edge),.06)}
 .side-name{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.2}
 .side-name strong{font-size:11px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -337,40 +341,58 @@ async function loadSummary(){
    just isn't pinned). Everything that must survive a device change --
    which accounts exist, their history -- is already server-side. */
 const FAV_KEY = 'sentient.tracker.favs';
+// Stored as an ordered array (not just a Set) specifically so the
+// Favourites list can be drag-reordered -- array order IS display order.
 function readFavs(){
-  try{ const v = JSON.parse(localStorage.getItem(FAV_KEY)||'[]'); return new Set(Array.isArray(v)?v:[]); }
-  catch{ return new Set(); }
+  try{ const v = JSON.parse(localStorage.getItem(FAV_KEY)||'[]'); return Array.isArray(v)?v:[]; }
+  catch{ return []; }
 }
-function writeFavs(set){
-  try{ localStorage.setItem(FAV_KEY, JSON.stringify([...set])); }catch{}
+function writeFavs(list){
+  try{ localStorage.setItem(FAV_KEY, JSON.stringify(list)); }catch{}
 }
 function toggleFav(handle){
   const favs = readFavs();
-  favs.has(handle) ? favs.delete(handle) : favs.add(handle);
+  const i = favs.indexOf(handle);
+  if(i>=0) favs.splice(i,1); else favs.push(handle);
+  writeFavs(favs);
+  renderSidebar();
+}
+function reorderFavs(dragHandle, targetHandle){
+  const favs = readFavs();
+  const from = favs.indexOf(dragHandle);
+  const to = favs.indexOf(targetHandle);
+  if(from<0 || to<0 || from===to) return;
+  favs.splice(from,1);
+  favs.splice(to,0,dragHandle);
   writeFavs(favs);
   renderSidebar();
 }
 
 function renderSidebar(){
   if(!SUMMARY || !SUMMARY.accounts) return;
-  const favs = readFavs();
+  const favsList = readFavs();
+  const favs = new Set(favsList);
   const current = readAcc();
   const q = (window.__sidebarQuery||'').trim().toLowerCase();
   const match = r => !q || r.handle.toLowerCase().includes(q) || (r.full_name||'').toLowerCase().includes(q);
 
   // Grouped by category, favourites hoisted into their own group at the top
   // so the accounts you actually watch are always the first thing in reach.
+  // Favourites keep the person's own drag-and-drop order; the other two
+  // groups stay in the dashboard's default (follower-count) order.
   const all = SUMMARY.accounts.filter(match);
+  const byHandle = new Map(all.map(r => [r.handle, r]));
+  const favRows = favsList.map(h => byHandle.get(h)).filter(Boolean);
   const groups = [
-    ['Favourites', all.filter(r=>favs.has(r.handle))],
+    ['Favourites', favRows],
     ['Ours',       all.filter(r=>!favs.has(r.handle) && r.group==='sentient')],
     ['Competitors',all.filter(r=>!favs.has(r.handle) && r.group!=='sentient')],
   ];
 
-  const item = r => {
+  const item = (r, draggable) => {
     const d = r.delta_1d ? r.delta_1d.delta : null;
     const cls = d==null ? 'flat' : d>0 ? 'up' : d<0 ? 'down' : 'flat';
-    return `<li class="side-item ${current===r.handle?'active':''}" data-handle="${r.handle}">
+    return `<li class="side-item ${current===r.handle?'active':''}" data-handle="${r.handle}" ${draggable?'draggable="true"':''}>
       <button class="side-star ${favs.has(r.handle)?'on':''}" data-fav="${r.handle}"
               title="${favs.has(r.handle)?'Remove from favourites':'Add to favourites'}" aria-label="Toggle favourite">★</button>
       <img class="side-avatar" src="${API}/api/dashboard/avatar/${encodeURIComponent(r.handle)}"
@@ -391,7 +413,7 @@ function renderSidebar(){
     ${groups.map(([label, rows]) => !rows.length ? '' : `
       <div class="side-group">
         <h3>${label} <span>${rows.length}</span></h3>
-        <ul>${rows.map(item).join('')}</ul>
+        <ul ${label==='Favourites'?'id="favList"':''}>${rows.map(r=>item(r, label==='Favourites')).join('')}</ul>
       </div>`).join('')}
   `;
 
@@ -403,6 +425,39 @@ function renderSidebar(){
   $('#sidebar').querySelectorAll('.side-item').forEach(li => li.onclick = () => {
     writeAcc(li.dataset.handle); render();
   });
+
+  // Drag-and-drop reordering, scoped to the Favourites list only -- Ours and
+  // Competitors stay in their normal order since nothing about them is
+  // personal to one viewer the way a shortlist is.
+  const favList = $('#favList');
+  if(favList){
+    let dragHandle = null;
+    favList.querySelectorAll('.side-item').forEach(li => {
+      li.addEventListener('dragstart', e => {
+        dragHandle = li.dataset.handle;
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', dragHandle);
+        li.classList.add('dragging');
+      });
+      li.addEventListener('dragend', () => {
+        li.classList.remove('dragging');
+        favList.querySelectorAll('.side-item').forEach(el => el.classList.remove('drag-over'));
+      });
+      li.addEventListener('dragover', e => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        if(li.dataset.handle !== dragHandle) li.classList.add('drag-over');
+      });
+      li.addEventListener('dragleave', () => li.classList.remove('drag-over'));
+      li.addEventListener('drop', e => {
+        e.preventDefault();
+        e.stopPropagation();
+        li.classList.remove('drag-over');
+        if(dragHandle) reorderFavs(dragHandle, li.dataset.handle);
+      });
+    });
+  }
+
   const search = $('#sideSearch');
   search.oninput = () => {
     window.__sidebarQuery = search.value;
