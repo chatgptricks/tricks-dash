@@ -106,6 +106,11 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
 .queue-thumb .queue-priority { position:absolute; top:4px; right:4px; padding:2px 5px; border-radius:4px; background:rgba(0,0,0,.55); }
 .queue-thumb-edit { position:absolute; bottom:4px; right:4px; display:grid; place-items:center; width:22px; height:22px; padding:0; border:0; border-radius:6px; background:rgba(0,0,0,.55); color:#fff; opacity:0; transition:opacity 120ms ease; }
 .queue-thumb:hover .queue-thumb-edit, .queue-thumb:focus-within .queue-thumb-edit { opacity:1; }
+/* Team overview's owner tag: a bar the full width of the card rather than a
+   round avatar chip, so it reads as "whose card is this" at a glance across
+   a grid of teammates' work instead of needing a hover to find out. */
+.queue-thumb-owner { position:absolute; left:0; right:0; bottom:0; padding:4px 22px 4px 6px; overflow:hidden; background:rgba(0,0,0,.62); color:#fff; font-size:10px; font-weight:700; letter-spacing:.02em; text-overflow:ellipsis; white-space:nowrap; }
+.queue-thumb.has-owner .queue-thumb-edit { bottom:22px; }
 
 /* ---------------------------------------------------------------------
  * Deep-dive sidebar -- byte-identical to the main dashboard's right rail
