@@ -93,24 +93,31 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
 /* ---------------------------------------------------------------------
  * Thumbnail-only task cards (each column is a 3-wide grid of these).
  * ------------------------------------------------------------------- */
-.queue-thumb { position:relative; padding:0; overflow:hidden; aspect-ratio:1/1; border:2px solid rgba(var(--edge,255,255,255),.12); border-radius:9px; background:var(--q-panel-2); cursor:grab; }
+.queue-thumb { position:relative; display:flex; flex-direction:column; padding:0; overflow:hidden; border:2px solid rgba(var(--edge,255,255,255),.12); border-radius:9px; background:var(--q-panel-2); cursor:grab; }
 .queue-thumb.priority-low { border-color:rgba(74,168,255,.55); }
 .queue-thumb.priority-medium { border-color:rgba(255,189,89,.55); }
 .queue-thumb.priority-high { border-color:rgba(255,138,76,.55); }
 .queue-thumb.priority-urgent { border-color:rgba(255,107,107,.55); }
 .queue-thumb:hover { border-color:rgba(var(--accent-rgb,245,255,0),.45); }
+/* The image's own box -- aspect-ratio lives here, not on .queue-thumb, so
+   the owner bar below (in normal flow, not an overlay) adds height on top
+   of a full, uncropped square image instead of eating into it. */
+.queue-thumb-media { position:relative; flex:0 0 auto; aspect-ratio:1/1; }
 .queue-thumb-open { display:block; width:100%; height:100%; padding:0; border:0; background:none; cursor:pointer; }
 .queue-thumb-open img { width:100%; height:100%; object-fit:cover; display:block; }
 .queue-thumb .queue-cover-empty { width:100%; height:100%; border-radius:0; }
 .queue-thumb .queue-drag { position:absolute; top:4px; left:4px; display:grid; place-items:center; width:20px; height:20px; border-radius:6px; background:rgba(0,0,0,.45); color:rgba(255,255,255,.8); pointer-events:none; }
 .queue-thumb .queue-priority { position:absolute; top:4px; right:4px; padding:2px 5px; border-radius:4px; background:rgba(0,0,0,.55); }
-.queue-thumb-edit { position:absolute; bottom:4px; right:4px; display:grid; place-items:center; width:22px; height:22px; padding:0; border:0; border-radius:6px; background:rgba(0,0,0,.55); color:#fff; opacity:0; transition:opacity 120ms ease; }
+/* Bottom-left (mirroring the drag handle up top) and smaller than before --
+   it's a secondary affordance that only needs to be findable on hover, not
+   compete with the priority pill or the cover image for attention. */
+.queue-thumb-edit { position:absolute; bottom:4px; left:4px; display:grid; place-items:center; width:17px; height:17px; padding:0; border:0; border-radius:5px; background:rgba(0,0,0,.55); color:#fff; opacity:0; transition:opacity 120ms ease; }
 .queue-thumb:hover .queue-thumb-edit, .queue-thumb:focus-within .queue-thumb-edit { opacity:1; }
-/* Team overview's owner tag: a bar the full width of the card rather than a
-   round avatar chip, so it reads as "whose card is this" at a glance across
-   a grid of teammates' work instead of needing a hover to find out. */
-.queue-thumb-owner { position:absolute; left:0; right:0; bottom:0; padding:4px 22px 4px 6px; overflow:hidden; background:rgba(0,0,0,.62); color:#fff; font-size:10px; font-weight:700; letter-spacing:.02em; text-overflow:ellipsis; white-space:nowrap; }
-.queue-thumb.has-owner .queue-thumb-edit { bottom:22px; }
+/* Team overview's owner tag: a bar the full width of the card, in normal
+   flow below the image (not an overlay on top of it), rather than a round
+   avatar chip -- so it reads as "whose card is this" at a glance across a
+   grid of teammates' work, without cropping into the cover photo to do it. */
+.queue-thumb-owner { flex:0 0 auto; padding:4px 6px; overflow:hidden; border-top:1px solid var(--q-line); background:var(--q-panel-2); color:var(--q-text); font-size:10px; font-weight:700; letter-spacing:.02em; text-overflow:ellipsis; white-space:nowrap; }
 
 /* ---------------------------------------------------------------------
  * Deep-dive sidebar -- byte-identical to the main dashboard's right rail
