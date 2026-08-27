@@ -4879,6 +4879,39 @@ function SlideDownload({ post }) {
                       >
                         <Download size={12} />
                       </span>
+                      {/* Reverse-image search to trace a slide back to its
+                          original source (a lot of these covers are reposts).
+                          Lens needs a URL it can fetch itself, so this only
+                          shows up for slides that actually have a poster --
+                          nothing to look up on a blank placeholder. */}
+                      {item.poster ? (
+                        <span
+                          className="media-cell-lens"
+                          role="button"
+                          tabIndex={0}
+                          title={t('Find with Google Lens')}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            window.open(
+                              `https://lens.google.com/uploadbyurl?url=${encodeURIComponent(item.poster)}`,
+                              '_blank',
+                              'noopener,noreferrer',
+                            );
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.stopPropagation();
+                              window.open(
+                                `https://lens.google.com/uploadbyurl?url=${encodeURIComponent(item.poster)}`,
+                                '_blank',
+                                'noopener,noreferrer',
+                              );
+                            }
+                          }}
+                        >
+                          <Eye size={12} />
+                        </span>
+                      ) : null}
                     </button>
                   ))}
                 </div>
