@@ -659,12 +659,26 @@ function histPill(curr, prev, isPct){
   return `<span class="hist-pill ${cls}">${text}</span>`;
 }
 
+// Manual refreshes can add several snapshots on the same calendar day (the
+// 7am job plus however many times someone hits the refresh button), but a
+// "day" in the table/chart should read as one settled total, not one row
+// per refresh. Collapsing to each day's LAST snapshot keeps the most
+// current number for that day while showing exactly one point per day --
+// hist is already oldest -> newest, so later entries simply overwrite
+// earlier ones for the same day in this Map, and insertion order (first
+// time each day is seen) keeps the result chronological.
+function collapseToLastPerDay(hist){
+  const byDay = new Map();
+  for(const h of hist) byDay.set(new Date(h.date).toDateString(), h);
+  return [...byDay.values()];
+}
+
 function renderHistoricalStats(hist){
   if(!hist.length) return '<div class="empty">No snapshots yet.</div>';
   // Oldest at the top, newest at the bottom -- reading downwards follows the
   // account forwards in time, which is how Social Blade presents it and how
   // people actually read a run of daily numbers.
-  const rows = [...hist].slice(-15);
+  const rows = collapseToLastPerDay(hist).slice(-15);
   const rateOf = h => (h.avg_likes_that_day!=null && h.followers) ? h.avg_likes_that_day/h.followers*100 : null;
   const dailyDelta = (curr, prev) =>
     (prev && curr.followers!=null && prev.followers!=null) ? curr.followers-prev.followers : null;
@@ -718,6 +732,10 @@ async function renderDetail(handle){
   const hist = detail.followers_history;
   const first = hist[0], last = hist[hist.length-1];
   const totalGrowth = (first && last && first.followers!=null && last.followers!=null) ? last.followers-first.followers : null;
+  // One point per day, not one per snapshot -- see collapseToLastPerDay's
+  // note above. Everything below that renders "N days" or plots the growth
+  // line reads from this instead of the raw per-snapshot history.
+  const dayHist = collapseToLastPerDay(hist);
 
   $('#app').innerHTML = `
     <button class="linkbtn" id="backBtn" style="margin-bottom:14px">← All accounts</button>
@@ -736,7 +754,7 @@ async function renderDetail(handle){
       <div class="kpi"><b>1 day growth</b><strong>${row.delta_1d?signed(row.delta_1d.delta):'—'}</strong><em>${row.delta_1d?pct(row.delta_1d.pct):'not enough history yet'}</em></div>
       <div class="kpi"><b>7 day growth</b><strong>${row.delta_7d?signed(row.delta_7d.delta):'—'}</strong><em>${row.delta_7d?pct(row.delta_7d.pct):'not enough history yet'}</em></div>
       <div class="kpi"><b>30 day growth</b><strong>${row.delta_30d?signed(row.delta_30d.delta):'—'}</strong><em>${row.delta_30d?pct(row.delta_30d.pct):'not enough history yet'}</em></div>
-      <div class="kpi"><b>Since tracking began</b><strong>${totalGrowth!=null?signed(totalGrowth):'—'}</strong><em>${hist.length} snapshot${hist.length===1?'':'s'} recorded</em></div>
+      <div class="kpi"><b>Since tracking began</b><strong>${totalGrowth!=null?signed(totalGrowth):'—'}</strong><em>${dayHist.length} day${dayHist.length===1?'':'s'} recorded</em></div>
       <div class="kpi"><b>Posts (total)</b><strong>${row.posts_count!=null?fmt(row.posts_count):'—'}</strong><em>per latest snapshot</em></div>
       <div class="kpi"><b>Avg likes (30d)</b><strong>${row.avg_likes_30d!=null?fmt(row.avg_likes_30d):'—'}</strong><em>${row.posts_30d?row.posts_30d+' posts':'no recent posts'}</em></div>
       <div class="kpi"><b>Engagement trend</b><strong>${row.engagement_trend_pct!=null?pct(row.engagement_trend_pct):'—'}</strong><em>vs. previous 30 days</em></div>
@@ -744,13 +762,13 @@ async function renderDetail(handle){
 
     <section>
       <h2>Historical Stats</h2>
-      <p class="sub">Last ${Math.min(hist.length,15)} day${Math.min(hist.length,15)===1?'':'s'} of recorded snapshots, oldest first. "Followers +/-" is that day's change -- the running total sits beside it for reference. Engagement rate is that day's average likes divided by that day's follower count, shown only for days with a post.</p>
+      <p class="sub">Last ${Math.min(dayHist.length,15)} day${Math.min(dayHist.length,15)===1?'':'s'} of recorded snapshots, oldest first. "Followers +/-" is that day's change -- the running total sits beside it for reference. Refreshing more than once a day updates that day's row instead of adding another one. Engagement rate is that day's average likes divided by that day's follower count, shown only for days with a post.</p>
       ${renderHistoricalStats(hist)}
     </section>
 
     <section>
       <h2>Follower growth</h2>
-      <p class="sub">${hist.length>1?'One point per recorded snapshot -- daily, starting the day this account began being tracked.':'Only one snapshot recorded so far -- this chart fills in day by day. There is no way to recover Instagram’s past follower counts.'}</p>
+      <p class="sub">${dayHist.length>1?'One point per day, starting the day this account began being tracked -- a same-day refresh updates that day\'s point instead of adding a new one.':'Only one snapshot recorded so far -- this chart fills in day by day. There is no way to recover Instagram’s past follower counts.'}</p>
       <div class="chartbox"><canvas id="cFollowers"></canvas></div>
     </section>
 
@@ -763,11 +781,11 @@ async function renderDetail(handle){
   $('#backBtn').onclick = () => { writeAcc(''); render(); };
   $('#detailRefreshBtn').onclick = (e) => refreshAccountNow(handle, e.currentTarget);
 
-  if(hist.length){
+  if(dayHist.length){
     CHARTS.push(new Chart($('#cFollowers'),{type:'line',
-      data:{labels:hist.map(h=>new Date(h.date).toLocaleDateString()),
-        datasets:[{label:'Followers',data:hist.map(h=>h.followers),borderColor:'#f5ff00',
-          backgroundColor:'#f5ff0022',fill:true,tension:.3,pointRadius:hist.length>1?2:4}]},
+      data:{labels:dayHist.map(h=>new Date(h.date).toLocaleDateString()),
+        datasets:[{label:'Followers',data:dayHist.map(h=>h.followers),borderColor:'#f5ff00',
+          backgroundColor:'#f5ff0022',fill:true,tension:.3,pointRadius:dayHist.length>1?2:4}]},
       options:{maintainAspectRatio:false,plugins:{legend:{display:false},
         tooltip:{callbacks:{label:c=>fmt(c.parsed.y)+' followers'}}},
         scales:{y:{ticks:{callback:v=>fmtAxis(v)}}}}}));
