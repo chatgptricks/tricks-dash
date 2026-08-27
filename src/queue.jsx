@@ -11,6 +11,7 @@ import {
   LoaderCircle,
   Pencil,
   Plus,
+  Trash2,
   Users,
   X,
 } from 'lucide-react';
@@ -33,7 +34,8 @@ const COPY = {
     note: 'Brief or note', priority: 'Priority', tags: 'Tags', noPriority: 'No priority', low: 'Low', medium: 'Medium',
     high: 'High', urgent: 'Urgent', allUsers: 'Everyone', loading: 'Loading Queue…', retry: 'Try again',
     archived: 'Posted tasks auto-hide 24h after posting. Show archive to see older ones.', teamPending: 'team pending',
-    close: 'Close', editTask: 'Edit task',
+    close: 'Close', editTask: 'Edit task', moveTo: 'Move to', remove: 'Remove task',
+    confirmRemove: 'Remove this task for good? This cannot be undone.',
   },
   es: {
     queue: 'Queue', personal: 'Mi cola', team: 'Vista del equipo', archive: 'Ver archivo', hideArchive: 'Ocultar archivo',
@@ -43,7 +45,8 @@ const COPY = {
     note: 'Brief o nota', priority: 'Prioridad', tags: 'Etiquetas', noPriority: 'Sin prioridad', low: 'Baja', medium: 'Media',
     high: 'Alta', urgent: 'Urgente', allUsers: 'Todo el equipo', loading: 'Cargando Queue…', retry: 'Reintentar',
     archived: 'Las tareas publicadas se ocultan solas 24h después. Activa "Ver archivo" para ver las más viejas.', teamPending: 'pendientes del equipo',
-    close: 'Cerrar', editTask: 'Editar tarea',
+    close: 'Cerrar', editTask: 'Editar tarea', moveTo: 'Mover a', remove: 'Eliminar tarea',
+    confirmRemove: '¿Eliminar esta tarea para siempre? No se puede deshacer.',
   },
 };
 
@@ -121,7 +124,7 @@ function Prefs({ lang, setLang, theme, setTheme }) {
   );
 }
 
-function TaskCard({ task, t, onOpen, onEdit, onDragStart, onDropBefore }) {
+function TaskCard({ task, t, onOpen, onEdit, onDragStart, onDropBefore, onContextMenu }) {
   const post = task.post || {};
   const [imageFailed, setImageFailed] = useState(false);
   return (
@@ -140,6 +143,10 @@ function TaskCard({ task, t, onOpen, onEdit, onDragStart, onDropBefore }) {
         event.stopPropagation();
         onDropBefore(task.status, task.id);
       }}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        onContextMenu(event, task);
+      }}
     >
       <button type="button" className="queue-thumb-open" onClick={() => onOpen(task)} aria-label={t.editTask}>
         {post.coverUrl && !imageFailed
@@ -150,6 +157,44 @@ function TaskCard({ task, t, onOpen, onEdit, onDragStart, onDropBefore }) {
       {task.priority ? <span className={`queue-priority ${task.priority}`}>{t[task.priority]}</span> : null}
       <button type="button" className="queue-thumb-edit" onClick={() => onEdit(task)} aria-label={t.edit}><Pencil size={12} /></button>
     </article>
+  );
+}
+
+// Small right-click menu for a task thumbnail: jump straight to another
+// stage (skipping drag-and-drop), open the full editor, or delete the task
+// outright. Closes itself on an outside click, Escape, or scroll so it never
+// lingers over a stale position.
+function TaskContextMenu({ menu, t, onMove, onEdit, onRemove, onClose }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const handlePointer = (event) => { if (ref.current && !ref.current.contains(event.target)) onClose(); };
+    const handleKey = (event) => { if (event.key === 'Escape') onClose(); };
+    document.addEventListener('mousedown', handlePointer);
+    document.addEventListener('keydown', handleKey);
+    document.addEventListener('scroll', onClose, true);
+    return () => {
+      document.removeEventListener('mousedown', handlePointer);
+      document.removeEventListener('keydown', handleKey);
+      document.removeEventListener('scroll', onClose, true);
+    };
+  }, [onClose]);
+  const { task, x, y } = menu;
+  const otherStages = STATUS_COLUMNS.filter((column) => column.value !== task.status);
+  return (
+    <div className="queue-context-menu" ref={ref} style={{ top: y, left: x }} role="menu">
+      {otherStages.map((column) => {
+        const Icon = column.icon;
+        return (
+          <button type="button" key={column.value} role="menuitem" onClick={() => onMove(task, column.value)}>
+            <Icon size={13} />{t.moveTo} {t[column.copyKey]}
+          </button>
+        );
+      })}
+      <span className="queue-context-sep" />
+      <button type="button" role="menuitem" onClick={() => onEdit(task)}><Pencil size={13} />{t.edit}</button>
+      <span className="queue-context-sep" />
+      <button type="button" role="menuitem" className="is-danger" onClick={() => onRemove(task)}><Trash2 size={13} />{t.remove}</button>
+    </div>
   );
 }
 
@@ -208,6 +253,7 @@ function QueueApp({ user }) {
   const [draggingId, setDraggingId] = useState(null);
   const [editing, setEditing] = useState(null);
   const [openTask, setOpenTask] = useState(null);
+  const [menu, setMenu] = useState(null);
   const scopeRef = useRef(scope);
   scopeRef.current = scope;
   const t = COPY[lang];
@@ -256,6 +302,41 @@ function QueueApp({ user }) {
     } catch (reason) { setError(reason.message || 'Could not move that Queue task.'); await load(scope, showArchive); }
   };
 
+  // Right-click menu: jumps a single task to another stage without going
+  // through drag-and-drop, using the same update-task endpoint TaskEditor
+  // already saves through (so no new backend route was needed for moves).
+  const openMenu = (event, task) => {
+    const width = 190;
+    const height = 190;
+    setMenu({
+      task,
+      x: Math.min(event.clientX, window.innerWidth - width - 8),
+      y: Math.min(event.clientY, window.innerHeight - height - 8),
+    });
+  };
+  const moveTaskStatus = async (task, status) => {
+    setMenu(null);
+    if (task.status === status) return;
+    setData((current) => current ? {
+      ...current,
+      assignments: current.assignments.map((item) => item.id === task.id ? { ...item, status } : item),
+    } : current);
+    try {
+      const body = new FormData(); body.append('status', status);
+      await apiFetch(`/api/dashboard/queue/tasks/${task.id}`, { method: 'POST', body });
+      await load(scope, showArchive);
+    } catch (reason) { setError(reason.message || 'Could not move that Queue task.'); await load(scope, showArchive); }
+  };
+  const removeTask = async (task) => {
+    setMenu(null);
+    if (!window.confirm(t.confirmRemove)) return;
+    setData((current) => current ? { ...current, assignments: current.assignments.filter((item) => item.id !== task.id) } : current);
+    try {
+      await apiFetch(`/api/dashboard/queue/tasks/${task.id}`, { method: 'DELETE' });
+    } catch (reason) { setError(reason.message || 'Could not remove that Queue task.'); }
+    await load(scope, showArchive);
+  };
+
   const userName = (email) => email === user.email ? `${email} (${t.personal})` : email;
   const metrics = data?.metrics;
   return (
@@ -281,7 +362,7 @@ function QueueApp({ user }) {
         const Icon = column.icon;
         return <section key={column.value} className={`queue-column ${column.color}`} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); move(column.value); }}>
           <header><div><Icon size={15} /><h3>{t[column.copyKey]}</h3><span>{column.tasks.length}</span></div>{column.value === 'posted' && !showArchive ? <p>{t.archived}</p> : null}</header>
-          <div className="queue-task-list">{column.tasks.map((task) => <TaskCard key={task.id} task={task} t={t} onOpen={setOpenTask} onEdit={setEditing} onDragStart={setDraggingId} onDropBefore={move} />)}{!column.tasks.length ? <p className="queue-empty">{t.noTasks}</p> : null}</div>
+          <div className="queue-task-list">{column.tasks.map((task) => <TaskCard key={task.id} task={task} t={t} onOpen={setOpenTask} onEdit={setEditing} onDragStart={setDraggingId} onDropBefore={move} onContextMenu={openMenu} />)}{!column.tasks.length ? <p className="queue-empty">{t.noTasks}</p> : null}</div>
         </section>;
       })}</section> : null}
       {/* Same right-rail markup/CSS classes as the main dashboard's post
@@ -319,6 +400,16 @@ function QueueApp({ user }) {
         </aside>
       ) : null}
       {editing ? <TaskEditor task={editing} t={t} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load(scope, showArchive); }} /> : null}
+      {menu ? (
+        <TaskContextMenu
+          menu={menu}
+          t={t}
+          onMove={moveTaskStatus}
+          onEdit={(task) => { setMenu(null); setEditing(task); }}
+          onRemove={removeTask}
+          onClose={() => setMenu(null)}
+        />
+      ) : null}
     </main>
   );
 }
