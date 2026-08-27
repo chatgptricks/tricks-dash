@@ -4802,6 +4802,40 @@ function PostMenu({ post, isPromo, onFlags, onReload, onAssign }) {
   );
 }
 
+// Sits directly left of the post-menu button. A conic-gradient pie rather
+// than an SVG/icon set: the filled wedge is just one angle, so a continuous
+// fraction draws as easily as a stepped one -- no extra markup either way.
+const FreshnessRing = memo(function FreshnessRing({ timestamp }) {
+  const fraction = freshnessFraction(timestamp);
+  // Without this the ring only visibly moves when something else causes the
+  // card to re-render (the 3-minute poll, a filter change) -- ticking on its
+  // own timer is what makes a continuous fraction actually read as a live
+  // clock rather than a value that happens to be more precise. Scoped to
+  // just this instance and only while there's still a ring to drain, so it
+  // costs nothing for the vast majority of posts that are already stale.
+  const [, forceTick] = useState(0);
+  useEffect(() => {
+    if (fraction <= 0) return undefined;
+    const timer = setInterval(() => forceTick((n) => n + 1), 30000);
+    return () => clearInterval(timer);
+  }, [fraction > 0]);
+  if (fraction <= 0) return null;
+  const filledDeg = fraction * 360;
+  const hoursLeft = FRESHNESS_WINDOW_HOURS - (Date.now() - timestamp) / 3600000;
+  const leftLabel = hoursLeft >= 1 ? `${hoursLeft.toFixed(1)}h` : `${Math.max(1, Math.round(hoursLeft * 60))}m`;
+  return (
+    <span
+      className="freshness-ring"
+      style={{
+        background: `conic-gradient(var(--accent) 0deg ${filledDeg}deg, rgba(255,255,255,.16) ${filledDeg}deg 360deg)`,
+      }}
+      role="img"
+      aria-label={`New post, fading over its first ${FRESHNESS_WINDOW_HOURS} hours -- about ${leftLabel} left`}
+      title={`New post · fades out over its first ${FRESHNESS_WINDOW_HOURS}h (~${leftLabel} left)`}
+    />
+  );
+});
+
 const PostCard = memo(function PostCard({ post, priority, selected, onSelect, onFlags, onReload, onAssign }) {
   const [avatarFailed, setAvatarFailed] = useState(false);
   const handleClick = () => onSelect(post.postKey);
