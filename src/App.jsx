@@ -544,10 +544,29 @@ function normalizePost(post) {
   };
 }
 
+// Splits a query into required terms and excluded terms: a token glued to a
+// leading "-" (e.g. "-foto") must NOT appear, everything else must. This
+// lets "prompts -foto" find prompt posts while filtering out ones that
+// mention "foto", without needing separate include/exclude UI.
+function parseSearchQuery(query) {
+  const include = [];
+  const exclude = [];
+  for (const token of String(query || '').trim().split(/\s+/)) {
+    if (!token) continue;
+    const isExclusion = token.length > 1 && token.startsWith('-');
+    const value = normalizeSearchValue(isExclusion ? token.slice(1) : token);
+    if (!value) continue;
+    (isExclusion ? exclude : include).push(value);
+  }
+  return { include, exclude };
+}
+
 function matchesSearch(post, query) {
-  const normalizedQuery = normalizeSearchValue(query);
-  if (!normalizedQuery) return true;
-  return post.searchText.includes(normalizedQuery);
+  const { include, exclude } = parseSearchQuery(query);
+  if (!include.length && !exclude.length) return true;
+  for (const term of include) if (!post.searchText.includes(term)) return false;
+  for (const term of exclude) if (post.searchText.includes(term)) return false;
+  return true;
 }
 
 function calculateRanges(posts) {
