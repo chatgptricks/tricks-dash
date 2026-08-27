@@ -2866,8 +2866,11 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
   const [slackNotice, setSlackNotice] = useState('');
   const [customAlertTitle, setCustomAlertTitle] = useState('');
   const [customAlertMessage, setCustomAlertMessage] = useState('');
+  const [customAlertImage, setCustomAlertImage] = useState(null); // File | null
+  const [customAlertImagePreview, setCustomAlertImagePreview] = useState(''); // object URL
   const [customAlertSending, setCustomAlertSending] = useState(false);
   const [customAlertNotice, setCustomAlertNotice] = useState('');
+  const customAlertFileInputRef = useRef(null);
   const [apifyRuns, setApifyRuns] = useState([]);
   const [apifyLoading, setApifyLoading] = useState(false);
   const [ocrStatus, setOcrStatus] = useState(null);
@@ -3208,6 +3211,41 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
     }
   };
 
+  // Object URLs need explicit cleanup or they leak for the life of the tab.
+  // Swapping images (paste, then paste again, or paste then pick a file)
+  // revokes the previous one before creating the next.
+  const setCustomAlertFile = (file) => {
+    if (!file || !file.type.startsWith('image/')) {
+      setCustomAlertNotice('That attachment is not an image.');
+      return;
+    }
+    setCustomAlertImagePreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return URL.createObjectURL(file);
+    });
+    setCustomAlertImage(file);
+  };
+
+  const clearCustomAlertImage = () => {
+    setCustomAlertImagePreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return '';
+    });
+    setCustomAlertImage(null);
+    if (customAlertFileInputRef.current) customAlertFileInputRef.current.value = '';
+  };
+
+  // Lets the message box double as a paste target: Cmd/Ctrl+V a screenshot
+  // while the cursor is in there and it attaches instead of doing nothing
+  // (images have no text representation to insert, so there's nothing to
+  // suppress from the normal paste behavior).
+  const handleCustomAlertPaste = (event) => {
+    const item = Array.from(event.clipboardData?.items || []).find((entry) => entry.type.startsWith('image/'));
+    if (!item) return;
+    const file = item.getAsFile();
+    if (file) setCustomAlertFile(file);
+  };
+
   const sendCustomAlert = async () => {
     const message = customAlertMessage.trim();
     if (!message) {
@@ -3217,13 +3255,14 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
     setCustomAlertSending(true);
     setCustomAlertNotice('');
     try {
-      const params = { password, message };
-      if (customAlertTitle.trim()) params.title = customAlertTitle.trim();
-      const response = await apiFetch(`${API_BASE}/api/admin/slack-custom`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams(params),
-      });
+      const form = new FormData();
+      form.set('password', password);
+      form.set('message', message);
+      if (customAlertTitle.trim()) form.set('title', customAlertTitle.trim());
+      if (customAlertImage) form.set('image', customAlertImage);
+      // No Content-Type header here on purpose -- the browser sets the
+      // multipart boundary itself, and overriding it breaks the upload.
+      const response = await apiFetch(`${API_BASE}/api/admin/slack-custom`, { method: 'POST', body: form });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) {
         setCustomAlertNotice(body.detail || 'Could not send the alert.');
@@ -3233,6 +3272,7 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
       if (body.sent) {
         setCustomAlertTitle('');
         setCustomAlertMessage('');
+        clearCustomAlertImage();
       }
     } catch (error) {
       setCustomAlertNotice('Network error.');
@@ -3706,8 +3746,8 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
                 </section>
               </>
             ) : tab === 'system' ? (
-              <div className="settings-list-width">
-                <section className="settings-section">
+              <div className="system-tab-grid">
+                <section className="settings-section system-card">
                   <div className="settings-section-head">
                     <h3>Refresh now</h3>
                     <button
@@ -3730,7 +3770,7 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
                   ) : null}
                 </section>
 
-                <section className="settings-section">
+                <section className="settings-section system-card">
                   <div className="settings-section-head">
                     <h3>
                       <HardDrive size={13} /> Disk usage
@@ -3757,7 +3797,7 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
                   )}
                 </section>
 
-                <section className="settings-section">
+                <section className="settings-section system-card">
                   <h3>
                     <MessageSquare size={13} /> Slack alerts
                   </h3>
@@ -3781,7 +3821,7 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
                   {slackNotice ? <p className="settings-notice">{slackNotice}</p> : null}
                 </section>
 
-                <section className="settings-section">
+                <section className="settings-section system-card system-card-wide">
                   <h3>
                     <Megaphone size={13} /> Custom alert
                   </h3>
@@ -3799,13 +3839,43 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
                     />
                     <textarea
                       className="custom-alert-message"
-                      placeholder="What do you want to notify?"
+                      placeholder="What do you want to notify? (You can paste an image here too)"
                       value={customAlertMessage}
                       onChange={(event) => setCustomAlertMessage(event.target.value)}
+                      onPaste={handleCustomAlertPaste}
                       rows={3}
                       maxLength={2900}
                     />
+                    {customAlertImagePreview ? (
+                      <div className="custom-alert-preview">
+                        <img src={customAlertImagePreview} alt="Attachment preview" />
+                        <button
+                          type="button"
+                          className="custom-alert-preview-remove"
+                          onClick={clearCustomAlertImage}
+                          aria-label="Remove attached image"
+                          title="Remove image"
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    ) : null}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      ref={customAlertFileInputRef}
+                      onChange={(event) => setCustomAlertFile(event.target.files?.[0])}
+                      style={{ display: 'none' }}
+                    />
                     <div className="settings-section-head">
+                      <button
+                        type="button"
+                        className="ghost-button"
+                        onClick={() => customAlertFileInputRef.current?.click()}
+                        disabled={customAlertSending}
+                      >
+                        <ImagePlus size={13} /> {customAlertImage ? 'Change image' : 'Upload image'}
+                      </button>
                       <button
                         type="button"
                         className="ghost-button"
@@ -3819,7 +3889,7 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
                   {customAlertNotice ? <p className="settings-notice">{customAlertNotice}</p> : null}
                 </section>
 
-                <section className="settings-section">
+                <section className="settings-section system-card system-card-wide">
                   <h3>Recent Apify runs</h3>
                   <div className="settings-table">
                     {apifyLoading ? <p className="wizard-hint">Loading…</p> : null}
@@ -3840,7 +3910,7 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
                   </div>
                 </section>
 
-                <section className="settings-section">
+                <section className="settings-section system-card">
                   <div className="settings-section-head">
                     <h3>
                       <ScanText size={13} /> Cover OCR sweep
