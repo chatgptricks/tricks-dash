@@ -3,7 +3,6 @@ import ReactDOM from 'react-dom/client';
 import {
   Archive,
   ArrowLeft,
-  CalendarDays,
   Check,
   Clock3,
   ExternalLink,
@@ -17,7 +16,10 @@ import {
 } from 'lucide-react';
 import { browserPopupRedirectResolver, getRedirectResult, onAuthStateChanged, signOut } from 'firebase/auth';
 import { describeSignInError, firebaseAuth as auth, startGoogleSignIn } from './firebase';
+import { clearSsoCookie, startSsoRefresh, trySsoSignIn } from './sso';
 import { applyLang, applyTheme, readLang, readTheme } from './prefs';
+import { PrefsProvider } from './prefsContext';
+import { PostDetailPanel, SelectedPost } from './postDetail';
 import './queue.css';
 
 const API_BASE = (import.meta.env.VITE_API_BASE || 'https://cortex-api-db2e.onrender.com').replace(/\/$/, '');
@@ -31,6 +33,7 @@ const COPY = {
     note: 'Brief or note', priority: 'Priority', tags: 'Tags', noPriority: 'No priority', low: 'Low', medium: 'Medium',
     high: 'High', urgent: 'Urgent', allUsers: 'Everyone', loading: 'Loading Queue…', retry: 'Try again',
     archived: 'Posted tasks are hidden. Drag a task here to archive it.', teamPending: 'team pending',
+    close: 'Close', editTask: 'Edit task',
   },
   es: {
     queue: 'Queue', personal: 'Mi cola', team: 'Vista del equipo', archive: 'Ver archivo', hideArchive: 'Ocultar archivo',
@@ -40,6 +43,7 @@ const COPY = {
     note: 'Brief o nota', priority: 'Prioridad', tags: 'Etiquetas', noPriority: 'Sin prioridad', low: 'Baja', medium: 'Media',
     high: 'Alta', urgent: 'Urgente', allUsers: 'Todo el equipo', loading: 'Cargando Queue…', retry: 'Reintentar',
     archived: 'Las tareas publicadas están ocultas. Arrastra una tarea aquí para archivarla.', teamPending: 'pendientes del equipo',
+    close: 'Cerrar', editTask: 'Editar tarea',
   },
 };
 
@@ -65,14 +69,25 @@ function themeIcon(theme) {
   return theme === 'light' ? '☀︎' : '◐';
 }
 
-function formatDate(value) {
-  if (!value) return '';
-  const date = new Date(`${value}T12:00:00`);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-}
-
 function initials(email) {
   return (email || '?').trim().slice(0, 2).toUpperCase();
+}
+
+// Adapts a Queue assignment's embedded post (account, shortcode, caption,
+// permalink, publishedAt, likes, comments, type, coverUrl, missing, plus the
+// music fields the backend now projects onto it) into the shape postDetail.jsx's
+// shared components expect, so a Queue thumbnail opens the exact same
+// deep-dive view as the main dashboard's right rail.
+function toDetailPost(task) {
+  const post = task?.post || {};
+  const type = post.type || 'Image';
+  return {
+    ...post,
+    postKey: `${post.account || 'unknown'}:${post.shortcode || task?.id}`,
+    postType: type,
+    isVideo: /^video/i.test(String(type)),
+    postDate: post.publishedAt,
+  };
 }
 
 function AuthGate({ notice, setNotice }) {
@@ -106,14 +121,14 @@ function Prefs({ lang, setLang, theme, setTheme }) {
   );
 }
 
-function TaskCard({ task, t, onEdit, onDragStart, onDropBefore }) {
+function TaskCard({ task, t, onOpen, onEdit, onDragStart, onDropBefore }) {
   const post = task.post || {};
   const [imageFailed, setImageFailed] = useState(false);
-  const excerpt = post.caption || (post.missing ? 'This post is no longer in the live dashboard.' : 'Instagram post');
   return (
     <article
-      className={`queue-task priority-${task.priority || 'none'}`}
+      className={`queue-thumb priority-${task.priority || 'none'}`}
       draggable
+      title={post.caption || (post.missing ? t.noTasks : `@${post.account || 'unknown'}`)}
       onDragStart={(event) => {
         event.dataTransfer.effectAllowed = 'move';
         event.dataTransfer.setData('text/plain', String(task.id));
@@ -126,22 +141,14 @@ function TaskCard({ task, t, onEdit, onDragStart, onDropBefore }) {
         onDropBefore(task.status, task.id);
       }}
     >
-      <div className="queue-task-head">
-        <span className="queue-drag"><GripVertical size={14} /></span>
-        <span className="queue-task-account">@{post.account || 'unknown'}</span>
-        {task.priority ? <span className={`queue-priority ${task.priority}`}>{t[task.priority]}</span> : null}
-        <button type="button" onClick={() => onEdit(task)} aria-label={t.edit}><Pencil size={13} /></button>
-      </div>
-      <div className="queue-task-post">
-        {post.coverUrl && !imageFailed ? <img src={`${API_BASE}${post.coverUrl}`} alt="" onError={() => setImageFailed(true)} /> : <div className="queue-cover-empty">@</div>}
-        <p>{excerpt}</p>
-      </div>
-      {task.note ? <p className="queue-task-note">{task.note}</p> : null}
-      <div className="queue-task-meta">
-        {task.dueDate ? <span className="queue-due"><CalendarDays size={12} />{formatDate(task.dueDate)}</span> : null}
-        {task.tags?.map((tag) => <span className="queue-tag" key={tag}>{tag}</span>)}
-      </div>
-      <div className="queue-task-owner"><span>{initials(task.assigneeEmail)}</span>{task.assigneeEmail}</div>
+      <button type="button" className="queue-thumb-open" onClick={() => onOpen(task)} aria-label={t.editTask}>
+        {post.coverUrl && !imageFailed
+          ? <img src={`${API_BASE}${post.coverUrl}`} alt="" onError={() => setImageFailed(true)} />
+          : <div className="queue-cover-empty">@</div>}
+      </button>
+      <span className="queue-drag"><GripVertical size={12} /></span>
+      {task.priority ? <span className={`queue-priority ${task.priority}`}>{t[task.priority]}</span> : null}
+      <button type="button" className="queue-thumb-edit" onClick={() => onEdit(task)} aria-label={t.edit}><Pencil size={12} /></button>
     </article>
   );
 }
@@ -200,6 +207,7 @@ function QueueApp({ user }) {
   const [error, setError] = useState('');
   const [draggingId, setDraggingId] = useState(null);
   const [editing, setEditing] = useState(null);
+  const [openTask, setOpenTask] = useState(null);
   const scopeRef = useRef(scope);
   scopeRef.current = scope;
   const t = COPY[lang];
@@ -254,7 +262,7 @@ function QueueApp({ user }) {
     <main className="queue-page">
       <header className="queue-topbar">
         <div className="queue-brand"><ListTodo size={23} /><div><span>sentientdash.app</span><h1>{t.queue}</h1></div></div>
-        <div className="queue-actions"><a href={`${import.meta.env.BASE_URL}`}><ArrowLeft size={14} />{t.dashboard}</a><Prefs lang={lang} setLang={setLang} theme={theme} setTheme={setTheme} /><button className="queue-avatar" type="button" title={user.email} onClick={() => signOut(auth)}>{initials(user.email)}</button></div>
+        <div className="queue-actions"><a href={`${import.meta.env.BASE_URL}`}><ArrowLeft size={14} />{t.dashboard}</a><Prefs lang={lang} setLang={setLang} theme={theme} setTheme={setTheme} /><button className="queue-avatar" type="button" title={user.email} onClick={() => { clearSsoCookie(); signOut(auth); }}>{initials(user.email)}</button></div>
       </header>
 
       <section className="queue-toolbar">
@@ -274,9 +282,29 @@ function QueueApp({ user }) {
         const visible = column.value !== 'posted' || showArchive;
         return <section key={column.value} className={`queue-column ${column.color} ${visible ? '' : 'is-archive-target'}`} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); move(column.value); }}>
           <header><div><Icon size={15} /><h3>{t[column.copyKey]}</h3><span>{visible ? column.tasks.length : 0}</span></div>{column.value === 'posted' && !showArchive ? <p>{t.archived}</p> : null}</header>
-          {visible ? <div className="queue-task-list">{column.tasks.map((task) => <TaskCard key={task.id} task={task} t={t} onEdit={setEditing} onDragStart={setDraggingId} onDropBefore={move} />)}{!column.tasks.length ? <p className="queue-empty">{t.noTasks}</p> : null}</div> : <div className="queue-archive-drop"><Archive size={18} /><span>{t.posted}</span></div>}
+          {visible ? <div className="queue-task-list">{column.tasks.map((task) => <TaskCard key={task.id} task={task} t={t} onOpen={setOpenTask} onEdit={setEditing} onDragStart={setDraggingId} onDropBefore={move} />)}{!column.tasks.length ? <p className="queue-empty">{t.noTasks}</p> : null}</div> : <div className="queue-archive-drop"><Archive size={18} /><span>{t.posted}</span></div>}
         </section>;
       })}</section> : null}
+      {openTask ? (
+        <div className="queue-rail-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setOpenTask(null); }}>
+          <aside className="queue-rail">
+            <div className="queue-rail-head">
+              <button type="button" onClick={() => setOpenTask(null)} aria-label={t.close}><X size={16} /></button>
+            </div>
+            <div className="queue-rail-body">
+              <SelectedPost post={toDetailPost(openTask)} />
+              <PrefsProvider lang={lang} theme={theme}>
+                <PostDetailPanel post={toDetailPost(openTask)} />
+              </PrefsProvider>
+            </div>
+            <div className="queue-rail-foot">
+              <button type="button" className="queue-rail-edit" onClick={() => { setEditing(openTask); setOpenTask(null); }}>
+                <Pencil size={13} />{t.editTask}
+              </button>
+            </div>
+          </aside>
+        </div>
+      ) : null}
       {editing ? <TaskEditor task={editing} t={t} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load(scope, showArchive); }} /> : null}
     </main>
   );
@@ -285,9 +313,17 @@ function QueueApp({ user }) {
 function Root() {
   const [user, setUser] = useState(undefined);
   const [notice, setNotice] = useState('');
+  const [ssoChecked, setSsoChecked] = useState(false);
   useEffect(() => { getRedirectResult(auth, browserPopupRedirectResolver).catch((error) => setNotice(describeSignInError(error))); }, []);
+  // Same-session-everywhere: adopt the shared .sentientdash.app cookie
+  // (minted by the main dashboard) before ever showing the Google gate here.
+  useEffect(() => { trySsoSignIn().finally(() => setSsoChecked(true)); }, []);
   useEffect(() => onAuthStateChanged(auth, setUser), []);
-  if (user === undefined || !user) return <AuthGate notice={notice} setNotice={setNotice} />;
+  useEffect(() => { if (user) return startSsoRefresh(); return undefined; }, [user]);
+  // While the silent cookie-based sign-in is still in flight, show a blank
+  // screen rather than flashing the "Sign in with Google" gate.
+  if (user === undefined || (!user && !ssoChecked)) return <main className="queue-auth" />;
+  if (!user) return <AuthGate notice={notice} setNotice={setNotice} />;
   return <QueueApp user={user} />;
 }
 
