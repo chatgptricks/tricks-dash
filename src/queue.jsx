@@ -284,25 +284,39 @@ function QueueApp({ user }) {
           <div className="queue-task-list">{column.tasks.map((task) => <TaskCard key={task.id} task={task} t={t} onOpen={setOpenTask} onEdit={setEditing} onDragStart={setDraggingId} onDropBefore={move} />)}{!column.tasks.length ? <p className="queue-empty">{t.noTasks}</p> : null}</div>
         </section>;
       })}</section> : null}
+      {/* Same right-rail markup/CSS classes as the main dashboard's post
+          detail view (App.jsx), so a task's deep dive here looks and
+          behaves identically -- fixed panel, backdrop, close button, cover
+          + caption/stats grid. The only Queue-specific addition is the
+          "Edit task" button, injected the same way App.jsx injects its
+          chatgptricks-only Canva link: via PostDetailPanel's captionExtra
+          slot, so the shared component itself stays untouched. */}
       {openTask ? (
-        <div className="queue-rail-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setOpenTask(null); }}>
-          <aside className="queue-rail">
-            <div className="queue-rail-head">
-              <button type="button" onClick={() => setOpenTask(null)} aria-label={t.close}><X size={16} /></button>
-            </div>
-            <div className="queue-rail-body">
-              <SelectedPost post={toDetailPost(openTask)} />
-              <PrefsProvider lang={lang} theme={theme}>
-                <PostDetailPanel post={toDetailPost(openTask)} />
-              </PrefsProvider>
-            </div>
-            <div className="queue-rail-foot">
-              <button type="button" className="queue-rail-edit" onClick={() => { setEditing(openTask); setOpenTask(null); }}>
-                <Pencil size={13} />{t.editTask}
-              </button>
-            </div>
-          </aside>
-        </div>
+        <button className="sidebar-backdrop" type="button" aria-label={t.close} onClick={() => setOpenTask(null)} />
+      ) : null}
+      {data ? (
+        <aside className={openTask ? 'right-rail is-open' : 'right-rail'} aria-label={t.editTask} aria-hidden={!openTask}>
+          {openTask ? (
+            <button className="rail-close-button" type="button" aria-label={t.close} onClick={() => setOpenTask(null)}>
+              <X size={14} />
+            </button>
+          ) : null}
+          <section className="panel detail">
+            {openTask ? <SelectedPost post={toDetailPost(openTask)} /> : null}
+          </section>
+          {openTask ? (
+            <PrefsProvider lang={lang} theme={theme}>
+              <PostDetailPanel
+                post={toDetailPost(openTask)}
+                captionExtra={
+                  <button type="button" className="ghost-button" onClick={() => { setEditing(openTask); setOpenTask(null); }}>
+                    <Pencil size={13} />{t.editTask}
+                  </button>
+                }
+              />
+            </PrefsProvider>
+          ) : null}
+        </aside>
       ) : null}
       {editing ? <TaskEditor task={editing} t={t} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load(scope, showArchive); }} /> : null}
     </main>
