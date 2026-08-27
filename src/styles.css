@@ -5334,16 +5334,21 @@ body {
   }
 }
 
-/* Primary action used by the Settings unlock form. The other modals submit via
-   ghost-button, but the unlock step is the one place a clear primary CTA helps. */
+/* The accent-colored counterpart to .ghost-button -- same box model so the
+   two read as one consistent pair wherever they sit side by side (Cancel +
+   Save, Download selected + Download all, Cancel + Add to Queue). Only the
+   color/weight differ, which is what should signal "primary" here, not size. */
 .primary-button {
-  height: 34px;
-  padding: 0 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 14px;
   border: 1px solid rgba(var(--accent-rgb), 0.5);
-  border-radius: 8px;
+  border-radius: 14px;
   background: rgba(var(--accent-rgb), 0.14);
   color: var(--accent-ink);
-  font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.02em;
   cursor: pointer;
