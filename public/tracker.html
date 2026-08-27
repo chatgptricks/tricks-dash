@@ -121,6 +121,22 @@ section>h2 .tag{margin-left:8px;padding:2px 7px;border-radius:999px;background:r
   color:var(--accent-text);font-size:9px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
 section>p.sub{margin:0 0 14px;color:var(--muted);font-size:11px;line-height:1.5}
 
+/* Manual follower-count refresh: a small ghost icon next to wherever a
+   count is shown (leaderboard cell, detail KPI), plus a full linkbtn for
+   the batch action. Both just call the same POST endpoints and merge the
+   result back into SUMMARY -- see refreshAccountNow/refreshAllAccountsNow. */
+.section-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:4px}
+.section-head h2{margin:0}
+.refresh-btn{flex:none}
+.followers-cell{display:inline-flex;align-items:center;gap:6px}
+.row-refresh-btn{flex:none;padding:0;border:0;background:none;color:rgba(var(--edge),.35);
+  font-size:13px;line-height:1;cursor:pointer}
+.row-refresh-btn:hover{color:var(--accent-text)}
+.row-refresh-btn:disabled,.refresh-btn:disabled{opacity:.5;cursor:default}
+.is-spinning{animation:tspin 900ms linear infinite}
+@keyframes tspin{to{transform:rotate(360deg)}}
+.kpi strong .row-refresh-btn{margin-left:6px;font-size:14px;vertical-align:2px}
+
 /* leaderboard table */
 table{width:100%;border-collapse:collapse;font-size:11.5px}
 th{text-align:right;padding:8px;color:var(--muted);font-size:9px;font-weight:800;
@@ -330,6 +346,62 @@ async function authedFetch(path){
   return r.json();
 }
 
+async function authedPost(path){
+  const headers = {};
+  if(window.__firebaseIdToken) headers.Authorization = 'Bearer '+window.__firebaseIdToken;
+  const r = await fetch(API+path, {method:'POST', headers});
+  if(r.status===401||r.status===403){ window.__onInsightsUnauthorized && window.__onInsightsUnauthorized(); throw new Error('unauthorized'); }
+  if(!r.ok){
+    let detail = 'HTTP '+r.status;
+    try{ const body = await r.json(); if(body && body.detail) detail = body.detail; }catch{}
+    throw new Error(detail);
+  }
+  return r.json();
+}
+
+/* ---------------- Manual refresh (real-time follower count) ----------------
+   Both actions cost real Apify calls (~$0.002 each), so they're explicit
+   opt-in buttons rather than anything automatic -- the daily 7am snapshot
+   already covers the "just keep this current" case for free. */
+async function refreshAccountNow(handle, btn){
+  if(btn){ btn.disabled = true; btn.classList.add('is-spinning'); }
+  try{
+    const result = await authedPost('/api/tracker/accounts/'+encodeURIComponent(handle)+'/refresh');
+    const row = SUMMARY.accounts.find(r=>r.handle===handle);
+    if(row){
+      row.followers = result.followers;
+      row.posts_count = result.posts_count;
+      row.captured_at = result.captured_at;
+      row.full_name = result.full_name;
+      row.verified = result.verified;
+      row.private = result.private;
+    }
+    // The detail page's chart/history is stale the instant a new snapshot
+    // lands, so drop the cache rather than patch it -- it's a cheap re-fetch
+    // (no Apify call) the next time this account's page is opened.
+    delete DETAIL_CACHE[handle];
+    render();
+  }catch(e){
+    alert('Could not refresh @'+handle+': '+(e.message||e));
+  }finally{
+    if(btn){ btn.disabled = false; btn.classList.remove('is-spinning'); }
+  }
+}
+
+async function refreshAllAccountsNow(btn){
+  if(btn){ btn.disabled = true; btn.dataset.label = btn.textContent; btn.textContent = 'Refreshing all…'; }
+  try{
+    await authedPost('/api/tracker/snapshot-now');
+    DETAIL_CACHE = {};
+    await loadSummary();
+    render();
+  }catch(e){
+    alert('Could not refresh accounts: '+(e.message||e));
+  }finally{
+    if(btn){ btn.disabled = false; btn.textContent = btn.dataset.label || '↻ Refresh all'; }
+  }
+}
+
 async function loadSummary(){
   SUMMARY = await authedFetch('/api/tracker/summary');
 }
@@ -530,8 +602,11 @@ function renderLeaderboard(){
     </div>
 
     <section>
-      <h2>Leaderboard <span class="tag">all tracked accounts</span></h2>
-      <p class="sub">Ranked by followers by default -- click any column to re-sort. Click a row to open its growth chart. "Engagement trend" compares this month's average likes to the previous month, from post history we already have.</p>
+      <div class="section-head">
+        <h2>Leaderboard <span class="tag">all tracked accounts</span></h2>
+        <button type="button" class="linkbtn refresh-btn" id="refreshAllBtn" title="Re-scrape every account's real follower count from Instagram right now (~$0.002 each)">&#8635; Refresh all</button>
+      </div>
+      <p class="sub">Ranked by followers by default -- click any column to re-sort. Click a row to open its growth chart. "Engagement trend" compares this month's average likes to the previous month, from post history we already have. The &#8635; next to a follower count re-scrapes just that account.</p>
       ${trackingSinceNote()}
       <div style="overflow-x:auto;margin-top:12px">
       <table id="tLeaderboard">
@@ -546,7 +621,7 @@ function renderLeaderboard(){
                 <span class="pill ${r.group==='sentient'?'s':'c'}">${r.group==='sentient'?'ours':'competitor'}</span>
               </div>
             </div></td>
-            <td>${r.followers!=null?fmt(r.followers):'<span class="na">—</span>'}</td>
+            <td><span class="followers-cell">${r.followers!=null?fmt(r.followers):'<span class="na">—</span>'}<button type="button" class="row-refresh-btn" data-refresh="${r.handle}" title="Refresh @${r.handle}&#39;s real follower count now">&#8635;</button></span></td>
             <td>${deltaCell(r.delta_1d)}</td>
             <td>${deltaCell(r.delta_7d)}</td>
             <td>${deltaCell(r.delta_30d)}</td>
@@ -567,6 +642,11 @@ function renderLeaderboard(){
   $('#tLeaderboard').querySelectorAll('tbody tr').forEach(tr=>tr.onclick=()=>{
     writeAcc(tr.dataset.handle); render();
   });
+  $('#tLeaderboard').querySelectorAll('[data-refresh]').forEach(btn=>btn.onclick=(e)=>{
+    e.stopPropagation();
+    refreshAccountNow(btn.dataset.refresh, btn);
+  });
+  $('#refreshAllBtn').onclick = (e) => refreshAllAccountsNow(e.currentTarget);
 }
 
 /* ---------------- Historical stats table ---------------- */
@@ -652,7 +732,7 @@ async function renderDetail(handle){
     </div>
 
     <div class="kpis">
-      <div class="kpi"><b>Followers</b><strong>${row.followers!=null?fmt(row.followers):'—'}</strong><em title="${dt(row.captured_at)}">${row.captured_at?'as of '+dt(row.captured_at):'no snapshot yet'}</em></div>
+      <div class="kpi"><b>Followers</b><strong>${row.followers!=null?fmt(row.followers):'—'}<button type="button" class="row-refresh-btn" id="detailRefreshBtn" title="Refresh @${handle}&#39;s real follower count now">&#8635;</button></strong><em title="${dt(row.captured_at)}">${row.captured_at?'as of '+dt(row.captured_at):'no snapshot yet'}</em></div>
       <div class="kpi"><b>1 day growth</b><strong>${row.delta_1d?signed(row.delta_1d.delta):'—'}</strong><em>${row.delta_1d?pct(row.delta_1d.pct):'not enough history yet'}</em></div>
       <div class="kpi"><b>7 day growth</b><strong>${row.delta_7d?signed(row.delta_7d.delta):'—'}</strong><em>${row.delta_7d?pct(row.delta_7d.pct):'not enough history yet'}</em></div>
       <div class="kpi"><b>30 day growth</b><strong>${row.delta_30d?signed(row.delta_30d.delta):'—'}</strong><em>${row.delta_30d?pct(row.delta_30d.pct):'not enough history yet'}</em></div>
@@ -681,6 +761,7 @@ async function renderDetail(handle){
     </section>
   `;
   $('#backBtn').onclick = () => { writeAcc(''); render(); };
+  $('#detailRefreshBtn').onclick = (e) => refreshAccountNow(handle, e.currentTarget);
 
   if(hist.length){
     CHARTS.push(new Chart($('#cFollowers'),{type:'line',
