@@ -149,19 +149,25 @@ function TaskCard({ task, t, showOwner, onOpen, onEdit, onDragStart, onDropBefor
         onContextMenu(event, task);
       }}
     >
-      <button type="button" className="queue-thumb-open" onClick={() => onOpen(task)} aria-label={t.editTask}>
-        {post.coverUrl && !imageFailed
-          ? <img src={`${API_BASE}${post.coverUrl}`} alt="" onError={() => setImageFailed(true)} />
-          : <div className="queue-cover-empty">@</div>}
-      </button>
-      <span className="queue-drag"><GripVertical size={12} /></span>
-      {task.priority ? <span className={`queue-priority ${task.priority}`}>{t[task.priority]}</span> : null}
+      {/* The image keeps its own square box (.queue-thumb-media) so the
+          owner bar below is added height, not an overlay that crops the
+          cover photo -- the whole point of showing it is to see the post,
+          owner label included. */}
+      <div className="queue-thumb-media">
+        <button type="button" className="queue-thumb-open" onClick={() => onOpen(task)} aria-label={t.editTask}>
+          {post.coverUrl && !imageFailed
+            ? <img src={`${API_BASE}${post.coverUrl}`} alt="" onError={() => setImageFailed(true)} />
+            : <div className="queue-cover-empty">@</div>}
+        </button>
+        <span className="queue-drag"><GripVertical size={12} /></span>
+        {task.priority ? <span className={`queue-priority ${task.priority}`}>{t[task.priority]}</span> : null}
+        <button type="button" className="queue-thumb-edit" onClick={() => onEdit(task)} aria-label={t.edit}><Pencil size={10} /></button>
+      </div>
       {/* Full-width bar rather than a round avatar chip -- at thumbnail size
           a circle only has room for two letters, while a bar spanning the
           card can show enough of the owner's name to actually identify them
           in Team overview, where a card could belong to any teammate. */}
       {owner ? <span className="queue-thumb-owner" title={owner}>{owner.split('@')[0]}</span> : null}
-      <button type="button" className="queue-thumb-edit" onClick={() => onEdit(task)} aria-label={t.edit}><Pencil size={12} /></button>
     </article>
   );
 }
