@@ -124,12 +124,13 @@ function Prefs({ lang, setLang, theme, setTheme }) {
   );
 }
 
-function TaskCard({ task, t, onOpen, onEdit, onDragStart, onDropBefore, onContextMenu }) {
+function TaskCard({ task, t, showOwner, onOpen, onEdit, onDragStart, onDropBefore, onContextMenu }) {
   const post = task.post || {};
   const [imageFailed, setImageFailed] = useState(false);
+  const owner = showOwner ? task.assigneeEmail : null;
   return (
     <article
-      className={`queue-thumb priority-${task.priority || 'none'}`}
+      className={`queue-thumb priority-${task.priority || 'none'}${owner ? ' has-owner' : ''}`}
       draggable
       title={post.caption || (post.missing ? t.noTasks : `@${post.account || 'unknown'}`)}
       onDragStart={(event) => {
@@ -155,6 +156,11 @@ function TaskCard({ task, t, onOpen, onEdit, onDragStart, onDropBefore, onContex
       </button>
       <span className="queue-drag"><GripVertical size={12} /></span>
       {task.priority ? <span className={`queue-priority ${task.priority}`}>{t[task.priority]}</span> : null}
+      {/* Full-width bar rather than a round avatar chip -- at thumbnail size
+          a circle only has room for two letters, while a bar spanning the
+          card can show enough of the owner's name to actually identify them
+          in Team overview, where a card could belong to any teammate. */}
+      {owner ? <span className="queue-thumb-owner" title={owner}>{owner.split('@')[0]}</span> : null}
       <button type="button" className="queue-thumb-edit" onClick={() => onEdit(task)} aria-label={t.edit}><Pencil size={12} /></button>
     </article>
   );
@@ -362,7 +368,7 @@ function QueueApp({ user }) {
         const Icon = column.icon;
         return <section key={column.value} className={`queue-column ${column.color}`} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); move(column.value); }}>
           <header><div><Icon size={15} /><h3>{t[column.copyKey]}</h3><span>{column.tasks.length}</span></div>{column.value === 'posted' && !showArchive ? <p>{t.archived}</p> : null}</header>
-          <div className="queue-task-list">{column.tasks.map((task) => <TaskCard key={task.id} task={task} t={t} onOpen={setOpenTask} onEdit={setEditing} onDragStart={setDraggingId} onDropBefore={move} onContextMenu={openMenu} />)}{!column.tasks.length ? <p className="queue-empty">{t.noTasks}</p> : null}</div>
+          <div className="queue-task-list">{column.tasks.map((task) => <TaskCard key={task.id} task={task} t={t} showOwner={isAdmin && scope === 'all'} onOpen={setOpenTask} onEdit={setEditing} onDragStart={setDraggingId} onDropBefore={move} onContextMenu={openMenu} />)}{!column.tasks.length ? <p className="queue-empty">{t.noTasks}</p> : null}</div>
         </section>;
       })}</section> : null}
       {/* Same right-rail markup/CSS classes as the main dashboard's post
