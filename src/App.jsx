@@ -2864,6 +2864,10 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
   const [slackStatus, setSlackStatus] = useState(null);
   const [slackSending, setSlackSending] = useState(false);
   const [slackNotice, setSlackNotice] = useState('');
+  const [customAlertTitle, setCustomAlertTitle] = useState('');
+  const [customAlertMessage, setCustomAlertMessage] = useState('');
+  const [customAlertSending, setCustomAlertSending] = useState(false);
+  const [customAlertNotice, setCustomAlertNotice] = useState('');
   const [apifyRuns, setApifyRuns] = useState([]);
   const [apifyLoading, setApifyLoading] = useState(false);
   const [ocrStatus, setOcrStatus] = useState(null);
@@ -3201,6 +3205,39 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
       setSlackNotice('Network error.');
     } finally {
       setSlackSending(false);
+    }
+  };
+
+  const sendCustomAlert = async () => {
+    const message = customAlertMessage.trim();
+    if (!message) {
+      setCustomAlertNotice('Write something to send first.');
+      return;
+    }
+    setCustomAlertSending(true);
+    setCustomAlertNotice('');
+    try {
+      const params = { password, message };
+      if (customAlertTitle.trim()) params.title = customAlertTitle.trim();
+      const response = await apiFetch(`${API_BASE}/api/admin/slack-custom`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams(params),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setCustomAlertNotice(body.detail || 'Could not send the alert.');
+        return;
+      }
+      setCustomAlertNotice(body.sent ? 'Alert sent -- check Slack.' : 'Slack accepted the request but did not confirm delivery.');
+      if (body.sent) {
+        setCustomAlertTitle('');
+        setCustomAlertMessage('');
+      }
+    } catch (error) {
+      setCustomAlertNotice('Network error.');
+    } finally {
+      setCustomAlertSending(false);
     }
   };
 
@@ -3742,6 +3779,44 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
                     </button>
                   </div>
                   {slackNotice ? <p className="settings-notice">{slackNotice}</p> : null}
+                </section>
+
+                <section className="settings-section">
+                  <h3>
+                    <Megaphone size={13} /> Custom alert
+                  </h3>
+                  <p className="wizard-hint">
+                    Send a one-off Slack message for anything that doesn't fit HOT posts, disk, or snapshot alerts.
+                  </p>
+                  <div className="custom-alert-form">
+                    <input
+                      type="text"
+                      className="custom-alert-title"
+                      placeholder="Title (optional)"
+                      value={customAlertTitle}
+                      onChange={(event) => setCustomAlertTitle(event.target.value)}
+                      maxLength={120}
+                    />
+                    <textarea
+                      className="custom-alert-message"
+                      placeholder="What do you want to notify?"
+                      value={customAlertMessage}
+                      onChange={(event) => setCustomAlertMessage(event.target.value)}
+                      rows={3}
+                      maxLength={2900}
+                    />
+                    <div className="settings-section-head">
+                      <button
+                        type="button"
+                        className="ghost-button"
+                        onClick={sendCustomAlert}
+                        disabled={customAlertSending || !slackStatus?.configured || !customAlertMessage.trim()}
+                      >
+                        {customAlertSending ? 'Sending…' : 'Send alert'}
+                      </button>
+                    </div>
+                  </div>
+                  {customAlertNotice ? <p className="settings-notice">{customAlertNotice}</p> : null}
                 </section>
 
                 <section className="settings-section">
