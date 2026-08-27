@@ -32,7 +32,7 @@ const COPY = {
     overview: 'Overview', due: 'Due', noDue: 'No due date', edit: 'Edit task', save: 'Save changes', cancel: 'Cancel',
     note: 'Brief or note', priority: 'Priority', tags: 'Tags', noPriority: 'No priority', low: 'Low', medium: 'Medium',
     high: 'High', urgent: 'Urgent', allUsers: 'Everyone', loading: 'Loading Queue…', retry: 'Try again',
-    archived: 'Posted tasks are hidden. Drag a task here to archive it.', teamPending: 'team pending',
+    archived: 'Posted tasks auto-hide 24h after posting. Show archive to see older ones.', teamPending: 'team pending',
     close: 'Close', editTask: 'Edit task',
   },
   es: {
@@ -42,7 +42,7 @@ const COPY = {
     overview: 'Resumen', due: 'Fecha límite', noDue: 'Sin fecha límite', edit: 'Editar tarea', save: 'Guardar cambios', cancel: 'Cancelar',
     note: 'Brief o nota', priority: 'Prioridad', tags: 'Etiquetas', noPriority: 'Sin prioridad', low: 'Baja', medium: 'Media',
     high: 'Alta', urgent: 'Urgente', allUsers: 'Todo el equipo', loading: 'Cargando Queue…', retry: 'Reintentar',
-    archived: 'Las tareas publicadas están ocultas. Arrastra una tarea aquí para archivarla.', teamPending: 'pendientes del equipo',
+    archived: 'Las tareas publicadas se ocultan solas 24h después. Activa "Ver archivo" para ver las más viejas.', teamPending: 'pendientes del equipo',
     close: 'Cerrar', editTask: 'Editar tarea',
   },
 };
@@ -279,10 +279,9 @@ function QueueApp({ user }) {
       {loading && !data ? <section className="queue-state"><LoaderCircle className="queue-spin" size={22} /><p>{t.loading}</p></section> : null}
       {data ? <section className="queue-board">{columns.map((column) => {
         const Icon = column.icon;
-        const visible = column.value !== 'posted' || showArchive;
-        return <section key={column.value} className={`queue-column ${column.color} ${visible ? '' : 'is-archive-target'}`} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); move(column.value); }}>
-          <header><div><Icon size={15} /><h3>{t[column.copyKey]}</h3><span>{visible ? column.tasks.length : 0}</span></div>{column.value === 'posted' && !showArchive ? <p>{t.archived}</p> : null}</header>
-          {visible ? <div className="queue-task-list">{column.tasks.map((task) => <TaskCard key={task.id} task={task} t={t} onOpen={setOpenTask} onEdit={setEditing} onDragStart={setDraggingId} onDropBefore={move} />)}{!column.tasks.length ? <p className="queue-empty">{t.noTasks}</p> : null}</div> : <div className="queue-archive-drop"><Archive size={18} /><span>{t.posted}</span></div>}
+        return <section key={column.value} className={`queue-column ${column.color}`} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); move(column.value); }}>
+          <header><div><Icon size={15} /><h3>{t[column.copyKey]}</h3><span>{column.tasks.length}</span></div>{column.value === 'posted' && !showArchive ? <p>{t.archived}</p> : null}</header>
+          <div className="queue-task-list">{column.tasks.map((task) => <TaskCard key={task.id} task={task} t={t} onOpen={setOpenTask} onEdit={setEditing} onDragStart={setDraggingId} onDropBefore={move} />)}{!column.tasks.length ? <p className="queue-empty">{t.noTasks}</p> : null}</div>
         </section>;
       })}</section> : null}
       {openTask ? (
