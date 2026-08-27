@@ -34,6 +34,7 @@ import {
   Settings,
   SlidersHorizontal,
   TrendingUp,
+  Users,
   X,
   Video,
 } from 'lucide-react';
@@ -4612,6 +4613,10 @@ function AssignPostModal({ post, userEmail, isAdmin, onClose, onAssigned }) {
 
   const tagOptions = ['content', 'design', 'copy', 'research', 'review', 'repurpose'];
   const cover = post.coverUrl ? (post.coverUrl.startsWith('http') ? post.coverUrl : `${API_BASE}${post.coverUrl}`) : '';
+  // Trigger text for the assignee dropdown: nothing chosen, one name, or a
+  // headcount once it's more than one -- mirrors how the filter bar's own
+  // dropdowns (Account, Type, etc.) summarize a multi-select.
+  const assigneeSummary = selected.size === 0 ? '' : selected.size === 1 ? [...selected][0] : `${selected.size} people`;
 
   return (
     <div className="queue-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) onClose(); }}>
@@ -4634,19 +4639,27 @@ function AssignPostModal({ post, userEmail, isAdmin, onClose, onAssigned }) {
           </div>
         </div>
 
-        <fieldset className="queue-assign-fieldset">
-          <legend>Assign to</legend>
-          <div className="queue-user-picker">
-            {users.map((user) => (
-              <label className={selected.has(user.email) ? 'queue-user-option is-selected' : 'queue-user-option'} key={user.email}>
-                <input type="checkbox" checked={selected.has(user.email)} onChange={() => toggleUser(user.email)} />
-                <span className="queue-user-initial">{user.email.charAt(0).toUpperCase()}</span>
-                <span>{user.email}</span>
-                {user.role === 'admin' ? <em>Admin</em> : null}
-              </label>
-            ))}
-          </div>
-        </fieldset>
+        <div className="queue-assign-fieldset queue-assign-assignee-field">
+          <FilterPopover
+            id="queue-assignees"
+            icon={<Users size={13} />}
+            label="Assign to"
+            summary={assigneeSummary}
+            isActive={selected.size > 0}
+            width={320}
+          >
+            <div className="queue-user-picker">
+              {users.map((user) => (
+                <label className={selected.has(user.email) ? 'queue-user-option is-selected' : 'queue-user-option'} key={user.email}>
+                  <input type="checkbox" checked={selected.has(user.email)} onChange={() => toggleUser(user.email)} />
+                  <span className="queue-user-initial">{user.email.charAt(0).toUpperCase()}</span>
+                  <span>{user.email}</span>
+                  {user.role === 'admin' ? <em>Admin</em> : null}
+                </label>
+              ))}
+            </div>
+          </FilterPopover>
+        </div>
 
         <div className="queue-assign-grid">
           <label>
