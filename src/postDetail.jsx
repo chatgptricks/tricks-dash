@@ -439,9 +439,7 @@ export function SlideDownload({ post }) {
 
             {state === 'listing' ? (
               <div className="media-modal-loading" aria-live="polite">
-                <div className="media-loading-grid" aria-hidden="true">
-                  {Array.from({ length: 6 }, (_, index) => <span key={index} />)}
-                </div>
+                <span className="media-loading-spinner" aria-hidden="true" />
                 <p>{t('Fetching media…')}</p>
               </div>
             ) : items && items.length ? (
@@ -462,11 +460,7 @@ export function SlideDownload({ post }) {
 
                 <footer className="media-modal-foot">
                   <div className="media-selection-summary">
-                    <span>{picked.size}</span>
-                    <p>
-                      {picked.size} {t(picked.size === 1 ? 'file' : 'files')} {t('selected')}
-                      <small>{t('Select media hint')}</small>
-                    </p>
+                    {picked.size} {t(picked.size === 1 ? 'file' : 'files')} {t('selected')}
                   </div>
                   <div className="media-modal-actions">
                     <button
