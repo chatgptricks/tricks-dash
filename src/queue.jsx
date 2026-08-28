@@ -413,6 +413,8 @@ function QueueApp({ user }) {
   const [selectedTasks, setSelectedTasks] = useState(() => new Set());
   const [weekStart, setWeekStart] = useState(() => weekMonday());
   const scopeRef = useRef(scope);
+  const deepLinkedTaskId = useRef(Number(new URLSearchParams(window.location.search).get('task')) || null);
+  const openedDeepLink = useRef(false);
   scopeRef.current = scope;
   const t = COPY[lang];
 
@@ -434,6 +436,18 @@ function QueueApp({ user }) {
   }, [showArchive, user.email]);
 
   useEffect(() => { load(scope, showArchive); }, [load, scope, showArchive]);
+
+  // Assignment DMs land here. The task is opened after authenticated Queue
+  // data arrives, rather than trying to serialise sensitive post data into
+  // the URL Slack carries around.
+  useEffect(() => {
+    if (!data || openedDeepLink.current || !deepLinkedTaskId.current) return;
+    const task = (data.assignments || []).find((item) => item.id === deepLinkedTaskId.current);
+    if (task) {
+      setOpenTask(task);
+      openedDeepLink.current = true;
+    }
+  }, [data]);
 
   const assignments = data?.assignments || [];
   const today = isoDate();
