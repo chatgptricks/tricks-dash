@@ -670,6 +670,7 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
   // Settings. This is purely a UI convenience -- the backend rejects
   // /api/admin/* for non-admins regardless of what this flag says.
   const [isAdmin, setIsAdmin] = useState(false);
+  const [operatingRole, setOperatingRole] = useState('sales');
   const [queuePendingCount, setQueuePendingCount] = useState(0);
   const [assignmentPost, setAssignmentPost] = useState(null);
   const posts = useMemo(() => dashboard.posts.map(normalizePost), [dashboard.posts]);
@@ -679,7 +680,7 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
 
   const refreshQueueSummary = useCallback(async () => {
     try {
-      const response = await apiFetch(`${API_BASE}/api/dashboard/queue/summary`);
+      const response = await apiFetch(`${API_BASE}/api/dashboard/queue/v2/summary`);
       if (!response.ok) return;
       const summary = await response.json();
       setQueuePendingCount(Number(summary.pending) || 0);
@@ -727,7 +728,10 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
       apiFetch(`${API_BASE}/api/dashboard/me`, { signal })
         .then((response) => (response.ok ? response.json() : null))
         .then((body) => {
-          if (body) setIsAdmin(Boolean(body.is_admin));
+        if (body) {
+          setIsAdmin(Boolean(body.is_admin));
+          setOperatingRole(body.operating_role || 'sales');
+        }
         })
         .catch(() => {});
     } catch (error) {
@@ -1931,6 +1935,7 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
                     onFlags={setPostFlags}
                     onReload={reloadPost}
                     onAssign={setAssignmentPost}
+                    canPool={isAdmin || operatingRole === 'vc'}
                   />
                 ))}
               </div>
@@ -2015,11 +2020,7 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
           {selected ? (
             <PostDetailPanel
               post={selected}
-              captionExtra={
-                selected.account === 'chatgptricks' ? (
-                  <CanvaLine url={canvaLinkForPost(selected.postDate)} />
-                ) : null
-              }
+              captionExtra={<>{selected.account === 'chatgptricks' ? <CanvaLine url={canvaLinkForPost(selected.postDate)} /> : null}{(isAdmin || operatingRole === 'vc') ? <button type="button" className="ghost-button" onClick={() => setAssignmentPost(selected)}><ListTodo size={13} />Send to Pool</button> : null}</>}
             />
           ) : null}
 
@@ -4531,31 +4532,14 @@ function BackgroundTaskStack({ tasks, onDismiss }) {
 // action; every bit of task metadata is optional and belongs to each person’s
 // independent Queue task on the backend.
 function AssignPostModal({ post, userEmail, isAdmin, accounts, onClose, onAssigned }) {
-  const [users, setUsers] = useState([]);
-  const [selected, setSelected] = useState(() => new Set(isAdmin ? [] : [userEmail]));
-  const [status, setStatus] = useState('queue');
+  const [productionPoints, setProductionPoints] = useState(3);
+  const [deadlineAt, setDeadlineAt] = useState('');
   const [note, setNote] = useState('');
-  const [priority, setPriority] = useState('');
-  const [dueDate, setDueDate] = useState('');
-  const [recommendedAccount, setRecommendedAccount] = useState('');
+  const [notes, setNotes] = useState('');
+  const [references, setReferences] = useState('');
   const [tags, setTags] = useState(() => new Set());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const response = await apiFetch(`${API_BASE}/api/dashboard/queue/users`);
-        if (!response.ok) throw new Error('Could not load the team roster.');
-        const data = await response.json();
-        if (!cancelled) setUsers(Array.isArray(data.users) ? data.users : []);
-      } catch (reason) {
-        if (!cancelled) setError(reason.message || 'Could not load the team roster.');
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
 
   useEffect(() => {
     const onKey = (event) => {
@@ -4564,16 +4548,6 @@ function AssignPostModal({ post, userEmail, isAdmin, accounts, onClose, onAssign
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose, saving]);
-
-  const toggleUser = (email) => {
-    if (!isAdmin && email !== userEmail) return;
-    setSelected((current) => {
-      const next = new Set(current);
-      if (next.has(email)) next.delete(email);
-      else next.add(email);
-      return next;
-    });
-  };
 
   const toggleTag = (tag) => {
     setTags((current) => {
@@ -4586,8 +4560,8 @@ function AssignPostModal({ post, userEmail, isAdmin, accounts, onClose, onAssign
 
   const submit = async (event) => {
     event.preventDefault();
-    if (!selected.size) {
-      setError('Choose at least one person to create a Queue task.');
+    if (!Number.isInteger(Number(productionPoints)) || Number(productionPoints) < 1 || !deadlineAt) {
+      setError('Production points and deadline are required.');
       return;
     }
     setSaving(true);
@@ -4596,14 +4570,13 @@ function AssignPostModal({ post, userEmail, isAdmin, accounts, onClose, onAssign
       const body = new FormData();
       body.append('account', post.account);
       body.append('shortcode', post.shortcode);
-      body.append('assignees', [...selected].join(','));
-      body.append('status', status);
-      body.append('note', note);
-      body.append('priority', priority);
-      body.append('due_date', dueDate);
+      body.append('production_points', String(productionPoints));
+      body.append('deadline_at', deadlineAt);
+      body.append('brief', note);
+      body.append('notes', notes);
+      body.append('references', JSON.stringify(references.split(/\n|,/).map((item) => item.trim()).filter(Boolean)));
       body.append('tags', [...tags].join(','));
-      body.append('recommended_account', recommendedAccount);
-      const response = await apiFetch(`${API_BASE}/api/dashboard/queue/assign`, { method: 'POST', body });
+      const response = await apiFetch(`${API_BASE}/api/dashboard/queue/v2/pool`, { method: 'POST', body });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.detail || 'Could not save this Queue assignment.');
       onAssigned();
@@ -4616,11 +4589,6 @@ function AssignPostModal({ post, userEmail, isAdmin, accounts, onClose, onAssign
 
   const tagOptions = ['content', 'design', 'copy', 'research', 'review', 'repurpose'];
   const cover = post.coverUrl ? (post.coverUrl.startsWith('http') ? post.coverUrl : `${API_BASE}${post.coverUrl}`) : '';
-  // Trigger text for the assignee dropdown: nothing chosen, one name, or a
-  // headcount once it's more than one -- mirrors how the filter bar's own
-  // dropdowns (Account, Type, etc.) summarize a multi-select.
-  const assigneeSummary = selected.size === 0 ? '' : selected.size === 1 ? [...selected][0] : `${selected.size} people`;
-  const sentientAccounts = accounts.filter((account) => account.group === 'sentient' && account.is_active);
 
   return (
     <div className="queue-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) onClose(); }}>
@@ -4628,7 +4596,7 @@ function AssignPostModal({ post, userEmail, isAdmin, accounts, onClose, onAssign
         <div className="queue-assign-head">
           <div>
             <p className="section-label">Queue</p>
-            <h2 id="queue-assign-title">Assign post</h2>
+            <h2 id="queue-assign-title">Send to Pool</h2>
           </div>
           <button type="button" className="icon-button" aria-label="Close assignment dialog" onClick={onClose} disabled={saving}>
             <X size={16} />
@@ -4643,57 +4611,14 @@ function AssignPostModal({ post, userEmail, isAdmin, accounts, onClose, onAssign
           </div>
         </div>
 
-        <div className="queue-assign-fieldset queue-assign-assignee-field">
-          <FilterPopover
-            id="queue-assignees"
-            icon={<Users size={13} />}
-            label="Assign to"
-            summary={assigneeSummary}
-            isActive={selected.size > 0}
-            width={320}
-          >
-            <div className="queue-user-picker">
-              {users.map((user) => (
-                <label className={selected.has(user.email) ? 'queue-user-option is-selected' : 'queue-user-option'} key={user.email}>
-                  <input type="checkbox" checked={selected.has(user.email)} onChange={() => toggleUser(user.email)} />
-                  <span className="queue-user-initial">{user.email.charAt(0).toUpperCase()}</span>
-                  <span>{user.email}</span>
-                  {user.role === 'admin' ? <em>Admin</em> : null}
-                </label>
-              ))}
-            </div>
-          </FilterPopover>
-        </div>
-
         <div className="queue-assign-grid">
           <label>
-            <span>Status</span>
-            <select value={status} onChange={(event) => setStatus(event.target.value)}>
-              <option value="queue">Queue</option>
-              <option value="in_progress">In progress</option>
-              <option value="posted">Posted</option>
-            </select>
+            <span>Production points <i>required</i></span>
+            <input type="number" min="1" step="1" value={productionPoints} onChange={(event) => setProductionPoints(event.target.value)} />
           </label>
           <label>
-            <span>Priority</span>
-            <select value={priority} onChange={(event) => setPriority(event.target.value)}>
-              <option value="">No priority</option>
-              <option value="low">Low</option>
-              <option value="medium">Medium</option>
-              <option value="high">High</option>
-              <option value="urgent">Urgent</option>
-            </select>
-          </label>
-          <label>
-            <span>Due date</span>
-            <input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} />
-          </label>
-          <label>
-            <span>Recommended for <i>optional</i></span>
-            <select value={recommendedAccount} onChange={(event) => setRecommendedAccount(event.target.value)}>
-              <option value="">No account</option>
-              {sentientAccounts.map((account) => <option value={account.handle} key={account.handle}>@{account.handle}</option>)}
-            </select>
+            <span>Deadline <i>required</i></span>
+            <input type="datetime-local" value={deadlineAt} onChange={(event) => setDeadlineAt(event.target.value)} />
           </label>
         </div>
 
@@ -4701,6 +4626,9 @@ function AssignPostModal({ post, userEmail, isAdmin, accounts, onClose, onAssign
           <span>Brief or note <i>optional</i></span>
           <textarea value={note} onChange={(event) => setNote(event.target.value)} placeholder="What should this person do with this post?" rows={3} />
         </label>
+
+        <label className="queue-assign-note"><span>Extra notes <i>optional</i></span><textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={2} /></label>
+        <label className="queue-assign-note"><span>Reference links <i>optional</i></span><textarea value={references} onChange={(event) => setReferences(event.target.value)} placeholder="One link per line" rows={2} /></label>
 
         <fieldset className="queue-assign-fieldset queue-tag-fieldset">
           <legend>Tags <i>optional</i></legend>
@@ -4716,9 +4644,9 @@ function AssignPostModal({ post, userEmail, isAdmin, accounts, onClose, onAssign
         {error ? <p className="queue-assign-error" role="alert">{error}</p> : null}
         <div className="queue-assign-actions">
           <button type="button" className="ghost-button" onClick={onClose} disabled={saving}>Cancel</button>
-          <button type="submit" className="primary-button" disabled={saving || !users.length}>
+          <button type="submit" className="primary-button" disabled={saving}>
             <ListTodo size={15} />
-            {saving ? 'Saving…' : `Add to Queue${selected.size > 1 ? ` (${selected.size})` : ''}`}
+            {saving ? 'Saving…' : 'Send to Pool'}
           </button>
         </div>
       </form>
@@ -4730,7 +4658,7 @@ function AssignPostModal({ post, userEmail, isAdmin, accounts, onClose, onAssign
 // than portaled: the header isn't inside an overflow-hidden container, so a
 // plain absolute panel is enough and avoids the fixed-position bookkeeping
 // the account dropdown needs.
-function PostMenu({ post, isPromo, onFlags, onReload, onAssign }) {
+function PostMenu({ post, isPromo, onFlags, onReload, onAssign, canPool }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState('');
   const [note, setNote] = useState('');
@@ -4794,7 +4722,7 @@ function PostMenu({ post, isPromo, onFlags, onReload, onAssign }) {
       </button>
       {open ? (
         <div className="post-menu-panel" role="menu" onClick={(event) => event.stopPropagation()}>
-          <button
+          {canPool ? <button
             type="button"
             role="menuitem"
             onClick={(event) => {
@@ -4804,8 +4732,8 @@ function PostMenu({ post, isPromo, onFlags, onReload, onAssign }) {
             }}
           >
             <ListTodo size={13} />
-            Assign to Queue
-          </button>
+            Send to Pool
+          </button> : null}
           <button
             type="button"
             role="menuitem"
@@ -4879,7 +4807,7 @@ const FreshnessRing = memo(function FreshnessRing({ timestamp }) {
   );
 });
 
-const PostCard = memo(function PostCard({ post, priority, selected, onSelect, onFlags, onReload, onAssign }) {
+const PostCard = memo(function PostCard({ post, priority, selected, onSelect, onFlags, onReload, onAssign, canPool }) {
   const [avatarFailed, setAvatarFailed] = useState(false);
   const handleClick = () => onSelect(post.postKey);
   const handleKeyDown = (event) => {
@@ -4925,7 +4853,7 @@ const PostCard = memo(function PostCard({ post, priority, selected, onSelect, on
         </div>
         <div className="post-header-actions">
           <FreshnessRing timestamp={post.timestamp} />
-          <PostMenu post={post} isPromo={isPromo} onFlags={onFlags} onReload={onReload} onAssign={onAssign} />
+          <PostMenu post={post} isPromo={isPromo} onFlags={onFlags} onReload={onReload} onAssign={onAssign} canPool={canPool} />
         </div>
       </div>
 
