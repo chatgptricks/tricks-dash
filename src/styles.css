@@ -7085,22 +7085,22 @@ body {
   z-index: 120;
   display: grid;
   place-items: center;
-  padding: 24px;
-  background: rgba(var(--shade), 0.6);
-  backdrop-filter: blur(6px);
+  padding: 20px;
+  background: rgba(var(--shade), 0.7);
+  backdrop-filter: blur(10px);
 }
 
 .media-modal {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  width: min(1280px, 96vw);
-  max-height: min(90vh, 920px);
-  padding: 16px 18px 14px;
-  border: 1px solid rgba(var(--edge), 0.16);
-  border-radius: 14px;
+  gap: 14px;
+  width: min(1360px, 96vw);
+  max-height: min(92vh, 960px);
+  padding: 18px;
+  border: 1px solid rgba(var(--edge), 0.2);
+  border-radius: 18px;
   background: var(--surface-1);
-  box-shadow: 0 30px 90px rgba(var(--shade), 0.6);
+  box-shadow: 0 32px 100px rgba(var(--shade), 0.72);
   /* .media-modal-head/.media-modal-foot are fixed-height; .media-grid is the
      only part that should scroll internally when a big carousel overflows
      the modal's max-height. min-height:0 is required here -- without it a
@@ -7118,19 +7118,64 @@ body {
   flex: 0 0 auto;
 }
 
-.media-modal-head p {
+.media-modal-title,
+.media-modal-head-actions,
+.media-modal-actions,
+.media-selection-summary {
+  display: flex;
+  align-items: center;
+}
+
+.media-modal-title {
+  min-width: 0;
+  gap: 10px;
+}
+
+.media-modal-title-icon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid color-mix(in srgb, var(--accent) 42%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--accent);
+}
+
+.media-modal-head p,
+.media-selection-summary p {
   margin: 0;
   font-size: 14px;
   font-weight: 700;
   color: var(--text-strong);
 }
 
-.media-modal-head span {
+.media-modal-head p > span {
   display: block;
   margin-top: 3px;
   color: rgba(var(--ink), 0.45);
   font-size: 11px;
   font-weight: 500;
+}
+
+.media-modal-head-actions {
+  flex: 0 0 auto;
+  gap: 8px;
+}
+
+.media-selected-count {
+  display: inline-flex !important;
+  align-items: center;
+  min-height: 30px;
+  margin: 0 !important;
+  padding: 0 9px;
+  border: 1px solid rgba(var(--edge), 0.16);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: rgba(var(--ink), 0.66) !important;
+  font-size: 11px !important;
+  font-variant-numeric: tabular-nums;
 }
 
 .media-grid {
@@ -7144,7 +7189,7 @@ body {
      getBoundingClientRect (row pitch 228px vs. actual 311px cell height,
      i.e. -83px of overlap). A `minmax(0, 200px)` column has its width
      resolved up front, which sidesteps the bug entirely. */
-  grid-template-columns: repeat(var(--media-cols, 5), minmax(0, 200px));
+  grid-template-columns: repeat(var(--media-cols, 5), minmax(0, 208px));
   /* Rows are implicit ("auto" by default) and MUST be pinned to
      max-content. Without this, once .media-grid gets flex-shrunk below its
      content's natural height (see the .media-modal note just below), the
@@ -7158,9 +7203,9 @@ body {
   grid-auto-rows: max-content;
   justify-content: center;
   align-content: start;
-  gap: 14px;
+  gap: 12px;
   overflow-y: auto;
-  padding: 2px;
+  padding: 2px 2px 6px;
   /* Lets this element actually shrink to fit inside .media-modal's
      max-height and become the scrollable region -- see the note on
      .media-modal above. */
@@ -7174,10 +7219,35 @@ body {
   padding: 0;
   overflow: hidden;
   aspect-ratio: 3 / 4;
-  border: 2px solid rgba(var(--edge), 0.12);
-  border-radius: 10px;
+  border: 1px solid rgba(var(--edge), 0.16);
+  border-radius: 12px;
   background: var(--surface-3);
+  box-shadow: 0 4px 18px rgba(var(--shade), 0.16);
+  transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+}
+
+.media-cell:hover,
+.media-cell:focus-within {
+  border-color: rgba(var(--edge), 0.38);
+  box-shadow: 0 10px 24px rgba(var(--shade), 0.25);
+  transform: translateY(-1px);
+}
+
+.media-cell-select {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
   cursor: pointer;
+}
+
+.media-cell-select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -3px;
 }
 
 .media-cell img {
@@ -7214,6 +7284,7 @@ body {
 
 .media-cell.is-picked {
   border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent), 0 10px 24px rgba(var(--shade), 0.28);
 }
 
 /* The tick has to read against a photograph, so it carries its own dark
@@ -7221,12 +7292,12 @@ body {
 .media-cell.is-picked::after {
   content: '✓';
   position: absolute;
-  top: 6px;
+  top: 8px;
   left: 6px;
   display: grid;
   place-items: center;
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   background: var(--accent);
   color: #000;
@@ -7240,10 +7311,8 @@ body {
   left: 0;
   right: 0;
   bottom: 0;
-  /* Right padding reserves room for .media-cell-lens sitting on top of this
-     bar so a long "N. Video" label can't run under the icon. */
-  padding: 4px 30px 4px 6px;
-  background: rgba(0, 0, 0, 0.62);
+  padding: 18px 7px 7px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.82), transparent);
   color: #fff;
   font-size: 10px;
   font-weight: 700;
@@ -7253,79 +7322,145 @@ body {
   text-overflow: ellipsis;
 }
 
-/* Solo-download and Lens are secondary, one-off actions -- keeping them
-   hidden until hover/focus (same pattern as the Queue card's edit button)
-   stops a big carousel's grid from turning into a wall of icons on top of
-   every single cell at once. */
-.media-cell-solo,
-.media-cell-lens {
-  opacity: 0;
-  transition: opacity 120ms ease, background-color 120ms ease, color 120ms ease;
-}
-
-.media-cell:hover .media-cell-solo,
-.media-cell:focus-within .media-cell-solo,
-.media-cell:hover .media-cell-lens,
-.media-cell:focus-within .media-cell-lens {
-  opacity: 1;
-}
-
-.media-cell-solo {
+.media-cell-number {
   position: absolute;
-  top: 6px;
-  right: 6px;
-  display: grid;
-  place-items: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 6px;
-  background: rgba(0, 0, 0, 0.62);
-  color: #fff;
-  cursor: pointer;
-}
-
-.media-cell-solo:hover {
-  background: var(--accent);
-  color: #000;
-}
-
-/* Sits on the right edge of the bottom label bar (.media-cell-tag), which
-   only ever holds a short "N. Image/Video" string -- plenty of room. */
-.media-cell-lens {
-  position: absolute;
-  right: 6px;
-  bottom: 5px;
+  top: 8px;
+  left: 34px;
   z-index: 1;
-  display: grid;
-  place-items: center;
-  width: 22px;
-  height: 22px;
+  min-width: 22px;
+  padding: 3px 5px;
   border-radius: 6px;
-  background: rgba(0, 0, 0, 0.62);
+  background: rgba(0, 0, 0, 0.55);
   color: #fff;
-  cursor: pointer;
+  font-size: 10px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
 }
 
-.media-cell-lens:hover {
+.media-cell-quick-actions {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  z-index: 2;
+  display: flex;
+  gap: 5px;
+  opacity: 0;
+  transform: translateY(-3px);
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+
+.media-cell:hover .media-cell-quick-actions,
+.media-cell:focus-within .media-cell-quick-actions {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.media-cell-action {
+  display: grid;
+  place-items: center;
+  width: 27px;
+  height: 27px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.66);
+  color: #fff;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+.media-cell-action:hover:not(:disabled),
+.media-cell-action:focus-visible {
   background: var(--accent);
+  border-color: var(--accent);
   color: #000;
+}
+
+.media-cell-action:disabled,
+.media-cell-select:disabled {
+  cursor: wait;
+}
+
+.media-modal-loading {
+  display: grid;
+  gap: 14px;
+  padding: 8px 2px 2px;
+}
+
+.media-modal-loading p {
+  margin: 0;
+  color: rgba(var(--ink), 0.56);
+  font-size: 13px;
+  text-align: center;
+}
+
+.media-loading-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.media-loading-grid span {
+  min-height: 150px;
+  border-radius: 12px;
+  background: linear-gradient(105deg, rgba(var(--edge), 0.07) 30%, rgba(var(--edge), 0.16) 48%, rgba(var(--edge), 0.07) 66%);
+  background-size: 240% 100%;
+  animation: media-loading-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes media-loading-shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -140% 0; }
 }
 
 .media-modal-foot {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 14px;
   flex-wrap: wrap;
   flex: 0 0 auto;
-  padding-top: 10px;
+  padding-top: 14px;
   border-top: 1px solid rgba(var(--edge), 0.1);
 }
 
 .media-modal-actions {
-  display: flex;
-  align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.media-selection-summary {
+  min-width: 0;
+  gap: 8px;
+}
+
+.media-selection-summary > span {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.media-selection-summary p {
+  font-size: 12px;
+}
+
+.media-selection-summary small {
+  display: block;
+  margin-top: 2px;
+  color: rgba(var(--ink), 0.48);
+  font-size: 10px;
+  font-weight: 500;
 }
 
 .media-modal-empty {
@@ -7334,6 +7469,27 @@ body {
   color: rgba(var(--ink), 0.5);
   font-size: 13px;
   text-align: center;
+}
+
+@media (hover: none) {
+  .media-cell-quick-actions {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .media-modal-backdrop { padding: 10px; }
+  .media-modal { width: 100%; max-height: 94vh; padding: 14px; border-radius: 15px; }
+  .media-modal-title-icon { width: 32px; height: 32px; }
+  .media-selected-count { display: none !important; }
+  .media-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+  .media-modal-foot { align-items: stretch; }
+  .media-modal-actions { width: 100%; }
+  .media-modal-actions .ghost-button,
+  .media-modal-actions .primary-button { flex: 1 1 auto; justify-content: center; }
+  .media-modal-actions .text-button { width: 100%; text-align: left; }
+  .media-loading-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 /* Handle field + its explicit lookup button. */

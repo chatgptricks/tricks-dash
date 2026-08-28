@@ -252,81 +252,77 @@ function bestColumns(count) {
 // a slow/large carousel shows a skeleton shimmer per-cell instead of a wall
 // of solid black boxes that looked broken/frozen while everything loaded at
 // once.
-function MediaCell({ item, picked, onToggle, onDownload, t }) {
+function MediaCell({ item, picked, disabled, onToggle, onDownload, t }) {
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
   const showImage = item.poster && !failed;
   return (
-    <button
-      type="button"
-      className={picked ? 'media-cell is-picked' : 'media-cell'}
-      onClick={onToggle}
-      aria-pressed={picked}
-    >
-      {showImage ? (
-        <>
-          {!loaded ? <span className="media-cell-skeleton" aria-hidden="true" /> : null}
-          <img
-            src={item.poster}
-            alt=""
-            loading="lazy"
-            referrerPolicy="no-referrer"
-            className={loaded ? 'is-loaded' : ''}
-            onLoad={() => setLoaded(true)}
-            onError={() => setFailed(true)}
-          />
-        </>
-      ) : (
-        <span className="media-cell-blank">{item.kind === 'video' ? '▶' : '—'}</span>
-      )}
-      <span className="media-cell-tag">{item.index}. {item.kind === 'video' ? t('Video') : t('Image')}</span>
-      {/* One item is a common case -- grabbing just the third slide -- so it
-          gets its own affordance rather than making you untick everything
-          else. Hidden until hover/focus so a big carousel doesn't turn into
-          a wall of icons. */}
-      <span
-        className="media-cell-solo"
-        role="button"
-        tabIndex={0}
-        title={t('Download just this one')}
-        onClick={(e) => { e.stopPropagation(); onDownload([item.index]); }}
-        onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); onDownload([item.index]); } }}
+    <article className={picked ? 'media-cell is-picked' : 'media-cell'}>
+      <button
+        type="button"
+        className="media-cell-select"
+        onClick={onToggle}
+        disabled={disabled}
+        aria-pressed={picked}
+        aria-label={`${picked ? t('Deselect media') : t('Select media')} ${item.index}`}
       >
-        <Download size={12} />
-      </span>
+        {showImage ? (
+          <>
+            {!loaded ? <span className="media-cell-skeleton" aria-hidden="true" /> : null}
+            <img
+              src={item.poster}
+              alt=""
+              loading="lazy"
+              referrerPolicy="no-referrer"
+              className={loaded ? 'is-loaded' : ''}
+              onLoad={() => setLoaded(true)}
+              onError={() => setFailed(true)}
+            />
+          </>
+        ) : (
+          <span className="media-cell-blank">{item.kind === 'video' ? '▶' : '—'}</span>
+        )}
+        <span className="media-cell-number">{String(item.index).padStart(2, '0')}</span>
+        <span className="media-cell-tag">{item.kind === 'video' ? t('Video') : t('Image')}</span>
+      </button>
+      {/* These are sibling buttons, rather than controls nested inside the
+          selection button. That keeps the grid keyboard-accessible and avoids
+          invalid interactive markup. */}
+      <div className="media-cell-quick-actions">
+        <button
+          type="button"
+          className="media-cell-action"
+          title={t('Download just this one')}
+          aria-label={`${t('Download just this one')} ${item.index}`}
+          disabled={disabled}
+          onClick={() => onDownload([item.index])}
+        >
+          <Download size={13} />
+        </button>
       {/* Reverse-image search to trace a slide back to its original source
           (a lot of these covers are reposts). Lens needs a URL it can fetch
           itself, so this only shows up for slides that actually have a
           poster -- nothing to look up on a blank placeholder. */}
       {item.poster ? (
-        <span
-          className="media-cell-lens"
-          role="button"
-          tabIndex={0}
+        <button
+          type="button"
+          className="media-cell-action"
           title={t('Find with Google Lens')}
+          aria-label={`${t('Find with Google Lens')} ${item.index}`}
           onClick={(e) => {
-            e.stopPropagation();
+            e.preventDefault();
             window.open(
               `https://lens.google.com/uploadbyurl?url=${encodeURIComponent(item.poster)}`,
               '_blank',
               'noopener,noreferrer',
             );
           }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.stopPropagation();
-              window.open(
-                `https://lens.google.com/uploadbyurl?url=${encodeURIComponent(item.poster)}`,
-                '_blank',
-                'noopener,noreferrer',
-              );
-            }
-          }}
         >
           <Eye size={12} />
-        </span>
+        </button>
       ) : null}
-    </button>
+      </div>
+    </article>
   );
 }
 
@@ -423,20 +419,31 @@ export function SlideDownload({ post }) {
         <div className="media-modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) setOpen(false); }}>
           <div className="media-modal" role="dialog" aria-modal="true" aria-label={t('Download media')}>
             <header className="media-modal-head">
-              <p>
-                {t('Download media')}
-                <span>
-                  @{post.account || IG_HANDLE} · {post.shortcode}
-                  {items && items.length ? ` · ${items.length} ${t(items.length === 1 ? 'item' : 'items')}` : ''}
-                </span>
-              </p>
-              <button type="button" className="tool-icon" onClick={() => setOpen(false)} aria-label={t('Close')}>
-                <X size={15} />
-              </button>
+              <div className="media-modal-title">
+                <span className="media-modal-title-icon"><Download size={17} /></span>
+                <p>
+                  {t('Download media')}
+                  <span>
+                    @{post.account || IG_HANDLE} · {post.shortcode}
+                    {items && items.length ? ` · ${items.length} ${t(items.length === 1 ? 'item' : 'items')}` : ''}
+                  </span>
+                </p>
+              </div>
+              <div className="media-modal-head-actions">
+                {items && items.length ? <span className="media-selected-count">{picked.size} {t('selected')}</span> : null}
+                <button type="button" className="tool-icon" onClick={() => setOpen(false)} aria-label={t('Close')}>
+                  <X size={15} />
+                </button>
+              </div>
             </header>
 
             {state === 'listing' ? (
-              <p className="media-modal-empty">{t('Fetching media…')}</p>
+              <div className="media-modal-loading" aria-live="polite">
+                <div className="media-loading-grid" aria-hidden="true">
+                  {Array.from({ length: 6 }, (_, index) => <span key={index} />)}
+                </div>
+                <p>{t('Fetching media…')}</p>
+              </div>
             ) : items && items.length ? (
               <>
                 <div className="media-grid" style={{ '--media-cols': bestColumns(items.length) }}>
@@ -445,6 +452,7 @@ export function SlideDownload({ post }) {
                       key={item.index}
                       item={item}
                       picked={picked.has(item.index)}
+                      disabled={state === 'working'}
                       onToggle={() => toggle(item.index)}
                       onDownload={download}
                       t={t}
@@ -453,14 +461,22 @@ export function SlideDownload({ post }) {
                 </div>
 
                 <footer className="media-modal-foot">
-                  <button
-                    type="button"
-                    className="text-button"
-                    onClick={() => setPicked(allPicked ? new Set() : new Set(items.map((i) => i.index)))}
-                  >
-                    {allPicked ? t('Deselect all') : t('Select all')}
-                  </button>
+                  <div className="media-selection-summary">
+                    <span>{picked.size}</span>
+                    <p>
+                      {picked.size} {t(picked.size === 1 ? 'file' : 'files')} {t('selected')}
+                      <small>{t('Select media hint')}</small>
+                    </p>
+                  </div>
                   <div className="media-modal-actions">
+                    <button
+                      type="button"
+                      className="text-button"
+                      disabled={state === 'working'}
+                      onClick={() => setPicked(allPicked ? new Set() : new Set(items.map((i) => i.index)))}
+                    >
+                      {allPicked ? t('Deselect all') : t('Select all')}
+                    </button>
                     <button
                       type="button"
                       className="ghost-button"
