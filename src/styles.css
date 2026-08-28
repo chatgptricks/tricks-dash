@@ -7145,6 +7145,17 @@ body {
      i.e. -83px of overlap). A `minmax(0, 200px)` column has its width
      resolved up front, which sidesteps the bug entirely. */
   grid-template-columns: repeat(var(--media-cols, 5), minmax(0, 200px));
+  /* Rows are implicit ("auto" by default) and MUST be pinned to
+     max-content. Without this, once .media-grid gets flex-shrunk below its
+     content's natural height (see the .media-modal note just below), the
+     browser redistributes each auto row track to fit the *shrunk* grid
+     height instead of sizing rows to their actual (aspect-ratio-driven)
+     content and letting the grid overflow + scroll -- confirmed live via
+     getBoundingClientRect: grid-template-rows came back as ~214px per row
+     while every cell's real rendered height was 267px, so rows visibly
+     overlapped. max-content forces true content sizing regardless of the
+     grid's own available height. */
+  grid-auto-rows: max-content;
   justify-content: center;
   align-content: start;
   gap: 14px;
