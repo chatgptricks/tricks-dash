@@ -14,8 +14,10 @@
             t = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
           }
           document.documentElement.setAttribute('data-theme', t);
+          document.documentElement.setAttribute('data-accent', localStorage.getItem('sentient.accent') || 'lime');
         } catch (e) {
           document.documentElement.setAttribute('data-theme', 'dark');
+          document.documentElement.setAttribute('data-accent', 'lime');
         }
       })();
     </script>
