@@ -7135,8 +7135,13 @@ body {
 
 .media-grid {
   display: grid;
-  grid-template-columns: repeat(var(--media-cols, 5), minmax(0, 220px));
-  justify-content: center;
+  /* Column COUNT is chosen per item count by bestColumns() in JS (fewest
+     empty cells in the last row); each column then stretches (1fr) to fill
+     the modal's full width, same as the old auto-fill behavior -- a fixed
+     max-width here previously made every thumbnail smaller than before,
+     which made carousels with dense, text-heavy cover images (a common
+     Instagram style) look cramped and illegible. */
+  grid-template-columns: repeat(var(--media-cols, 5), minmax(0, 1fr));
   align-content: start;
   gap: 14px;
   overflow-y: auto;
@@ -7146,21 +7151,6 @@ body {
      .media-modal above. */
   flex: 1 1 auto;
   min-height: 0;
-}
-
-/* Skeleton shown while the media list is still being fetched (can take
-   several seconds for a large, uncached carousel via Apify). A fixed count
-   of pulsing placeholders reads as "loading" instead of the old blank
-   "Fetching media…" text, which looked frozen/broken on a slow request. */
-.media-grid-skeleton {
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  flex: 0 0 auto;
-  overflow: visible;
-}
-
-.media-grid-skeleton .media-cell-skeleton {
-  aspect-ratio: 3 / 4;
-  border-radius: 10px;
 }
 
 .media-cell {
@@ -7188,24 +7178,15 @@ body {
   opacity: 1;
 }
 
-/* Pulsing placeholder shown per-cell until its image actually paints, so a
-   19-slide carousel doesn't flash a wall of solid black boxes all at once. */
+/* Plain placeholder shown per-cell until its image actually paints, so a
+   big carousel doesn't flash a wall of solid black boxes all at once. Flat
+   color on purpose -- an animated shimmer here, repeated across a dozen-plus
+   cells loading at once, read as a distracting flashing block rather than a
+   loading hint. */
 .media-cell-skeleton {
   position: absolute;
   inset: 0;
-  background: linear-gradient(
-    100deg,
-    rgba(var(--edge), 0.08) 30%,
-    rgba(var(--edge), 0.18) 50%,
-    rgba(var(--edge), 0.08) 70%
-  );
-  background-size: 200% 100%;
-  animation: media-skeleton-pulse 1.4s ease-in-out infinite;
-}
-
-@keyframes media-skeleton-pulse {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+  background: rgba(var(--edge), 0.1);
 }
 
 .media-cell-blank {

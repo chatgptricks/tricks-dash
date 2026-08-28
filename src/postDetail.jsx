@@ -436,12 +436,7 @@ export function SlideDownload({ post }) {
             </header>
 
             {state === 'listing' ? (
-              <>
-                <div className="media-grid media-grid-skeleton" aria-hidden="true">
-                  {Array.from({ length: 8 }, (_, i) => <span key={i} className="media-cell-skeleton" />)}
-                </div>
-                <p className="media-modal-empty">{t('Fetching media…')}</p>
-              </>
+              <p className="media-modal-empty">{t('Fetching media…')}</p>
             ) : items && items.length ? (
               <>
                 <div className="media-grid" style={{ '--media-cols': bestColumns(items.length) }}>
