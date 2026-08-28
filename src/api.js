@@ -12,6 +12,8 @@ export const API_BASE = (import.meta.env.VITE_API_BASE || 'https://cortex-api-db
 // this doesn't add a round-trip to normal usage.
 export async function apiFetch(url, options = {}) {
   const headers = new Headers(options.headers || {});
+  const previewRole = window.localStorage.getItem('sentient.queueRolePreview');
+  if (previewRole) headers.set('X-Queue-Role-Preview', previewRole);
   if (firebaseAuth.currentUser) {
     try {
       const token = await firebaseAuth.currentUser.getIdToken();
