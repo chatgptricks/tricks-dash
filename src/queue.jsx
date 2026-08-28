@@ -2,15 +2,20 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ReactDOM from 'react-dom/client';
 import {
   Archive,
+  AlertTriangle,
   ArrowLeft,
+  CalendarDays,
   Check,
+  CheckSquare,
+  ChevronLeft,
+  ChevronRight,
   Clock3,
   ExternalLink,
   GripVertical,
   ListTodo,
   LoaderCircle,
   Pencil,
-  Plus,
+  Square,
   Trash2,
   Users,
   X,
@@ -35,7 +40,12 @@ const COPY = {
     high: 'High', urgent: 'Urgent', allUsers: 'Everyone', loading: 'Loading Queue…', retry: 'Try again',
     archived: 'Posted tasks auto-hide 24h after posting. Show archive to see older ones.', teamPending: 'team pending',
     close: 'Close', editTask: 'Edit task', moveTo: 'Move to', remove: 'Remove task',
-    recommendedFor: 'Recommended for', noRecommendedAccount: 'No account',
+    recommendedFor: 'Recommended for', noRecommendedAccount: 'No account', noRecommendedChange: 'Keep recommended account',
+    board: 'Board', week: 'Week', filters: 'Filters', allPriorities: 'All priorities', allAccounts: 'All recommended accounts',
+    allDueDates: 'All due dates', overdue: 'Overdue', noDate: 'No date', noRecommendation: 'No recommendation',
+    risks: 'Needs attention', overloaded: 'Overloaded', activity: 'Activity', noActivity: 'No activity yet.',
+    selectedTasks: 'selected', bulkEdit: 'Bulk edit', applyChanges: 'Apply changes', clearSelection: 'Clear', assignTo: 'Assign to',
+    noAssigneeChange: 'Keep assignee', noChanges: 'Choose at least one field to update.', unscheduled: 'Unscheduled',
     confirmRemove: 'Remove this task for good? This cannot be undone.',
   },
   es: {
@@ -47,7 +57,12 @@ const COPY = {
     high: 'Alta', urgent: 'Urgente', allUsers: 'Todo el equipo', loading: 'Cargando Queue…', retry: 'Reintentar',
     archived: 'Las tareas publicadas se ocultan solas 24h después. Activa "Ver archivo" para ver las más viejas.', teamPending: 'pendientes del equipo',
     close: 'Cerrar', editTask: 'Editar tarea', moveTo: 'Mover a', remove: 'Eliminar tarea',
-    recommendedFor: 'Recomendado para', noRecommendedAccount: 'Sin cuenta',
+    recommendedFor: 'Recomendado para', noRecommendedAccount: 'Sin cuenta', noRecommendedChange: 'Mantener cuenta recomendada',
+    board: 'Tablero', week: 'Semana', filters: 'Filtros', allPriorities: 'Todas las prioridades', allAccounts: 'Todas las cuentas recomendadas',
+    allDueDates: 'Todas las fechas', overdue: 'Vencidas', noDate: 'Sin fecha', noRecommendation: 'Sin recomendación',
+    risks: 'Requiere atención', overloaded: 'Con demasiadas tareas', activity: 'Actividad', noActivity: 'Aún no hay actividad.',
+    selectedTasks: 'seleccionadas', bulkEdit: 'Edición masiva', applyChanges: 'Aplicar cambios', clearSelection: 'Limpiar', assignTo: 'Asignar a',
+    noAssigneeChange: 'Mantener responsable', noChanges: 'Elige al menos un campo para actualizar.', unscheduled: 'Sin fecha',
     confirmRemove: '¿Eliminar esta tarea para siempre? No se puede deshacer.',
   },
 };
@@ -76,6 +91,36 @@ function themeIcon(theme) {
 
 function initials(email) {
   return (email || '?').trim().slice(0, 2).toUpperCase();
+}
+
+function isoDate(value = new Date()) {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, '0');
+  const day = String(value.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function weekMonday(value = new Date()) {
+  const date = new Date(value.getFullYear(), value.getMonth(), value.getDate());
+  const day = (date.getDay() + 6) % 7;
+  date.setDate(date.getDate() - day);
+  return date;
+}
+
+function addDays(value, days) {
+  const next = new Date(value);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function eventDescription(event, t) {
+  const fields = event.details?.fields || [];
+  if (event.type === 'assigned') return t.assignTo;
+  if (event.type === 'assignment_refreshed') return t.bulkEdit;
+  if (event.type === 'moved') return `${t.moveTo} ${event.details?.status || ''}`;
+  if (event.type === 'bulk_updated') return `${t.bulkEdit}${fields.length ? ` · ${fields.join(', ')}` : ''}`;
+  if (event.type === 'updated') return `${t.edit}${fields.length ? ` · ${fields.join(', ')}` : ''}`;
+  return event.type.replace(/_/g, ' ');
 }
 
 // Adapts a Queue assignment's embedded post (account, shortcode, caption,
@@ -126,25 +171,25 @@ function Prefs({ lang, setLang, theme, setTheme }) {
   );
 }
 
-function TaskCard({ task, t, showOwner, onOpen, onEdit, onDragStart, onDropBefore, onContextMenu }) {
+function TaskCard({ task, t, showOwner, selectable = false, selected = false, draggable = true, onToggleSelect, onOpen, onEdit, onDragStart, onDropBefore, onContextMenu }) {
   const post = task.post || {};
   const [imageFailed, setImageFailed] = useState(false);
   const owner = showOwner ? task.assigneeEmail : null;
   return (
     <article
-      className={`queue-thumb priority-${task.priority || 'none'}${owner ? ' has-owner' : ''}`}
-      draggable
+      className={`queue-thumb priority-${task.priority || 'none'}${owner ? ' has-owner' : ''}${selected ? ' is-selected' : ''}`}
+      draggable={draggable}
       title={post.caption || (post.missing ? t.noTasks : `@${post.account || 'unknown'}`)}
       onDragStart={(event) => {
         event.dataTransfer.effectAllowed = 'move';
         event.dataTransfer.setData('text/plain', String(task.id));
-        onDragStart(task.id);
+        if (draggable) onDragStart(task.id);
       }}
       onDragOver={(event) => event.preventDefault()}
       onDrop={(event) => {
         event.preventDefault();
         event.stopPropagation();
-        onDropBefore(task.status, task.id);
+        if (draggable) onDropBefore(task.status, task.id);
       }}
       onContextMenu={(event) => {
         event.preventDefault();
@@ -163,6 +208,16 @@ function TaskCard({ task, t, showOwner, onOpen, onEdit, onDragStart, onDropBefor
         </button>
         <span className="queue-drag"><GripVertical size={12} /></span>
         {task.priority ? <span className={`queue-priority ${task.priority}`}>{t[task.priority]}</span> : null}
+        {selectable ? (
+          <button
+            type="button"
+            className="queue-thumb-select"
+            aria-label={selected ? t.clearSelection : t.bulkEdit}
+            onClick={(event) => { event.stopPropagation(); onToggleSelect(task.id); }}
+          >
+            {selected ? <CheckSquare size={13} /> : <Square size={13} />}
+          </button>
+        ) : null}
         <button type="button" className="queue-thumb-edit" onClick={() => onEdit(task)} aria-label={t.edit}><Pencil size={10} /></button>
       </div>
       {/* Full-width bar rather than a round avatar chip -- at thumbnail size
@@ -170,7 +225,10 @@ function TaskCard({ task, t, showOwner, onOpen, onEdit, onDragStart, onDropBefor
           card can show enough of the owner's name to actually identify them
           in Team overview, where a card could belong to any teammate. */}
       {owner ? <span className="queue-thumb-owner" title={owner}>{owner.split('@')[0]}</span> : null}
-      {task.recommendedAccount ? <span className="queue-thumb-recommended" title={`${t.recommendedFor}: @${task.recommendedAccount}`}>→ @{task.recommendedAccount}</span> : null}
+      <div className="queue-thumb-objective">
+        <span className={task.recommendedAccount ? '' : 'is-empty'}>{task.recommendedAccount ? `→ @${task.recommendedAccount}` : t.noRecommendation}</span>
+        {task.note ? <small title={task.note}>{task.note}</small> : null}
+      </div>
     </article>
   );
 }
@@ -220,6 +278,7 @@ function TaskEditor({ task, t, recommendedAccounts, onClose, onSaved }) {
   const [dueDate, setDueDate] = useState(task.dueDate || '');
   const [recommendedAccount, setRecommendedAccount] = useState(task.recommendedAccount || '');
   const [tags, setTags] = useState(() => new Set(task.tags || []));
+  const [history, setHistory] = useState([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const toggleTag = (tag) => setTags((current) => {
@@ -227,6 +286,13 @@ function TaskEditor({ task, t, recommendedAccounts, onClose, onSaved }) {
     if (next.has(tag)) next.delete(tag); else next.add(tag);
     return next;
   });
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch(`/api/dashboard/queue/tasks/${task.id}/history`)
+      .then((result) => { if (!cancelled) setHistory(result.events || []); })
+      .catch(() => { if (!cancelled) setHistory([]); });
+    return () => { cancelled = true; };
+  }, [task.id]);
   const save = async (event) => {
     event.preventDefault();
     setSaving(true); setError('');
@@ -253,10 +319,80 @@ function TaskEditor({ task, t, recommendedAccounts, onClose, onSaved }) {
         </div>
         <label className="queue-editor-note"><span>{t.note}</span><textarea rows={4} value={note} onChange={(event) => setNote(event.target.value)} /></label>
         <fieldset><legend>{t.tags}</legend><div className="queue-editor-tags">{TAGS.map((tag) => <button type="button" key={tag} className={tags.has(tag) ? 'is-on' : ''} onClick={() => toggleTag(tag)}>{tag}</button>)}</div></fieldset>
+        <section className="queue-history">
+          <h3>{t.activity}</h3>
+          {history.length ? history.slice(0, 8).map((event, index) => (
+            <p key={`${event.createdAt}-${index}`}>
+              <strong>{eventDescription(event, t)}</strong>
+              <span>{event.actorEmail} · {new Date(event.createdAt).toLocaleString()}</span>
+            </p>
+          )) : <p className="queue-history-empty">{t.noActivity}</p>}
+        </section>
         {error ? <p className="queue-error">{error}</p> : null}
         <div className="queue-editor-actions"><button type="button" onClick={onClose} disabled={saving}>{t.cancel}</button><button type="submit" className="primary" disabled={saving}>{saving ? '…' : t.save}</button></div>
       </form>
     </div>
+  );
+}
+
+function WeekPlanner({ tasks, weekStart, onWeekChange, onOpen, t }) {
+  const days = Array.from({ length: 7 }, (_, index) => addDays(weekStart, index));
+  const today = isoDate();
+  const unscheduled = tasks.filter((task) => !task.dueDate);
+  return (
+    <section className="queue-week-plan">
+      <header>
+        <div><CalendarDays size={15} /><strong>{t.week}</strong><span>{weekStart.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} – {addDays(weekStart, 6).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span></div>
+        <div className="queue-week-nav"><button type="button" onClick={() => onWeekChange(addDays(weekStart, -7))} aria-label="Previous week"><ChevronLeft size={15} /></button><button type="button" onClick={() => onWeekChange(weekMonday())}>Today</button><button type="button" onClick={() => onWeekChange(addDays(weekStart, 7))} aria-label="Next week"><ChevronRight size={15} /></button></div>
+      </header>
+      <div className="queue-week-grid">
+        {days.map((day) => {
+          const date = isoDate(day);
+          const dueTasks = tasks.filter((task) => task.dueDate === date);
+          return <section key={date} className={date === today ? 'is-today' : ''}>
+            <h3>{day.toLocaleDateString(undefined, { weekday: 'short' })}<span>{day.getDate()}</span></h3>
+            <div>{dueTasks.map((task) => <button type="button" key={task.id} className={`queue-week-task priority-${task.priority || 'none'}`} onClick={() => onOpen(task)}><strong>{task.recommendedAccount ? `→ @${task.recommendedAccount}` : `@${task.post?.account || '?'}`}</strong><span>{task.note || task.post?.caption || t.noRecommendation}</span></button>)}</div>
+          </section>;
+        })}
+      </div>
+      {unscheduled.length ? <div className="queue-unscheduled"><strong>{t.unscheduled}</strong>{unscheduled.map((task) => <button type="button" key={task.id} onClick={() => onOpen(task)}>@{task.recommendedAccount || task.post?.account || '?'}<span>{task.note || task.post?.caption || ''}</span></button>)}</div> : null}
+    </section>
+  );
+}
+
+function BulkEditor({ count, users, accounts, t, onApply, onClear }) {
+  const [assignee, setAssignee] = useState('');
+  const [priority, setPriority] = useState('');
+  const [dueDate, setDueDate] = useState('');
+  const [recommendedAccount, setRecommendedAccount] = useState('');
+  const [tags, setTags] = useState(() => new Set());
+  const [working, setWorking] = useState(false);
+  const [error, setError] = useState('');
+  const toggleTag = (tag) => setTags((current) => {
+    const next = new Set(current);
+    if (next.has(tag)) next.delete(tag); else next.add(tag);
+    return next;
+  });
+  const submit = async (event) => {
+    event.preventDefault();
+    const changes = { assignee, priority, dueDate, recommendedAccount, tags: [...tags] };
+    if (!assignee && !priority && !dueDate && !recommendedAccount && !tags.size) { setError(t.noChanges); return; }
+    setWorking(true); setError('');
+    try { await onApply(changes); } catch (reason) { setError(reason.message || 'Could not update the selected tasks.'); } finally { setWorking(false); }
+  };
+  return (
+    <form className="queue-bulk-editor" onSubmit={submit}>
+      <div className="queue-bulk-title"><CheckSquare size={16} /><strong>{count} {t.selectedTasks}</strong><span>{t.bulkEdit}</span><button type="button" onClick={onClear}>{t.clearSelection}</button></div>
+      <div className="queue-bulk-fields">
+        <label><span>{t.assignTo}</span><select value={assignee} onChange={(event) => setAssignee(event.target.value)}><option value="">{t.noAssigneeChange}</option>{users.map((user) => <option key={user.email} value={user.email}>{user.email}</option>)}</select></label>
+        <label><span>{t.recommendedFor}</span><select value={recommendedAccount} onChange={(event) => setRecommendedAccount(event.target.value)}><option value="">{t.noRecommendedChange}</option>{accounts.map((account) => <option key={account.handle} value={account.handle}>@{account.handle}</option>)}</select></label>
+        <label><span>{t.priority}</span><select value={priority} onChange={(event) => setPriority(event.target.value)}><option value="">{t.allPriorities}</option>{['low', 'medium', 'high', 'urgent'].map((value) => <option key={value} value={value}>{t[value]}</option>)}</select></label>
+        <label><span>{t.due}</span><input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} /></label>
+      </div>
+      <div className="queue-bulk-tags">{TAGS.map((tag) => <button type="button" key={tag} className={tags.has(tag) ? 'is-on' : ''} onClick={() => toggleTag(tag)}>{tag}</button>)}</div>
+      {error ? <p className="queue-error">{error}</p> : null}
+      <button className="queue-bulk-apply" type="submit" disabled={working}>{working ? '…' : t.applyChanges}</button>
+    </form>
   );
 }
 
@@ -272,6 +408,10 @@ function QueueApp({ user }) {
   const [editing, setEditing] = useState(null);
   const [openTask, setOpenTask] = useState(null);
   const [menu, setMenu] = useState(null);
+  const [view, setView] = useState('board');
+  const [filters, setFilters] = useState({ recommended: '', priority: '', due: 'all' });
+  const [selectedTasks, setSelectedTasks] = useState(() => new Set());
+  const [weekStart, setWeekStart] = useState(() => weekMonday());
   const scopeRef = useRef(scope);
   scopeRef.current = scope;
   const t = COPY[lang];
@@ -296,8 +436,45 @@ function QueueApp({ user }) {
   useEffect(() => { load(scope, showArchive); }, [load, scope, showArchive]);
 
   const assignments = data?.assignments || [];
-  const columns = useMemo(() => STATUS_COLUMNS.map((column) => ({ ...column, tasks: assignments.filter((task) => task.status === column.value) })), [assignments]);
+  const today = isoDate();
+  const activeAssignments = useMemo(() => assignments.filter((task) => task.status !== 'posted'), [assignments]);
+  const riskSummary = useMemo(() => {
+    const overdue = activeAssignments.filter((task) => task.dueDate && task.dueDate < today).length;
+    const noDate = activeAssignments.filter((task) => !task.dueDate).length;
+    const noRecommendation = activeAssignments.filter((task) => !task.recommendedAccount).length;
+    const perUser = activeAssignments.reduce((all, task) => ({ ...all, [task.assigneeEmail]: (all[task.assigneeEmail] || 0) + 1 }), {});
+    const overloaded = Object.values(perUser).filter((count) => count > 5).length;
+    return { overdue, noDate, noRecommendation, overloaded };
+  }, [activeAssignments, today]);
+  const visibleAssignments = useMemo(() => assignments.filter((task) => {
+    if (filters.recommended && task.recommendedAccount !== filters.recommended) return false;
+    if (filters.priority && task.priority !== filters.priority) return false;
+    if (filters.due === 'overdue' && !(task.dueDate && task.dueDate < today && task.status !== 'posted')) return false;
+    if (filters.due === 'no_date' && task.dueDate) return false;
+    if (filters.due === 'no_recommendation' && task.recommendedAccount) return false;
+    return true;
+  }), [assignments, filters, today]);
+  const columns = useMemo(() => STATUS_COLUMNS.map((column) => ({ ...column, tasks: visibleAssignments.filter((task) => task.status === column.value) })), [visibleAssignments]);
   const isAdmin = Boolean(data?.viewer?.isAdmin);
+
+  const toggleTaskSelection = (taskId) => setSelectedTasks((current) => {
+    const next = new Set(current);
+    if (next.has(taskId)) next.delete(taskId); else next.add(taskId);
+    return next;
+  });
+
+  const bulkUpdate = async (changes) => {
+    const body = new FormData();
+    body.append('task_ids', [...selectedTasks].join(','));
+    if (changes.assignee) body.append('assignee', changes.assignee);
+    if (changes.priority) body.append('priority', changes.priority);
+    if (changes.dueDate) body.append('due_date', changes.dueDate);
+    if (changes.recommendedAccount) body.append('recommended_account', changes.recommendedAccount);
+    if (changes.tags.length) body.append('tags', changes.tags.join(','));
+    await apiFetch('/api/dashboard/queue/bulk-update', { method: 'POST', body });
+    setSelectedTasks(new Set());
+    await load(scope, showArchive);
+  };
 
   const move = async (status, beforeId = null) => {
     if (!draggingId) return;
@@ -374,15 +551,29 @@ function QueueApp({ user }) {
 
       {isAdmin && scope === 'all' && metrics ? <section className="queue-overview"><div><span>{t.active}</span><strong>{metrics.pending}</strong></div><div><span>{t.queueCol}</span><strong>{metrics.queue}</strong></div><div><span>{t.progress}</span><strong>{metrics.inProgress}</strong></div><div><span>{t.posted}</span><strong>{metrics.posted}</strong></div><div className="queue-overview-users"><span>{t.overview}</span>{metrics.byUser.slice(0, 8).map((entry) => <button type="button" key={entry.email} onClick={() => setScope(entry.email)}><i>{initials(entry.email)}</i>{entry.email}<b>{entry.pending}</b></button>)}</div></section> : null}
 
+      {data ? <section className="queue-operations">
+        <div className="queue-view-toggle"><button type="button" className={view === 'board' ? 'is-on' : ''} onClick={() => setView('board')}><ListTodo size={14} />{t.board}</button><button type="button" className={view === 'week' ? 'is-on' : ''} onClick={() => setView('week')}><CalendarDays size={14} />{t.week}</button></div>
+        <div className="queue-filters" aria-label={t.filters}>
+          <select value={filters.recommended} onChange={(event) => setFilters((current) => ({ ...current, recommended: event.target.value }))}><option value="">{t.allAccounts}</option>{data.recommendedAccounts?.map((account) => <option key={account.handle} value={account.handle}>@{account.handle}</option>)}</select>
+          <select value={filters.priority} onChange={(event) => setFilters((current) => ({ ...current, priority: event.target.value }))}><option value="">{t.allPriorities}</option>{['low', 'medium', 'high', 'urgent'].map((value) => <option key={value} value={value}>{t[value]}</option>)}</select>
+          <select value={filters.due} onChange={(event) => setFilters((current) => ({ ...current, due: event.target.value }))}><option value="all">{t.allDueDates}</option><option value="overdue">{t.overdue}</option><option value="no_date">{t.noDate}</option><option value="no_recommendation">{t.noRecommendation}</option></select>
+        </div>
+      </section> : null}
+
+      {data ? <section className="queue-risks"><span><AlertTriangle size={14} />{t.risks}</span><button type="button" className={filters.due === 'overdue' ? 'is-on' : ''} onClick={() => setFilters((current) => ({ ...current, due: 'overdue' }))}>{riskSummary.overdue} {t.overdue}</button><button type="button" className={filters.due === 'no_date' ? 'is-on' : ''} onClick={() => setFilters((current) => ({ ...current, due: 'no_date' }))}>{riskSummary.noDate} {t.noDate}</button><button type="button" className={filters.due === 'no_recommendation' ? 'is-on' : ''} onClick={() => setFilters((current) => ({ ...current, due: 'no_recommendation' }))}>{riskSummary.noRecommendation} {t.noRecommendation}</button>{riskSummary.overloaded ? <span className="queue-risk-overload">{riskSummary.overloaded} {t.overloaded}</span> : null}</section> : null}
+
+      {isAdmin && selectedTasks.size ? <BulkEditor count={selectedTasks.size} users={data?.users || []} accounts={data?.recommendedAccounts || []} t={t} onApply={bulkUpdate} onClear={() => setSelectedTasks(new Set())} /> : null}
+
       {error ? <section className="queue-state queue-error"><p>{error}</p><button type="button" onClick={() => load(scope, showArchive)}>{t.retry}</button></section> : null}
       {loading && !data ? <section className="queue-state"><LoaderCircle className="queue-spin" size={22} /><p>{t.loading}</p></section> : null}
-      {data ? <section className="queue-board">{columns.map((column) => {
+      {data && view === 'board' ? <section className="queue-board">{columns.map((column) => {
         const Icon = column.icon;
         return <section key={column.value} className={`queue-column ${column.color}`} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); move(column.value); }}>
           <header><div><Icon size={15} /><h3>{t[column.copyKey]}</h3><span>{column.tasks.length}</span></div>{column.value === 'posted' && !showArchive ? <p>{t.archived}</p> : null}</header>
-          <div className="queue-task-list">{column.tasks.map((task) => <TaskCard key={task.id} task={task} t={t} showOwner={isAdmin && scope === 'all'} onOpen={setOpenTask} onEdit={setEditing} onDragStart={setDraggingId} onDropBefore={move} onContextMenu={openMenu} />)}{!column.tasks.length ? <p className="queue-empty">{t.noTasks}</p> : null}</div>
+          <div className="queue-task-list">{column.tasks.map((task) => <TaskCard key={task.id} task={task} t={t} showOwner={isAdmin && scope === 'all'} selectable={isAdmin} selected={selectedTasks.has(task.id)} onToggleSelect={toggleTaskSelection} onOpen={setOpenTask} onEdit={setEditing} onDragStart={setDraggingId} onDropBefore={move} onContextMenu={openMenu} />)}{!column.tasks.length ? <p className="queue-empty">{t.noTasks}</p> : null}</div>
         </section>;
       })}</section> : null}
+      {data && view === 'week' ? <WeekPlanner tasks={visibleAssignments.filter((task) => task.status !== 'posted')} weekStart={weekStart} onWeekChange={setWeekStart} onOpen={setOpenTask} t={t} /> : null}
       {/* Same right-rail markup/CSS classes as the main dashboard's post
           detail view (App.jsx), so a task's deep dive here looks and
           behaves identically -- fixed panel, backdrop, close button, cover
