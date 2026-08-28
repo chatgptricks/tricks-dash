@@ -136,6 +136,8 @@ const ES = {
   'Close': 'Cerrar',
   'file': 'archivo',
   'files': 'archivos',
+  'item': 'elemento',
+  'items': 'elementos',
   'Load 60 more': 'Cargar 60 más',
   'Showing': 'Mostrando',
   'No posts match the current filters.': 'Ningún post coincide con los filtros.',
