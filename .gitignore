@@ -17,3 +17,7 @@ coverage/
 # Firebase service-account keys must never be committed -- backend only,
 # stored as a Render Secret File.
 *firebase-adminsdk*.json
+
+# Local agent-handover notes -- session-to-session scratch, not project docs.
+AGENTS.md
+FOR_CODEX.md
