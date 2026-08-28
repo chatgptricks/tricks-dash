@@ -671,6 +671,7 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
   // /api/admin/* for non-admins regardless of what this flag says.
   const [isAdmin, setIsAdmin] = useState(false);
   const [operatingRole, setOperatingRole] = useState('sales');
+  const [operatingRoles, setOperatingRoles] = useState(['sales']);
   const [queuePendingCount, setQueuePendingCount] = useState(0);
   const [assignmentPost, setAssignmentPost] = useState(null);
   const posts = useMemo(() => dashboard.posts.map(normalizePost), [dashboard.posts]);
@@ -731,6 +732,7 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
         if (body) {
           setIsAdmin(Boolean(body.is_admin));
           setOperatingRole(body.operating_role || 'sales');
+          setOperatingRoles(body.operating_roles || [body.operating_role || 'sales']);
         }
         })
         .catch(() => {});
@@ -1935,7 +1937,7 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
                     onFlags={setPostFlags}
                     onReload={reloadPost}
                     onAssign={setAssignmentPost}
-                    canPool={isAdmin || operatingRole === 'vc'}
+                    canPool={isAdmin || operatingRoles.includes('vc')}
                   />
                 ))}
               </div>
@@ -2020,7 +2022,7 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
           {selected ? (
             <PostDetailPanel
               post={selected}
-              captionExtra={<>{selected.account === 'chatgptricks' ? <CanvaLine url={canvaLinkForPost(selected.postDate)} /> : null}{(isAdmin || operatingRole === 'vc') ? <button type="button" className="ghost-button" onClick={() => setAssignmentPost(selected)}><ListTodo size={13} />Send to Pool</button> : null}</>}
+              captionExtra={<>{selected.account === 'chatgptricks' ? <CanvaLine url={canvaLinkForPost(selected.postDate)} /> : null}{(isAdmin || operatingRoles.includes('vc')) ? <button type="button" className="ghost-button" onClick={() => setAssignmentPost(selected)}><ListTodo size={13} />Send to Pool</button> : null}</>}
             />
           ) : null}
 
