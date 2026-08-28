@@ -7488,3 +7488,10 @@ body {
   flex: 0 0 auto;
   white-space: nowrap;
 }
+
+/* Private role simulator, rendered only for Esteban's Dev account. */
+.dev-role-preview { position: fixed; right: 18px; bottom: 18px; z-index: 90; }
+.dev-role-preview > button { display: inline-flex; align-items: center; gap: 7px; min-height: 34px; padding: 0 11px; border: 1px solid rgba(var(--accent-rgb), .48); border-radius: 9px; background: var(--surface-2); box-shadow: 0 12px 30px rgba(var(--shade), .28); color: var(--text-strong); font-size: 12px; font-weight: 760; cursor: pointer; }
+.dev-role-preview > button span { padding: 2px 5px; border-radius: 4px; background: var(--accent); color: #151500; font-size: 9px; font-weight: 900; letter-spacing: .08em; }
+.dev-role-preview-panel { position: absolute; right: 0; bottom: calc(100% + 8px); width: 220px; padding: 12px; border: 1px solid rgba(var(--edge), .16); border-radius: 10px; background: var(--surface-2); box-shadow: 0 20px 50px rgba(var(--shade), .35); }
+.dev-role-preview-panel strong { display: block; color: var(--text-strong); font-size: 12px; }.dev-role-preview-panel p { margin: 3px 0 12px; color: rgba(var(--ink), .52); font-size: 11px; }.dev-role-preview-panel label { display: grid; gap: 5px; color: rgba(var(--ink), .62); font-size: 10px; font-weight: 750; text-transform: uppercase; letter-spacing: .05em; }.dev-role-preview-panel select { width: 100%; height: 32px; border: 1px solid rgba(var(--edge), .17); border-radius: 7px; background: var(--surface-3); color: var(--text-strong); font-size: 12px; text-transform: none; letter-spacing: normal; }

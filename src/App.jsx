@@ -659,6 +659,20 @@ function buildDatePresets(ranges) {
   return presets;
 }
 
+function DevRolePreview({ isDev }) {
+  const [open, setOpen] = useState(false);
+  const active = window.localStorage.getItem('sentient.queueRolePreview') || '';
+  if (!isDev) return null;
+  const label = { sales: 'Sales', pd: 'Post Designer', vc: 'Viral Coordinator', admin: 'Admin' }[active] || 'Dev';
+  const choose = (event) => {
+    const role = event.target.value;
+    if (role) window.localStorage.setItem('sentient.queueRolePreview', role);
+    else window.localStorage.removeItem('sentient.queueRolePreview');
+    window.location.reload();
+  };
+  return <div className="dev-role-preview"><button type="button" onClick={() => setOpen((value) => !value)} aria-expanded={open}><span>DEV</span>{label}</button>{open ? <div className="dev-role-preview-panel"><strong>Role preview</strong><p>Only visible to Esteban.</p><label>Active role<select value={active} onChange={choose}><option value="">Dev · full access</option><option value="sales">Sales</option><option value="pd">Post Designer</option><option value="vc">Viral Coordinator</option><option value="admin">Admin</option></select></label></div> : null}</div>;
+}
+
 function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
   const [dashboard, setDashboard] = useState({ posts: [], summary: {} });
   const [accounts, setAccounts] = useState([]);
@@ -672,6 +686,7 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
   const [isAdmin, setIsAdmin] = useState(false);
   const [operatingRole, setOperatingRole] = useState('sales');
   const [operatingRoles, setOperatingRoles] = useState(['sales']);
+  const [isDev, setIsDev] = useState(false);
   const [queuePendingCount, setQueuePendingCount] = useState(0);
   const [assignmentPost, setAssignmentPost] = useState(null);
   const posts = useMemo(() => dashboard.posts.map(normalizePost), [dashboard.posts]);
@@ -733,6 +748,7 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
           setIsAdmin(Boolean(body.is_admin));
           setOperatingRole(body.operating_role || 'sales');
           setOperatingRoles(body.operating_roles || [body.operating_role || 'sales']);
+          setIsDev(Boolean(body.is_dev));
         }
         })
         .catch(() => {});
@@ -1554,7 +1570,7 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
                   <span>{t('Tracker')}</span>
                   <ExternalLink size={12} className="tool-link-out" aria-hidden="true" />
                 </a>
-                <a
+                {(isAdmin || operatingRoles.some((role) => role === 'pd' || role === 'vc')) ? <a
                   className="tool-link tool-link-queue"
                   href={`${import.meta.env.BASE_URL}queue.html`}
                   target="_blank"
@@ -1565,7 +1581,7 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
                   <span>Queue</span>
                   {queuePendingCount ? <b className="queue-pending-badge">{queuePendingCount > 99 ? '99+' : queuePendingCount}</b> : null}
                   <ExternalLink size={12} className="tool-link-out" aria-hidden="true" />
-                </a>
+                </a> : null}
                 <a
                   className="tool-link"
                   href={`${import.meta.env.BASE_URL}insights.html`}
@@ -2065,6 +2081,7 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
       ) : null}
 
       <BackgroundTaskStack tasks={backgroundTasks} onDismiss={dismissBackgroundTask} />
+      <DevRolePreview isDev={isDev} />
     </div>
   );
 }
@@ -4535,7 +4552,10 @@ function BackgroundTaskStack({ tasks, onDismiss }) {
 // independent Queue task on the backend.
 function AssignPostModal({ post, userEmail, isAdmin, accounts, onClose, onAssigned }) {
   const [productionPoints, setProductionPoints] = useState(3);
-  const [deadlineAt, setDeadlineAt] = useState('');
+  const [deadlineAt, setDeadlineAt] = useState(() => {
+    const deadline = new Date(Date.now() + 6 * 60 * 60 * 1000);
+    return new Date(deadline.getTime() - deadline.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  });
   const [note, setNote] = useState('');
   const [notes, setNotes] = useState('');
   const [references, setReferences] = useState('');
