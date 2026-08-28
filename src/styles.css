@@ -7136,12 +7136,16 @@ body {
 .media-grid {
   display: grid;
   /* Column COUNT is chosen per item count by bestColumns() in JS (fewest
-     empty cells in the last row); each column then stretches (1fr) to fill
-     the modal's full width, same as the old auto-fill behavior -- a fixed
-     max-width here previously made every thumbnail smaller than before,
-     which made carousels with dense, text-heavy cover images (a common
-     Instagram style) look cramped and illegible. */
-  grid-template-columns: repeat(var(--media-cols, 5), minmax(0, 1fr));
+     empty cells in the last row). Columns use a fixed max width (not 1fr)
+     on purpose: an `fr` track's width is only resolved during layout, and
+     Chrome/Safari compute each row's height from `aspect-ratio` children
+     *before* that resolution finishes, so rows ended up sized way too
+     short and adjacent rows overlapped by dozens of px -- confirmed via
+     getBoundingClientRect (row pitch 228px vs. actual 311px cell height,
+     i.e. -83px of overlap). A `minmax(0, 200px)` column has its width
+     resolved up front, which sidesteps the bug entirely. */
+  grid-template-columns: repeat(var(--media-cols, 5), minmax(0, 200px));
+  justify-content: center;
   align-content: start;
   gap: 14px;
   overflow-y: auto;
