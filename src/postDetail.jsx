@@ -228,6 +228,108 @@ export const SelectedPost = memo(function SelectedPost({ post }) {
   );
 });
 
+// Picks a column count (within [MIN_COLS, MAX_COLS]) that leaves the fewest
+// empty cells in the grid's last row for this exact item count, instead of
+// letting CSS auto-fill pick columns purely from viewport width. A 19-item
+// carousel in a fixed 6-column grid leaves 5 empty slots in the last row --
+// this is what actually read as "broken" in bug reports, not a real layout
+// bug. Ties prefer more columns (fuller rows, less vertical scroll).
+const MIN_COLS = 3;
+const MAX_COLS = 6;
+function bestColumns(count) {
+  if (count <= 0) return MIN_COLS;
+  if (count <= MIN_COLS) return count;
+  let best = MAX_COLS;
+  let bestWaste = Infinity;
+  for (let c = MIN_COLS; c <= MAX_COLS; c += 1) {
+    const waste = Math.ceil(count / c) * c - count;
+    if (waste < bestWaste || (waste === bestWaste && c >= best)) { bestWaste = waste; best = c; }
+  }
+  return best;
+}
+
+// One grid cell: owns its own "has the image actually painted yet" state so
+// a slow/large carousel shows a skeleton shimmer per-cell instead of a wall
+// of solid black boxes that looked broken/frozen while everything loaded at
+// once.
+function MediaCell({ item, picked, onToggle, onDownload, t }) {
+  const [loaded, setLoaded] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const showImage = item.poster && !failed;
+  return (
+    <button
+      type="button"
+      className={picked ? 'media-cell is-picked' : 'media-cell'}
+      onClick={onToggle}
+      aria-pressed={picked}
+    >
+      {showImage ? (
+        <>
+          {!loaded ? <span className="media-cell-skeleton" aria-hidden="true" /> : null}
+          <img
+            src={item.poster}
+            alt=""
+            loading="lazy"
+            referrerPolicy="no-referrer"
+            className={loaded ? 'is-loaded' : ''}
+            onLoad={() => setLoaded(true)}
+            onError={() => setFailed(true)}
+          />
+        </>
+      ) : (
+        <span className="media-cell-blank">{item.kind === 'video' ? '▶' : '—'}</span>
+      )}
+      <span className="media-cell-tag">{item.index}. {item.kind === 'video' ? t('Video') : t('Image')}</span>
+      {/* One item is a common case -- grabbing just the third slide -- so it
+          gets its own affordance rather than making you untick everything
+          else. Hidden until hover/focus so a big carousel doesn't turn into
+          a wall of icons. */}
+      <span
+        className="media-cell-solo"
+        role="button"
+        tabIndex={0}
+        title={t('Download just this one')}
+        onClick={(e) => { e.stopPropagation(); onDownload([item.index]); }}
+        onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); onDownload([item.index]); } }}
+      >
+        <Download size={12} />
+      </span>
+      {/* Reverse-image search to trace a slide back to its original source
+          (a lot of these covers are reposts). Lens needs a URL it can fetch
+          itself, so this only shows up for slides that actually have a
+          poster -- nothing to look up on a blank placeholder. */}
+      {item.poster ? (
+        <span
+          className="media-cell-lens"
+          role="button"
+          tabIndex={0}
+          title={t('Find with Google Lens')}
+          onClick={(e) => {
+            e.stopPropagation();
+            window.open(
+              `https://lens.google.com/uploadbyurl?url=${encodeURIComponent(item.poster)}`,
+              '_blank',
+              'noopener,noreferrer',
+            );
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.stopPropagation();
+              window.open(
+                `https://lens.google.com/uploadbyurl?url=${encodeURIComponent(item.poster)}`,
+                '_blank',
+                'noopener,noreferrer',
+              );
+            }
+          }}
+        >
+          <Eye size={12} />
+        </span>
+      ) : null}
+    </button>
+  );
+}
+
 export function SlideDownload({ post }) {
   const { t } = usePrefs();
   const [open, setOpen] = useState(false);
@@ -321,76 +423,37 @@ export function SlideDownload({ post }) {
         <div className="media-modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) setOpen(false); }}>
           <div className="media-modal" role="dialog" aria-modal="true" aria-label={t('Download media')}>
             <header className="media-modal-head">
-              <p>{t('Download media')}<span>@{post.account || IG_HANDLE} · {post.shortcode}</span></p>
+              <p>
+                {t('Download media')}
+                <span>
+                  @{post.account || IG_HANDLE} · {post.shortcode}
+                  {items && items.length ? ` · ${items.length} ${t(items.length === 1 ? 'item' : 'items')}` : ''}
+                </span>
+              </p>
               <button type="button" className="tool-icon" onClick={() => setOpen(false)} aria-label={t('Close')}>
                 <X size={15} />
               </button>
             </header>
 
             {state === 'listing' ? (
-              <p className="media-modal-empty">{t('Fetching media…')}</p>
+              <>
+                <div className="media-grid media-grid-skeleton" aria-hidden="true">
+                  {Array.from({ length: 8 }, (_, i) => <span key={i} className="media-cell-skeleton" />)}
+                </div>
+                <p className="media-modal-empty">{t('Fetching media…')}</p>
+              </>
             ) : items && items.length ? (
               <>
-                <div className="media-grid">
+                <div className="media-grid" style={{ '--media-cols': bestColumns(items.length) }}>
                   {items.map((item) => (
-                    <button
+                    <MediaCell
                       key={item.index}
-                      type="button"
-                      className={picked.has(item.index) ? 'media-cell is-picked' : 'media-cell'}
-                      onClick={() => toggle(item.index)}
-                      aria-pressed={picked.has(item.index)}
-                    >
-                      {item.poster
-                        ? <img src={item.poster} alt="" loading="lazy" referrerPolicy="no-referrer" />
-                        : <span className="media-cell-blank">{item.kind === 'video' ? '▶' : '—'}</span>}
-                      <span className="media-cell-tag">{item.index}. {item.kind === 'video' ? t('Video') : t('Image')}</span>
-                      {/* One item is a common case -- grabbing just the third
-                          slide -- so it gets its own affordance rather than
-                          making you untick everything else. */}
-                      <span
-                        className="media-cell-solo"
-                        role="button"
-                        tabIndex={0}
-                        title={t('Download just this one')}
-                        onClick={(e) => { e.stopPropagation(); download([item.index]); }}
-                        onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); download([item.index]); } }}
-                      >
-                        <Download size={12} />
-                      </span>
-                      {/* Reverse-image search to trace a slide back to its
-                          original source (a lot of these covers are reposts).
-                          Lens needs a URL it can fetch itself, so this only
-                          shows up for slides that actually have a poster --
-                          nothing to look up on a blank placeholder. */}
-                      {item.poster ? (
-                        <span
-                          className="media-cell-lens"
-                          role="button"
-                          tabIndex={0}
-                          title={t('Find with Google Lens')}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            window.open(
-                              `https://lens.google.com/uploadbyurl?url=${encodeURIComponent(item.poster)}`,
-                              '_blank',
-                              'noopener,noreferrer',
-                            );
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.stopPropagation();
-                              window.open(
-                                `https://lens.google.com/uploadbyurl?url=${encodeURIComponent(item.poster)}`,
-                                '_blank',
-                                'noopener,noreferrer',
-                              );
-                            }
-                          }}
-                        >
-                          <Eye size={12} />
-                        </span>
-                      ) : null}
-                    </button>
+                      item={item}
+                      picked={picked.has(item.index)}
+                      onToggle={() => toggle(item.index)}
+                      onDownload={download}
+                      t={t}
+                    />
                   ))}
                 </div>
 
