@@ -262,6 +262,9 @@ export default defineConfig({
   // chatgptricks.github.io/tricks-dash/ -- the repo-name path segment that
   // GitHub Pages requires when there's no custom domain.
   base: '/',
+  // Lets CI/local validation skip the 61MB static archive; normal production
+  // builds retain Vite's default public-directory copy behavior.
+  publicDir: process.env.VITE_SKIP_PUBLIC === '1' ? false : 'public',
   plugins: [react(), serveLocalCovers(), serveInstagramCovers()],
   server: {
     host: '0.0.0.0',
