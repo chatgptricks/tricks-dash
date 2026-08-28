@@ -14,14 +14,16 @@
             t = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
           }
           document.documentElement.setAttribute('data-theme', t);
+          document.documentElement.setAttribute('data-accent', localStorage.getItem('sentient.accent') || 'lime');
         } catch (e) {
           document.documentElement.setAttribute('data-theme', 'dark');
+          document.documentElement.setAttribute('data-accent', 'lime');
         }
       })();
     </script>
-    <script type="module" crossorigin src="/assets/queue-DM5aaKma.js"></script>
+    <script type="module" crossorigin src="/assets/queue-D5YpLuRr.js"></script>
     <link rel="modulepreload" crossorigin href="/assets/sso-B0Eyk_hr.js">
-    <link rel="stylesheet" crossorigin href="/assets/queue-B1K0Ck3U.css">
+    <link rel="stylesheet" crossorigin href="/assets/queue-FZagNtS7.css">
   </head>
   <body>
     <div id="root"></div>
