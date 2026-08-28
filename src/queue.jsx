@@ -35,6 +35,7 @@ const COPY = {
     high: 'High', urgent: 'Urgent', allUsers: 'Everyone', loading: 'Loading Queue…', retry: 'Try again',
     archived: 'Posted tasks auto-hide 24h after posting. Show archive to see older ones.', teamPending: 'team pending',
     close: 'Close', editTask: 'Edit task', moveTo: 'Move to', remove: 'Remove task',
+    recommendedFor: 'Recommended for', noRecommendedAccount: 'No account',
     confirmRemove: 'Remove this task for good? This cannot be undone.',
   },
   es: {
@@ -46,6 +47,7 @@ const COPY = {
     high: 'Alta', urgent: 'Urgente', allUsers: 'Todo el equipo', loading: 'Cargando Queue…', retry: 'Reintentar',
     archived: 'Las tareas publicadas se ocultan solas 24h después. Activa "Ver archivo" para ver las más viejas.', teamPending: 'pendientes del equipo',
     close: 'Cerrar', editTask: 'Editar tarea', moveTo: 'Mover a', remove: 'Eliminar tarea',
+    recommendedFor: 'Recomendado para', noRecommendedAccount: 'Sin cuenta',
     confirmRemove: '¿Eliminar esta tarea para siempre? No se puede deshacer.',
   },
 };
@@ -168,6 +170,7 @@ function TaskCard({ task, t, showOwner, onOpen, onEdit, onDragStart, onDropBefor
           card can show enough of the owner's name to actually identify them
           in Team overview, where a card could belong to any teammate. */}
       {owner ? <span className="queue-thumb-owner" title={owner}>{owner.split('@')[0]}</span> : null}
+      {task.recommendedAccount ? <span className="queue-thumb-recommended" title={`${t.recommendedFor}: @${task.recommendedAccount}`}>→ @{task.recommendedAccount}</span> : null}
     </article>
   );
 }
@@ -210,11 +213,12 @@ function TaskContextMenu({ menu, t, onMove, onEdit, onRemove, onClose }) {
   );
 }
 
-function TaskEditor({ task, t, onClose, onSaved }) {
+function TaskEditor({ task, t, recommendedAccounts, onClose, onSaved }) {
   const [status, setStatus] = useState(task.status);
   const [note, setNote] = useState(task.note || '');
   const [priority, setPriority] = useState(task.priority || '');
   const [dueDate, setDueDate] = useState(task.dueDate || '');
+  const [recommendedAccount, setRecommendedAccount] = useState(task.recommendedAccount || '');
   const [tags, setTags] = useState(() => new Set(task.tags || []));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -230,6 +234,7 @@ function TaskEditor({ task, t, onClose, onSaved }) {
       const body = new FormData();
       body.append('status', status); body.append('note', note); body.append('priority', priority);
       body.append('due_date', dueDate); body.append('tags', [...tags].join(','));
+      body.append('recommended_account', recommendedAccount);
       await apiFetch(`/api/dashboard/queue/tasks/${task.id}`, { method: 'POST', body });
       onSaved();
     } catch (reason) {
@@ -244,6 +249,7 @@ function TaskEditor({ task, t, onClose, onSaved }) {
           <label><span>Status</span><select value={status} onChange={(event) => setStatus(event.target.value)}><option value="queue">{t.queueCol}</option><option value="in_progress">{t.progress}</option><option value="posted">{t.posted}</option></select></label>
           <label><span>{t.priority}</span><select value={priority} onChange={(event) => setPriority(event.target.value)}><option value="">{t.noPriority}</option>{['low', 'medium', 'high', 'urgent'].map((value) => <option value={value} key={value}>{t[value]}</option>)}</select></label>
           <label><span>{t.due}</span><input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} /></label>
+          <label><span>{t.recommendedFor}</span><select value={recommendedAccount} onChange={(event) => setRecommendedAccount(event.target.value)}><option value="">{t.noRecommendedAccount}</option>{recommendedAccounts.map((account) => <option key={account.handle} value={account.handle}>@{account.handle}</option>)}</select></label>
         </div>
         <label className="queue-editor-note"><span>{t.note}</span><textarea rows={4} value={note} onChange={(event) => setNote(event.target.value)} /></label>
         <fieldset><legend>{t.tags}</legend><div className="queue-editor-tags">{TAGS.map((tag) => <button type="button" key={tag} className={tags.has(tag) ? 'is-on' : ''} onClick={() => toggleTag(tag)}>{tag}</button>)}</div></fieldset>
@@ -411,7 +417,7 @@ function QueueApp({ user }) {
           ) : null}
         </aside>
       ) : null}
-      {editing ? <TaskEditor task={editing} t={t} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load(scope, showArchive); }} /> : null}
+      {editing ? <TaskEditor task={editing} t={t} recommendedAccounts={data?.recommendedAccounts || []} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load(scope, showArchive); }} /> : null}
       {menu ? (
         <TaskContextMenu
           menu={menu}

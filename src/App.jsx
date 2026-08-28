@@ -2052,6 +2052,7 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
           post={assignmentPost}
           userEmail={userEmail}
           isAdmin={isAdmin}
+          accounts={accounts}
           onClose={() => setAssignmentPost(null)}
           onAssigned={() => {
             refreshQueueSummary();
@@ -4529,13 +4530,14 @@ function BackgroundTaskStack({ tasks, onDismiss }) {
 // to turn the menu itself into a form. Assigning a post is the only required
 // action; every bit of task metadata is optional and belongs to each person’s
 // independent Queue task on the backend.
-function AssignPostModal({ post, userEmail, isAdmin, onClose, onAssigned }) {
+function AssignPostModal({ post, userEmail, isAdmin, accounts, onClose, onAssigned }) {
   const [users, setUsers] = useState([]);
   const [selected, setSelected] = useState(() => new Set(isAdmin ? [] : [userEmail]));
   const [status, setStatus] = useState('queue');
   const [note, setNote] = useState('');
   const [priority, setPriority] = useState('');
   const [dueDate, setDueDate] = useState('');
+  const [recommendedAccount, setRecommendedAccount] = useState('');
   const [tags, setTags] = useState(() => new Set());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -4600,6 +4602,7 @@ function AssignPostModal({ post, userEmail, isAdmin, onClose, onAssigned }) {
       body.append('priority', priority);
       body.append('due_date', dueDate);
       body.append('tags', [...tags].join(','));
+      body.append('recommended_account', recommendedAccount);
       const response = await apiFetch(`${API_BASE}/api/dashboard/queue/assign`, { method: 'POST', body });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.detail || 'Could not save this Queue assignment.');
@@ -4617,6 +4620,7 @@ function AssignPostModal({ post, userEmail, isAdmin, onClose, onAssigned }) {
   // headcount once it's more than one -- mirrors how the filter bar's own
   // dropdowns (Account, Type, etc.) summarize a multi-select.
   const assigneeSummary = selected.size === 0 ? '' : selected.size === 1 ? [...selected][0] : `${selected.size} people`;
+  const sentientAccounts = accounts.filter((account) => account.group === 'sentient' && account.is_active);
 
   return (
     <div className="queue-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) onClose(); }}>
@@ -4683,6 +4687,13 @@ function AssignPostModal({ post, userEmail, isAdmin, onClose, onAssigned }) {
           <label>
             <span>Due date</span>
             <input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} />
+          </label>
+          <label>
+            <span>Recommended for <i>optional</i></span>
+            <select value={recommendedAccount} onChange={(event) => setRecommendedAccount(event.target.value)}>
+              <option value="">No account</option>
+              {sentientAccounts.map((account) => <option value={account.handle} key={account.handle}>@{account.handle}</option>)}
+            </select>
           </label>
         </div>
 

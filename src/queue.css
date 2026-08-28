@@ -118,6 +118,7 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
    avatar chip -- so it reads as "whose card is this" at a glance across a
    grid of teammates' work, without cropping into the cover photo to do it. */
 .queue-thumb-owner { flex:0 0 auto; padding:4px 6px; overflow:hidden; border-top:1px solid var(--q-line); background:var(--q-panel-2); color:var(--q-text); font-size:10px; font-weight:700; letter-spacing:.02em; text-overflow:ellipsis; white-space:nowrap; }
+.queue-thumb-recommended { display:block; padding:4px 6px; overflow:hidden; border-top:1px solid var(--q-line); background:rgba(var(--accent-rgb,245,255,0),.07); color:var(--q-accent); font-size:10px; font-weight:700; text-overflow:ellipsis; white-space:nowrap; }
 
 /* ---------------------------------------------------------------------
  * Deep-dive sidebar -- byte-identical to the main dashboard's right rail
