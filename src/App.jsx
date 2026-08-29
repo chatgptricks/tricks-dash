@@ -2735,8 +2735,12 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
   const [usersNotice, setUsersNotice] = useState('');
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserRole, setNewUserRole] = useState('viewer');
+  const [newUserOperatingRole, setNewUserOperatingRole] = useState('sales');
+  const [newUserSlackId, setNewUserSlackId] = useState('');
   const [addingUser, setAddingUser] = useState(false);
   const [userActionEmail, setUserActionEmail] = useState('');
+  const [designerAccounts, setDesignerAccounts] = useState([]);
+  const [designerAccountChoice, setDesignerAccountChoice] = useState({});
 
   // Users tab -- usage heatmap. Separate load/loading state from the roster
   // above: the roster is small and cheap, this is a heavier aggregation
@@ -2819,6 +2823,16 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
     }
   }, []);
 
+  const loadDesignerAccounts = useCallback(async () => {
+    try {
+      const response = await apiFetch(`${API_BASE}/api/admin/queue/designer-accounts`);
+      const body = await response.json().catch(() => ({}));
+      if (Array.isArray(body.designers)) setDesignerAccounts(body.designers);
+    } catch (error) {
+      setUsersNotice('Could not load Queue account assignments.');
+    }
+  }, []);
+
   const loadUsage = useCallback(async () => {
     setUsageLoading(true);
     try {
@@ -2872,8 +2886,9 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
     if (unlocked && tab === 'users') {
       loadUsers();
       loadUsage();
+      loadDesignerAccounts();
     }
-  }, [unlocked, tab, loadUsers, loadUsage]);
+  }, [unlocked, tab, loadUsers, loadUsage, loadDesignerAccounts]);
 
   // While a sweep is running, poll so the "done" count moves without a manual
   // refresh -- same pattern as the background-task polling used elsewhere.
@@ -3221,7 +3236,7 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
       const response = await apiFetch(`${API_BASE}/api/admin/users`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ email, role: newUserRole }),
+        body: new URLSearchParams({ email, role: newUserRole, operating_role: newUserOperatingRole, is_admin: String(newUserRole === 'admin'), slack_user_id: newUserSlackId.trim() }),
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) {
@@ -3231,6 +3246,8 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
       setUsers(body.users || []);
       setNewUserEmail('');
       setNewUserRole('viewer');
+      setNewUserOperatingRole('sales');
+      setNewUserSlackId('');
       setUsersNotice(`Added @${email}.`);
     } catch (error) {
       setUsersNotice('Network error while adding.');
@@ -3239,26 +3256,55 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
     }
   };
 
-  const setUserRole = async (email, role) => {
-    setUserActionEmail(email);
+  const updateUser = async (user, changes) => {
+    setUserActionEmail(user.email);
     setUsersNotice('');
     try {
+      const nextRole = changes.role ?? user.role;
+      const nextOperatingRole = changes.operating_role ?? user.operating_role ?? 'sales';
+      const nextSlackId = changes.slack_user_id ?? user.slack_user_id ?? '';
       const response = await apiFetch(`${API_BASE}/api/admin/users`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ email, role }),
+        body: new URLSearchParams({ email: user.email, role: nextRole, operating_role: nextOperatingRole, is_admin: String(nextRole === 'admin'), slack_user_id: nextSlackId }),
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) {
-        setUsersNotice(body.detail || `Could not update ${email}.`);
+        setUsersNotice(body.detail || `Could not update ${user.email}.`);
         return;
       }
       setUsers(body.users || []);
+      await loadDesignerAccounts();
+      setUsersNotice(`Updated ${user.email}.`);
     } catch (error) {
       setUsersNotice('Network error while updating.');
     } finally {
       setUserActionEmail('');
     }
+  };
+
+  const addDesignerAccount = async (designerEmail) => {
+    const handle = designerAccountChoice[designerEmail];
+    if (!handle) return;
+    setUserActionEmail(designerEmail);
+    try {
+      const response = await apiFetch(`${API_BASE}/api/admin/queue/designer-accounts`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ designer_email: designerEmail, account_handle: handle }) });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.detail || 'Could not assign that account.');
+      setDesignerAccounts(body.designers || []);
+      setDesignerAccountChoice((current) => ({ ...current, [designerEmail]: '' }));
+    } catch (error) { setUsersNotice(error.message); } finally { setUserActionEmail(''); }
+  };
+
+  const removeDesignerAccount = async (designerEmail, handle) => {
+    setUserActionEmail(designerEmail);
+    try {
+      const query = new URLSearchParams({ designer_email: designerEmail, account_handle: handle });
+      const response = await apiFetch(`${API_BASE}/api/admin/queue/designer-accounts?${query}`, { method: 'DELETE' });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.detail || 'Could not remove that account.');
+      setDesignerAccounts(body.designers || []);
+    } catch (error) { setUsersNotice(error.message); } finally { setUserActionEmail(''); }
   };
 
   const removeUser = async (email) => {
@@ -3859,11 +3905,21 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
                       />
                     </label>
                     <label className="modal-field">
-                      <span>Role</span>
+                      <span>Access</span>
                       <select value={newUserRole} onChange={(event) => setNewUserRole(event.target.value)}>
                         <option value="viewer">Viewer</option>
                         <option value="admin">Admin</option>
                       </select>
+                    </label>
+                    <label className="modal-field">
+                      <span>Queue role</span>
+                      <select value={newUserOperatingRole} onChange={(event) => setNewUserOperatingRole(event.target.value)}>
+                        <option value="sales">Sales</option><option value="vc">Viral Coordinator</option><option value="pd">Post Designer</option>
+                      </select>
+                    </label>
+                    <label className="modal-field">
+                      <span>Slack user ID</span>
+                      <input value={newUserSlackId} onChange={(event) => setNewUserSlackId(event.target.value.toUpperCase())} placeholder="U0123456789" />
                     </label>
                     <button type="submit" className="ghost-button primary" disabled={addingUser}>
                       {addingUser ? 'Adding…' : 'Add'}
@@ -3880,13 +3936,17 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
                       <div className="settings-row" key={user.email}>
                         <div className="settings-row-account">
                           <strong>{user.email}</strong>
-                          <span>{user.role === 'admin' ? 'Admin' : 'Viewer'}</span>
+                          <span>{user.role === 'admin' ? 'Admin' : 'Viewer'} · {(user.operating_role || 'sales').toUpperCase()}</span>
                         </div>
-                        <div className="settings-row-controls">
+                        <div className="settings-row-controls queue-user-controls">
+                          <select value={user.operating_role || 'sales'} aria-label={`Queue role for ${user.email}`} onChange={(event) => updateUser(user, { operating_role: event.target.value })} disabled={userActionEmail === user.email}>
+                            <option value="sales">Sales</option><option value="vc">VC</option><option value="pd">PD</option>
+                          </select>
+                          <input defaultValue={user.slack_user_id || ''} aria-label={`Slack user ID for ${user.email}`} placeholder="Slack ID" onBlur={(event) => { if (event.target.value.trim() !== (user.slack_user_id || '')) updateUser(user, { slack_user_id: event.target.value.trim().toUpperCase() }); }} />
                           <button
                             type="button"
                             className="ghost-button"
-                            onClick={() => setUserRole(user.email, user.role === 'admin' ? 'viewer' : 'admin')}
+                            onClick={() => updateUser(user, { role: user.role === 'admin' ? 'viewer' : 'admin' })}
                             disabled={userActionEmail === user.email}
                           >
                             {user.role === 'admin' ? 'Make viewer' : 'Make admin'}
@@ -3903,6 +3963,17 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
                       </div>
                     ))}
                     {!usersLoading && !users.length ? <p className="wizard-hint">No one loaded yet.</p> : null}
+                  </div>
+                </section>
+
+                <section className="settings-section">
+                  <h3>Queue designer accounts</h3>
+                  <p className="wizard-hint">Accounts a coordinator may recommend when assigning work to each Post Designer.</p>
+                  <div className="queue-designer-settings">
+                    {designerAccounts.map((designer) => {
+                      const available = roster.filter((account) => account.group === 'sentient' && account.is_active !== false && !designer.accounts.includes(account.handle));
+                      return <article key={designer.email}><header><strong>{designer.email}</strong><span>{designer.accounts.length} account{designer.accounts.length === 1 ? '' : 's'}</span></header><div className="queue-designer-account-chips">{designer.accounts.map((handle) => <button type="button" key={handle} onClick={() => removeDesignerAccount(designer.email, handle)} disabled={userActionEmail === designer.email}>@{handle} <X size={11} /></button>)}{!designer.accounts.length ? <em>No accounts assigned</em> : null}</div><div className="queue-designer-add"><select value={designerAccountChoice[designer.email] || ''} onChange={(event) => setDesignerAccountChoice((current) => ({ ...current, [designer.email]: event.target.value }))}><option value="">Choose Sentient account</option>{available.map((account) => <option key={account.handle} value={account.handle}>@{account.handle}</option>)}</select><button type="button" className="ghost-button" disabled={!designerAccountChoice[designer.email] || userActionEmail === designer.email} onClick={() => addDesignerAccount(designer.email)}>Assign</button></div></article>;
+                    })}
                   </div>
                 </section>
               </div>
@@ -4559,6 +4630,8 @@ function AssignPostModal({ post, userEmail, isAdmin, accounts, onClose, onAssign
   const [note, setNote] = useState('');
   const [notes, setNotes] = useState('');
   const [references, setReferences] = useState('');
+  const [attachmentFiles, setAttachmentFiles] = useState([]);
+  const [createdRequestId, setCreatedRequestId] = useState(null);
   const [tags, setTags] = useState(() => new Set());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -4589,18 +4662,38 @@ function AssignPostModal({ post, userEmail, isAdmin, accounts, onClose, onAssign
     setSaving(true);
     setError('');
     try {
-      const body = new FormData();
-      body.append('account', post.account);
-      body.append('shortcode', post.shortcode);
-      body.append('production_points', String(productionPoints));
-      body.append('deadline_at', deadlineAt);
-      body.append('brief', note);
-      body.append('notes', notes);
-      body.append('references', JSON.stringify(references.split(/\n|,/).map((item) => item.trim()).filter(Boolean)));
-      body.append('tags', [...tags].join(','));
-      const response = await apiFetch(`${API_BASE}/api/dashboard/queue/v2/pool`, { method: 'POST', body });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.detail || 'Could not save this Queue assignment.');
+      let requestId = createdRequestId;
+      if (!requestId) {
+        const body = new FormData();
+        body.append('account', post.account);
+        body.append('shortcode', post.shortcode);
+        body.append('production_points', String(productionPoints));
+        body.append('deadline_at', deadlineAt);
+        body.append('brief', note);
+        body.append('notes', notes);
+        body.append('references', JSON.stringify(references.split(/\n|,/).map((item) => item.trim()).filter(Boolean)));
+        body.append('tags', [...tags].join(','));
+        const response = await apiFetch(`${API_BASE}/api/dashboard/queue/v2/pool`, { method: 'POST', body });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.detail || 'Could not save this Queue assignment.');
+        requestId = data.request?.id;
+        setCreatedRequestId(requestId);
+      }
+      const failed = [];
+      for (const file of attachmentFiles) {
+        try {
+          const fileBody = new FormData();
+          fileBody.append('file', file);
+          const response = await apiFetch(`${API_BASE}/api/dashboard/queue/v2/requests/${requestId}/attachments`, { method: 'POST', body: fileBody });
+          if (!response.ok) failed.push(file);
+        } catch {
+          failed.push(file);
+        }
+      }
+      if (failed.length) {
+        setAttachmentFiles(failed);
+        throw new Error(`The post is already in the Pool, but ${failed.length} file${failed.length === 1 ? '' : 's'} failed to upload. Send again to retry only those files.`);
+      }
       onAssigned();
     } catch (reason) {
       setError(reason.message || 'Could not save this Queue assignment.');
@@ -4651,6 +4744,12 @@ function AssignPostModal({ post, userEmail, isAdmin, accounts, onClose, onAssign
 
         <label className="queue-assign-note"><span>Extra notes <i>optional</i></span><textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={2} /></label>
         <label className="queue-assign-note"><span>Reference links <i>optional</i></span><textarea value={references} onChange={(event) => setReferences(event.target.value)} placeholder="One link per line" rows={2} /></label>
+
+        <label className="queue-assign-files">
+          <span>Files <i>optional · up to 20 MB each</i></span>
+          <input type="file" multiple onChange={(event) => setAttachmentFiles([...event.target.files])} />
+          {attachmentFiles.length ? <small>{attachmentFiles.map((file) => file.name).join(' · ')}</small> : null}
+        </label>
 
         <fieldset className="queue-assign-fieldset queue-tag-fieldset">
           <legend>Tags <i>optional</i></legend>
@@ -4890,6 +4989,16 @@ const PostCard = memo(function PostCard({ post, priority, selected, onSelect, on
         {isPromo ? (
           <div className="promo-ribbon" title={`Promo (${PROMO_HASHTAG})`}>
             <span>Promo</span>
+          </div>
+        ) : null}
+        {post.queueState && post.queueState !== 'cancelled' ? (
+          <div className={`queue-source-state state-${post.queueState}`} title={`Queue · ${post.queueState.replace('_', ' ')}`}>
+            <ListTodo size={11} />{post.queueState === 'pool' ? 'In Pool' : 'Assigned'}
+          </div>
+        ) : null}
+        {post.queueAttribution ? (
+          <div className="queue-attribution-badge" title={`Created through Queue by ${post.queueAttribution.designerEmail}`}>
+            <Check size={11} />{post.queueAttribution.designerEmail?.split('@')[0] || 'Queue'}
           </div>
         ) : null}
       </CoverImage>
