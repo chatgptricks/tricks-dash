@@ -156,8 +156,12 @@ function AdminUserManagement() {
   return <section className="queue-user-management"><header><div><p className="scheduler-eyebrow">{t('userManagement')}</p><h3>{t('managedAccounts')}</h3></div><small>{users.length} {t('usersCount')}</small></header>{error ? <p className="queue-user-management-error">{error}</p> : null}{users.length ? <div className="queue-user-management-list">{users.map((user) => {
     const managed = designerAccounts.find((item) => item.email === user.email) || { accounts: [] };
     const available = accounts.filter((account) => !managed.accounts.includes(account.handle));
-    const rawRole = String(user.operating_role || 'sales').toLowerCase();
-    const displayRole = user.is_admin ? t('admin') : rawRole === 'pd' ? '' : rawRole.toUpperCase();
+    let explicitRoles = [];
+    try { explicitRoles = JSON.parse(user.operating_roles || '[]'); } catch { explicitRoles = []; }
+    if (!Array.isArray(explicitRoles) || !explicitRoles.length) explicitRoles = [user.operating_role || 'sales'];
+    const roleLabels = explicitRoles.filter((role) => String(role).toLowerCase() !== 'pd').map((role) => ({ vc: t('viralCoordinator'), sales: t('salesRole') }[String(role).toLowerCase()] || String(role).toUpperCase()));
+    if (user.is_admin) roleLabels.push(t('admin'));
+    const displayRole = roleLabels.join(' · ');
     return <article key={user.email}><header><b>{user.email.split('@')[0]}</b><small>{user.email}{displayRole ? ` · ${displayRole}` : ''}</small></header><div className="queue-user-management-accounts">{managed.accounts.map((handle) => <button type="button" key={handle} title={t('removeAccount')} onClick={() => updateAccount(user.email, handle, 'DELETE')} disabled={Boolean(busy)}>@{handle} <X size={11} /></button>)}{!managed.accounts.length ? <em>—</em> : null}</div><div className="queue-user-management-add"><select value={choices[user.email] || ''} aria-label={`${t('chooseSentientAccount')} ${user.email}`} onChange={(event) => setChoices((current) => ({ ...current, [user.email]: event.target.value }))} disabled={Boolean(busy)}><option value="">{t('chooseSentientAccount')}</option>{available.map((account) => <option key={account.handle} value={account.handle}>@{account.handle}</option>)}</select><button type="button" onClick={() => updateAccount(user.email, choices[user.email], 'POST')} disabled={!choices[user.email] || Boolean(busy)}>{t('assignAccount')}</button></div></article>;
   })}</div> : <p className="queue-user-management-empty">{t('noUsers')}</p>}</section>;
 }
