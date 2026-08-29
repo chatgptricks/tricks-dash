@@ -344,6 +344,25 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
 .cover-image { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .cover-fallback { position: absolute; inset: 0; display: grid; place-content: center; gap: 10px; text-align: center; background: linear-gradient(180deg, var(--surface-3), var(--surface-2)); color: var(--text); }
 .cover-fallback strong { font-size: 1.35rem; letter-spacing: 0; }
+.queue-rail-caption .panel-header { margin-bottom: 10px; }
+.queue-rail-caption .caption-header .ghost-button { width: auto; min-width: 0; min-height: 30px; padding: 0 9px; font-size: 11px; }
+.queue-detail-copy { min-height: 0; overflow: auto; }
+.queue-detail-copy > p { overflow: visible; }
+.queue-detail-copy section { margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(var(--edge), .08); }
+.queue-detail-copy h3 { margin: 0 0 6px; color: rgba(var(--ink), .55); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
+.queue-detail-copy section a { display: block; margin-top: 5px; color: var(--accent-ink); font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
+.queue-detail-actions { display: grid; gap: 8px; margin-top: 12px; }
+.queue-detail-actions .scheduler-primary,.queue-detail-actions .scheduler-secondary,.queue-detail-actions .scheduler-danger { margin-top: 0; }
+.queue-detail-actions .scheduler-close-form { display: grid; gap: 8px; }
+.queue-detail-actions .scheduler-close-form label { margin-top: 0; }
+.queue-detail-actions .scheduler-cancel { margin-top: 3px; }
+.queue-detail-editor { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; min-height: 0; overflow: auto; padding-right: 2px; }
+.queue-detail-editor label { display: grid; gap: 5px; color: rgba(var(--ink), .58); font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.queue-detail-editor label:nth-child(n+4) { grid-column: 1 / -1; }
+.queue-detail-editor input,.queue-detail-editor textarea { width: 100%; border: 1px solid rgba(var(--edge), .14); border-radius: 7px; background: var(--surface-2); color: var(--text); font-size: 12px; letter-spacing: normal; text-transform: none; }
+.queue-detail-editor input { height: 34px; padding: 0 9px; }
+.queue-detail-editor textarea { min-height: 72px; padding: 8px 9px; resize: vertical; }
+@media (max-width: 640px) { .queue-detail-editor { grid-template-columns: 1fr; }.queue-detail-editor label { grid-column: 1 / -1; } }
 .media-badge { position: absolute; top: 12px; right: 12px; z-index: 2; display: inline-flex; align-items: center; gap: 6px; padding: 7px 10px; border-radius: 999px; background: rgba(var(--shade), 0.6); border: 1px solid rgba(var(--edge), 0.14); font-size: 0.68rem; line-height: 1; font-weight: 800; text-transform: uppercase; letter-spacing: 0; }
 .instagram-link { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 32px; padding: 0 11px; border: 1px solid rgba(var(--accent-rgb), 0.42); border-radius: 10px; background: rgba(var(--accent-rgb), 0.12); color: var(--accent-ink); font-size: 12px; font-weight: 800; text-decoration: none; }
 .instagram-link:hover { border-color: rgba(var(--accent-rgb), 0.8); background: rgba(var(--accent-rgb), 0.22); }
