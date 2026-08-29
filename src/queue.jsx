@@ -37,6 +37,11 @@ const COPY = {
   },
 };
 
+COPY.en.returnToPool = 'Return to pool';
+COPY.en.poolDropHint = 'Drop a scheduled request here to return it to the pool.';
+COPY.es.returnToPool = 'Devolver al pool';
+COPY.es.poolDropHint = 'Suelta aquí un request programado para devolverlo al pool.';
+
 const QueuePreferencesContext = createContext({ language: 'en', t: (key) => key });
 const useQueuePreferences = () => useContext(QueuePreferencesContext);
 const statusCopy = (status, t, isDraft = false) => isDraft ? t('tentative') : ({ pool: t('inPool'), scheduled: t('scheduled'), in_progress: t('inProgress'), completed: t('readyToClose'), closed: t('closed'), cancelled: t('cancelled') }[status] || status);
@@ -96,7 +101,8 @@ function TaskBlock({ task, editable, onOpen, onResizeStart, accountAvatars = {} 
 }
 
 function PoolCard({ task, onOpen }) {
-  return <article className={`queue-pool-card priority-${task.priority || 'medium'}`} draggable onDragStart={(event) => { activeQueueDragId = task.id; event.dataTransfer.setData('queue-task', String(task.id)); }} onDragEnd={() => { activeQueueDragId = null; }}><button type="button" onClick={() => onOpen(task)}>{cover(task) ? <img src={cover(task)} alt="" /> : <span className="queue-pool-empty">@</span>}<span><b>@{task.post.account}</b><small>{task.productionPoints} PP · {task.durationMinutes} min</small></span><PriorityBadge priority={task.priority} /></button><div>{task.tags?.map((tag) => <i key={tag}>{tag}</i>)}</div></article>;
+  const { t } = useQueuePreferences();
+  return <article className={`queue-pool-card priority-${task.priority || 'medium'}${task.isDraft ? ' is-draft' : ''}`} draggable onDragStart={(event) => { activeQueueDragId = task.id; event.dataTransfer.setData('queue-task', String(task.id)); }} onDragEnd={() => { activeQueueDragId = null; }}><button type="button" onClick={() => onOpen(task)}>{cover(task) ? <img src={cover(task)} alt="" /> : <span className="queue-pool-empty">@</span>}<span><b>@{task.post.account}</b><small>{task.productionPoints} PP · {task.durationMinutes} min</small>{task.isDraft ? <em>{t('returnToPool')}</em> : null}</span><PriorityBadge priority={task.priority} /></button><div>{task.tags?.map((tag) => <i key={tag}>{tag}</i>)}</div></article>;
 }
 
 function DesignerAssignments({ tasks, onOpen }) {
@@ -373,6 +379,7 @@ function QueueApp({ user }) {
   const [liveStatus, setLiveStatus] = useState('connecting');
   const [adminOpen, setAdminOpen] = useState(false);
   const [archive, setArchive] = useState(false);
+  const [poolDropActive, setPoolDropActive] = useState(false);
   const [designerScope, setDesignerScope] = useState('');
   const [report, setReport] = useState(null);
   const [reportLoading, setReportLoading] = useState(false);
@@ -439,7 +446,7 @@ function QueueApp({ user }) {
     const version = ++draftSaveVersionRef.current;
     draftSyncingRef.current = true;
     const changes = optimistic.map((task) => ({
-      id: task.id, designerEmail: task.designerEmail, scheduledDate: task.scheduledDate,
+      id: task.id, status: task.status, designerEmail: task.designerEmail, scheduledDate: task.scheduledDate,
       scheduledStartMinutes: task.scheduledStartMinutes, productionPoints: task.productionPoints,
       recommendedAccounts: task.recommendedAccounts || [],
     }));
@@ -498,7 +505,12 @@ function QueueApp({ user }) {
   }, [data?.viewer?.email, loadReport]);
 
   const coordinator = data?.viewer && (data.viewer.isAdmin || data.viewer.operatingRoles?.includes('vc'));
-  const pool = useMemo(() => { const drafted = new Set((data?.liveDrafts || []).map((task) => task.id)); return data?.requests.filter((task) => task.status === 'pool' && !drafted.has(task.id)) || []; }, [data]);
+  const pool = useMemo(() => {
+    const byId = new Map();
+    (data?.requests || []).filter((task) => task.status === 'pool').forEach((task) => byId.set(task.id, task));
+    (data?.liveDrafts || []).filter((task) => task.status === 'pool').forEach((task) => byId.set(task.id, task));
+    return [...byId.values()];
+  }, [data]);
   const archived = useMemo(() => data?.requests.filter((task) => task.status === 'cancelled') || [], [data]);
   const upcoming = useMemo(() => {
     if (!coordinator) return [];
@@ -510,9 +522,29 @@ function QueueApp({ user }) {
   }, [coordinator, data]);
   const assigned = useMemo(() => { const byId = new Map((data?.assignedRequests || []).map((task) => [task.id, task])); (data?.liveDrafts || []).filter((task) => task.designerEmail === data?.viewer?.email).forEach((task) => byId.set(task.id, task)); return [...byId.values()].sort((a, b) => `${a.scheduledDate}-${String(a.scheduledStartMinutes).padStart(4, '0')}`.localeCompare(`${b.scheduledDate}-${String(b.scheduledStartMinutes).padStart(4, '0')}`)); }, [data]);
   const toggleAdminTools = async () => { const next = !adminOpen; setAdminOpen(next); if (next && !reportLoading) await loadReport(); };
-  const submit = async () => { try { await draftSavePromiseRef.current.catch(() => {}); const changes = draftRef.current.map((task) => ({ id: task.id, designerEmail: task.designerEmail, scheduledDate: task.scheduledDate, scheduledStartMinutes: task.scheduledStartMinutes, productionPoints: task.productionPoints, recommendedAccounts: task.recommendedAccounts || [] })); const result = await json('/api/dashboard/queue/v2/submit', { method: 'POST', body: new URLSearchParams({ changes: JSON.stringify(changes) }) }); applyDraft([]); await load({ silent: true }); const sent = result.notifications?.sent || 0; const failed = result.notifications?.failed || 0; notify(`${t('scheduleSubmitted')} ${sent} DM${sent === 1 ? '' : 's'} sent${failed ? ` · ${failed} failed` : ''}.`, failed ? 'warning' : 'success'); } catch (err) { notify(err.message, 'error'); } };
+  const submit = async () => { try { await draftSavePromiseRef.current.catch(() => {}); const changes = draftRef.current.map((task) => ({ id: task.id, status: task.status, designerEmail: task.designerEmail, scheduledDate: task.scheduledDate, scheduledStartMinutes: task.scheduledStartMinutes, productionPoints: task.productionPoints, recommendedAccounts: task.recommendedAccounts || [] })); const result = await json('/api/dashboard/queue/v2/submit', { method: 'POST', body: new URLSearchParams({ changes: JSON.stringify(changes) }) }); applyDraft([]); await load({ silent: true }); const sent = result.notifications?.sent || 0; const failed = result.notifications?.failed || 0; notify(`${t('scheduleSubmitted')} ${sent} DM${sent === 1 ? '' : 's'} sent${failed ? ` · ${failed} failed` : ''}.`, failed ? 'warning' : 'success'); } catch (err) { notify(err.message, 'error'); } };
   const clearDrafts = async () => { try { await draftSavePromiseRef.current.catch(() => {}); await json('/api/dashboard/queue/v2/drafts/clear', { method: 'POST', body: new URLSearchParams() }); applyDraft([]); await load({ silent: true }); } catch (err) { notify(err.message, 'error'); } };
   const changeDraftAccounts = (requestId, accounts) => persistDrafts(draftRef.current.map((task) => task.id === requestId ? { ...task, recommendedAccounts: accounts } : task));
+  const dragTask = (event) => {
+    const id = Number(activeQueueDragId || event.dataTransfer?.getData('queue-task'));
+    return [...draftRef.current, ...(data?.liveDrafts || []), ...(data?.planningRequests || []), ...(data?.requests || [])].find((task) => task.id === id);
+  };
+  const poolDragOver = (event) => {
+    if (!coordinator || dragTask(event)?.status !== 'scheduled') return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    setPoolDropActive(true);
+  };
+  const poolDrop = (event) => {
+    event.preventDefault();
+    if (!coordinator) return;
+    const source = dragTask(event);
+    setPoolDropActive(false);
+    activeQueueDragId = null;
+    if (!source || source.status !== 'scheduled') return;
+    const returned = { ...source, status: 'pool', designerEmail: null, scheduledDate: null, scheduledStartMinutes: null, isDraft: true, draftCoordinatorEmail: data.viewer.email };
+    persistDrafts([...draftRef.current.filter((task) => task.id !== source.id), returned]);
+  };
   const closeDetail = () => { openRef.current = null; setOpen(null); };
   const action = async (actionName, value) => { try { const body = value ? new URLSearchParams(actionName === 'close' ? { final_permalink: value } : {}) : undefined; const result = await json(`/api/dashboard/queue/v2/requests/${open.id}/${actionName}`, { method: 'POST', body }); closeDetail(); await load({ silent: true }); notify(result.deferred ? `${t('movedAfterActive')} ${result.scheduledDate} · ${time(result.scheduledStartMinutes)}.` : t('requestUpdated'), result.deferred ? 'warning' : 'success'); } catch (err) { setDetailNotice({ message: err.message, type: 'error' }); } };
   const cancel = async (reason) => { try { await json(`/api/dashboard/queue/v2/requests/${open.id}/cancel`, { method: 'POST', body: new URLSearchParams({ reason }) }); closeDetail(); await load({ silent: true }); notify(t('requestUpdated')); } catch (err) { setDetailNotice({ message: err.message, type: 'error' }); } };
@@ -528,7 +560,7 @@ function QueueApp({ user }) {
     {error ? <section className="queue-state queue-error"><p>{error}</p><button type="button" onClick={load}>{t('tryAgain')}</button></section> : null}
     {data ? <>{adminOpen ? <AdminTools report={report} loading={reportLoading} error={reportError} onClose={() => setAdminOpen(false)} onOpen={setOpen} /> : null}
       <section className="scheduler-toolbar"><div><p className="scheduler-eyebrow">{coordinator ? t('coordinatorSchedule') : t('mySchedule')}</p><h2>{displayDate(date, language)}</h2></div>{coordinator ? <label className="scheduler-designer-filter">{t('assignedView')}<select value={designerScope} onChange={(event) => setDesignerScope(event.target.value)}><option value="">{t('allUsers')}</option>{(data.schedulerUsers || data.designers).map((person) => <option key={person.email} value={person.email}>{person.email.split('@')[0]}</option>)}</select></label> : null}<div className="scheduler-nav"><button type="button" aria-label="Previous day" onClick={() => setDate(shiftDay(date, -1))}><ChevronLeft size={17} /></button><button type="button" onClick={() => setDate(DAY())}>{t('today')}</button><button type="button" aria-label="Next day" onClick={() => setDate(shiftDay(date, 1))}><ChevronRight size={17} /></button></div><button type="button" className={`scheduler-archive-toggle${archive ? ' is-on' : ''}`} onClick={() => setArchive((value) => !value)}><Archive size={14} />{archive ? t('liveQueue') : t('archive')}</button>{coordinator && draft.length ? <button type="button" className="scheduler-submit" onClick={submit}><Send size={14} />{t('submit')} {draft.length} {draft.length > 1 ? t('changes') : t('change')}</button> : null}</section>
-      {coordinator && !archive ? <section className="scheduler-pool"><header><div><p className="scheduler-eyebrow">{t('productionPool')}</p><h2>{pool.length} {t('readyToSchedule')}</h2></div><small>{t('visibleSchedule')}</small></header><div className="scheduler-pool-list">{pool.map((task) => <PoolCard key={task.id} task={task} onOpen={setOpen} />)}{!pool.length ? <p className="scheduler-empty">{t('emptyPool')}</p> : null}</div></section> : null}
+      {coordinator && !archive ? <section className={`scheduler-pool${poolDropActive ? ' is-drop-target' : ''}`} onDragOver={poolDragOver} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setPoolDropActive(false); }} onDrop={poolDrop} aria-label={t('poolDropHint')}><header><div><p className="scheduler-eyebrow">{t('productionPool')}</p><h2>{pool.length} {t('readyToSchedule')}</h2></div><small>{poolDropActive ? t('poolDropHint') : t('visibleSchedule')}</small></header><div className="scheduler-pool-list">{pool.map((task) => <PoolCard key={task.id} task={task} onOpen={setOpen} />)}{!pool.length ? <p className="scheduler-empty">{t('emptyPool')}</p> : null}</div></section> : null}
       {archive ? <section className="queue-archive-list"><header><p className="scheduler-eyebrow">{t('archive')}</p><h2>{archived.length} {t('cancelled')}</h2></header>{archived.length ? archived.map((task) => <button type="button" key={task.id} onClick={() => setOpen(task)}><span>{cover(task) ? <img src={cover(task)} alt="" /> : '@'}</span><div><b>@{task.post.account}</b><small>{task.cancellationReason || t('cancelled')}</small></div><em>{displayTimestamp(task.updatedAt, language)}</em></button>) : <p className="scheduler-empty">{t('noArchived')}</p>}</section> : <>{coordinator && draft.length ? <><DraftAccounts draft={draft} designers={data.designers} onAccountsChange={changeDraftAccounts} /><div className="scheduler-draft-actions"><span><Clock3 size={13} />{t('sharedDrafts')}</span><button type="button" onClick={clearDrafts}>{t('clearDrafts')}</button></div></> : null}<Scheduler data={data} draft={draft} setDraft={setDraft} onDraftChange={persistDrafts} selectedDate={date} designerScope={designerScope} onOpen={setOpen} onError={(message) => notify(message, 'error')} />{coordinator ? <AdminAssignmentTable tasks={upcoming} onOpen={setOpen} headingKey="upcomingProduction" countKey="activeRequests" /> : <DesignerAssignments tasks={assigned} onOpen={setOpen} />}</>}
     </> : null}
     <Detail task={open} tags={data?.tags || []} canCoordinate={coordinator} isOwner={open?.designerEmail === data?.viewer.email || data?.viewer.isAdmin} notice={detailNotice} history={history} historyLoading={historyLoading} onClose={closeDetail} onAction={action} onCancel={cancel} onEdit={edit} onNotify={resend} onUpload={upload} onDownload={download} />

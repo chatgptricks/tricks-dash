@@ -37,7 +37,7 @@ const stubFetch = async (url, options = {}) => {
   if (value.includes('/api/admin/queue/designer-accounts')) return response({ designers: [{ email: 'esteban@sentientagency.io', accounts: ['chatgptricks'] }] });
   if (value.includes('/api/admin/accounts')) return response({ accounts: [{ handle: 'chatgptricks', group: 'sentient', is_active: true }] });
   if (value.includes('/api/dashboard/queue/v2/drafts') && !value.includes('/clear')) {
-    drafted = JSON.parse(options.body.get('changes')).map((change) => ({ ...pool, ...change, designerEmail: change.designerEmail, scheduledDate: change.scheduledDate, scheduledStartMinutes: change.scheduledStartMinutes, recommendedAccounts: change.recommendedAccounts || [], status: 'scheduled', isDraft: true, draftCoordinatorEmail: 'esteban@sentientagency.io' }));
+    drafted = JSON.parse(options.body.get('changes')).map((change) => ({ ...pool, ...change, designerEmail: change.designerEmail, scheduledDate: change.scheduledDate, scheduledStartMinutes: change.scheduledStartMinutes, recommendedAccounts: change.recommendedAccounts || [], status: change.status === 'pool' ? 'pool' : 'scheduled', isDraft: true, draftCoordinatorEmail: 'esteban@sentientagency.io' }));
     payload.liveDrafts = drafted;
     payload.liveRevision += 1;
     return response({ ok: true, drafts: drafted, liveRevision: payload.liveRevision });
@@ -111,6 +111,15 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 100)); });
     checks['Drop creates one draft'] = document.querySelectorAll('.scheduler-drafts article').length === 1;
     checks['Draft is shared before submit'] = drafted?.length === 1 && Boolean(document.querySelector('.scheduler-block.is-draft'));
+    const poolDrop = document.querySelector('.scheduler-pool');
+    const draftBlock = document.querySelector('.scheduler-block.is-draft');
+    await act(async () => { draftBlock.dispatchEvent(dragEvent('dragstart')); poolDrop.dispatchEvent(dragEvent('dragover')); poolDrop.dispatchEvent(dragEvent('drop')); });
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 100)); });
+    checks['Scheduled block can return to pool'] = drafted?.[0]?.status === 'pool' && drafted?.[0]?.designerEmail == null && Boolean(document.querySelector('.queue-pool-card.is-draft'));
+    const returnedPool = document.querySelector('.queue-pool-card.is-draft');
+    await act(async () => { returnedPool.dispatchEvent(dragEvent('dragstart')); track.dispatchEvent(dragEvent('dragover', 550)); track.dispatchEvent(dragEvent('drop', 550)); });
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 100)); });
+    checks['Pool return can be scheduled again'] = drafted?.[0]?.status === 'scheduled' && Boolean(document.querySelector('.scheduler-block.is-draft'));
     const submit = document.querySelector('.scheduler-submit');
     await click(submit);
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 100)); });

@@ -520,6 +520,11 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
 /* Full-day Queue timeline: an eight-hour desktop viewport over 24 hours. */
 .scheduler-shell { position:relative; }
 .scheduler-shell > .scheduler-center-now { position:absolute; top:8px; right:8px; z-index:20; }
+.scheduler-pool { transition:border-color 140ms ease, box-shadow 140ms ease, background 140ms ease; }
+.scheduler-pool.is-drop-target { border-color:rgba(var(--accent-rgb),.72); background:rgba(var(--accent-rgb),.045); box-shadow:0 0 0 2px rgba(var(--accent-rgb),.12),0 20px 55px rgba(var(--shade),.2); }
+.scheduler-pool.is-drop-target .scheduler-pool-list { background:rgba(var(--accent-rgb),.04); }
+.queue-pool-card.is-draft { border-style:dashed; border-color:rgba(var(--accent-rgb),.62); }
+.queue-pool-card.is-draft em { display:block; margin-top:2px; color:var(--q-accent); font-size:9px; font-style:normal; font-weight:800; }
 .scheduler { container-type:inline-size; overflow-x:auto; padding:12px; scrollbar-color:rgba(var(--accent-rgb),.5) rgba(var(--edge),.06); scrollbar-width:thin; }
 .scheduler-canvas { --scheduler-label-width:154px; --scheduler-day-width:max(2160px,calc(300cqw - 462px)); position:relative; width:calc(var(--scheduler-label-width) + var(--scheduler-day-width)); min-width:calc(var(--scheduler-label-width) + var(--scheduler-day-width)); }
 .scheduler-time-head,.scheduler-row { grid-template-columns:var(--scheduler-label-width) var(--scheduler-day-width); width:100%; min-width:0; }
