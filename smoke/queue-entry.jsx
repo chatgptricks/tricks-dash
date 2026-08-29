@@ -14,6 +14,7 @@ const payload = {
   viewer: { email: 'esteban@sentientagency.io', isAdmin: true, isDev: true, operatingRoles: ['vc', 'pd'] },
   date: day,
   requests: [pool, active, scheduled],
+  pickRequests: [pool],
   planningRequests: [active, scheduled],
   assignedRequests: [active, scheduled],
   liveDrafts: [],
@@ -60,6 +61,13 @@ const stubFetch = async (url, options = {}) => {
     return response({ ok: true, ticket: tickets.find((ticket) => ticket.id === id) });
   }
   if (value.includes('/api/dashboard/queue/v2/tickets')) return response({ tickets });
+  if (value.includes('/api/dashboard/queue/v2/pick')) {
+    const picked = { ...pool, status: 'scheduled', designerEmail: 'esteban@sentientagency.io', scheduledDate: day, scheduledStartMinutes: 600 };
+    payload.requests = [picked, ...payload.requests.filter((task) => task.id !== picked.id)];
+    payload.pickRequests = [];
+    payload.assignedRequests = [...payload.assignedRequests, picked];
+    return response({ ok: true, request: picked });
+  }
   if (value.includes('/api/dashboard/queue/v2/drafts') && !value.includes('/clear')) {
     drafted = JSON.parse(options.body.get('changes')).map((change) => ({ ...pool, ...change, designerEmail: change.designerEmail, scheduledDate: change.scheduledDate, scheduledStartMinutes: change.scheduledStartMinutes, recommendedAccounts: change.recommendedAccounts || [], status: change.status === 'pool' ? 'pool' : 'scheduled', isDraft: true, draftCoordinatorEmail: 'esteban@sentientagency.io' }));
     payload.liveDrafts = drafted;
