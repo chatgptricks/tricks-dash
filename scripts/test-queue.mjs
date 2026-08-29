@@ -11,6 +11,10 @@ const planned = planQueueDrop({ tasks: [fixed, movable], target, designerEmail: 
 assert.equal(planned.ok, true);
 assert.equal(planned.target.scheduledStartMinutes, 580);
 assert.equal(planned.tasks.find((task) => task.id === 2).scheduledStartMinutes, 620, 'movable work should reflow after the dropped request');
-const impossible = planQueueDrop({ tasks: [], target: { ...target, durationMinutes: 960 }, designerEmail: 'pd@example.com', scheduledDate: '2026-09-01', desiredStart: 500, notBefore: 500 });
-assert.equal(impossible.ok, false, 'work that cannot fit in the calendar day must be rejected');
+const overnight = planQueueDrop({ tasks: [], target: { ...target, durationMinutes: 960 }, designerEmail: 'pd@example.com', scheduledDate: '2026-09-01', desiredStart: 1430, notBefore: 500 });
+assert.equal(overnight.ok, true, 'work must remain assignable even when it runs past midnight');
+assert.equal(overnight.target.scheduledStartMinutes, 1430);
+const saturated = planQueueDrop({ tasks: [{ ...fixed, id: 9, scheduledStartMinutes: 480, durationMinutes: 960 }], target, designerEmail: 'pd@example.com', scheduledDate: '2026-09-01', desiredStart: 700, notBefore: 500 });
+assert.equal(saturated.ok, true, 'a fully occupied row must still accept an assignment');
+assert.equal(saturated.target.scheduledStartMinutes, 700, 'a saturated row falls back to the requested slot');
 console.log('Queue planner rules passed.');
