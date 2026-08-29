@@ -578,6 +578,52 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
 .queue-pick-modal>footer { display:grid; grid-template-columns:1fr 1fr; gap:8px; }.queue-pick-modal>footer button { margin-top:0; }
 .queue-pick-empty { display:grid; justify-items:center; gap:8px; min-height:150px; place-content:center; color:var(--q-muted); font-size:11px; text-align:center; }.queue-pick-empty p { margin:0; }
 
+/* Priority and HOT signals are intentionally redundant: the strong leading
+ * edge survives a quick scan, while the compact labels remain readable for
+ * keyboard users and narrow cards. HOT intensity starts at 3x (low) and
+ * escalates as the measured rate climbs. */
+.queue-priority-badge { min-height:20px; padding:4px 8px; border-width:2px; font-size:9px!important; letter-spacing:.07em; box-shadow:0 0 0 1px rgba(0,0,0,.12); }
+.queue-pool-card { position:relative; border-width:2px; box-shadow:inset 5px 0 currentColor,0 8px 18px rgba(var(--shade,0,0,0),.18); }
+.queue-pool-card.priority-low { color:#63b4ff; background:linear-gradient(105deg,rgba(74,168,255,.13),transparent 65%),var(--q-panel-2); }
+.queue-pool-card.priority-medium { color:#ffc968; background:linear-gradient(105deg,rgba(255,189,89,.14),transparent 65%),var(--q-panel-2); }
+.queue-pool-card.priority-high { color:#ff9b63; background:linear-gradient(105deg,rgba(255,138,76,.16),transparent 65%),var(--q-panel-2); }
+.queue-pool-card.priority-urgent { color:#ff7676; background:linear-gradient(105deg,rgba(255,107,107,.18),transparent 65%),var(--q-panel-2); }
+.queue-pool-card>button { position:relative; }
+.queue-pool-card-badges { display:flex!important; flex-direction:column; align-items:flex-end; justify-content:flex-start; gap:4px!important; margin-left:auto; padding:0!important; }
+.queue-pool-card-badges .queue-priority-badge { flex:0 0 auto; }
+.scheduler-priority-mark { display:inline-flex; align-items:center; align-self:flex-start; min-height:17px; padding:2px 5px; border:1px solid currentColor; border-radius:4px; font-size:7px; font-weight:950; letter-spacing:.05em; text-transform:uppercase; }
+.scheduler-block.priority-low { border-color:#4aa8ff; background-color:rgba(35,91,139,.72); }
+.scheduler-block.priority-medium { border-color:#ffbd59; background-color:rgba(126,86,25,.72); }
+.scheduler-block.priority-high { border-color:#ff8a4c; background-color:rgba(139,65,27,.76); }
+.scheduler-block.priority-urgent { border-color:#ff6b6b; background-color:rgba(137,35,44,.8); }
+.scheduler-block.priority-low .scheduler-priority-mark { color:#a8d9ff; background:rgba(74,168,255,.2); }
+.scheduler-block.priority-medium .scheduler-priority-mark { color:#ffe0a0; background:rgba(255,189,89,.2); }
+.scheduler-block.priority-high .scheduler-priority-mark { color:#ffc09d; background:rgba(255,138,76,.22); }
+.scheduler-block.priority-urgent .scheduler-priority-mark { color:#ffc0c0; background:rgba(255,107,107,.22); }
+.queue-hot-badge { display:inline-flex; align-items:center; width:max-content; min-height:18px; padding:3px 6px; border:1px solid currentColor; border-radius:999px; background:rgba(0,0,0,.24); color:#ffcb75; font-size:8px; font-style:normal; font-weight:950; letter-spacing:.04em; line-height:1; white-space:nowrap; }
+.hot-intensity-low .queue-hot-badge { color:#f4ca75; background:rgba(244,202,117,.13); }
+.hot-intensity-medium .queue-hot-badge { color:#ff9c6c; background:rgba(255,156,108,.15); }
+.hot-intensity-high .queue-hot-badge { color:#ff725e; background:rgba(255,114,94,.18); }
+.hot-intensity-critical .queue-hot-badge { color:#ff4e68; background:rgba(255,78,104,.2); box-shadow:0 0 12px rgba(255,78,104,.24); }
+.scheduler-block .queue-hot-badge { position:absolute; top:4px; right:5px; z-index:3; }
+.scheduler-block .scheduler-priority-mark { position:absolute; bottom:4px; left:5px; z-index:3; }
+.queue-pick-card .queue-hot-badge { margin-left:auto; }
+.queue-pick-card.hot-intensity-low { border-color:#f4ca75; }
+.queue-pick-card.hot-intensity-medium { border-color:#ff9c6c; }
+.queue-pick-card.hot-intensity-high { border-color:#ff725e; }
+.queue-pick-card.hot-intensity-critical { border-color:#ff4e68; box-shadow:0 0 0 2px rgba(255,78,104,.12),0 30px 90px rgba(var(--shade),.6); }
+.designer-assignment-priority .queue-hot-badge { margin-top:3px; }
+.queue-admin-assignment-post .queue-hot-badge { margin-top:3px; }
+.queue-archive-list>button.priority-low { box-shadow:inset 4px 0 #4aa8ff; }
+.queue-archive-list>button.priority-medium { box-shadow:inset 4px 0 #ffbd59; }
+.queue-archive-list>button.priority-high { box-shadow:inset 4px 0 #ff8a4c; }
+.queue-archive-list>button.priority-urgent { box-shadow:inset 4px 0 #ff6b6b; }
+.queue-archive-list>button .queue-hot-badge { margin-top:3px; }
+.designer-assignment-row.priority-low,.queue-admin-assignment-row.priority-low { box-shadow:inset 5px 0 #4aa8ff; background:linear-gradient(90deg,rgba(74,168,255,.08),transparent 42%),var(--q-panel); }
+.designer-assignment-row.priority-medium,.queue-admin-assignment-row.priority-medium { box-shadow:inset 5px 0 #ffbd59; background:linear-gradient(90deg,rgba(255,189,89,.08),transparent 42%),var(--q-panel); }
+.designer-assignment-row.priority-high,.queue-admin-assignment-row.priority-high { box-shadow:inset 5px 0 #ff8a4c; background:linear-gradient(90deg,rgba(255,138,76,.09),transparent 42%),var(--q-panel); }
+.designer-assignment-row.priority-urgent,.queue-admin-assignment-row.priority-urgent { box-shadow:inset 5px 0 #ff6b6b; background:linear-gradient(90deg,rgba(255,107,107,.1),transparent 42%),var(--q-panel); }
+
 .queue-designer-ticket-actions { grid-column:1/-1; display:grid; grid-template-columns:1fr 1fr; gap:6px; padding:8px; border-top:1px solid rgba(var(--edge),.09); }
 .queue-designer-ticket-actions>button { display:flex; align-items:center; justify-content:center; gap:5px; min-height:30px; padding:0 7px; border:1px solid rgba(var(--accent-rgb),.25); border-radius:7px; background:rgba(var(--accent-rgb),.06); color:var(--accent-ink); font-size:9px; font-weight:800; }
 .queue-designer-ticket-actions>button:disabled { opacity:.38; }
