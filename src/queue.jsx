@@ -75,7 +75,7 @@ COPY.es.poolDropHint = 'Suelta aquí un request programado para devolverlo al po
 COPY.es.returnedToPool = 'Request devuelto al pool.';
 Object.assign(COPY.en, {
   tickets: 'Requests', ticketInbox: 'Approval inbox', myRequests: 'My requests', ticketsPending: 'Pending', ticketsApproved: 'Approved', ticketsRejected: 'Rejected', approve: 'Approve', reject: 'Reject',
-  pick: 'Pick', pickTitle: 'Pick a request', pickHelp: 'Choose a request from the production pool.', hotPickHelp: 'The pool is empty. Choose the highest-rate HOT post.', nextRequest: 'Next', assignRequest: 'Assign', noPickRequests: 'There are no requests available in the pool or HOT list.', pickedRequest: 'Request assigned to your schedule.', pickPriority: 'Priority', hotRate: 'HOT rate',
+  pick: 'Pick', pickTitle: 'Pick a request', pickHelp: 'Choose a request from the production pool.', hotPickHelp: 'There are no regular pool requests. Choose the highest-rate HOT post.', nextRequest: 'Next', assignRequest: 'Assign', noPickRequests: 'There are no requests available in the pool or HOT list.', pickedRequest: 'Request assigned to your schedule.', pickPriority: 'Priority', hotRate: 'HOT rate',
   meeting: 'Meeting', break: 'Break', promo: 'Promo', focus: 'Focus time', other: 'Other', addTime: 'Add personal time', blockTitle: 'Title',
   startTime: 'Start time', duration: 'Duration', noteOptional: 'Note (optional)', requestApproval: 'Request approval', pendingApproval: 'Pending approval',
   approved: 'Approved', rejected: 'Rejected', ppRevision: 'PP revision', cancellationRequest: 'Cancellation', requestPPChange: 'Request PP change',
@@ -85,7 +85,7 @@ Object.assign(COPY.en, {
 });
 Object.assign(COPY.es, {
   tickets: 'Solicitudes', ticketInbox: 'Bandeja de aprobación', myRequests: 'Mis solicitudes', ticketsPending: 'Pendientes', ticketsApproved: 'Aprobadas', ticketsRejected: 'Rechazadas', approve: 'Aprobar', reject: 'Rechazar',
-  pick: 'Pick', pickTitle: 'Elegir un request', pickHelp: 'Elige un request del pool de producción.', hotPickHelp: 'El pool está vacío. Elige el post HOT con mayor rate.', nextRequest: 'Siguiente', assignRequest: 'Asignar', noPickRequests: 'No hay requests disponibles en el pool ni en HOT.', pickedRequest: 'Request asignado a tu agenda.', pickPriority: 'Prioridad', hotRate: 'Rate HOT',
+  pick: 'Pick', pickTitle: 'Elegir un request', pickHelp: 'Elige un request del pool de producción.', hotPickHelp: 'No hay requests regulares en el pool. Elige el post HOT con mayor rate.', nextRequest: 'Siguiente', assignRequest: 'Asignar', noPickRequests: 'No hay requests disponibles en el pool ni en HOT.', pickedRequest: 'Request asignado a tu agenda.', pickPriority: 'Prioridad', hotRate: 'Rate HOT',
   meeting: 'Meeting', break: 'Break', promo: 'Promo', focus: 'Tiempo de enfoque', other: 'Otro', addTime: 'Agregar tiempo personal', blockTitle: 'Título',
   startTime: 'Hora de inicio', duration: 'Duración', noteOptional: 'Nota (opcional)', requestApproval: 'Solicitar aprobación', pendingApproval: 'Pendiente de aprobación',
   approved: 'Aprobado', rejected: 'Rechazado', ppRevision: 'Revisión de PPs', cancellationRequest: 'Cancelación', requestPPChange: 'Solicitar cambio de PPs',
@@ -730,10 +730,15 @@ function QueueApp({ user }) {
   const assigned = useMemo(() => { const byId = new Map((data?.assignedRequests || []).map((task) => [task.id, task])); (data?.liveDrafts || []).filter((task) => task.designerEmail === data?.viewer?.email).forEach((task) => byId.set(task.id, task)); return [...byId.values()].sort((a, b) => `${a.scheduledDate}-${String(a.scheduledStartMinutes).padStart(4, '0')}`.localeCompare(`${b.scheduledDate}-${String(b.scheduledStartMinutes).padStart(4, '0')}`)); }, [data]);
   const pickPool = useMemo(() => {
     const poolRequests = (data?.pickRequests || []).filter((task) => task.status === 'pool');
-    if (poolRequests.length) return poolRequests;
+    const regularRequests = poolRequests.filter((task) => !(task.isHot || task.tags?.includes('hot')));
+    if (regularRequests.length) return poolRequests;
+    if (poolRequests.length) return [...poolRequests].sort((a, b) => (Number(b.hotMultiplier) || 0) - (Number(a.hotMultiplier) || 0));
     return (data?.hotPickRequests || []).filter((task) => task.status === 'pool').sort((a, b) => (Number(b.hotMultiplier) || 0) - (Number(a.hotMultiplier) || 0));
   }, [data]);
-  const pickHotFallback = useMemo(() => !(data?.pickRequests || []).some((task) => task.status === 'pool') && pickPool.length > 0, [data, pickPool]);
+  const pickHotFallback = useMemo(() => {
+    const poolRequests = (data?.pickRequests || []).filter((task) => task.status === 'pool');
+    return poolRequests.length > 0 && poolRequests.every((task) => task.isHot || task.tags?.includes('hot')) && pickPool.length > 0;
+  }, [data, pickPool]);
   const pickAvailable = !coordinator && !assigned.some((task) => ['scheduled', 'in_progress'].includes(task.status)) && pickPool.length > 0;
   const toggleAdminTools = async () => { const next = !adminOpen; setAdminOpen(next); if (next && !reportLoading) await loadReport(); };
   const toggleTickets = async () => { const next = !ticketsOpen; setTicketsOpen(next); if (next) await loadTickets(); };
