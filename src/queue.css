@@ -533,7 +533,7 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
 .queue-ticket-panel>header { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; padding:13px 14px 11px; border-bottom:1px solid var(--q-line); }
 .queue-ticket-panel h2 { margin:2px 0 0; color:var(--q-text); font-size:16px; }
 .queue-ticket-panel>header button { display:grid; place-items:center; width:27px; height:27px; padding:0; border:1px solid var(--q-line); border-radius:7px; background:var(--q-panel-2); color:var(--q-muted); }
-.queue-ticket-panel>nav { display:grid; grid-template-columns:1fr 1fr; border-bottom:1px solid var(--q-line); }
+.queue-ticket-panel>nav { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); border-bottom:1px solid var(--q-line); }
 .queue-ticket-panel>nav button { display:flex; align-items:center; justify-content:center; gap:6px; min-height:36px; padding:0 8px; border:0; border-bottom:2px solid transparent; background:transparent; color:var(--q-muted); font-size:10px; font-weight:800; }
 .queue-ticket-panel>nav button.is-active { border-bottom-color:var(--q-accent); color:var(--q-accent); }
 .queue-ticket-panel>nav b { display:grid; place-items:center; min-width:17px; height:17px; padding:0 4px; border-radius:999px; background:var(--q-panel-2); font-size:8px; }

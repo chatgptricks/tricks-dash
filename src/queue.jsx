@@ -45,21 +45,21 @@ COPY.es.returnToPool = 'Devolver al pool';
 COPY.es.poolDropHint = 'Suelta aquí un request programado para devolverlo al pool.';
 COPY.es.returnedToPool = 'Request devuelto al pool.';
 Object.assign(COPY.en, {
-  tickets: 'Requests', ticketInbox: 'Approval inbox', ticketsPending: 'Pending', ticketsResolved: 'Resolved', approve: 'Approve', reject: 'Reject',
+  tickets: 'Requests', ticketInbox: 'Approval inbox', myRequests: 'My requests', ticketsPending: 'Pending', ticketsApproved: 'Approved', ticketsRejected: 'Rejected', approve: 'Approve', reject: 'Reject',
   meeting: 'Meeting', break: 'Break', promo: 'Promo', focus: 'Focus time', other: 'Other', addTime: 'Add personal time', blockTitle: 'Title',
   startTime: 'Start time', duration: 'Duration', noteOptional: 'Note (optional)', requestApproval: 'Request approval', pendingApproval: 'Pending approval',
   approved: 'Approved', rejected: 'Rejected', ppRevision: 'PP revision', cancellationRequest: 'Cancellation', requestPPChange: 'Request PP change',
   requestCancellation: 'Request cancellation', requestedPP: 'Requested PP', requestReason: 'Reason (optional)', sendRequest: 'Send request',
-  ticketCreated: 'Request sent for approval.', ticketReviewed: 'Request reviewed.', noPendingTickets: 'No pending requests.', noResolvedTickets: 'No reviewed requests.',
+  ticketCreated: 'Request sent for approval.', ticketReviewed: 'Request reviewed.', noPendingTickets: 'No pending requests.', noApprovedTickets: 'No approved requests.', noRejectedTickets: 'No rejected requests.',
   rightClickHint: 'Right-click your scheduler row to add meetings, breaks, promos, or focus time.', personalTime: 'Personal time',
 });
 Object.assign(COPY.es, {
-  tickets: 'Solicitudes', ticketInbox: 'Bandeja de aprobación', ticketsPending: 'Pendientes', ticketsResolved: 'Resueltas', approve: 'Aprobar', reject: 'Rechazar',
+  tickets: 'Solicitudes', ticketInbox: 'Bandeja de aprobación', myRequests: 'Mis solicitudes', ticketsPending: 'Pendientes', ticketsApproved: 'Aprobadas', ticketsRejected: 'Rechazadas', approve: 'Aprobar', reject: 'Rechazar',
   meeting: 'Meeting', break: 'Break', promo: 'Promo', focus: 'Tiempo de enfoque', other: 'Otro', addTime: 'Agregar tiempo personal', blockTitle: 'Título',
   startTime: 'Hora de inicio', duration: 'Duración', noteOptional: 'Nota (opcional)', requestApproval: 'Solicitar aprobación', pendingApproval: 'Pendiente de aprobación',
   approved: 'Aprobado', rejected: 'Rechazado', ppRevision: 'Revisión de PPs', cancellationRequest: 'Cancelación', requestPPChange: 'Solicitar cambio de PPs',
   requestCancellation: 'Solicitar cancelación', requestedPP: 'PPs solicitados', requestReason: 'Motivo (opcional)', sendRequest: 'Enviar solicitud',
-  ticketCreated: 'Solicitud enviada para aprobación.', ticketReviewed: 'Solicitud revisada.', noPendingTickets: 'No hay solicitudes pendientes.', noResolvedTickets: 'No hay solicitudes revisadas.',
+  ticketCreated: 'Solicitud enviada para aprobación.', ticketReviewed: 'Solicitud revisada.', noPendingTickets: 'No hay solicitudes pendientes.', noApprovedTickets: 'No hay solicitudes aprobadas.', noRejectedTickets: 'No hay solicitudes rechazadas.',
   rightClickHint: 'Haz click derecho en tu fila para agregar meetings, breaks, promos o tiempo de enfoque.', personalTime: 'Tiempo personal',
 });
 
@@ -222,12 +222,22 @@ function AdminTools({ report, loading, error, onClose, onOpen }) {
   return <section className="queue-admin-tools"><header><div><p className="scheduler-eyebrow">{t('adminWorkspace')}</p><h2>{t('productionReports')}</h2></div><button type="button" onClick={onClose} aria-label={t('close')}><X size={16} /></button></header><nav className="queue-admin-tabs" role="tablist" aria-label={t('adminWorkspace')}><button type="button" role="tab" aria-selected={tab === 'overview'} className={tab === 'overview' ? 'is-active' : ''} onClick={() => setTab('overview')}>{t('adminOverview')}</button><button type="button" role="tab" aria-selected={tab === 'users'} className={tab === 'users' ? 'is-active' : ''} onClick={() => setTab('users')}>{t('userManagement')}</button></nav>{tab === 'users' ? <AdminUserManagement /> : <>{loading ? <div className="queue-admin-loading"><LoaderCircle className="queue-spin" />{t('loadingReport')}</div> : null}{error ? <p className="queue-admin-error">{error}</p> : null}{report ? <><div className="queue-admin-metrics">{metric('pool', t('inPool'))}{metric('scheduled', t('scheduled'))}{metric('in_progress', t('inProgress'))}{metric('completed', t('readyToClose'))}{metric('closed', t('closed'))}{['low', 'medium', 'high', 'urgent'].map(priorityMetric)}</div><div className="queue-admin-designers"><div><h3>{t('designerWorkload')}</h3><p>{t('workloadHelp')}</p></div><div className="queue-admin-designer-list">{report.designers.map((designer) => <span key={designer.email}><b>{designer.email.split('@')[0]}</b><small>{designer.activeRequests} {t('activeRequests')} · {designer.productionPoints} PP · {designer.urgentRequests} {t('priorityUrgent')}</small><em>{designer.highPriorityRequests} {t('highPriority')} · {designer.closedRequests} {t('closed')} · {designer.averageActualMinutes == null ? '—' : `${designer.averageActualMinutes} min`} {t('averageTime')}</em></span>)}</div></div><a className="queue-admin-settings" href={`${import.meta.env.BASE_URL}?view=admin`} target="_blank" rel="noreferrer"><Settings size={14} />{t('openSettings')}</a><AdminAssignmentTable tasks={report.assignedPosts || []} onOpen={onOpen} /></> : null}</>}</section>;
 }
 
-function TicketPanel({ tickets, loading, error, onClose, onReview }) {
+function TicketPanel({ tickets, loading, error, onClose, onReview, canReview }) {
   const { t, language } = useQueuePreferences();
   const [tab, setTab] = useState('pending');
   const [busy, setBusy] = useState('');
-  const items = tickets.filter((ticket) => tab === 'pending' ? ticket.status === 'pending' : ticket.status !== 'pending');
-  const counts = { pending: tickets.filter((ticket) => ticket.status === 'pending').length, resolved: tickets.filter((ticket) => ticket.status !== 'pending').length };
+  const items = tickets.filter((ticket) => ticket.status === tab);
+  const counts = {
+    pending: tickets.filter((ticket) => ticket.status === 'pending').length,
+    approved: tickets.filter((ticket) => ticket.status === 'approved').length,
+    rejected: tickets.filter((ticket) => ticket.status === 'rejected').length,
+  };
+  const tabs = [
+    { status: 'pending', label: 'ticketsPending', empty: 'noPendingTickets' },
+    { status: 'approved', label: 'ticketsApproved', empty: 'noApprovedTickets' },
+    { status: 'rejected', label: 'ticketsRejected', empty: 'noRejectedTickets' },
+  ];
+  const emptyMessage = tabs.find((item) => item.status === tab)?.empty || 'noPendingTickets';
   const review = async (ticket, action) => { setBusy(`${ticket.id}:${action}`); try { await onReview(ticket.id, action); } finally { setBusy(''); } };
   const ticketTitle = (ticket) => ticket.type === 'time_block' ? (ticket.title || t(ticket.category || 'other')) : ticket.type === 'pp_revision' ? t('ppRevision') : t('cancellationRequest');
   const ticketMeta = (ticket) => {
@@ -236,7 +246,16 @@ function TicketPanel({ tickets, loading, error, onClose, onReview }) {
     if (ticket.type === 'pp_revision') return `${account} · ${ticket.request?.productionPoints || '—'} PP → ${ticket.requestedProductionPoints} PP`;
     return `${account} · ${statusCopy(ticket.request?.status, t)}`;
   };
-  return <aside className="queue-ticket-panel" aria-label={t('ticketInbox')}><header><div><p className="scheduler-eyebrow">{t('tickets')}</p><h2>{t('ticketInbox')}</h2></div><button type="button" onClick={onClose} aria-label={t('close')}><X size={16} /></button></header><nav role="tablist"><button type="button" role="tab" aria-selected={tab === 'pending'} className={tab === 'pending' ? 'is-active' : ''} onClick={() => setTab('pending')}>{t('ticketsPending')} <b>{counts.pending}</b></button><button type="button" role="tab" aria-selected={tab === 'resolved'} className={tab === 'resolved' ? 'is-active' : ''} onClick={() => setTab('resolved')}>{t('ticketsResolved')} <b>{counts.resolved}</b></button></nav><div className="queue-ticket-list">{loading ? <div className="queue-ticket-state"><LoaderCircle className="queue-spin" />{t('loadingSchedule')}</div> : null}{error ? <p className="queue-ticket-error">{error}</p> : null}{!loading && !items.length ? <div className="queue-ticket-empty"><ClipboardList size={20} /><span>{tab === 'pending' ? t('noPendingTickets') : t('noResolvedTickets')}</span></div> : null}{items.map((ticket) => <article key={ticket.id} className={`ticket-${ticket.type} status-${ticket.status}`}><header><span>{ticket.type === 'time_block' ? <CalendarPlus size={14} /> : ticket.type === 'pp_revision' ? <TimerReset size={14} /> : <Ban size={14} />}</span><div><b>{ticketTitle(ticket)}</b><small>{ticket.requesterEmail.split('@')[0]} · {displayTimestamp(ticket.createdAt, language)}</small></div><i>{ticket.status === 'pending' ? t('ticketsPending') : t(ticket.status)}</i></header><p>{ticketMeta(ticket)}</p>{ticket.reason ? <blockquote>{ticket.reason}</blockquote> : null}{ticket.status === 'pending' ? <footer><button type="button" className="is-approve" disabled={Boolean(busy)} onClick={() => review(ticket, 'approve')}>{busy === `${ticket.id}:approve` ? <LoaderCircle className="queue-spin" size={13} /> : <Check size={13} />}{t('approve')}</button><button type="button" className="is-reject" disabled={Boolean(busy)} onClick={() => review(ticket, 'reject')}>{busy === `${ticket.id}:reject` ? <LoaderCircle className="queue-spin" size={13} /> : <X size={13} />}{t('reject')}</button></footer> : <small className="ticket-reviewer">{ticket.reviewerEmail?.split('@')[0] || '—'} · {ticket.reviewedAt ? displayTimestamp(ticket.reviewedAt, language) : ''}</small>}</article>)}</div></aside>;
+  return <aside className="queue-ticket-panel" aria-label={t(canReview ? 'ticketInbox' : 'myRequests')}>
+    <header><div><p className="scheduler-eyebrow">{t('tickets')}</p><h2>{t(canReview ? 'ticketInbox' : 'myRequests')}</h2></div><button type="button" onClick={onClose} aria-label={t('close')}><X size={16} /></button></header>
+    <nav role="tablist">{tabs.map((item) => <button key={item.status} type="button" role="tab" aria-selected={tab === item.status} className={tab === item.status ? 'is-active' : ''} onClick={() => setTab(item.status)}>{t(item.label)} <b>{counts[item.status]}</b></button>)}</nav>
+    <div className="queue-ticket-list">
+      {loading ? <div className="queue-ticket-state"><LoaderCircle className="queue-spin" />{t('loadingSchedule')}</div> : null}
+      {error ? <p className="queue-ticket-error">{error}</p> : null}
+      {!loading && !items.length ? <div className="queue-ticket-empty"><ClipboardList size={20} /><span>{t(emptyMessage)}</span></div> : null}
+      {items.map((ticket) => <article key={ticket.id} className={`ticket-${ticket.type} status-${ticket.status}`}><header><span>{ticket.type === 'time_block' ? <CalendarPlus size={14} /> : ticket.type === 'pp_revision' ? <TimerReset size={14} /> : <Ban size={14} />}</span><div><b>{ticketTitle(ticket)}</b><small>{ticket.requesterEmail.split('@')[0]} · {displayTimestamp(ticket.createdAt, language)}</small></div><i>{ticket.status === 'pending' ? t('ticketsPending') : t(ticket.status)}</i></header><p>{ticketMeta(ticket)}</p>{ticket.reason ? <blockquote>{ticket.reason}</blockquote> : null}{ticket.status === 'pending' && canReview ? <footer><button type="button" className="is-approve" disabled={Boolean(busy)} onClick={() => review(ticket, 'approve')}>{busy === `${ticket.id}:approve` ? <LoaderCircle className="queue-spin" size={13} /> : <Check size={13} />}{t('approve')}</button><button type="button" className="is-reject" disabled={Boolean(busy)} onClick={() => review(ticket, 'reject')}>{busy === `${ticket.id}:reject` ? <LoaderCircle className="queue-spin" size={13} /> : <X size={13} />}{t('reject')}</button></footer> : ticket.status === 'pending' ? <small className="ticket-reviewer">{t('pendingApproval')}</small> : <small className="ticket-reviewer">{ticket.reviewerEmail?.split('@')[0] || '—'} · {ticket.reviewedAt ? displayTimestamp(ticket.reviewedAt, language) : ''}</small>}</article>)}
+    </div>
+  </aside>;
 }
 
 function AttachmentList({ task, busy, onUpload, onDownload }) {
@@ -756,7 +775,7 @@ function QueueApp({ user }) {
       <div className="queue-actions">
         <span className={`queue-live-status is-${liveStatus}`} title={liveStatus === 'live' ? t('liveConnected') : liveStatus === 'offline' ? t('liveOffline') : t('liveConnecting')}>{liveStatus === 'offline' ? <WifiOff size={12} /> : <Radio size={12} />}<b>{liveStatus === 'live' ? t('liveConnected') : liveStatus === 'offline' ? t('liveOffline') : t('liveConnecting')}</b></span>
         <QueuePreferences />
-        {coordinator ? <button type="button" className={`queue-ticket-button${ticketsOpen ? ' is-active' : ''}`} onClick={toggleTickets}><ClipboardList size={14} />{t('tickets')}{data?.pendingTicketCount ? <b>{data.pendingTicketCount}</b> : null}</button> : null}
+        {data?.viewer ? <button type="button" className={`queue-ticket-button${ticketsOpen ? ' is-active' : ''}`} onClick={toggleTickets}><ClipboardList size={14} />{t('tickets')}{data.pendingTicketCount ? <b>{data.pendingTicketCount}</b> : null}</button> : null}
         {data?.viewer?.isAdmin ? <button type="button" className={`queue-admin-button${adminOpen ? ' is-active' : ''}`} onClick={toggleAdminTools}><BarChart3 size={14} />{t('admin')}</button> : null}
         <a href={`${import.meta.env.BASE_URL}tracker.html`} target="_blank" rel="noreferrer">Tracker</a><a href={`${import.meta.env.BASE_URL}insights.html`} target="_blank" rel="noreferrer">Insights</a><span className="queue-nav-current" aria-current="page">Queue</span><a href={import.meta.env.BASE_URL} target="_blank" rel="noreferrer"><ArrowLeft size={14} />{t('dashboard')}</a><button type="button" className="queue-avatar" title={user.email} onClick={() => { clearSsoCookie(); signOut(auth); }}><LogOut size={14} /></button>
       </div>
@@ -769,7 +788,7 @@ function QueueApp({ user }) {
       {coordinator && !archive ? <section className={`scheduler-pool${poolDropActive ? ' is-drop-target' : ''}`} onDragOver={poolDragOver} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setPoolDropActive(false); }} onDrop={poolDrop} aria-label={t('poolDropHint')}><header><div><p className="scheduler-eyebrow">{t('productionPool')}</p><h2>{pool.length} {t('readyToSchedule')}</h2></div><small>{poolDropActive ? t('poolDropHint') : t('visibleSchedule')}</small></header><div className="scheduler-pool-list">{pool.map((task) => <PoolCard key={task.id} task={task} onOpen={setOpen} />)}{!pool.length ? <p className="scheduler-empty">{t('emptyPool')}</p> : null}</div></section> : null}
       {archive ? <section className="queue-archive-list"><header><p className="scheduler-eyebrow">{t('archive')}</p><h2>{archived.length} {t('cancelled')}</h2></header>{archived.length ? archived.map((task) => <button type="button" key={task.id} onClick={() => setOpen(task)}><span>{cover(task) ? <img src={cover(task)} alt="" /> : '@'}</span><div><b>@{task.post.account}</b><small>{task.cancellationReason || t('cancelled')}</small></div><em>{displayTimestamp(task.updatedAt, language)}</em></button>) : <p className="scheduler-empty">{t('noArchived')}</p>}</section> : <>{coordinator && draft.length ? <><DraftAccounts draft={draft} designers={data.designers} onAccountsChange={changeDraftAccounts} /><div className="scheduler-draft-actions"><span><Clock3 size={13} />{t('sharedDrafts')}</span><button type="button" onClick={clearDrafts}>{t('clearDrafts')}</button></div></> : null}<Scheduler data={data} draft={draft} setDraft={setDraft} onDraftChange={persistDrafts} selectedDate={date} designerScope={designerScope} onOpen={setOpen} onError={(message) => notify(message, 'error')} onCreateTimeBlock={createTimeBlock} />{coordinator ? <AdminAssignmentTable tasks={upcoming} onOpen={setOpen} headingKey="upcomingProduction" countKey="activeRequests" /> : <DesignerAssignments tasks={assigned} onOpen={setOpen} />}</>}
     </> : null}
-    {ticketsOpen && coordinator ? <TicketPanel tickets={tickets} loading={ticketsLoading} error={ticketsError} onClose={() => setTicketsOpen(false)} onReview={reviewTicket} /> : null}
+    {ticketsOpen && data?.viewer ? <TicketPanel tickets={tickets} loading={ticketsLoading} error={ticketsError} onClose={() => setTicketsOpen(false)} onReview={reviewTicket} canReview={Boolean(coordinator)} /> : null}
     <Detail task={open} tags={data?.tags || []} canCoordinate={coordinator} isOwner={open?.designerEmail === data?.viewer.email || data?.viewer.isAdmin} notice={detailNotice} history={history} historyLoading={historyLoading} onClose={closeDetail} onAction={action} onCancel={cancel} onEdit={edit} onNotify={resend} onUpload={upload} onDownload={download} onRequestPP={requestPP} onRequestCancellation={requestCancellation} />
     <DevRolePreview isDev={Boolean(viewer?.is_dev || data?.viewer?.isDev)} />
   </main>;
