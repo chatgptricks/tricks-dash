@@ -790,6 +790,8 @@ img {
   text-transform: uppercase;
   letter-spacing: 0.14em;
 }
+.queue-source-state,.queue-attribution-badge { position:absolute; bottom:10px; z-index:5; display:inline-flex; align-items:center; gap:5px; min-height:24px; padding:0 8px; border:1px solid rgba(255,255,255,.22); border-radius:999px; background:rgba(0,0,0,.72); color:#fff; font-size:9px; font-weight:850; letter-spacing:.03em; text-transform:uppercase; backdrop-filter:blur(7px); }
+.queue-source-state { left:10px; color:var(--accent); }.queue-attribution-badge { right:10px; border-color:rgba(var(--accent-rgb),.52); background:rgba(0,0,0,.78); color:var(--accent); text-transform:none; }
 
 .media-badge {
   position: absolute;
@@ -6666,6 +6668,7 @@ body {
 
 .queue-assign-fieldset legend,
 .queue-assign-note > span,
+.queue-assign-files > span,
 .queue-assign-grid > label > span {
   display: block;
   margin-bottom: 6px;
@@ -6674,6 +6677,29 @@ body {
   font-weight: 800;
   letter-spacing: 0.03em;
   text-transform: uppercase;
+}
+
+.queue-assign-files {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  margin-bottom: 14px;
+  border: 1px dashed rgba(var(--edge), 0.18);
+  border-radius: 9px;
+  background: rgba(var(--edge), 0.025);
+}
+
+.queue-assign-files input {
+  color: rgba(var(--ink), 0.66);
+  font-size: 11px;
+}
+
+.queue-assign-files small {
+  overflow: hidden;
+  color: rgba(var(--ink), 0.46);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .queue-assign-fieldset i,
