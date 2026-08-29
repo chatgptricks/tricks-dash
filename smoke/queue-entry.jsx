@@ -33,7 +33,11 @@ let submitted = null;
 let drafted = null;
 let started = false;
 let createdTimeBlock = false;
-let tickets = [{ id: 70, type: 'cancellation', status: 'pending', requesterEmail: 'ivan@sentientagency.io', requestId: 3, reason: 'Client changed direction', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), request: { id: 3, post: { account: 'chatgptricks', shortcode: 'NEXT1' }, designerEmail: 'ivan@sentientagency.io', status: 'scheduled', productionPoints: 3 } }];
+let tickets = [
+  { id: 70, type: 'cancellation', status: 'pending', requesterEmail: 'ivan@sentientagency.io', requestId: 3, reason: 'Client changed direction', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), request: { id: 3, post: { account: 'chatgptricks', shortcode: 'NEXT1' }, designerEmail: 'ivan@sentientagency.io', status: 'scheduled', productionPoints: 3 } },
+  { id: 69, type: 'pp_revision', status: 'rejected', requesterEmail: 'esteban@sentientagency.io', requestId: 3, requestedProductionPoints: 5, reason: 'More editing time', reviewerEmail: 'ivan@sentientagency.io', reviewedAt: new Date().toISOString(), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), request: { id: 3, post: { account: 'chatgptricks', shortcode: 'NEXT1' }, designerEmail: 'esteban@sentientagency.io', status: 'scheduled', productionPoints: 3 } },
+  { id: 68, type: 'time_block', status: 'approved', requesterEmail: 'esteban@sentientagency.io', category: 'meeting', title: 'Team sync', scheduledDate: day, scheduledStartMinutes: 720, durationMinutes: 30, reason: '', reviewerEmail: 'ivan@sentientagency.io', reviewedAt: new Date().toISOString(), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+];
 const response = (body) => ({ ok: true, status: 200, json: async () => body, text: async () => JSON.stringify(body) });
 const stubFetch = async (url, options = {}) => {
   const value = String(url);
@@ -125,7 +129,14 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
 
     await click(document.querySelector('.queue-ticket-button'));
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 50)); });
-    checks['Coordinator ticket inbox renders'] = Boolean(document.querySelector('.queue-ticket-panel')) && document.querySelectorAll('.queue-ticket-list article').length === 1;
+    const ticketPanel = document.querySelector('.queue-ticket-panel');
+    checks['Coordinator ticket inbox renders'] = Boolean(ticketPanel) && document.querySelectorAll('.queue-ticket-list article').length === 1;
+    checks['Request status tabs render'] = document.querySelectorAll('.queue-ticket-panel > nav [role="tab"]').length === 3;
+    checks['Coordinator can review pending requests'] = document.querySelectorAll('.queue-ticket-list footer button').length === 2;
+    await click([...document.querySelectorAll('.queue-ticket-panel > nav [role="tab"]')].find((node) => /Approved|Aprobadas/.test(node.textContent)));
+    checks['Approved requests render separately'] = document.querySelectorAll('.queue-ticket-list article.status-approved').length === 1 && !document.querySelector('.queue-ticket-list footer');
+    await click([...document.querySelectorAll('.queue-ticket-panel > nav [role="tab"]')].find((node) => /Rejected|Rechazadas/.test(node.textContent)));
+    checks['Rejected requests render separately'] = document.querySelectorAll('.queue-ticket-list article.status-rejected').length === 1 && !document.querySelector('.queue-ticket-list footer');
     await click(document.querySelector('.queue-ticket-panel > header button'));
 
     const ownTrack = document.querySelector('.scheduler-track');
