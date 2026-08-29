@@ -173,7 +173,11 @@ function Scheduler({ data, draft, setDraft, selectedDate, designerScope, onOpen,
       return [...currentById.values()];
     });
   };
-  const merged = (designer) => allTasks.filter((task) => task.designerEmail === designer && task.scheduledDate === selectedDate && !['pool', 'cancelled'].includes(task.status));
+  const merged = (designer) => allTasks.filter((task) => {
+    if (task.designerEmail !== designer || task.scheduledDate !== selectedDate || ['pool', 'cancelled'].includes(task.status)) return false;
+    const start = task.scheduledStartMinutes ?? QUEUE_DAY_START;
+    return start + (task.durationMinutes || 10) > viewStart && start < viewStart + 720;
+  });
   const nowPosition = ((currentMinutes(now) - viewStart) / 720) * 100;
   return <section className="scheduler"><div className="scheduler-time-head"><span>{t('designer')}</span><div>{Array.from({ length: 13 }, (_, hour) => <b key={hour} style={{ left: `${hour * (100 / 12)}%` }}>{time(viewStart + hour * 60)}</b>)}</div></div>{visibleDesigners.map((designer) => <div className="scheduler-row" key={designer.email}><header><b>{designer.email.split('@')[0]}</b><small>{designer.accounts?.map((account) => `@${account}`).join(' · ') || t('noAccounts')}</small></header><div className="scheduler-track" onDragOver={(event) => previewDrop(event, designer.email)} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setDropPreview(null); }} onDrop={(event) => drop(event, designer.email)}>{Array.from({ length: 13 }, (_, hour) => <i key={hour} style={{ left: `${hour * (100 / 12)}%` }} />)}{today ? <span className="scheduler-now" style={{ left: `${nowPosition}%` }}><b>{t('now')}</b></span> : null}{dropPreview?.designer === designer.email ? <span className="scheduler-drop-preview" style={{ left: `${((dropPreview.target.scheduledStartMinutes - viewStart) / 720) * 100}%`, width: `${(dropPreview.target.durationMinutes / 720) * 100}%` }}><b>@{dropPreview.target.post.account}</b><small>{time(dropPreview.target.scheduledStartMinutes)} · {dropPreview.target.durationMinutes} min{dropPreview.tasks.length > 1 ? ` · ${dropPreview.tasks.length - 1} ${t('movedJobs')}` : ''}</small></span> : null}{merged(designer.email).map((task) => <TaskBlock key={task.id} task={task} editable={coordinator} onOpen={onOpen} viewStart={viewStart} />)}</div></div>)}</section>;
 }
