@@ -18,11 +18,13 @@ const payload = {
   assignedRequests: [active, scheduled],
   liveDrafts: [],
   liveRevision: 0,
+  timeBlocks: [],
+  pendingTicketCount: 1,
   designers: [{ email: 'esteban@sentientagency.io', isAdmin: true, accounts: ['chatgptricks'] }],
   schedulerUsers: [
     { email: 'esteban@sentientagency.io', isAdmin: true, roles: ['vc', 'pd'], isQueueDesigner: true, accounts: ['chatgptricks'], accountAvatars: { chatgptricks: '/api/dashboard/avatar/chatgptricks' } },
-    { email: 'ivan@sentientagency.io', isAdmin: true, roles: ['vc'], isQueueDesigner: false, accounts: [] },
-    { email: 'louis@sentientagency.io', isAdmin: false, roles: ['sales'], isQueueDesigner: false, accounts: [] },
+    { email: 'ivan@sentientagency.io', isAdmin: true, roles: ['vc', 'pd'], isQueueDesigner: true, accounts: [] },
+    { email: 'louis@sentientagency.io', isAdmin: false, roles: ['sales', 'pd'], isQueueDesigner: true, accounts: [] },
   ],
   tags: ['copy'], priorities: ['low', 'medium', 'high', 'urgent'], hours: { start: 0, end: 1440 },
 };
@@ -30,12 +32,30 @@ const payload = {
 let submitted = null;
 let drafted = null;
 let started = false;
+let createdTimeBlock = false;
+let tickets = [{ id: 70, type: 'cancellation', status: 'pending', requesterEmail: 'ivan@sentientagency.io', requestId: 3, reason: 'Client changed direction', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), request: { id: 3, post: { account: 'chatgptricks', shortcode: 'NEXT1' }, designerEmail: 'ivan@sentientagency.io', status: 'scheduled', productionPoints: 3 } }];
 const response = (body) => ({ ok: true, status: 200, json: async () => body, text: async () => JSON.stringify(body) });
 const stubFetch = async (url, options = {}) => {
   const value = String(url);
   if (value.includes('/api/admin/users')) return response({ users: [{ email: 'esteban@sentientagency.io', role: 'admin', operating_role: 'vc', is_admin: true }] });
   if (value.includes('/api/admin/queue/designer-accounts')) return response({ designers: [{ email: 'esteban@sentientagency.io', accounts: ['chatgptricks'] }] });
   if (value.includes('/api/admin/accounts')) return response({ accounts: [{ handle: 'chatgptricks', group: 'sentient', is_active: true }] });
+  if (value.includes('/api/dashboard/queue/v2/admin-report')) return response({ totals: {}, priorities: {}, designers: [], assignedPosts: [active, scheduled] });
+  if (value.includes('/api/dashboard/queue/v2/tickets/time-block')) {
+    const block = { id: 71, type: 'time_block', status: 'pending', requesterEmail: 'esteban@sentientagency.io', category: options.body.get('category'), title: options.body.get('title') || 'Meeting', scheduledDate: options.body.get('scheduled_date'), scheduledStartMinutes: Number(options.body.get('scheduled_start_minutes')), durationMinutes: Number(options.body.get('duration_minutes')), reason: options.body.get('note') || '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+    createdTimeBlock = true;
+    payload.timeBlocks = [block];
+    payload.pendingTicketCount += 1;
+    tickets = [block, ...tickets];
+    return response({ ok: true, ticket: block });
+  }
+  if (/\/api\/dashboard\/queue\/v2\/tickets\/\d+\/review/.test(value)) {
+    const id = Number(value.match(/tickets\/(\d+)\/review/)[1]);
+    tickets = tickets.map((ticket) => ticket.id === id ? { ...ticket, status: options.body.get('action') === 'approve' ? 'approved' : 'rejected', reviewerEmail: 'esteban@sentientagency.io', reviewedAt: new Date().toISOString() } : ticket);
+    payload.pendingTicketCount = tickets.filter((ticket) => ticket.status === 'pending').length;
+    return response({ ok: true, ticket: tickets.find((ticket) => ticket.id === id) });
+  }
+  if (value.includes('/api/dashboard/queue/v2/tickets')) return response({ tickets });
   if (value.includes('/api/dashboard/queue/v2/drafts') && !value.includes('/clear')) {
     drafted = JSON.parse(options.body.get('changes')).map((change) => ({ ...pool, ...change, designerEmail: change.designerEmail, scheduledDate: change.scheduledDate, scheduledStartMinutes: change.scheduledStartMinutes, recommendedAccounts: change.recommendedAccounts || [], status: change.status === 'pool' ? 'pool' : 'scheduled', isDraft: true, draftCoordinatorEmail: 'esteban@sentientagency.io' }));
     payload.liveDrafts = drafted;
@@ -92,12 +112,29 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     checks['Center Now control renders'] = Boolean(document.querySelector('.scheduler-center-now'));
     checks['Pool and scheduled blocks render'] = document.querySelectorAll('.queue-pool-card').length === 1 && document.querySelectorAll('.scheduler-block').length === 2;
     checks['Account badge and resize handles render'] = Boolean(document.querySelector('.scheduler-account-badges')) && document.querySelectorAll('.scheduler-resize-handle').length >= 2;
-    checks['All dashboard users render in scheduler'] = document.querySelectorAll('.scheduler-row').length === 3 && document.querySelectorAll('.scheduler-row.is-non-queue-user').length === 2;
+    checks['All dashboard users render as PD-capable'] = document.querySelectorAll('.scheduler-row').length === 3 && document.querySelectorAll('.scheduler-row.is-non-queue-user').length === 0;
     await click(document.querySelector('.queue-admin-button'));
     checks['Admin tabs render'] = document.querySelectorAll('.queue-admin-tabs [role="tab"]').length === 2;
+    checks['Admin Overview hides scheduler'] = !document.querySelector('.scheduler-canvas') && !document.querySelector('.scheduler-pool');
     await click([...document.querySelectorAll('.queue-admin-tabs [role="tab"]')].find((node) => /User Management|Gestión de usuarios/.test(node.textContent)));
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 100)); });
     checks['User Management lists users and accounts'] = Boolean(document.querySelector('.queue-user-management-list')) && Boolean(document.querySelector('.queue-user-management-add select'));
+    checks['User Management hides scheduler'] = !document.querySelector('.scheduler-canvas') && !document.querySelector('.scheduler-pool');
+    await click(document.querySelector('.queue-admin-tools > header button'));
+    checks['Closing Admin restores scheduler'] = Boolean(document.querySelector('.scheduler-canvas'));
+
+    await click(document.querySelector('.queue-ticket-button'));
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 50)); });
+    checks['Coordinator ticket inbox renders'] = Boolean(document.querySelector('.queue-ticket-panel')) && document.querySelectorAll('.queue-ticket-list article').length === 1;
+    await click(document.querySelector('.queue-ticket-panel > header button'));
+
+    const ownTrack = document.querySelector('.scheduler-track');
+    ownTrack.getBoundingClientRect = () => ({ left: 0, right: 1440, top: 0, bottom: 84, width: 1440, height: 84, x: 0, y: 0, toJSON() {} });
+    await act(async () => { ownTrack.dispatchEvent(new window.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 300, clientY: 120 })); });
+    checks['Right click opens personal time form'] = Boolean(document.querySelector('.scheduler-time-form'));
+    await click(document.querySelector('.scheduler-time-form > .scheduler-primary'));
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 100)); });
+    checks['Pending personal time appears immediately'] = createdTimeBlock && Boolean(document.querySelector('.scheduler-time-block.status-pending'));
 
     const nextBlock = document.querySelector('.scheduler-block.state-scheduled');
     await click(nextBlock);
