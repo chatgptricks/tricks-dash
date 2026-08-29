@@ -592,7 +592,7 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
 
 /* Full-day Queue timeline: an eight-hour desktop viewport over 24 hours. */
 .scheduler-shell { position:relative; }
-.scheduler-shell > .scheduler-center-now { position:absolute; top:8px; right:8px; z-index:20; }
+.scheduler-shell > .scheduler-center-now { position:absolute; top:8px; right:8px; z-index:10; }
 .scheduler-pool { transition:border-color 140ms ease, box-shadow 140ms ease, background 140ms ease; }
 .scheduler-pool.is-drop-target { border-color:rgba(var(--accent-rgb),.72); background:rgba(var(--accent-rgb),.045); box-shadow:0 0 0 2px rgba(var(--accent-rgb),.12),0 20px 55px rgba(var(--shade),.2); }
 .scheduler-pool.is-drop-target .scheduler-pool-list { background:rgba(var(--accent-rgb),.04); }
