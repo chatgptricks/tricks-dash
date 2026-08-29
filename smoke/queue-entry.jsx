@@ -33,6 +33,9 @@ let started = false;
 const response = (body) => ({ ok: true, status: 200, json: async () => body, text: async () => JSON.stringify(body) });
 const stubFetch = async (url, options = {}) => {
   const value = String(url);
+  if (value.includes('/api/admin/users')) return response({ users: [{ email: 'esteban@sentientagency.io', role: 'admin', operating_role: 'vc', is_admin: true }] });
+  if (value.includes('/api/admin/queue/designer-accounts')) return response({ designers: [{ email: 'esteban@sentientagency.io', accounts: ['chatgptricks'] }] });
+  if (value.includes('/api/admin/accounts')) return response({ accounts: [{ handle: 'chatgptricks', group: 'sentient', is_active: true }] });
   if (value.includes('/api/dashboard/queue/v2/drafts') && !value.includes('/clear')) {
     drafted = JSON.parse(options.body.get('changes')).map((change) => ({ ...pool, ...change, designerEmail: change.designerEmail, scheduledDate: change.scheduledDate, scheduledStartMinutes: change.scheduledStartMinutes, recommendedAccounts: change.recommendedAccounts || [], status: 'scheduled', isDraft: true, draftCoordinatorEmail: 'esteban@sentientagency.io' }));
     payload.liveDrafts = drafted;
@@ -77,8 +80,14 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     checks['Queue renders'] = Boolean(document.querySelector('.scheduler-canvas'));
     checks['24 hourly labels render'] = document.querySelectorAll('.scheduler-time-head b').length === 24;
     checks['Now renders once'] = document.querySelectorAll('.scheduler-now-global').length === 1 && document.querySelectorAll('.scheduler-now').length === 0;
+    checks['Center Now control renders'] = Boolean(document.querySelector('.scheduler-center-now'));
     checks['Pool and scheduled blocks render'] = document.querySelectorAll('.queue-pool-card').length === 1 && document.querySelectorAll('.scheduler-block').length === 2;
     checks['All dashboard users render in scheduler'] = document.querySelectorAll('.scheduler-row').length === 3 && document.querySelectorAll('.scheduler-row.is-non-queue-user').length === 2;
+    await click(document.querySelector('.queue-admin-button'));
+    checks['Admin tabs render'] = document.querySelectorAll('.queue-admin-tabs [role="tab"]').length === 2;
+    await click([...document.querySelectorAll('.queue-admin-tabs [role="tab"]')].find((node) => /User Management|Gestión de usuarios/.test(node.textContent)));
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 100)); });
+    checks['User Management lists users and accounts'] = Boolean(document.querySelector('.queue-user-management-list')) && Boolean(document.querySelector('.queue-user-management-add select'));
 
     const nextBlock = document.querySelector('.scheduler-block.state-scheduled');
     await click(nextBlock);
