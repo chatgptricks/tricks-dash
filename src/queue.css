@@ -466,6 +466,31 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
 .queue-admin-metrics { grid-template-columns:repeat(7,minmax(100px,1fr)); }
 .queue-admin-designer-list span { min-width:190px; }.queue-admin-designer-list em { color:rgba(var(--ink),.4); font-size:8px; font-style:normal; line-height:1.4; }
 
+/* Cross-day admin assignment ledger. The scheduler remains date-scoped;
+ * this table is the durable overview of every request that has an owner. */
+.queue-admin-assignments { margin-top:2px; border-top:1px solid var(--q-line); background:var(--q-panel); }
+.queue-admin-assignments>header { display:flex; align-items:flex-end; justify-content:space-between; gap:14px; padding:15px 16px 12px; }
+.queue-admin-assignments>header h3 { margin:2px 0 0; color:var(--q-text); font-size:16px; }
+.queue-admin-assignment-table { width:100%; overflow-x:auto; border-top:1px solid var(--q-line); }
+.queue-admin-assignment-head,.queue-admin-assignment-row { display:grid; grid-template-columns:minmax(260px,2.2fr) minmax(150px,1.1fr) minmax(150px,1fr) minmax(130px,.9fr) minmax(100px,.65fr) minmax(120px,.8fr); min-width:1020px; }
+.queue-admin-assignment-head { padding:9px 16px; background:rgba(var(--edge),.025); color:var(--q-muted); font-size:9px; font-weight:850; letter-spacing:.07em; text-transform:uppercase; }
+.queue-admin-assignment-row { width:100%; align-items:center; padding:9px 16px; border:0; border-top:1px solid rgba(var(--edge),.07); background:var(--q-panel); color:var(--q-text); text-align:left; }
+.queue-admin-assignment-row:hover { background:var(--q-panel-2); }
+.queue-admin-assignment-post { display:flex; align-items:center; gap:10px; min-width:0; }
+.queue-admin-assignment-post img,.queue-admin-assignment-empty { display:grid; place-items:center; width:46px; height:46px; flex:0 0 auto; border-radius:7px; object-fit:cover; background:var(--q-panel-2); color:var(--q-muted); }
+.queue-admin-assignment-post>span:last-child,.queue-admin-assignment-designer,.queue-admin-assignment-time,.queue-admin-assignment-deadline,.queue-admin-assignment-pp { display:grid; min-width:0; gap:3px; }
+.queue-admin-assignment-row b { overflow:hidden; color:var(--q-text); font-size:11px; text-overflow:ellipsis; white-space:nowrap; }
+.queue-admin-assignment-row small { overflow:hidden; color:var(--q-muted); font-size:9px; line-height:1.35; text-overflow:ellipsis; white-space:nowrap; }
+.queue-admin-assignment-row em { overflow:hidden; color:var(--q-accent); font-size:8px; font-style:normal; text-overflow:ellipsis; white-space:nowrap; }
+.queue-admin-assignment-post small { max-width:330px; }.queue-admin-assignment-pp b { color:var(--q-accent); }
+.queue-admin-assignment-status i { display:inline-flex; max-width:max-content; padding:4px 7px; border:1px solid var(--q-line); border-radius:999px; color:var(--q-muted); font-size:9px; font-style:normal; font-weight:800; text-transform:capitalize; }
+.queue-admin-assignment-row.state-in_progress .queue-admin-assignment-status i { border-color:rgba(255,189,89,.5); color:#ffcf80; }
+.queue-admin-assignment-row.state-completed .queue-admin-assignment-status i { border-color:rgba(210,210,210,.45); color:#ddd; }
+.queue-admin-assignment-row.state-closed .queue-admin-assignment-status i { border-color:rgba(130,130,130,.5); color:#aaa; }
+.queue-admin-assignment-row.state-cancelled .queue-admin-assignment-status i { border-color:rgba(255,107,107,.45); color:#ff9b9b; }
+.queue-admin-assignment-row.is-overdue { box-shadow:inset 3px 0 #ff6b6b; }.queue-admin-assignment-row.is-at-risk { box-shadow:inset 3px 0 #ffbd59; }
+.queue-admin-assignment-empty-state { margin:0; padding:26px 16px 30px; color:var(--q-muted); font-size:11px; text-align:center; }
+
 .queue-request-rail .detail { position:relative; }.queue-detail-status { position:absolute; top:20px; right:20px; z-index:3; padding:6px 8px; border:1px solid rgba(255,255,255,.2); border-radius:999px; background:rgba(0,0,0,.66); color:#fff; font-size:9px; font-weight:850; text-transform:uppercase; backdrop-filter:blur(8px); }
 .queue-request-rail .stats-panel { grid-template-columns:repeat(2,minmax(0,1fr)); overflow:visible; }.queue-request-rail .stats-panel .metric { min-height:64px; }.queue-request-rail .stats-panel .metric strong { font-size:12px; line-height:1.35; overflow-wrap:anywhere; }
 .queue-detail-scroll { min-height:0; overflow:auto; padding-right:3px; }.queue-detail-scroll>.slide-download { padding:10px; margin-top:12px; border:1px solid rgba(var(--edge),.09); box-shadow:none; background:var(--surface-2); }.queue-detail-scroll>.slide-download .ghost-button { min-height:34px; border-radius:8px; }
