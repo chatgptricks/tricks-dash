@@ -1,0 +1,100 @@
+import { act } from 'react';
+
+const localDay = () => {
+  const value = new Date();
+  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
+};
+const day = localDay();
+const post = (account, shortcode) => ({ account, shortcode, caption: `${account} source post`, type: 'Image', coverUrl: '' });
+const base = { productionPoints: 3, durationMinutes: 30, priority: 'medium', tags: [], brief: '', notes: '', references: [], attachments: [], recommendedAccounts: [], coordinatorEmail: 'ivan@sentientagency.io' };
+const pool = { ...base, id: 1, post: post('chatgptricks', 'POOL1'), status: 'pool', designerEmail: null, scheduledDate: null, scheduledStartMinutes: null };
+const active = { ...base, id: 2, post: post('chatgptricks', 'ACTIVE1'), status: 'in_progress', designerEmail: 'esteban@sentientagency.io', scheduledDate: day, scheduledStartMinutes: 540 };
+const scheduled = { ...base, id: 3, post: post('chatgptricks', 'NEXT1'), status: 'scheduled', designerEmail: 'esteban@sentientagency.io', scheduledDate: day, scheduledStartMinutes: 570 };
+const payload = {
+  viewer: { email: 'esteban@sentientagency.io', isAdmin: true, isDev: true, operatingRoles: ['vc', 'pd'] },
+  date: day,
+  requests: [pool, active, scheduled],
+  planningRequests: [active, scheduled],
+  assignedRequests: [active, scheduled],
+  designers: [{ email: 'esteban@sentientagency.io', isAdmin: true, accounts: ['chatgptricks'] }],
+  tags: ['copy'], priorities: ['low', 'medium', 'high', 'urgent'], hours: { start: 0, end: 1440 },
+};
+
+let submitted = null;
+let started = false;
+const response = (body) => ({ ok: true, status: 200, json: async () => body, text: async () => JSON.stringify(body) });
+const stubFetch = async (url, options = {}) => {
+  const value = String(url);
+  if (value.includes('/api/dashboard/queue/v2/submit')) {
+    submitted = JSON.parse(options.body.get('changes'));
+    return response({ ok: true, submitted: submitted.length, notifications: { sent: 1, failed: 0 } });
+  }
+  if (value.includes('/api/dashboard/queue/v2/requests/3/start')) {
+    started = true;
+    return response({ ok: true, deferred: true, scheduledDate: day, scheduledStartMinutes: 600 });
+  }
+  if (value.includes('/history')) return response({ events: [] });
+  if (value.includes('/api/dashboard/me')) return response({ email: 'esteban@sentientagency.io', is_dev: true });
+  if (value.includes('/api/dashboard/queue/v2')) return response(payload);
+  return response({});
+};
+globalThis.fetch = stubFetch;
+window.fetch = stubFetch;
+
+const transfer = { setData() {}, getData() { return ''; }, dropEffect: 'move' };
+const dragEvent = (type, clientX = 0) => {
+  const event = new window.MouseEvent(type, { bubbles: true, cancelable: true, clientX });
+  Object.defineProperty(event, 'dataTransfer', { value: transfer });
+  return event;
+};
+const click = async (node) => { await act(async () => { node.dispatchEvent(new window.MouseEvent('click', { bubbles: true })); }); };
+
+(async () => {
+  const checks = {};
+  const errors = [];
+  const originalError = console.error;
+  console.error = (...args) => { const message = args.map(String).join(' '); if (!/not wrapped in act/.test(message)) errors.push(message); originalError(...args); };
+  try {
+    await act(async () => {
+      await import('../src/queue.jsx');
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    });
+    checks['Queue renders'] = Boolean(document.querySelector('.scheduler-canvas'));
+    checks['24 hourly labels render'] = document.querySelectorAll('.scheduler-time-head b').length === 24;
+    checks['Now renders once'] = document.querySelectorAll('.scheduler-now-global').length === 1 && document.querySelectorAll('.scheduler-now').length === 0;
+    checks['Pool and scheduled blocks render'] = document.querySelectorAll('.queue-pool-card').length === 1 && document.querySelectorAll('.scheduler-block').length === 2;
+
+    const nextBlock = document.querySelector('.scheduler-block.state-scheduled');
+    await click(nextBlock);
+    checks['Sideview opens'] = Boolean(document.querySelector('.queue-request-rail'));
+    const start = [...document.querySelectorAll('.queue-detail-actions button')].find((node) => /Start work|Empezar trabajo/.test(node.textContent));
+    await click(start);
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 100)); });
+    checks['Start action accepts deferred response'] = started && !document.querySelector('.queue-request-rail');
+    checks['Deferred warning is shown'] = /already in progress|Ya hay otro post/.test(document.querySelector('.queue-toast')?.textContent || '');
+
+    const poolCard = document.querySelector('.queue-pool-card');
+    const track = document.querySelector('.scheduler-track');
+    track.getBoundingClientRect = () => ({ left: 0, right: 1440, top: 0, bottom: 84, width: 1440, height: 84, x: 0, y: 0, toJSON() {} });
+    await act(async () => { poolCard.dispatchEvent(dragEvent('dragstart')); });
+    await act(async () => { track.dispatchEvent(dragEvent('dragover', 550)); });
+    const ghost = document.querySelector('.scheduler-drop-preview');
+    checks['Drag ghost renders before drop'] = Boolean(ghost);
+    checks['Ghost shows final collision-free time'] = /10:00/.test(ghost?.textContent || '');
+    await act(async () => { track.dispatchEvent(dragEvent('drop', 550)); });
+    checks['Drop creates one draft'] = document.querySelectorAll('.scheduler-drafts article').length === 1;
+    const submit = document.querySelector('.scheduler-submit');
+    await click(submit);
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 100)); });
+    checks['Submit sends final planned position'] = submitted?.length === 1 && submitted[0].scheduledStartMinutes === 600 && submitted[0].scheduledDate === day;
+    checks['No render or console errors'] = errors.length === 0;
+
+    console.log('\n=== QUEUE SMOKE ===');
+    for (const [label, passed] of Object.entries(checks)) console.log(`${passed ? 'PASS' : 'FAIL'}  ${label}`);
+    if (errors.length) errors.slice(0, 5).forEach((error) => console.log('ERROR ', error.slice(0, 300)));
+    process.exit(Object.values(checks).every(Boolean) ? 0 : 1);
+  } catch (error) {
+    console.log('QUEUE HARNESS ERROR:', error?.stack || error);
+    process.exit(1);
+  }
+})();

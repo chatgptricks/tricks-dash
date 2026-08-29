@@ -121,10 +121,12 @@ section>h2 .tag{margin-left:8px;padding:2px 7px;border-radius:999px;background:r
   color:var(--accent-text);font-size:9px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
 section>p.sub{margin:0 0 14px;color:var(--muted);font-size:11px;line-height:1.5}
 
-/* Manual follower-count refresh: a small ghost icon next to wherever a
-   count is shown (leaderboard cell, detail KPI), plus a full linkbtn for
-   the batch action. Both just call the same POST endpoints and merge the
-   result back into SUMMARY -- see refreshAccountNow/refreshAllAccountsNow. */
+/* Manual follower-count refresh: a small ghost icon next to the leaderboard
+   table's follower cell (many rows, so a full button per row would be
+   noisy), and a full linkbtn -- same look as the overview's "Refresh all" --
+   for the single-account detail page and the batch action. All three just
+   call the same POST endpoints and merge the result back into SUMMARY --
+   see refreshAccountNow/refreshAllAccountsNow. */
 .section-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:4px}
 .section-head h2{margin:0}
 .refresh-btn{flex:none}
@@ -133,9 +135,9 @@ section>p.sub{margin:0 0 14px;color:var(--muted);font-size:11px;line-height:1.5}
   font-size:13px;line-height:1;cursor:pointer}
 .row-refresh-btn:hover{color:var(--accent-text)}
 .row-refresh-btn:disabled,.refresh-btn:disabled{opacity:.5;cursor:default}
+.refresh-icon{display:inline-block}
 .is-spinning{animation:tspin 900ms linear infinite}
 @keyframes tspin{to{transform:rotate(360deg)}}
-.kpi strong .row-refresh-btn{margin-left:6px;font-size:14px;vertical-align:2px}
 
 /* leaderboard table */
 table{width:100%;border-collapse:collapse;font-size:11.5px}
@@ -177,10 +179,11 @@ tbody tr:hover{background:rgba(var(--edge),.03)}
 .note b{color:var(--text)}
 
 /* detail view */
-.detail-head{display:flex;align-items:center;gap:12px;margin-bottom:4px}
+.detail-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:4px}
+.detail-head-id{display:flex;align-items:center;gap:12px;min-width:0}
 .detail-head img{width:46px;height:46px;border-radius:999px;object-fit:cover;background:var(--panel-2)}
 .detail-head h2{margin:0;font-size:17px}
-.detail-head span{color:var(--muted);font-size:11px}
+.detail-head-id span{color:var(--muted);font-size:11px}
 
 /* historical stats table (Social-Blade-style day-by-day breakdown) */
 table.hist-table{font-size:12px}
@@ -365,7 +368,12 @@ async function authedPost(path){
    opt-in buttons rather than anything automatic -- the daily 7am snapshot
    already covers the "just keep this current" case for free. */
 async function refreshAccountNow(handle, btn){
-  if(btn){ btn.disabled = true; btn.classList.add('is-spinning'); }
+  // Spins just the &#8635; glyph, not the whole element -- the leaderboard's
+  // button IS the glyph, but the detail page's button also has a "Refresh"
+  // label next to it that shouldn't spin along with the icon.
+  const icon = btn && (btn.querySelector('.refresh-icon') || btn);
+  if(btn){ btn.disabled = true; }
+  if(icon){ icon.classList.add('is-spinning'); }
   try{
     const result = await authedPost('/api/tracker/accounts/'+encodeURIComponent(handle)+'/refresh');
     const row = SUMMARY.accounts.find(r=>r.handle===handle);
@@ -385,7 +393,8 @@ async function refreshAccountNow(handle, btn){
   }catch(e){
     alert('Could not refresh @'+handle+': '+(e.message||e));
   }finally{
-    if(btn){ btn.disabled = false; btn.classList.remove('is-spinning'); }
+    if(btn){ btn.disabled = false; }
+    if(icon){ icon.classList.remove('is-spinning'); }
   }
 }
 
@@ -622,7 +631,7 @@ function renderLeaderboard(){
                 <span class="pill ${r.group==='sentient'?'s':'c'}">${r.group==='sentient'?'ours':'competitor'}</span>
               </div>
             </div></td>
-            <td><span class="followers-cell">${r.followers!=null?fmt(r.followers):'<span class="na">—</span>'}<button type="button" class="row-refresh-btn" data-refresh="${r.handle}" title="Refresh @${r.handle}&#39;s real follower count now">&#8635;</button></span></td>
+            <td><span class="followers-cell">${r.followers!=null?fmt(r.followers):'<span class="na">—</span>'}<button type="button" class="row-refresh-btn" data-refresh="${r.handle}" title="Refresh @${r.handle}&#39;s real follower count now"><span class="refresh-icon">&#8635;</span></button></span></td>
             <td>${deltaCell(r.delta_1d)}</td>
             <td>${deltaCell(r.delta_7d)}</td>
             <td>${deltaCell(r.delta_30d)}</td>
@@ -741,17 +750,20 @@ async function renderDetail(handle){
   $('#app').innerHTML = `
     <button class="linkbtn" id="backBtn" style="margin-bottom:14px">← All accounts</button>
     <div class="detail-head">
-      <img src="${API}/api/dashboard/avatar/${encodeURIComponent(handle)}" referrerpolicy="no-referrer" onerror="avFail(this,'${handle}')">
-      <div>
-        <h2>@${handle}${row.verified?' <span title="Verified" style="color:#4aa8ff;font-size:14px">✓</span>':''}${row.private?' <span class="na" title="Private account" style="font-size:13px">🔒</span>':''}</h2>
-        ${row.full_name && row.full_name.toLowerCase()!==handle.toLowerCase() ? `<span>${row.full_name} · </span>` : ''}
-        <span class="pill ${row.group==='sentient'?'s':'c'}">${row.group==='sentient'?'ours':'competitor'}</span>
-        ${row.rank_by_followers ? ' <span>rank #'+row.rank_by_followers+' by followers</span>' : ''}
+      <div class="detail-head-id">
+        <img src="${API}/api/dashboard/avatar/${encodeURIComponent(handle)}" referrerpolicy="no-referrer" onerror="avFail(this,'${handle}')">
+        <div>
+          <h2>@${handle}${row.verified?' <span title="Verified" style="color:#4aa8ff;font-size:14px">✓</span>':''}${row.private?' <span class="na" title="Private account" style="font-size:13px">🔒</span>':''}</h2>
+          ${row.full_name && row.full_name.toLowerCase()!==handle.toLowerCase() ? `<span>${row.full_name} · </span>` : ''}
+          <span class="pill ${row.group==='sentient'?'s':'c'}">${row.group==='sentient'?'ours':'competitor'}</span>
+          ${row.rank_by_followers ? ' <span>rank #'+row.rank_by_followers+' by followers</span>' : ''}
+        </div>
       </div>
+      <button type="button" class="linkbtn refresh-btn" id="detailRefreshBtn" title="Refresh @${handle}&#39;s real follower count now"><span class="refresh-icon">&#8635;</span> Refresh</button>
     </div>
 
     <div class="kpis">
-      <div class="kpi"><b>Followers</b><strong>${row.followers!=null?fmt(row.followers):'—'}<button type="button" class="row-refresh-btn" id="detailRefreshBtn" title="Refresh @${handle}&#39;s real follower count now">&#8635;</button></strong><em title="${dt(row.captured_at)}">${row.captured_at?'as of '+dt(row.captured_at):'no snapshot yet'}</em></div>
+      <div class="kpi"><b>Followers</b><strong>${row.followers!=null?fmt(row.followers):'—'}</strong><em title="${dt(row.captured_at)}">${row.captured_at?'as of '+dt(row.captured_at):'no snapshot yet'}</em></div>
       <div class="kpi"><b>1 day growth</b><strong>${row.delta_1d?signed(row.delta_1d.delta):'—'}</strong><em>${row.delta_1d?pct(row.delta_1d.pct):'not enough history yet'}</em></div>
       <div class="kpi"><b>7 day growth</b><strong>${row.delta_7d?signed(row.delta_7d.delta):'—'}</strong><em>${row.delta_7d?pct(row.delta_7d.pct):'not enough history yet'}</em></div>
       <div class="kpi"><b>30 day growth</b><strong>${row.delta_30d?signed(row.delta_30d.delta):'—'}</strong><em>${row.delta_30d?pct(row.delta_30d.pct):'not enough history yet'}</em></div>

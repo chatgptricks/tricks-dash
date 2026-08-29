@@ -8,4 +8,5 @@ export function onAuthStateChanged(auth, cb) {
 }
 export function signInWithPopup() { return Promise.resolve(); }
 export function signInWithRedirect() { return Promise.resolve(); }
+export function signInWithCustomToken() { return Promise.resolve({ user: { email: 'esteban@sentientagency.io' } }); }
 export function signOut() { return Promise.resolve(); }

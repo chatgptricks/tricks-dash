@@ -1,58 +1,69 @@
-export const QUEUE_DAY_START = 8 * 60;
-export const QUEUE_DAY_END = 20 * 60;
+export const QUEUE_DAY_START = 0;
+export const QUEUE_DAY_END = 24 * 60;
 export const QUEUE_CALENDAR_END = 24 * 60;
-export const QUEUE_BUFFER_MINUTES = 10;
-const LAST_START_SLOT = QUEUE_CALENDAR_END - 10;
+export const QUEUE_BUFFER_MINUTES = 0;
 
-const movable = (task) => task.status === 'scheduled' || task.status === 'pool';
+const DAY_MS = 24 * 60 * 60 * 1000;
+const scheduled = (task) => task.status === 'scheduled' && task.designerEmail && task.scheduledDate;
+const fixed = (task) => ['in_progress', 'completed', 'closed'].includes(task.status) && task.designerEmail && task.scheduledDate;
+const durationOf = (task) => Math.max(10, Number(task.durationMinutes || Number(task.productionPoints || 1) * 10));
+
+function dateValue(value) {
+  return Math.floor(Date.parse(`${value}T00:00:00Z`) / DAY_MS);
+}
+
+function shiftDate(value, amount) {
+  return new Date((dateValue(value) + amount) * DAY_MS).toISOString().slice(0, 10);
+}
+
+function absoluteStart(task, anchorDate) {
+  return (dateValue(task.scheduledDate) - dateValue(anchorDate)) * QUEUE_CALENDAR_END + Number(task.scheduledStartMinutes || 0);
+}
+
+function splitAbsolute(anchorDate, absolute) {
+  const dayOffset = Math.floor(absolute / QUEUE_CALENDAR_END);
+  return {
+    scheduledDate: shiftDate(anchorDate, dayOffset),
+    scheduledStartMinutes: absolute - dayOffset * QUEUE_CALENDAR_END,
+  };
+}
+
+function nextFreeStart(preferred, duration, occupied) {
+  let candidate = Math.max(0, Math.round(preferred / 10) * 10);
+  while (true) {
+    const conflicts = occupied.filter((item) => intervalsConflict(candidate, duration, item.start, item.duration));
+    if (!conflicts.length) return candidate;
+    candidate = Math.max(...conflicts.map((item) => item.start + item.duration));
+    candidate = Math.ceil(candidate / 10) * 10;
+  }
+}
 
 export function intervalsConflict(start, duration, otherStart, otherDuration, buffer = QUEUE_BUFFER_MINUTES) {
   return start < otherStart + otherDuration + buffer && start + duration + buffer > otherStart;
 }
 
-function candidateStarts(preferred, minimum, maximum) {
-  const rounded = Math.round(preferred / 10) * 10;
-  const results = [];
-  for (let distance = 0; distance <= QUEUE_CALENDAR_END; distance += 10) {
-    const earlier = rounded - distance;
-    const later = rounded + distance;
-    if (earlier >= minimum && earlier <= maximum) results.push(earlier);
-    if (distance && later >= minimum && later <= maximum) results.push(later);
-  }
-  return [...new Set(results)];
-}
-
-function findSlot(task, preferred, occupied, notBefore) {
-  const duration = task.durationMinutes || Math.max(10, Number(task.productionPoints || 1) * 10);
-  for (const start of candidateStarts(preferred, Math.max(QUEUE_DAY_START, notBefore), LAST_START_SLOT)) {
-    if (!occupied.some((item) => intervalsConflict(start, duration, item.start, item.duration))) return start;
-  }
-  return null;
-}
-
-function fallbackStart(preferred, notBefore) {
-  const rounded = Math.round(preferred / 10) * 10;
-  return Math.min(LAST_START_SLOT, Math.max(QUEUE_DAY_START, notBefore, rounded));
-}
-
-/** Plans the complete designer/day row, reflowing movable work around fixed work. */
-export function planQueueDrop({ tasks, target, designerEmail, scheduledDate, desiredStart, notBefore = QUEUE_DAY_START }) {
+/**
+ * Plans the final drop position on an unbounded sequence of 24-hour days.
+ * Existing work owns its slot; the dropped request advances to the first
+ * collision-free position, including the following day when necessary.
+ */
+export function planQueueDrop({ tasks, target, designerEmail, scheduledDate, desiredStart }) {
   if (!target || target.status === 'in_progress') return { ok: false, error: 'This request cannot be moved.' };
-  const row = tasks.filter((task) => task.designerEmail === designerEmail && task.scheduledDate === scheduledDate && task.id !== target.id);
-  const fixed = row.filter((task) => !movable(task)).map((task) => ({ id: task.id, start: Number(task.scheduledStartMinutes), duration: task.durationMinutes || 10 }));
-  // Capacity must never block an assignment. Prefer a free slot, including a
-  // start late enough for the block to run past midnight; if the row is fully
-  // occupied, keep the requested position and allow visual overlap.
-  const targetStart = findSlot(target, desiredStart, fixed, notBefore) ?? fallbackStart(desiredStart, notBefore);
-
-  const placed = [...fixed, { id: target.id, start: targetStart, duration: target.durationMinutes || 10 }];
-  const planned = [{ ...target, designerEmail, scheduledDate, scheduledStartMinutes: targetStart, status: 'scheduled' }];
-  const pending = row.filter(movable).sort((a, b) => (a.scheduledStartMinutes ?? QUEUE_DAY_START) - (b.scheduledStartMinutes ?? QUEUE_DAY_START));
-  for (const task of pending) {
-    const preferred = task.scheduledStartMinutes ?? QUEUE_DAY_START;
-    const start = findSlot(task, preferred, placed, notBefore) ?? fallbackStart(preferred, notBefore);
-    placed.push({ id: task.id, start, duration: task.durationMinutes || 10 });
-    planned.push({ ...task, scheduledStartMinutes: start });
-  }
-  return { ok: true, tasks: planned, target: planned[0] };
+  const row = tasks.filter((task) => task.id !== target.id && task.designerEmail === designerEmail && (scheduled(task) || fixed(task)));
+  const occupied = row.map((task) => ({
+    id: task.id,
+    start: absoluteStart(task, scheduledDate),
+    duration: durationOf(task),
+  }));
+  const duration = durationOf(target);
+  const start = nextFreeStart(desiredStart, duration, occupied);
+  const position = splitAbsolute(scheduledDate, start);
+  const plannedTarget = {
+    ...target,
+    ...position,
+    designerEmail,
+    durationMinutes: duration,
+    status: 'scheduled',
+  };
+  return { ok: true, tasks: [plannedTarget], target: plannedTarget };
 }

@@ -8,6 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "test:queue": "node scripts/test-queue.mjs",
+    "smoke:queue": "node smoke/run-queue.mjs",
     "generate:data": "node scripts/build-data.mjs",
     "ocr:covers": "node scripts/ocr-covers.mjs"
   },
@@ -20,6 +21,7 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^5.0.4",
+    "jsdom": "^30.0.1",
     "playwright": "^1.61.1",
     "vite": "^7.0.6"
   }
