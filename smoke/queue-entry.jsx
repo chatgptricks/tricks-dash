@@ -45,6 +45,15 @@ const stubFetch = async (url, options = {}) => {
   if (value.includes('/api/dashboard/queue/v2/submit')) {
     submitted = JSON.parse(options.body.get('changes'));
     payload.liveDrafts = [];
+    const poolReturn = submitted.find((change) => change.status === 'pool');
+    if (poolReturn) {
+      const source = [...payload.requests, ...payload.planningRequests].find((task) => task.id === poolReturn.id) || pool;
+      const returned = { ...source, ...poolReturn, status: 'pool', designerEmail: null, scheduledDate: null, scheduledStartMinutes: null };
+      payload.requests = [...payload.requests.filter((task) => task.id !== returned.id), returned];
+      payload.planningRequests = payload.planningRequests.filter((task) => task.id !== returned.id);
+      payload.assignedRequests = payload.assignedRequests.filter((task) => task.id !== returned.id);
+      return response({ ok: true, submitted: submitted.length, notifications: { sent: 0, failed: 0 } });
+    }
     return response({ ok: true, submitted: submitted.length, notifications: { sent: 1, failed: 0 } });
   }
   if (value.includes('/api/dashboard/queue/v2/requests/3/start')) {
@@ -115,8 +124,8 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     const draftBlock = document.querySelector('.scheduler-block.is-draft');
     await act(async () => { draftBlock.dispatchEvent(dragEvent('dragstart')); poolDrop.dispatchEvent(dragEvent('dragover')); poolDrop.dispatchEvent(dragEvent('drop')); });
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 100)); });
-    checks['Scheduled block can return to pool'] = drafted?.[0]?.status === 'pool' && drafted?.[0]?.designerEmail == null && Boolean(document.querySelector('.queue-pool-card.is-draft'));
-    const returnedPool = document.querySelector('.queue-pool-card.is-draft');
+    checks['Scheduled block returns immediately without Submit'] = submitted?.[0]?.status === 'pool' && !document.querySelector('.scheduler-drafts article') && Boolean(document.querySelector('.queue-pool-card'));
+    const returnedPool = document.querySelector('.queue-pool-card');
     await act(async () => { returnedPool.dispatchEvent(dragEvent('dragstart')); track.dispatchEvent(dragEvent('dragover', 550)); track.dispatchEvent(dragEvent('drop', 550)); });
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 100)); });
     checks['Pool return can be scheduled again'] = drafted?.[0]?.status === 'scheduled' && Boolean(document.querySelector('.scheduler-block.is-draft'));

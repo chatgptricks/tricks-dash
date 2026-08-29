@@ -39,8 +39,10 @@ const COPY = {
 
 COPY.en.returnToPool = 'Return to pool';
 COPY.en.poolDropHint = 'Drop a scheduled request here to return it to the pool.';
+COPY.en.returnedToPool = 'Request returned to the pool.';
 COPY.es.returnToPool = 'Devolver al pool';
 COPY.es.poolDropHint = 'Suelta aquí un request programado para devolverlo al pool.';
+COPY.es.returnedToPool = 'Request devuelto al pool.';
 
 const QueuePreferencesContext = createContext({ language: 'en', t: (key) => key });
 const useQueuePreferences = () => useContext(QueuePreferencesContext);
@@ -535,15 +537,25 @@ function QueueApp({ user }) {
     event.dataTransfer.dropEffect = 'move';
     setPoolDropActive(true);
   };
-  const poolDrop = (event) => {
+  const poolDrop = async (event) => {
     event.preventDefault();
     if (!coordinator) return;
     const source = dragTask(event);
     setPoolDropActive(false);
     activeQueueDragId = null;
     if (!source || source.status !== 'scheduled') return;
-    const returned = { ...source, status: 'pool', designerEmail: null, scheduledDate: null, scheduledStartMinutes: null, isDraft: true, draftCoordinatorEmail: data.viewer.email };
-    persistDrafts([...draftRef.current.filter((task) => task.id !== source.id), returned]);
+    const remainingDrafts = draftRef.current.filter((task) => task.id !== source.id);
+    const returned = { id: source.id, status: 'pool', designerEmail: null, scheduledDate: null, scheduledStartMinutes: null, productionPoints: source.productionPoints, recommendedAccounts: source.recommendedAccounts || [] };
+    try {
+      await draftSavePromiseRef.current.catch(() => {});
+      await json('/api/dashboard/queue/v2/submit', { method: 'POST', body: new URLSearchParams({ changes: JSON.stringify([returned]) }) });
+      applyDraft(remainingDrafts);
+      await load({ silent: true });
+      notify(t('returnedToPool'));
+    } catch (err) {
+      await load({ silent: true }).catch(() => {});
+      notify(err.message, 'error');
+    }
   };
   const closeDetail = () => { openRef.current = null; setOpen(null); };
   const action = async (actionName, value) => { try { const body = value ? new URLSearchParams(actionName === 'close' ? { final_permalink: value } : {}) : undefined; const result = await json(`/api/dashboard/queue/v2/requests/${open.id}/${actionName}`, { method: 'POST', body }); closeDetail(); await load({ silent: true }); notify(result.deferred ? `${t('movedAfterActive')} ${result.scheduledDate} · ${time(result.scheduledStartMinutes)}.` : t('requestUpdated'), result.deferred ? 'warning' : 'success'); } catch (err) { setDetailNotice({ message: err.message, type: 'error' }); } };
