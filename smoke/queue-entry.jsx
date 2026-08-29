@@ -15,6 +15,7 @@ const payload = {
   date: day,
   requests: [pool, active, scheduled],
   pickRequests: [pool],
+  hotPickRequests: [],
   planningRequests: [active, scheduled],
   assignedRequests: [active, scheduled],
   liveDrafts: [],
