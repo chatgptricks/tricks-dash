@@ -127,7 +127,6 @@ const ES = {
   'Download all': 'Descargar todo',
   'Download selected': 'Descargar selección',
   'Download just this one': 'Descargar solo este',
-  'Select all': 'Seleccionar todo',
   'Deselect all': 'Deseleccionar todo',
   'selected': 'seleccionados',
   'Select media': 'Seleccionar media',
