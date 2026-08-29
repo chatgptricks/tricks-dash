@@ -526,3 +526,24 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
 .scheduler-drop-preview { top:8px; z-index:5; height:68px; min-width:28px; border-width:2px; background:rgba(var(--accent-rgb),.28); box-shadow:0 0 0 2px rgba(var(--accent-rgb),.16),0 14px 34px rgba(var(--shade),.4); opacity:1; }
 .scheduler-drop-preview.is-next-day { border-color:#ff8a4c; background:rgba(255,138,76,.25); }
 .scheduler-drop-preview.is-next-day small { color:#ffc09d; }
+
+/* Collaborative Queue state: firm work stays solid; pre-Submit work is
+   visibly provisional while remaining fully readable to the assigned PD. */
+.queue-live-status { display:inline-flex; align-items:center; gap:6px; min-height:29px; padding:0 8px; border:1px solid var(--q-line); border-radius:999px; background:var(--q-panel-2); color:var(--q-muted); font-size:9px; letter-spacing:.04em; text-transform:uppercase; }
+.queue-live-status.is-live { border-color:rgba(72,199,142,.28); color:#70dca7; }
+.queue-live-status.is-live svg { animation:queue-live-pulse 1.8s ease-in-out infinite; }
+.queue-live-status.is-offline { border-color:rgba(255,189,89,.34); color:#ffbd59; }
+.queue-live-status.is-connecting { color:var(--q-accent); }
+@keyframes queue-live-pulse { 0%,100% { opacity:.45; } 50% { opacity:1; } }
+.scheduler-block.is-draft { border-style:dashed; opacity:.78; background-image:repeating-linear-gradient(135deg,rgba(255,255,255,.055) 0 7px,transparent 7px 14px); box-shadow:inset 0 0 0 1px rgba(var(--accent-rgb),.32),0 6px 14px rgba(0,0,0,.15); }
+.scheduler-block.is-draft:hover { opacity:1; }
+.scheduler-draft-badge { position:absolute; top:3px; right:3px; max-width:calc(100% - 8px); overflow:hidden; padding:2px 4px; border:1px solid rgba(var(--accent-rgb),.42); border-radius:999px; background:rgba(0,0,0,.58); color:var(--q-accent); font-size:7px; font-weight:900; letter-spacing:.03em; text-overflow:ellipsis; text-transform:uppercase; white-space:nowrap; }
+.scheduler-block.is-draft .scheduler-block-copy { padding-top:11px; }
+.designer-assignment-row.is-draft { background-image:linear-gradient(90deg,rgba(var(--accent-rgb),.075),transparent 42%); box-shadow:inset 3px 0 rgba(var(--accent-rgb),.68); }
+.designer-assignment-row.is-draft .designer-assignment-status { display:grid; gap:3px; }
+.designer-assignment-row.is-draft .designer-assignment-status i { border-style:dashed; border-color:rgba(var(--accent-rgb),.52); color:var(--q-accent); }
+.designer-assignment-row.is-draft .designer-assignment-status small { color:var(--q-muted); font-size:8px; text-transform:capitalize; }
+.queue-detail-status.is-draft { border-style:dashed; border-color:rgba(var(--accent-rgb),.58); color:var(--q-accent); }
+.queue-detail-notice.is-draft { border-style:dashed; border-color:rgba(var(--accent-rgb),.34); background:rgba(var(--accent-rgb),.07); color:var(--q-accent)!important; }
+.queue-admin-assignment-row.is-draft { background-image:linear-gradient(90deg,rgba(var(--accent-rgb),.075),transparent 42%); box-shadow:inset 3px 0 rgba(var(--accent-rgb),.68); }
+.queue-admin-assignment-row.is-draft .queue-admin-assignment-status i { border-style:dashed; border-color:rgba(var(--accent-rgb),.52); color:var(--q-accent); }

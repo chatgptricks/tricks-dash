@@ -16,17 +16,27 @@ const payload = {
   requests: [pool, active, scheduled],
   planningRequests: [active, scheduled],
   assignedRequests: [active, scheduled],
+  liveDrafts: [],
+  liveRevision: 0,
   designers: [{ email: 'esteban@sentientagency.io', isAdmin: true, accounts: ['chatgptricks'] }],
   tags: ['copy'], priorities: ['low', 'medium', 'high', 'urgent'], hours: { start: 0, end: 1440 },
 };
 
 let submitted = null;
+let drafted = null;
 let started = false;
 const response = (body) => ({ ok: true, status: 200, json: async () => body, text: async () => JSON.stringify(body) });
 const stubFetch = async (url, options = {}) => {
   const value = String(url);
+  if (value.includes('/api/dashboard/queue/v2/drafts') && !value.includes('/clear')) {
+    drafted = JSON.parse(options.body.get('changes')).map((change) => ({ ...pool, ...change, designerEmail: change.designerEmail, scheduledDate: change.scheduledDate, scheduledStartMinutes: change.scheduledStartMinutes, recommendedAccounts: change.recommendedAccounts || [], status: 'scheduled', isDraft: true, draftCoordinatorEmail: 'esteban@sentientagency.io' }));
+    payload.liveDrafts = drafted;
+    payload.liveRevision += 1;
+    return response({ ok: true, drafts: drafted, liveRevision: payload.liveRevision });
+  }
   if (value.includes('/api/dashboard/queue/v2/submit')) {
     submitted = JSON.parse(options.body.get('changes'));
+    payload.liveDrafts = [];
     return response({ ok: true, submitted: submitted.length, notifications: { sent: 1, failed: 0 } });
   }
   if (value.includes('/api/dashboard/queue/v2/requests/3/start')) {
@@ -82,7 +92,9 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     checks['Drag ghost renders before drop'] = Boolean(ghost);
     checks['Ghost shows final collision-free time'] = /10:00/.test(ghost?.textContent || '');
     await act(async () => { track.dispatchEvent(dragEvent('drop', 550)); });
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 100)); });
     checks['Drop creates one draft'] = document.querySelectorAll('.scheduler-drafts article').length === 1;
+    checks['Draft is shared before submit'] = drafted?.length === 1 && Boolean(document.querySelector('.scheduler-block.is-draft'));
     const submit = document.querySelector('.scheduler-submit');
     await click(submit);
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 100)); });

@@ -43,6 +43,7 @@ import { describeSignInError, firebaseAuth, startGoogleSignIn } from './firebase
 import { clearSsoCookie, startSsoRefresh, trySsoSignIn } from './sso';
 import { PrefsProvider, usePrefs } from './prefsContext';
 import { API_BASE, IG_HANDLE, apiFetch } from './api';
+import { followQueueLive } from './queueLive';
 import {
   CoverImage,
   HotBadge,
@@ -710,6 +711,17 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
   useEffect(() => {
     refreshQueueSummary();
   }, [refreshQueueSummary, userEmail]);
+
+  // Queue publishes a durable revision for every pool, draft, assignment and
+  // delivery change. Keep the dashboard's Queue badge in sync with that same
+  // stream so users never have to reload the post library just to see new work.
+  useEffect(() => {
+    if (!(isAdmin || operatingRoles.some((role) => role === 'pd' || role === 'vc'))) return undefined;
+    if (import.meta.env.MODE === 'test') return undefined;
+    const controller = new AbortController();
+    followQueueLive({ after: 0, signal: controller.signal, onEvent: () => refreshQueueSummary() });
+    return () => controller.abort();
+  }, [isAdmin, operatingRoles, refreshQueueSummary]);
 
   const loadDashboard = useCallback(async (signal, { silent = false } = {}) => {
     try {
