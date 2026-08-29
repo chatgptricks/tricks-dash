@@ -518,6 +518,8 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
 .queue-designer-add select { min-height:32px; padding:0 8px; border:1px solid rgba(var(--edge),.12); border-radius:7px; background:var(--surface-2); color:var(--text); font-size:10px; }.queue-designer-add button { min-height:32px; padding:0 9px; border:1px solid rgba(var(--accent-rgb),.35); border-radius:7px; background:rgba(var(--accent-rgb),.09); color:var(--accent-ink); font-size:10px; font-weight:800; }
 
 /* Full-day Queue timeline: an eight-hour desktop viewport over 24 hours. */
+.scheduler-shell { position:relative; }
+.scheduler-shell > .scheduler-center-now { position:absolute; top:8px; right:8px; z-index:20; }
 .scheduler { container-type:inline-size; overflow-x:auto; padding:12px; scrollbar-color:rgba(var(--accent-rgb),.5) rgba(var(--edge),.06); scrollbar-width:thin; }
 .scheduler-canvas { --scheduler-label-width:154px; --scheduler-day-width:max(2160px,calc(300cqw - 462px)); position:relative; width:calc(var(--scheduler-label-width) + var(--scheduler-day-width)); min-width:calc(var(--scheduler-label-width) + var(--scheduler-day-width)); }
 .scheduler-time-head,.scheduler-row { grid-template-columns:var(--scheduler-label-width) var(--scheduler-day-width); width:100%; min-width:0; }
