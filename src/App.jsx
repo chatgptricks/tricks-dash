@@ -662,13 +662,13 @@ function buildDatePresets(ranges) {
 
 function DevRolePreview({ isDev }) {
   const [open, setOpen] = useState(false);
-  const active = window.localStorage.getItem('sentient.queueRolePreview') || '';
+  const active = window.sessionStorage.getItem('sentient.queueRolePreview') || '';
   if (!isDev) return null;
   const label = { sales: 'Sales', pd: 'Post Designer', vc: 'Viral Coordinator', admin: 'Admin' }[active] || 'Dev';
   const choose = (event) => {
     const role = event.target.value;
-    if (role) window.localStorage.setItem('sentient.queueRolePreview', role);
-    else window.localStorage.removeItem('sentient.queueRolePreview');
+    if (role) window.sessionStorage.setItem('sentient.queueRolePreview', role);
+    else window.sessionStorage.removeItem('sentient.queueRolePreview');
     window.location.reload();
   };
   return <div className="dev-role-preview"><button type="button" onClick={() => setOpen((value) => !value)} aria-expanded={open}><span>DEV</span>{label}</button>{open ? <div className="dev-role-preview-panel"><strong>Role preview</strong><p>Only visible to Esteban.</p><label>Active role<select value={active} onChange={choose}><option value="">Dev · full access</option><option value="sales">Sales</option><option value="pd">Post Designer</option><option value="vc">Viral Coordinator</option><option value="admin">Admin</option></select></label></div> : null}</div>;

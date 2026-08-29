@@ -19,6 +19,11 @@ const payload = {
   liveDrafts: [],
   liveRevision: 0,
   designers: [{ email: 'esteban@sentientagency.io', isAdmin: true, accounts: ['chatgptricks'] }],
+  schedulerUsers: [
+    { email: 'esteban@sentientagency.io', isAdmin: true, roles: ['vc', 'pd'], isQueueDesigner: true, accounts: ['chatgptricks'] },
+    { email: 'ivan@sentientagency.io', isAdmin: true, roles: ['vc'], isQueueDesigner: false, accounts: [] },
+    { email: 'louis@sentientagency.io', isAdmin: false, roles: ['sales'], isQueueDesigner: false, accounts: [] },
+  ],
   tags: ['copy'], priorities: ['low', 'medium', 'high', 'urgent'], hours: { start: 0, end: 1440 },
 };
 
@@ -73,6 +78,7 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     checks['24 hourly labels render'] = document.querySelectorAll('.scheduler-time-head b').length === 24;
     checks['Now renders once'] = document.querySelectorAll('.scheduler-now-global').length === 1 && document.querySelectorAll('.scheduler-now').length === 0;
     checks['Pool and scheduled blocks render'] = document.querySelectorAll('.queue-pool-card').length === 1 && document.querySelectorAll('.scheduler-block').length === 2;
+    checks['All dashboard users render in scheduler'] = document.querySelectorAll('.scheduler-row').length === 3 && document.querySelectorAll('.scheduler-row.is-non-queue-user').length === 2;
 
     const nextBlock = document.querySelector('.scheduler-block.state-scheduled');
     await click(nextBlock);
