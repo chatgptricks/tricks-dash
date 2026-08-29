@@ -647,7 +647,13 @@ function QueueApp({ user }) {
   const pool = useMemo(() => {
     const byId = new Map();
     (data?.requests || []).filter((task) => task.status === 'pool').forEach((task) => byId.set(task.id, task));
-    (data?.liveDrafts || []).filter((task) => task.status === 'pool').forEach((task) => byId.set(task.id, task));
+    // A live draft is the authoritative temporary state for its request. A
+    // scheduled draft must therefore remove the committed pool copy before
+    // Submit; a return-to-pool draft replaces it with the provisional card.
+    (data?.liveDrafts || []).forEach((task) => {
+      if (task.status === 'pool') byId.set(task.id, task);
+      else byId.delete(task.id);
+    });
     return [...byId.values()];
   }, [data]);
   const archived = useMemo(() => data?.requests.filter((task) => task.status === 'cancelled') || [], [data]);

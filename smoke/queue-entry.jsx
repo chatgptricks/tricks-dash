@@ -157,6 +157,7 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 100)); });
     checks['Drop creates one draft'] = document.querySelectorAll('.scheduler-drafts article').length === 1;
     checks['Draft is shared before submit'] = drafted?.length === 1 && Boolean(document.querySelector('.scheduler-block.is-draft'));
+    checks['Draft leaves pool before submit'] = document.querySelectorAll('.queue-pool-card').length === 0;
     const poolDrop = document.querySelector('.scheduler-pool');
     const draftBlock = document.querySelector('.scheduler-block.is-draft');
     await act(async () => { draftBlock.dispatchEvent(dragEvent('dragstart')); poolDrop.dispatchEvent(dragEvent('dragover')); poolDrop.dispatchEvent(dragEvent('drop')); });
