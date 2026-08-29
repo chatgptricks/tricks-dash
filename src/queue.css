@@ -505,6 +505,7 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
 .queue-ticket-button>b { display:grid; place-items:center; min-width:17px; height:17px; padding:0 4px; border-radius:999px; background:var(--q-accent); color:#171900; font-size:8px; line-height:1; }
 .queue-pick-button { display:inline-flex; align-items:center; gap:6px; min-height:29px; padding:0 9px; border:1px solid rgba(var(--accent-rgb),.42); border-radius:7px; background:rgba(var(--accent-rgb),.1); color:var(--q-accent); font-size:10px; font-weight:850; }
 .queue-pick-button:hover,.queue-pick-button.is-active { border-color:rgba(var(--accent-rgb),.72); background:rgba(var(--accent-rgb),.17); }
+.queue-pick-hot { display:inline-flex; align-items:center; min-height:18px; padding:0 6px; border:1px solid rgba(255,103,120,.52); border-radius:999px; background:rgba(255,103,120,.14); color:#ff9aa7; font-size:9px; font-weight:900; letter-spacing:.03em; }
 .scheduler-time-block { position:absolute; top:8px; z-index:4; display:flex; align-items:center; gap:6px; height:68px; min-width:18px; padding:6px 7px; overflow:hidden; border:2px solid #7d8ca3; border-radius:8px; background:#263242; color:#f6f8fb; box-shadow:0 8px 18px rgba(0,0,0,.18); }
 .scheduler-time-block>svg { flex:0 0 auto; }
 .scheduler-time-block>span { display:grid; gap:3px; min-width:0; }
