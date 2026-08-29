@@ -4623,10 +4623,7 @@ function BackgroundTaskStack({ tasks, onDismiss }) {
 // independent Queue task on the backend.
 function AssignPostModal({ post, userEmail, isAdmin, accounts, onClose, onAssigned }) {
   const [productionPoints, setProductionPoints] = useState(3);
-  const [deadlineAt, setDeadlineAt] = useState(() => {
-    const deadline = new Date(Date.now() + 6 * 60 * 60 * 1000);
-    return new Date(deadline.getTime() - deadline.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-  });
+  const [priority, setPriority] = useState('medium');
   const [note, setNote] = useState('');
   const [notes, setNotes] = useState('');
   const [references, setReferences] = useState('');
@@ -4655,8 +4652,8 @@ function AssignPostModal({ post, userEmail, isAdmin, accounts, onClose, onAssign
 
   const submit = async (event) => {
     event.preventDefault();
-    if (!Number.isInteger(Number(productionPoints)) || Number(productionPoints) < 1 || !deadlineAt) {
-      setError('Production points and deadline are required.');
+    if (!Number.isInteger(Number(productionPoints)) || Number(productionPoints) < 1) {
+      setError('Production points are required.');
       return;
     }
     setSaving(true);
@@ -4668,7 +4665,7 @@ function AssignPostModal({ post, userEmail, isAdmin, accounts, onClose, onAssign
         body.append('account', post.account);
         body.append('shortcode', post.shortcode);
         body.append('production_points', String(productionPoints));
-        body.append('deadline_at', deadlineAt);
+        body.append('priority', priority);
         body.append('brief', note);
         body.append('notes', notes);
         body.append('references', JSON.stringify(references.split(/\n|,/).map((item) => item.trim()).filter(Boolean)));
@@ -4732,8 +4729,13 @@ function AssignPostModal({ post, userEmail, isAdmin, accounts, onClose, onAssign
             <input type="number" min="1" step="1" value={productionPoints} onChange={(event) => setProductionPoints(event.target.value)} />
           </label>
           <label>
-            <span>Deadline <i>required</i></span>
-            <input type="datetime-local" value={deadlineAt} onChange={(event) => setDeadlineAt(event.target.value)} />
+            <span>Priority <i>required</i></span>
+            <select value={priority} onChange={(event) => setPriority(event.target.value)}>
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+              <option value="urgent">Urgent</option>
+            </select>
           </label>
         </div>
 
