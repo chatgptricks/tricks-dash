@@ -6323,6 +6323,36 @@ body {
 .settings-accent-picker .accent-blue { background: #60a5fa; }
 .settings-accent-picker .accent-coral { background: #fb7185; }
 
+.settings-custom-color,
+.queue-custom-color {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.settings-custom-color input,
+.queue-custom-color input {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid rgba(var(--edge), 0.28);
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.settings-custom-color input::-webkit-color-swatch-wrapper,
+.queue-custom-color input::-webkit-color-swatch-wrapper { padding: 0; }
+.settings-custom-color input::-webkit-color-swatch,
+.queue-custom-color input::-webkit-color-swatch { border: 0; border-radius: 50%; }
+.settings-custom-color input:focus-visible,
+.queue-custom-color input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
 .settings-menu-segment {
   display: flex;
   padding: 2px;

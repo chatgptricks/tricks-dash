@@ -44,6 +44,7 @@ import { browserPopupRedirectResolver, getRedirectResult, onAuthStateChanged, si
 import { describeSignInError, firebaseAuth, startGoogleSignIn } from './firebase';
 import { clearSsoCookie, startSsoRefresh, trySsoSignIn } from './sso';
 import { PrefsProvider, usePrefs } from './prefsContext';
+import { ACCENT_CHOICES, accentHex } from './prefs';
 import { API_BASE, IG_HANDLE, apiFetch } from './api';
 import { followQueueLive } from './queueLive';
 import {
@@ -263,24 +264,9 @@ function useSectionFavicon(section) {
 // language live together with account info and, for admins, the same
 // designer-account assignment tool Queue's Admin Tools panel exposes.
 export function SettingsMenu({ email, isAdmin, isDev, onSignOut, showSettingsLink = true }) {
-  const { t, lang, theme, setLang, setTheme } = usePrefs();
-  const [accent, setAccentState] = useState(() => {
-    try { return window.localStorage.getItem('sentient.accent') || 'lime'; } catch { return 'lime'; }
-  });
+  const { t, lang, theme, setLang, setTheme, accent, setAccent } = usePrefs();
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
-
-  // Shares the exact 'sentient.accent' key + data-accent attribute Queue
-  // already uses, so picking an accent on either page carries over to the
-  // other rather than being a second, independent preference.
-  useEffect(() => {
-    document.documentElement.setAttribute('data-accent', accent);
-  }, [accent]);
-
-  const setAccent = (value) => {
-    try { window.localStorage.setItem('sentient.accent', value); } catch { /* private mode */ }
-    setAccentState(value);
-  };
 
   useEffect(() => {
     if (!open) return undefined;
@@ -315,7 +301,7 @@ export function SettingsMenu({ email, isAdmin, isDev, onSignOut, showSettingsLin
           <div className="settings-menu-section">
             <span>{t('Accent color')}</span>
             <div className="settings-accent-picker">
-              {['lime', 'blue', 'coral'].map((value) => (
+              {ACCENT_CHOICES.map((value) => (
                 <button
                   key={value}
                   type="button"
@@ -324,6 +310,15 @@ export function SettingsMenu({ email, isAdmin, isDev, onSignOut, showSettingsLin
                   aria-label={`${value} accent`}
                 />
               ))}
+              <label className="settings-custom-color" title={t('Custom color')}>
+                <input
+                  type="color"
+                  value={accentHex(accent)}
+                  onChange={(event) => setAccent(event.target.value)}
+                  aria-label={t('Custom color')}
+                />
+                <span>{t('Custom')}</span>
+              </label>
             </div>
           </div>
           <div className="settings-menu-section">
@@ -2775,6 +2770,7 @@ export function SettingsPanel({
   const [users, setUsers] = useState([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [usersNotice, setUsersNotice] = useState('');
+  const [userDisplayDrafts, setUserDisplayDrafts] = useState({});
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserDisplayName, setNewUserDisplayName] = useState('');
   // Admin is an orthogonal flag layered on top of a Queue role, same as
@@ -2873,7 +2869,10 @@ export function SettingsPanel({
     try {
       const response = await apiFetch(`${API_BASE}/api/admin/users`);
       const body = await response.json().catch(() => ({}));
-      if (Array.isArray(body.users)) setUsers(body.users);
+      if (Array.isArray(body.users)) {
+        setUsers(body.users);
+        setUserDisplayDrafts(Object.fromEntries(body.users.map((person) => [person.email, person.display_name || person.email.split('@')[0]])));
+      }
     } catch (error) {
       // Keep whatever list we already had rather than blanking the tab.
     } finally {
@@ -3337,7 +3336,9 @@ export function SettingsPanel({
         setUsersNotice(body.detail || 'Could not add that person.');
         return;
       }
-      setUsers(body.users || []);
+      const nextUsers = body.users || [];
+      setUsers(nextUsers);
+      setUserDisplayDrafts(Object.fromEntries(nextUsers.map((person) => [person.email, person.display_name || person.email.split('@')[0]])));
       setNewUserEmail('');
       setNewUserDisplayName('');
       setNewUserIsAdmin(false);
@@ -3354,11 +3355,23 @@ export function SettingsPanel({
   const updateUser = async (user, changes) => {
     setUserActionEmail(user.email);
     setUsersNotice('');
+    const nextRole = changes.role ?? user.role;
+    const nextOperatingRole = changes.operating_role ?? user.operating_role ?? 'sales';
+    const nextSlackId = changes.slack_user_id ?? user.slack_user_id ?? '';
+    const nextDisplayName = changes.display_name ?? user.display_name ?? user.email.split('@')[0];
+    const previousUser = user;
+    // Reflect edits immediately. The API response remains authoritative, but
+    // a slow round trip should never make the Users table feel unresponsive.
+    setUsers((current) => current.map((person) => person.email === user.email ? {
+      ...person,
+      display_name: nextDisplayName,
+      role: nextRole,
+      operating_role: nextOperatingRole,
+      slack_user_id: nextSlackId,
+      is_admin: nextRole === 'admin' ? 1 : 0,
+    } : person));
+    setUserDisplayDrafts((current) => ({ ...current, [user.email]: nextDisplayName }));
     try {
-      const nextRole = changes.role ?? user.role;
-      const nextOperatingRole = changes.operating_role ?? user.operating_role ?? 'sales';
-      const nextSlackId = changes.slack_user_id ?? user.slack_user_id ?? '';
-      const nextDisplayName = changes.display_name ?? user.display_name ?? user.email.split('@')[0];
       const response = await apiFetch(`${API_BASE}/api/admin/users`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -3373,13 +3386,19 @@ export function SettingsPanel({
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) {
+        setUsers((current) => current.map((person) => person.email === user.email ? previousUser : person));
+        setUserDisplayDrafts((current) => ({ ...current, [user.email]: previousUser.display_name || user.email.split('@')[0] }));
         setUsersNotice(body.detail || `Could not update ${user.email}.`);
         return;
       }
-      setUsers(body.users || []);
+      const nextUsers = body.users || [];
+      setUsers(nextUsers);
+      setUserDisplayDrafts(Object.fromEntries(nextUsers.map((person) => [person.email, person.display_name || person.email.split('@')[0]])));
       await loadDesignerAccounts();
       setUsersNotice(`Updated ${user.email}.`);
     } catch (error) {
+      setUsers((current) => current.map((person) => person.email === user.email ? previousUser : person));
+      setUserDisplayDrafts((current) => ({ ...current, [user.email]: previousUser.display_name || user.email.split('@')[0] }));
       setUsersNotice('Network error while updating.');
     } finally {
       setUserActionEmail('');
@@ -4141,9 +4160,10 @@ export function SettingsPanel({
                           </div>
                           <div className="settings-row-controls queue-user-controls">
                             <input
-                              defaultValue={user.display_name || user.email.split('@')[0]}
+                              value={userDisplayDrafts[user.email] ?? (user.display_name || user.email.split('@')[0])}
                               aria-label={`Display name for ${user.email}`}
                               placeholder="Display name"
+                              onChange={(event) => setUserDisplayDrafts((current) => ({ ...current, [user.email]: event.target.value }))}
                               onBlur={(event) => {
                                 const value = event.target.value.trim();
                                 if (value && value !== (user.display_name || '')) updateUser(user, { display_name: value });
