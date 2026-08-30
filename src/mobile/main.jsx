@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { browserPopupRedirectResolver, getRedirectResult, onAuthStateChanged, signOut } from 'firebase/auth';
 import { API_BASE, apiFetch } from '../api';
-import { describeSignInError, firebaseAuth, startGoogleSignIn } from '../firebase';
+import { authPersistenceReady, describeSignInError, firebaseAuth, startGoogleSignIn } from '../firebase';
 import { followQueueLive } from '../queueLive';
 import { clearSsoCookie, startSsoRefresh, trySsoSignIn } from '../sso';
 import './mobile.css';
@@ -193,7 +193,7 @@ function MobileApp() {
   const [ssoChecked, setSsoChecked] = useState(false);
   const [viewer, setViewer] = useState(undefined);
   const [authNotice, setAuthNotice] = useState('');
-  useEffect(() => { getRedirectResult(firebaseAuth, browserPopupRedirectResolver).catch((error) => setAuthNotice(describeSignInError(error))); }, []);
+  useEffect(() => { authPersistenceReady.then(() => getRedirectResult(firebaseAuth, browserPopupRedirectResolver)).catch((error) => setAuthNotice(describeSignInError(error))); }, []);
   useEffect(() => { trySsoSignIn().finally(() => setSsoChecked(true)); }, []);
   useEffect(() => onAuthStateChanged(firebaseAuth, (next) => { setUser(next); setViewer(undefined); }), []);
   useEffect(() => user ? startSsoRefresh() : undefined, [user]);

@@ -1,4 +1,4 @@
-const VERSION = 'sentient-mobile-v1';
+const VERSION = 'sentient-mobile-v2';
 const SHELL = ['/mobile/', '/mobile-manifest.webmanifest', '/mobile-icon-192.png', '/mobile-icon-512.png', '/mobile-icon-maskable-512.png'];
 
 self.addEventListener('install', (event) => {

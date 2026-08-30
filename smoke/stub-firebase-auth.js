@@ -1,6 +1,8 @@
 export function getAuth() { return { currentUser: { email: 'user03@example.com', getIdToken: () => Promise.resolve('tok') } }; }
 export class GoogleAuthProvider { setCustomParameters() {} }
 export const browserPopupRedirectResolver = {};
+export const browserLocalPersistence = {};
+export function setPersistence() { return Promise.resolve(); }
 export function getRedirectResult() { return Promise.resolve(null); }
 export function onAuthStateChanged(auth, cb) {
   cb({ email: 'user03@example.com', getIdToken: () => Promise.resolve('tok') });
