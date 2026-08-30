@@ -280,6 +280,7 @@ export default defineConfig({
         dashboard: resolve(__dirname, 'index.html'),
         queue: resolve(__dirname, 'queue.html'),
         settings: resolve(__dirname, 'settings.html'),
+        mobile: resolve(__dirname, 'mobile/index.html'),
       },
     },
   },

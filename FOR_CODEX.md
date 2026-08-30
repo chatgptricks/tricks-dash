@@ -1,9 +1,20 @@
 # Handover for Codex — Sentient Dash
 
-Originally written by Claude on 2026-08-27; last updated by Codex on 2026-08-30. This file is duplicated identically at the
-root of both repos below. Esteban is planning to merge the two repos into
+Originally written by Claude on 2026-08-27; last updated by Codex on 2026-08-30. This frontend copy is the canonical handover
+for frontend work; the backend repo also carries a mirror that is synchronized
+when backend work is released. Esteban is planning to merge the two repos into
 one — read the "Planned repo merge" section near the bottom before you start
 that.
+
+## Latest change: independent mobile PWA (2026-08-30)
+
+- Sentient Dash now has a purpose-built mobile app at `https://sentientdash.app/mobile/`. It is an independent React entry with its own information architecture and CSS, not a responsive copy of the desktop dashboard.
+- Phones are redirected automatically from Dashboard, Queue, Tracker, Insights, and Settings into the equivalent mobile section. `?desktop=1` keeps the desktop version for the current tab; `?mobile=1` re-enables mobile routing.
+- The installed PWA is named `Sentient Dash`, has standalone/portrait metadata, safe-area layout, mobile icons, a service worker, offline state, and an update-ready flow.
+- Primary mobile navigation exposes five sections from the start: Home, Research, Queue, Tracker, and Insights. Admin/Dev Settings is a separate sixth route opened from the profile sheet.
+- Home is role-aware: PD-first users land on their production day; VC/Admin users get team, pool, and approval status. Queue preserves live drafts, submit-and-notify, Pick, requests, tickets, time blocks, and coordinator assignment actions in touch-first sheets.
+- Mobile preferences use the same local-storage keys as desktop for language, light/dark theme, preset accent, and custom accent.
+- Verification: production Vite build, dedicated mobile jsdom smoke test, existing Dashboard/Queue/Settings smokes, Queue planner tests, and 390x844 visual QA.
 
 ## Latest change: standalone Settings command center (2026-08-30)
 
@@ -52,8 +63,12 @@ models, or A/B cover testing, it's describing the dead product, not this one.
 ## Live surfaces
 
 - `https://sentientdash.app/` — main dashboard (`index.html` / `App.jsx`),
-  multi-page Vite build (`vite.config.js` has three entries: `dashboard` →
-  `index.html`, `queue` → `queue.html`, `settings` → `settings.html`).
+  multi-page Vite build (`vite.config.js` has four entries: `dashboard` →
+  `index.html`, `queue` → `queue.html`, `settings` → `settings.html`, and
+  `mobile` → `mobile/index.html`).
+- `https://sentientdash.app/mobile/` — independent mobile PWA. Real phones
+  are routed here automatically; add `?desktop=1` to any desktop URL to opt
+  out for the current tab.
 - `https://sentientdash.app/settings.html` — Admin/Dev Settings command center.
 - `https://sentientdash.app/queue.html` — Queue board (drag-and-drop content
   calendar, per-user assignment, deep-dive sidebar). Shares
@@ -131,6 +146,9 @@ models, or A/B cover testing, it's describing the dead product, not this one.
 - `postDetail.jsx` — shared cover/caption/stats panel + `SlideDownload`
   media modal, used by both `App.jsx`'s right rail and `queue.jsx`'s sidebar.
 - `queue.jsx` / `queue.css` — Queue board.
+- `mobile/main.jsx` / `mobile/mobile.css` — standalone touch-first PWA shell
+  and the mobile implementations of Home, Research, Queue, Tracker,
+  Insights, and Admin/Dev Settings.
 - `api.js` — `API_BASE`, `apiFetch` (adds the Firebase ID token + legacy
   password header).
 - `firebase.js` — Firebase app/init.
@@ -185,27 +203,26 @@ scratch clone** for the actual commit/push. Don't `git reset`/`git pull` on
 the mounted checkouts expecting to "fix" this; it's cosmetic, not data loss
 — the real history lives on GitHub.
 
-**Why a fresh clone, not the mounted path directly**: running `vite build`
-or bulk `rsync` against the mounted (network) path throws a spurious
-`Error: Unknown system error -35`. Always build from a real local clone.
+The active desktop checkout now builds and tests reliably. Work directly in
+that checkout, preserve unrelated edits, and use its own `main` and
+`gh-pages` branches for release. Do not create scratch clones or replace the
+checkout with bulk sync operations.
 
 **tricks-dash** (frontend):
-1. `git clone https://github.com/chatgptricks/tricks-dash.git` into a
-   scratch dir (or reuse one if it's already clean and up to date).
-2. Copy over the files you changed from the mounted working copy.
-3. `git diff --stat` — confirm *only* the files you meant to touch are
+1. Confirm the checkout is on `main` and up to date with `origin/main`.
+2. `git diff --stat` — confirm *only* the files you meant to touch are
    dirty.
-4. `npm install && npm run build` — must succeed with no errors.
-5. Commit, push to `main` with the deploy token (see Secrets below).
-6. **`main` is source only.** The live site is served from the separate
-   `gh-pages` branch. Clone that branch separately and only ever touch:
-   `index.html`, `queue.html`, and the hashed files under `assets/`
-   (`dashboard-*.js/css`, `queue-*.js/css`, `postDetail-*.js`). Everything
-   else on `gh-pages` (`tracker.html`, `insights.html`, favicons, `CNAME`,
-   `traselveloreal-covers/`, `.nojekyll`) is unrelated static content —
-   never touch it, and don't let an `rsync --delete` from a fresh `dist/`
-   silently delete `.nojekyll` (it's not produced by `vite build`; re-touch
-   it after syncing).
+3. `npm install && npm run build` — must succeed with no errors.
+4. Commit and push `main` with the deploy token (see Secrets below).
+5. **`main` is source only.** The live site is served from the separate
+   `gh-pages` branch. Switch the same clean checkout to `gh-pages`, fast-forward
+   it, and copy only the built entry files and current hashed assets. For the
+   PWA this also includes `mobile/index.html`, `mobile-manifest.webmanifest`,
+   `mobile-sw.js`, `mobile-redirect.js`, and the three `mobile-icon-*.png`
+   files. Preserve all unrelated static content, `CNAME`, cover folders, and
+   `.nojekyll`; never use `rsync --delete`.
+6. Commit/push `gh-pages`, then switch the checkout back to `main` before
+   handing off.
 7. Verify live: `curl -s https://sentientdash.app/queue.html | grep -o 'assets/[a-zA-Z0-9._-]*'`
    and confirm the hashes match what you just built. An already-open browser
    tab can keep serving a stale cached bundle even after a real deploy —

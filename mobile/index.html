@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#07120f" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Sentient Dash" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="description" content="Sentient Dash mobile workspace for research, production, tracking, insights, and administration." />
+    <title>Sentient Dash</title>
+    <link rel="manifest" href="/mobile-manifest.webmanifest" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/mobile-icon-192.png" />
+    <link rel="apple-touch-icon" href="/mobile-icon-192.png" />
+    <script>
+      (function () {
+        try {
+          var theme = localStorage.getItem('sentient.theme');
+          if (theme !== 'light' && theme !== 'dark') theme = 'dark';
+          document.documentElement.setAttribute('data-theme', theme);
+          document.documentElement.setAttribute('data-accent', localStorage.getItem('sentient.accent') || 'lime');
+          var custom = localStorage.getItem('sentient.accentCustom');
+          if (custom) document.documentElement.style.setProperty('--custom-accent', custom);
+        } catch (_) {}
+      })();
+    </script>
+    <script type="module" src="/src/mobile/main.jsx"></script>
+  </head>
+  <body><div id="root"></div></body>
+</html>
