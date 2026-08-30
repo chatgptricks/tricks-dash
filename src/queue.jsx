@@ -1,6 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import ReactDOM from 'react-dom/client';
-import { AlertTriangle, Archive, ArrowLeft, Ban, BarChart3, BellRing, CalendarDays, CalendarPlus, Check, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Clock3, Coffee, Download, History, LoaderCircle, LocateFixed, LogOut, Moon, Paperclip, Pencil, Plus, Radio, Send, Settings, Sun, TimerReset, WifiOff, X } from 'lucide-react';
+import { AlertTriangle, Archive, ArrowLeft, Ban, BellRing, CalendarDays, CalendarPlus, Check, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Clock3, Coffee, Download, History, LoaderCircle, LocateFixed, LogOut, Moon, Paperclip, Pencil, Plus, Radio, Send, Settings, Sun, TimerReset, WifiOff, X } from 'lucide-react';
 import { browserPopupRedirectResolver, getRedirectResult, onAuthStateChanged, signOut } from 'firebase/auth';
 import { describeSignInError, firebaseAuth as auth, startGoogleSignIn } from './firebase';
 import { clearSsoCookie, startSsoRefresh, trySsoSignIn } from './sso';
@@ -42,7 +42,8 @@ const USER_DISPLAY_NAMES = Object.freeze({
   'gabo@sentientagency.io': 'Gabo',
   'trainee@sentientagency.io': 'Trainee',
 });
-const displayName = (value) => {
+const displayName = (value, preferred = '') => {
+  if (String(preferred || '').trim()) return String(preferred).trim();
   const raw = String(value || '').trim();
   const key = raw.toLowerCase();
   if (USER_DISPLAY_NAMES[key]) return USER_DISPLAY_NAMES[key];
@@ -150,7 +151,7 @@ function AuthGate({ notice, setNotice }) {
    account info, and (for admins) the same account-assignment tool that used
    to only be reachable inside Admin Tools -> User Management. Meant to be
    the same shape as the Settings button on Dashboard/Tracker/Insights. */
-function QueueSettings({ isAdmin, userEmail, onSignOut }) {
+function QueueSettings({ isAdmin, isDev, userEmail, onSignOut }) {
   const { t, language, setLanguage, theme, setTheme, accent, setAccent } = useQueuePreferences();
   const [open, setOpen] = useState(false);
   return <div className="queue-settings">
@@ -160,7 +161,7 @@ function QueueSettings({ isAdmin, userEmail, onSignOut }) {
       <section className="queue-settings-section"><span>{t('accentColor')}</span><div className="queue-accent-picker">{['lime', 'blue', 'coral'].map((value) => <button type="button" key={value} className={`accent-${value}${accent === value ? ' is-on' : ''}`} onClick={() => setAccent(value)} aria-label={`${value} accent`} />)}</div></section>
       <section className="queue-settings-section"><span>{t('theme')}</span><div className="queue-settings-segment"><button type="button" className={theme === 'dark' ? 'is-on' : ''} onClick={() => setTheme('dark')}><Moon size={13} />{t('darkTheme')}</button><button type="button" className={theme === 'light' ? 'is-on' : ''} onClick={() => setTheme('light')}><Sun size={13} />{t('lightTheme')}</button></div></section>
       <section className="queue-settings-section"><span>{t('language')}</span><div className="queue-language" aria-label="Language"><button type="button" className={language === 'en' ? 'is-on' : ''} onClick={() => setLanguage('en')}>EN</button><button type="button" className={language === 'es' ? 'is-on' : ''} onClick={() => setLanguage('es')}>ES</button></div></section>
-      {isAdmin ? <section className="queue-settings-section queue-settings-admin"><span>{t('adminSettings')}</span><a className="queue-settings-link" href={`${import.meta.env.BASE_URL}?view=admin`} target="_blank" rel="noreferrer"><Settings size={13} />{t('openSettings')}</a></section> : null}
+      {isAdmin || isDev ? <section className="queue-settings-section queue-settings-admin"><span>Command center</span><a className="queue-settings-link" href={`${import.meta.env.BASE_URL}settings.html`}><Settings size={13} />{t('settings')}</a></section> : null}
       <footer><small>{t('signedInAs')} {userEmail}</small><button type="button" className="queue-settings-signout" onClick={onSignOut}><LogOut size={13} />{t('signOut')}</button></footer>
     </div></> : null}
   </div>;
@@ -589,7 +590,7 @@ function Scheduler({ data, draft, setDraft, onDraftChange, selectedDate, designe
         <div className="scheduler-time-head"><span>{t('designer')}</span><div>{Array.from({ length: 24 }, (_, hour) => <b key={hour} style={{ left: `${hour * (100 / 24)}%` }}>{time(hour * 60)}</b>)}</div></div>
         {visibleDesigners.map((designer) => {
           const queueEligible = designer.isQueueDesigner !== false;
-          const initials = initialsFor(designer.email);
+          const initials = displayName(designer.email, designer.displayName).split(/\s+/).map((word) => word.slice(0, 1)).join('').slice(0, 2).toUpperCase();
           const role = schedulerUserRole(designer, t);
           const ppUnit = Number(designer.minutesPerPP || 10) !== 10 ? `${designer.minutesPerPP} min/PP` : '';
           const accounts = designer.accounts?.map((account) => `@${account}`).join(' · ') || t('noAccounts');
@@ -597,7 +598,7 @@ function Scheduler({ data, draft, setDraft, onDraftChange, selectedDate, designe
           const tasks = merged(designer.email);
           const timeBlocks = (data.timeBlocks || []).filter((block) => block.requesterEmail === designer.email && block.scheduledDate === selectedDate);
           return <div className={`scheduler-row${queueEligible ? '' : ' is-non-queue-user'}`} key={designer.email}>
-            <header><div className="scheduler-user-identity"><span className="scheduler-user-avatar"><span aria-hidden="true">{initials}</span>{userAvatar(designer.avatarUrl) ? <img src={userAvatar(designer.avatarUrl)} alt="" referrerPolicy="no-referrer" onError={(event) => { event.currentTarget.hidden = true; }} /> : null}</span><span className="scheduler-user-copy"><b>{displayName(designer.email)}</b><small>{[role, ppUnit, accounts].filter(Boolean).join(' · ')}</small></span></div></header>
+            <header><div className="scheduler-user-identity"><span className="scheduler-user-avatar"><span aria-hidden="true">{initials}</span>{userAvatar(designer.avatarUrl) ? <img src={userAvatar(designer.avatarUrl)} alt="" referrerPolicy="no-referrer" onError={(event) => { event.currentTarget.hidden = true; }} /> : null}</span><span className="scheduler-user-copy"><b>{displayName(designer.email, designer.displayName)}</b><small>{[role, ppUnit, accounts].filter(Boolean).join(' · ')}</small></span></div></header>
             <div className="scheduler-track" onContextMenu={(event) => openTimeBlockForm(event, designer)} onDragOver={(event) => previewDrop(event, designer.email)} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setDropPreview(null); }} onDrop={(event) => drop(event, designer.email)}>
               {Array.from({ length: 25 }, (_, hour) => <i key={hour} style={{ left: `${hour * (100 / 24)}%` }} />)}
               {timeBlocks.map((block) => <TimeBlock key={block.id} block={block} />)}
@@ -944,13 +945,12 @@ function QueueApp({ user }) {
           {coordinator ? <button type="button" className="queue-create-button" onClick={() => setCreateOpen(true)}><Plus size={14} />{t('createPost')}</button> : null}
           {data?.viewer ? <button type="button" className={`queue-ticket-button${ticketsOpen ? ' is-active' : ''}`} onClick={toggleTickets}><ClipboardList size={14} />{t('tickets')}{data.pendingTicketCount ? <b>{data.pendingTicketCount}</b> : null}</button> : null}
           {pickAvailable ? <button type="button" className={`queue-pick-button${pickOpen ? ' is-active' : ''}`} onClick={() => setPickOpen(true)}><Check size={14} />{t('pick')}</button> : null}
-          {data?.viewer?.isAdmin ? <a className="queue-admin-button" href={`${import.meta.env.BASE_URL}?view=admin&settingsTab=reports`} target="_blank" rel="noreferrer"><BarChart3 size={14} />{t('admin')}</a> : null}
         </div>
         <nav className="queue-actions-nav" aria-label={t('dashboard')}>
-          <a href={`${import.meta.env.BASE_URL}tracker.html`} target="_blank" rel="noreferrer">Tracker</a><a href={`${import.meta.env.BASE_URL}insights.html`} target="_blank" rel="noreferrer">Insights</a><span className="queue-nav-current" aria-current="page">Queue</span><a href={import.meta.env.BASE_URL} target="_blank" rel="noreferrer"><ArrowLeft size={14} />{t('dashboard')}</a>
+          <a href={`${import.meta.env.BASE_URL}tracker.html`}>Tracker</a><a href={`${import.meta.env.BASE_URL}insights.html`}>Insights</a><span className="queue-nav-current" aria-current="page">Queue</span><a href={import.meta.env.BASE_URL}><ArrowLeft size={14} />{t('dashboard')}</a>
         </nav>
         <div className="queue-actions-group queue-actions-account">
-          <QueueSettings isAdmin={Boolean(data?.viewer?.isAdmin)} userEmail={user.email} onSignOut={() => { clearSsoCookie(); signOut(auth); }} />
+          <QueueSettings isAdmin={Boolean(data?.viewer?.isAdmin)} isDev={Boolean(viewer?.is_dev || data?.viewer?.isDev)} userEmail={user.email} onSignOut={() => { clearSsoCookie(); signOut(auth); }} />
         </div>
       </div>
     </header>
@@ -958,7 +958,7 @@ function QueueApp({ user }) {
     {loading ? <section className="queue-state"><LoaderCircle className="queue-spin" /><p>{t('loadingSchedule')}</p></section> : null}
     {error ? <section className="queue-state queue-error"><p>{error}</p><button type="button" onClick={load}>{t('tryAgain')}</button></section> : null}
     {data ? <>
-      <section className="scheduler-toolbar"><div><p className="scheduler-eyebrow">{coordinator ? t('coordinatorSchedule') : t('mySchedule')}</p><h2>{displayDate(date, language)}</h2></div>{coordinator ? <label className="scheduler-designer-filter">{t('assignedView')}<select value={designerScope} onChange={(event) => setDesignerScope(event.target.value)}><option value="">{t('allUsers')}</option>{(data.schedulerUsers || data.designers).map((person) => <option key={person.email} value={person.email}>{displayName(person.email)}</option>)}</select></label> : null}<div className="scheduler-nav"><button type="button" aria-label="Previous day" onClick={() => setDate(shiftDay(date, -1))}><ChevronLeft size={17} /></button><button type="button" onClick={() => setDate(DAY())}>{t('today')}</button><button type="button" aria-label="Next day" onClick={() => setDate(shiftDay(date, 1))}><ChevronRight size={17} /></button></div><button type="button" className={`scheduler-archive-toggle${archive ? ' is-on' : ''}`} onClick={() => setArchive((value) => !value)}><Archive size={14} />{archive ? t('liveQueue') : t('archive')}</button>{coordinator && draft.length ? <button type="button" className="scheduler-submit" onClick={submit}><Send size={14} />{t('submit')} {draft.length} {draft.length > 1 ? t('changes') : t('change')}</button> : null}</section>
+      <section className="scheduler-toolbar"><div><p className="scheduler-eyebrow">{coordinator ? t('coordinatorSchedule') : t('mySchedule')}</p><h2>{displayDate(date, language)}</h2></div>{coordinator ? <label className="scheduler-designer-filter">{t('assignedView')}<select value={designerScope} onChange={(event) => setDesignerScope(event.target.value)}><option value="">{t('allUsers')}</option>{(data.schedulerUsers || data.designers).map((person) => <option key={person.email} value={person.email}>{displayName(person.email, person.displayName)}</option>)}</select></label> : null}<div className="scheduler-nav"><button type="button" aria-label="Previous day" onClick={() => setDate(shiftDay(date, -1))}><ChevronLeft size={17} /></button><button type="button" onClick={() => setDate(DAY())}>{t('today')}</button><button type="button" aria-label="Next day" onClick={() => setDate(shiftDay(date, 1))}><ChevronRight size={17} /></button></div><button type="button" className={`scheduler-archive-toggle${archive ? ' is-on' : ''}`} onClick={() => setArchive((value) => !value)}><Archive size={14} />{archive ? t('liveQueue') : t('archive')}</button>{coordinator && draft.length ? <button type="button" className="scheduler-submit" onClick={submit}><Send size={14} />{t('submit')} {draft.length} {draft.length > 1 ? t('changes') : t('change')}</button> : null}</section>
       {coordinator && !archive ? <section className={`scheduler-pool${poolDropActive ? ' is-drop-target' : ''}`} onDragOver={poolDragOver} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setPoolDropActive(false); }} onDrop={poolDrop} aria-label={t('poolDropHint')}><header><div><p className="scheduler-eyebrow">{t('productionPool')}</p><h2>{pool.length} {t('readyToSchedule')}</h2></div><small>{poolDropActive ? t('poolDropHint') : t('visibleSchedule')}</small></header><div className="scheduler-pool-list">{pool.map((task) => <PoolCard key={task.id} task={task} onOpen={setOpen} />)}{!pool.length ? <p className="scheduler-empty">{t('emptyPool')}</p> : null}</div></section> : null}
       {archive ? <section className="queue-archive-list"><header><p className="scheduler-eyebrow">{t('archive')}</p><h2>{archived.length} {t('cancelled')}</h2></header>{archived.length ? archived.map((task) => <button type="button" key={task.id} className={`priority-${task.priority || 'medium'}${hotClass(task)}`} onClick={() => setOpen(task)}><span>{cover(task) ? <img src={cover(task)} alt="" /> : '@'}</span><div><b>@{task.post.account}</b><small>{task.cancellationReason || t('cancelled')}</small>{isHotTask(task) ? <i className="queue-hot-badge">🔥 {hotText(task)}</i> : null}</div><em>{displayTimestamp(task.updatedAt, language)}</em></button>) : <p className="scheduler-empty">{t('noArchived')}</p>}</section> : <>{coordinator && draft.length ? <><DraftAccounts draft={draft} designers={data.designers} onAccountsChange={changeDraftAccounts} /><div className="scheduler-draft-actions"><span><Clock3 size={13} />{t('sharedDrafts')}</span><button type="button" onClick={clearDrafts}>{t('clearDrafts')}</button></div></> : null}<Scheduler data={data} draft={draft} setDraft={setDraft} onDraftChange={persistDrafts} selectedDate={date} designerScope={designerScope} onOpen={setOpen} onError={(message) => notify(message, 'error')} onCreateTimeBlock={createTimeBlock} />{coordinator ? <AdminAssignmentTable tasks={upcoming} onOpen={setOpen} headingKey="upcomingProduction" countKey="activeRequests" /> : <DesignerAssignments tasks={assigned} onOpen={setOpen} />}</>}
     </> : null}
@@ -974,10 +974,10 @@ function Root() {
   const [user, setUser] = useState(undefined);
   const [notice, setNotice] = useState('');
   const [checked, setChecked] = useState(false);
-  const [language, setLanguageState] = useState(() => window.localStorage.getItem('sentient.language') || (navigator.language.startsWith('es') ? 'es' : 'en'));
+  const [language, setLanguageState] = useState(() => window.localStorage.getItem('sentient.lang') || (navigator.language.startsWith('es') ? 'es' : 'en'));
   const [theme, setThemeState] = useState(() => document.documentElement.getAttribute('data-theme') || 'dark');
   const [accent, setAccentState] = useState(() => window.localStorage.getItem('sentient.accent') || 'lime');
-  const setLanguage = (value) => { window.localStorage.setItem('sentient.language', value); setLanguageState(value); };
+  const setLanguage = (value) => { window.localStorage.setItem('sentient.lang', value); setLanguageState(value); };
   const setTheme = (value) => { window.localStorage.setItem('sentient.theme', value); document.documentElement.setAttribute('data-theme', value); setThemeState(value); };
   const setAccent = (value) => { window.localStorage.setItem('sentient.accent', value); document.documentElement.setAttribute('data-accent', value); setAccentState(value); };
   useEffect(() => { document.documentElement.setAttribute('data-accent', accent); }, [accent]);

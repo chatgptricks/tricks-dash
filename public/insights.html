@@ -248,8 +248,8 @@ tbody tr:hover{background:rgba(var(--edge),.03)}
             </div>
           </div>
           <div class="settings-menu-admin" id="settingsAdmin">
-            <span data-i18n="Admin">Admin</span>
-            <a class="settings-menu-link" href="./index.html?view=admin" target="_blank" rel="noreferrer">⚙ <span data-i18n="Open full settings">Open full settings</span></a>
+            <span>Command center</span>
+            <a class="settings-menu-link" href="./settings.html">⚙ <span data-i18n="Settings">Settings</span></a>
           </div>
           <div class="settings-menu-footer">
             <small id="settingsEmail"></small>
@@ -1361,7 +1361,7 @@ function checkAdminForSettings() {
   fetch(API + '/api/dashboard/me', { headers: { Authorization: 'Bearer ' + window.__firebaseIdToken } })
     .then((r) => (r.ok ? r.json() : null))
     .then((me) => {
-      const isAdmin = Boolean(me && (me.is_admin || (Array.isArray(me.operating_roles) && me.operating_roles.includes('admin')) || me.operating_role === 'admin'));
+      const isAdmin = Boolean(me && (me.is_admin || me.is_dev || (Array.isArray(me.operating_roles) && me.operating_roles.includes('admin')) || me.operating_role === 'admin'));
       document.getElementById('settingsAdmin').classList.toggle('is-visible', isAdmin);
     })
     .catch(() => { adminChecked = false; });

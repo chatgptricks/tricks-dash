@@ -127,12 +127,12 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     checks['Pool and scheduled blocks render'] = document.querySelectorAll('.queue-pool-card').length === 1 && document.querySelectorAll('.scheduler-block').length === 2;
     checks['Account badge and resize handles render'] = Boolean(document.querySelector('.scheduler-account-badges')) && document.querySelectorAll('.scheduler-resize-handle').length >= 2;
     checks['All dashboard users render as PD-capable'] = document.querySelectorAll('.scheduler-row').length === 4 && document.querySelectorAll('.scheduler-row.is-non-queue-user').length === 0;
-    // Admin is a plain link to the unified Settings tool's Reports tab now --
-    // no more separate overlay/report-fetching duplicated here.
-    const adminLink = document.querySelector('.queue-admin-button');
-    checks['Admin links to the unified Settings Reports tab'] = adminLink?.tagName === 'A'
-      && /\?view=admin&settingsTab=reports/.test(adminLink.getAttribute('href') || '')
-      && adminLink.getAttribute('target') === '_blank';
+    checks['Queue has no duplicate Admin tool'] = !document.querySelector('.queue-admin-button');
+    await click(document.querySelector('.queue-settings-trigger'));
+    const settingsLink = document.querySelector('.queue-settings-admin .queue-settings-link');
+    checks['Admin gear links to standalone Settings'] = settingsLink?.tagName === 'A'
+      && /\/settings\.html$/.test(settingsLink.getAttribute('href') || '');
+    await click(document.querySelector('.queue-overlay-backdrop'));
 
     await click(document.querySelector('.queue-ticket-button'));
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 50)); });

@@ -4432,10 +4432,148 @@ body {
   width: 148px;
 }
 
+.settings-command-header {
+  justify-content: space-between;
+  min-height: 62px;
+  padding: 10px 14px;
+}
+
+.settings-command-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 190px;
+  color: var(--text-strong);
+  text-decoration: none;
+}
+
+.settings-command-mark {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid rgba(var(--accent-rgb), 0.34);
+  border-radius: 11px;
+  background: linear-gradient(145deg, rgba(var(--accent-rgb), 0.22), rgba(var(--accent-rgb), 0.06));
+  color: var(--accent-text);
+}
+
+.settings-command-brand > span:last-child {
+  display: grid;
+  gap: 1px;
+}
+
+.settings-command-brand small,
+.settings-command-brand strong {
+  line-height: 1.05;
+}
+
+.settings-command-brand small {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.settings-command-brand strong {
+  font-size: 17px;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+}
+
+.settings-command-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid rgba(var(--edge), 0.08);
+  border-radius: 10px;
+  background: rgba(var(--edge), 0.03);
+}
+
+.settings-command-nav a,
+.settings-command-nav span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 11px;
+  border-radius: 7px;
+  color: rgba(var(--ink), 0.58);
+  font-size: 11px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.settings-command-nav a:hover {
+  background: rgba(var(--edge), 0.06);
+  color: var(--text-strong);
+}
+
+.settings-command-nav span[aria-current='page'] {
+  background: rgba(var(--accent-rgb), 0.14);
+  color: var(--accent-text);
+}
+
 .admin-page-body {
   max-width: 1600px;
   margin: 0 auto;
   padding: 20px 20px 60px;
+}
+
+.settings-command-intro {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 16px 2px 22px;
+}
+
+.settings-command-intro h1 {
+  margin: 4px 0 6px;
+  color: var(--text-strong);
+  font-size: clamp(27px, 3vw, 40px);
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+
+.settings-command-intro p {
+  max-width: 760px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.settings-command-kicker {
+  color: var(--accent-text);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.settings-command-access {
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+  min-width: 220px;
+}
+
+.settings-command-access span {
+  padding: 4px 8px;
+  border: 1px solid rgba(var(--accent-rgb), 0.3);
+  border-radius: 999px;
+  background: rgba(var(--accent-rgb), 0.1);
+  color: var(--accent-text);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.settings-command-access small {
+  color: var(--muted);
+  font-size: 10px;
 }
 
 .admin-page-body .settings-body {
@@ -4449,13 +4587,116 @@ body {
 }
 
 .admin-page-body .settings-tabs {
-  height: 40px;
+  position: sticky;
+  top: 96px;
+  z-index: 4;
+  min-height: 44px;
+  width: 100%;
+  padding: 5px;
+  overflow-x: auto;
+  box-shadow: 0 10px 28px rgba(var(--shade), 0.12);
 }
 
 .admin-page-body .settings-tab {
   height: 34px;
-  padding: 0 20px;
+  padding: 0 18px;
   font-size: 12.5px;
+}
+
+.settings-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.settings-overview-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 13px;
+  min-height: 122px;
+  padding: 18px;
+  border: 1px solid rgba(var(--edge), 0.1);
+  border-radius: 15px;
+  background: linear-gradient(145deg, rgba(var(--edge), 0.045), rgba(var(--edge), 0.015));
+  color: var(--text-strong);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 150ms ease, transform 150ms ease, background 150ms ease;
+}
+
+.settings-overview-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(var(--accent-rgb), 0.38);
+  background: linear-gradient(145deg, rgba(var(--accent-rgb), 0.1), rgba(var(--edge), 0.02));
+}
+
+.settings-overview-icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: rgba(var(--accent-rgb), 0.11);
+  color: var(--accent-text);
+}
+
+.settings-overview-card > span:nth-child(2) {
+  display: grid;
+  gap: 3px;
+}
+
+.settings-overview-card small {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.settings-overview-card strong {
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: -0.03em;
+}
+
+.settings-overview-card em {
+  color: var(--muted);
+  font-size: 11px;
+  font-style: normal;
+}
+
+.settings-overview-arrow {
+  transform: rotate(-90deg);
+  color: rgba(var(--ink), 0.35);
+}
+
+.settings-overview-brief {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 22px 24px;
+  border: 1px solid rgba(var(--accent-rgb), 0.2);
+  border-radius: 15px;
+  background: radial-gradient(circle at 0 0, rgba(var(--accent-rgb), 0.12), transparent 42%), var(--surface-1);
+}
+
+.settings-overview-brief h2 {
+  margin: 3px 0 0;
+  color: var(--text-strong);
+  font-size: 20px;
+}
+
+.settings-overview-brief p {
+  max-width: 690px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
 }
 
 /* Accounts is the section with the most content, so it's the one that
@@ -4467,7 +4708,13 @@ body {
    30 day-columns need the room -- so it's deliberately rendered as a
    sibling of settings-list-width instead of inside it. */
 .settings-list-width {
-  max-width: 760px;
+  max-width: 1280px;
+}
+
+.settings-section-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .add-user-form {
@@ -4876,9 +5123,40 @@ body {
 }
 
 .settings-row-account {
-  display: grid;
-  gap: 2px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
   min-width: 0;
+}
+
+.settings-user-avatar {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  overflow: hidden;
+  border: 1px solid rgba(var(--edge), 0.14);
+  border-radius: 50%;
+  background: linear-gradient(145deg, rgba(var(--accent-rgb), 0.26), rgba(var(--edge), 0.08));
+  color: var(--accent-ink);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.settings-user-avatar img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.settings-user-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
 }
 
 .settings-row-account strong {
@@ -4892,6 +5170,11 @@ body {
   font-size: 9px;
   font-weight: 700;
   text-transform: uppercase;
+}
+
+.settings-row-account small {
+  color: var(--muted);
+  font-size: 10px;
 }
 
 .settings-import-notice {
@@ -4920,6 +5203,36 @@ body {
   font-size: 12px;
   font-weight: 500;
   box-sizing: border-box;
+}
+
+.queue-user-controls {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.queue-user-controls > input:first-child {
+  width: 150px;
+}
+
+.settings-user-admin-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 0 9px;
+  border: 1px solid rgba(var(--edge), 0.1);
+  border-radius: 7px;
+  background: rgba(var(--edge), 0.035);
+  color: var(--text);
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.settings-user-admin-toggle input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--accent);
 }
 
 /* The Queue-role <select> here used to fall back to unstyled native
@@ -6069,7 +6382,26 @@ body {
   font-size: 11px;
   font-weight: 750;
   font-family: inherit;
+  text-decoration: none;
   cursor: pointer;
+}
+
+.settings-access-card h1 {
+  margin: 7px 0 10px;
+  color: var(--text-strong);
+  font-size: 30px;
+  letter-spacing: -0.03em;
+}
+
+.settings-access-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.settings-access-actions a {
+  text-decoration: none;
 }
 
 .settings-menu-footer {

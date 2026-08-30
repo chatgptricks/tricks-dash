@@ -15,7 +15,9 @@ pnpm install
 pnpm dev
 ```
 
-Pages: `index.html` (main dashboard), `queue.html` (Queue board). Both read
+React/Vite pages: `index.html` (main dashboard), `queue.html` (Queue board),
+and `settings.html` (Admin/Dev command center). Tracker and Insights remain
+standalone pages under `public/`. All surfaces read
 live data from the `cortex` backend (`chatgptricks/cortex`, deployed on
 Render) via `GET /api/dashboard/*`, `/api/tracker/*`, `/api/insights/*`.
 Set `VITE_API_BASE` to point at a different backend for local dev.
@@ -34,6 +36,8 @@ commands and the things that must not be touched on `gh-pages`.
 
 ```bash
 node smoke/run.mjs
+npm run smoke:queue
+npm run smoke:settings
 ```
 
 Renders the real `<App />` in jsdom with Firebase and `fetch` stubbed, and

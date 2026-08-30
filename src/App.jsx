@@ -71,6 +71,12 @@ const ACCOUNT_PROFILE_IMAGES = {
   traselveloreal: traselveloralProfileImage,
 };
 
+const settingsUserAvatar = (value) => {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  return raw.startsWith('/api/') ? `${API_BASE}${raw}` : raw;
+};
+
 // All/Sentient/Competitors tabs -- accounts themselves come from the
 // backend's self-serve account registry (/api/dashboard/accounts), not a
 // hardcoded list, so adding a new account never requires a frontend change.
@@ -256,7 +262,7 @@ function useSectionFavicon(section) {
 // shape as the Settings button on Queue/Tracker/Insights: accent, theme and
 // language live together with account info and, for admins, the same
 // designer-account assignment tool Queue's Admin Tools panel exposes.
-function SettingsMenu({ email, isAdmin, onSignOut, onOpenAdminSettings }) {
+export function SettingsMenu({ email, isAdmin, isDev, onSignOut, showSettingsLink = true }) {
   const { t, lang, theme, setLang, setTheme } = usePrefs();
   const [accent, setAccentState] = useState(() => {
     try { return window.localStorage.getItem('sentient.accent') || 'lime'; } catch { return 'lime'; }
@@ -343,13 +349,13 @@ function SettingsMenu({ email, isAdmin, onSignOut, onOpenAdminSettings }) {
               ))}
             </div>
           </div>
-          {isAdmin ? (
+          {(isAdmin || isDev) && showSettingsLink ? (
             <div className="settings-menu-section settings-menu-admin">
-              <span>{t('Admin')}</span>
-              <button type="button" className="settings-menu-link" onClick={() => { setOpen(false); onOpenAdminSettings(); }}>
+              <span>{t('Command center')}</span>
+              <a className="settings-menu-link" href={`${import.meta.env.BASE_URL}settings.html`}>
                 <Settings size={13} />
-                {t('Open full settings')}
-              </button>
+                {t('Settings')}
+              </a>
             </div>
           ) : null}
           <div className="settings-menu-footer">
@@ -980,16 +986,21 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
     [accounts, activeGroup, customLists],
   );
   const [selectedAccounts, setSelectedAccounts] = useState(() => new Set());
-  const [showAddAccount, setShowAddAccount] = useState(false);
-  // Admin panel is a full page, not a modal, so it's linkable/reload-safe
-  // like every other view here -- gated behind isAdmin below regardless of
-  // what a stale or hand-edited URL says.
-  const [showSettings, setShowSettings] = useState(initialUrl.view === 'admin');
   const [backgroundTasks, setBackgroundTasks] = useState([]);
 
   // Custom lists fall back to the archive icon: they're user-made and there's
   // no sensible per-list emoji to pick.
-  useSectionFavicon(showSettings ? 'admin' : (SECTION_ICONS[activeGroup] ? activeGroup : 'all'));
+  useSectionFavicon(SECTION_ICONS[activeGroup] ? activeGroup : 'all');
+
+  // Claude's first Settings pass lived inside the Dashboard at ?view=admin.
+  // Keep old bookmarks useful, but move them to the standalone command center
+  // as soon as the role check confirms this user can open it.
+  useEffect(() => {
+    if (initialUrl.view !== 'admin' || !(isAdmin || isDev)) return;
+    const params = new URLSearchParams();
+    if (initialUrl.settingsTab) params.set('tab', initialUrl.settingsTab);
+    window.location.replace(`${import.meta.env.BASE_URL}settings.html${params.size ? `?${params}` : ''}`);
+  }, [initialUrl, isAdmin, isDev]);
 
   // Kicks off the (slow, Apify-bound) initial history import for a
   // freshly-created account without blocking the UI -- tracked as a
@@ -1232,12 +1243,12 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
       // even when nobody opened anything. Sharing that would pin a stranger's
       // link to whichever post happened to sort first.
       post: isSidebarOpen ? selectedKey : '',
-      view: showSettings ? 'admin' : '',
+      view: '',
     });
   }, [
     query, activeGroup, selectedAccounts, accountsInScope, activeType, mediaFilter,
     sortBy, minLikes, minComments, dateFrom, dateTo, datePreset, promoOnly, selectedKey,
-    isSidebarOpen, ranges.likesMin, ranges.commentsMin, showSettings,
+    isSidebarOpen, ranges.likesMin, ranges.commentsMin,
   ]);
 
   // Switching tabs changes which accounts are in scope, but the effect that
@@ -1580,27 +1591,6 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
     });
   }, []);
 
-  // Admin panel is its own full page, not a modal over the dashboard --
-  // rendered here as a straight replacement rather than an overlay. Gated on
-  // isAdmin regardless of what a stale/hand-edited ?view=admin URL says; the
-  // backend enforces the real boundary on every /api/admin/* call either way.
-  if (showSettings && isAdmin) {
-    return (
-      <>
-        <SettingsPanel
-          accounts={accounts}
-          onClose={() => setShowSettings(false)}
-          onRefresh={handleRefresh}
-          refreshing={refreshing}
-          refreshNotice={refreshNotice}
-          onAccountsChanged={() => loadDashboard(undefined, { silent: true })}
-          initialTab={initialUrl.settingsTab}
-        />
-        <DevRolePreview isDev={isDev} />
-      </>
-    );
-  }
-
   return (
     <div className="shell">
       <div className="backdrop" />
@@ -1700,8 +1690,8 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
                 <SettingsMenu
                   email={userEmail}
                   isAdmin={isAdmin}
+                  isDev={isDev}
                   onSignOut={onSignOut}
-                  onOpenAdminSettings={() => setShowSettings(true)}
                 />
               </div>
 
@@ -1810,7 +1800,6 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
                       counts={accountCounts}
                       selected={selectedAccounts}
                       onChange={(next) => startTransition(() => setSelectedAccounts(next))}
-                      onAddAccount={() => setShowAddAccount(true)}
                     />
                   </FilterPopover>
 
@@ -2145,17 +2134,6 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
           onSave={saveList}
           onDelete={deleteList}
           onClose={() => setListEditor(null)}
-        />
-      ) : null}
-
-      {showAddAccount ? (
-        <AddAccountWizard
-          onClose={() => setShowAddAccount(false)}
-          onAccountCreated={(account, password) => {
-            setShowAddAccount(false);
-            loadDashboard(undefined, { silent: true });
-            startBackgroundBackfill(account, password);
-          }}
         />
       ) : null}
 
@@ -2767,7 +2745,11 @@ const WIZARD_STEPS = ['Account', 'Settings', 'Confirm'];
 // The password is asked for once when the panel opens and kept only in this
 // component's state -- never written to localStorage, so closing the panel or
 // reloading the page discards it.
-function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice, onAccountsChanged, initialTab }) {
+export function SettingsPanel({
+  accounts = [], onRefresh, refreshing = false, refreshNotice, onAccountsChanged,
+  initialTab, userEmail, isAdmin = false, isDev = false, onSignOut,
+}) {
+  const { t } = usePrefs();
   // Firebase sign-in is the real gate now (only an allowlisted Google account
   // can reach this component at all), so the old shared-password unlock
   // screen is skipped entirely -- the fixed legacy value is supplied
@@ -2776,10 +2758,9 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
   const [unlocked, setUnlocked] = useState(true);
   const [checking, setChecking] = useState(false);
   const [notice, setNotice] = useState('');
-  // 'accounts' | 'system' | 'users' | 'reports'. Deep-linkable via
-  // ?view=admin&settingsTab=reports so Queue's Admin button can open straight
-  // to Reports instead of duplicating this tool as its own overlay.
-  const [tab, setTab] = useState(['accounts', 'system', 'users', 'reports'].includes(initialTab) ? initialTab : 'accounts');
+  const settingsTabs = ['overview', 'accounts', 'users', 'usage', 'notifications', 'system', 'reports'];
+  const [tab, setTab] = useState(settingsTabs.includes(initialTab) ? initialTab : 'overview');
+  const [showAddAccount, setShowAddAccount] = useState(false);
 
   // Reports tab -- the same production-report data Queue's admin overlay
   // used to show in its own separate panel (totals, priorities, designer
@@ -2795,6 +2776,7 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
   const [usersLoading, setUsersLoading] = useState(false);
   const [usersNotice, setUsersNotice] = useState('');
   const [newUserEmail, setNewUserEmail] = useState('');
+  const [newUserDisplayName, setNewUserDisplayName] = useState('');
   // Admin is an orthogonal flag layered on top of a Queue role, same as
   // everywhere else a person's role is shown (Queue's own roster appends
   // "Admin" onto whatever operating role someone has, never treats it as a
@@ -2851,6 +2833,15 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
   const [apifyLoading, setApifyLoading] = useState(false);
   const [ocrStatus, setOcrStatus] = useState(null);
   const [ocrStarting, setOcrStarting] = useState(false);
+
+  const selectTab = useCallback((nextTab) => {
+    setTab(nextTab);
+    const params = new URLSearchParams(window.location.search);
+    if (nextTab === 'overview') params.delete('tab');
+    else params.set('tab', nextTab);
+    const search = params.toString();
+    window.history.replaceState(null, '', `${window.location.pathname}${search ? `?${search}` : ''}`);
+  }, []);
 
   const loadRoster = useCallback(async () => {
     try {
@@ -2952,8 +2943,11 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
   useEffect(() => {
     if (unlocked && tab === 'users') {
       loadUsers();
-      loadUsage();
       loadDesignerAccounts();
+    }
+    if (unlocked && tab === 'usage') {
+      loadUsage();
+      loadUsers();
     }
   }, [unlocked, tab, loadUsers, loadUsage, loadDesignerAccounts]);
 
@@ -2975,6 +2969,13 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
   useEffect(() => {
     if (unlocked && tab === 'reports') loadReport();
   }, [unlocked, tab, loadReport]);
+
+  useEffect(() => {
+    if (!unlocked || tab !== 'overview') return;
+    loadUsers();
+    loadDesignerAccounts();
+    loadReport();
+  }, [unlocked, tab, loadUsers, loadDesignerAccounts, loadReport]);
 
   // While a sweep is running, poll so the "done" count moves without a manual
   // refresh -- same pattern as the background-task polling used elsewhere.
@@ -3322,7 +3323,14 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
       const response = await apiFetch(`${API_BASE}/api/admin/users`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ email, role: newUserIsAdmin ? 'admin' : 'viewer', operating_role: newUserOperatingRole, is_admin: String(newUserIsAdmin), slack_user_id: newUserSlackId.trim() }),
+        body: new URLSearchParams({
+          email,
+          display_name: newUserDisplayName.trim() || email.split('@')[0],
+          role: newUserIsAdmin ? 'admin' : 'viewer',
+          operating_role: newUserOperatingRole,
+          is_admin: String(newUserIsAdmin),
+          slack_user_id: newUserSlackId.trim(),
+        }),
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) {
@@ -3331,6 +3339,7 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
       }
       setUsers(body.users || []);
       setNewUserEmail('');
+      setNewUserDisplayName('');
       setNewUserIsAdmin(false);
       setNewUserOperatingRole('sales');
       setNewUserSlackId('');
@@ -3349,10 +3358,18 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
       const nextRole = changes.role ?? user.role;
       const nextOperatingRole = changes.operating_role ?? user.operating_role ?? 'sales';
       const nextSlackId = changes.slack_user_id ?? user.slack_user_id ?? '';
+      const nextDisplayName = changes.display_name ?? user.display_name ?? user.email.split('@')[0];
       const response = await apiFetch(`${API_BASE}/api/admin/users`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ email: user.email, role: nextRole, operating_role: nextOperatingRole, is_admin: String(nextRole === 'admin'), slack_user_id: nextSlackId }),
+        body: new URLSearchParams({
+          email: user.email,
+          display_name: nextDisplayName,
+          role: nextRole,
+          operating_role: nextOperatingRole,
+          is_admin: String(nextRole === 'admin'),
+          slack_user_id: nextSlackId,
+        }),
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) {
@@ -3460,6 +3477,7 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
     if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
     return String(n);
   };
+  const userDisplayName = (email) => users.find((person) => person.email === email)?.display_name || email;
 
   // Plain date (no time) for "oldest post on file" -- this is how far back a
   // history backfill actually reached for that account, which is otherwise
@@ -3471,66 +3489,123 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
     return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
   };
 
+  const handleAccountCreated = async (account, legacyPassword) => {
+    setShowAddAccount(false);
+    await loadRoster();
+    setNotice(`@${account.handle} added. Initial history import is starting in the background.`);
+
+    if (account.avatarUrl) {
+      apiFetch(`${API_BASE}/api/admin/accounts/${encodeURIComponent(account.handle)}/avatar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ password: legacyPassword, image_url: account.avatarUrl }),
+      }).then(() => loadRoster()).catch(() => {});
+    }
+
+    const params = { password: legacyPassword, results_limit: String(account.resultsLimit || 2000) };
+    if (account.dateFrom) params.date_from = account.dateFrom;
+    if (account.dateTo) params.date_to = account.dateTo;
+    apiFetch(`${API_BASE}/api/admin/accounts/backfill-bg/${encodeURIComponent(account.handle)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams(params),
+    }).catch(() => setNotice(`@${account.handle} was added, but its initial history import could not be started.`));
+    onAccountsChanged?.();
+  };
+
   return (
     <div className="admin-page">
-      <header className="admin-page-header">
-        <button type="button" className="ghost-button" onClick={onClose}>
-          <ArrowLeft size={15} />
-          <span>Back to dashboard</span>
-        </button>
-        <h1>Admin panel</h1>
-        <div className="admin-page-header-spacer" />
+      <header className="admin-page-header settings-command-header">
+        <a className="settings-command-brand" href={`${import.meta.env.BASE_URL}settings.html`} aria-label="Settings home">
+          <span className="settings-command-mark"><Settings size={19} /></span>
+          <span><small>sentientdash.app</small><strong>{t('Settings')}</strong></span>
+        </a>
+        <nav className="settings-command-nav" aria-label="Sentient tools">
+          <a href={import.meta.env.BASE_URL}>{t('Dashboard')}</a>
+          <a href={`${import.meta.env.BASE_URL}tracker.html`}>{t('Tracker')}</a>
+          <a href={`${import.meta.env.BASE_URL}insights.html`}>{t('Insights')}</a>
+          <a href={`${import.meta.env.BASE_URL}queue.html`}>{t('Queue')}</a>
+          <span aria-current="page">{t('Settings')}</span>
+        </nav>
+        <SettingsMenu
+          email={userEmail}
+          isAdmin={isAdmin}
+          isDev={isDev}
+          onSignOut={onSignOut}
+          showSettingsLink={false}
+        />
       </header>
 
       <div className="admin-page-body">
+        <section className="settings-command-intro">
+          <div>
+            <span className="settings-command-kicker">{t('Command center')}</span>
+            <h1>{t('Workspace settings')}</h1>
+            <p>{t('Manage the people, accounts, operations, notifications, and production controls shared by every Sentient tool.')}</p>
+          </div>
+          <div className="settings-command-access">
+            <span>{isDev ? 'DEV' : 'ADMIN'}</span>
+            <small>{userEmail}</small>
+          </div>
+        </section>
         <div className="settings-body">
           <div className="settings-tabs" role="tablist">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={tab === 'accounts'}
-              className={tab === 'accounts' ? 'settings-tab settings-tab-active' : 'settings-tab'}
-              onClick={() => setTab('accounts')}
-            >
-              Accounts
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={tab === 'system'}
-              className={tab === 'system' ? 'settings-tab settings-tab-active' : 'settings-tab'}
-              onClick={() => setTab('system')}
-            >
-              System
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={tab === 'users'}
-              className={tab === 'users' ? 'settings-tab settings-tab-active' : 'settings-tab'}
-              onClick={() => setTab('users')}
-            >
-              Users
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={tab === 'reports'}
-              className={tab === 'reports' ? 'settings-tab settings-tab-active' : 'settings-tab'}
-              onClick={() => setTab('reports')}
-            >
-              Reports
-            </button>
+            {[
+              ['overview', t('Overview')],
+              ['accounts', t('Accounts')],
+              ['users', t('Users')],
+              ['usage', t('Usage')],
+              ['notifications', t('Notifications')],
+              ['system', t('System')],
+              ['reports', t('Reports')],
+            ].map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                role="tab"
+                aria-selected={tab === value}
+                className={tab === value ? 'settings-tab settings-tab-active' : 'settings-tab'}
+                onClick={() => selectTab(value)}
+              >
+                {label}
+              </button>
+            ))}
           </div>
 
           {notice ? <p className="settings-notice">{notice}</p> : null}
 
-          {tab === 'accounts' ? (
+          {tab === 'overview' ? (
+            <div className="settings-overview-grid">
+              {[
+                { tab: 'accounts', label: t('Accounts'), value: roster.length, detail: `${roster.filter((item) => item.is_active !== false).length} ${t('active sources')}`, icon: <AtSign size={18} /> },
+                { tab: 'users', label: t('Users'), value: users.length, detail: `${users.filter((item) => item.is_admin).length} ${t('administrators')}`, icon: <Users size={18} /> },
+                { tab: 'usage', label: t('Usage'), value: '30d', detail: t('Activity and adoption'), icon: <BarChart3 size={18} /> },
+                { tab: 'notifications', label: t('Notifications'), value: slackStatus?.configured ? t('Live') : t('Check'), detail: slackStatus?.configured ? t('Slack delivery configured') : t('Slack status unavailable'), icon: <MessageSquare size={18} /> },
+                { tab: 'system', label: t('System'), value: disk ? `${disk.pct_used}%` : '—', detail: disk ? `${disk.free_mb.toLocaleString()} MB ${t('free')}` : t('Diagnostics and maintenance'), icon: <HardDrive size={18} /> },
+                { tab: 'reports', label: t('Reports'), value: report?.assignedPosts?.length ?? '—', detail: t('Assigned Queue posts'), icon: <TrendingUp size={18} /> },
+              ].map((item) => (
+                <button type="button" className="settings-overview-card" key={item.tab} onClick={() => selectTab(item.tab)}>
+                  <span className="settings-overview-icon">{item.icon}</span>
+                  <span><small>{item.label}</small><strong>{item.value}</strong><em>{item.detail}</em></span>
+                  <ChevronDown size={15} className="settings-overview-arrow" />
+                </button>
+              ))}
+              <section className="settings-overview-brief">
+                <div><span className="settings-command-kicker">{t('Shared control plane')}</span><h2>{t('One source of truth')}</h2></div>
+                <p>{t('Changes made here affect Dashboard, Tracker, Insights, and Queue. Operational controls no longer live in tool-specific admin panels.')}</p>
+              </section>
+            </div>
+          ) : tab === 'accounts' ? (
               <>
                 <section className="settings-section">
                   <div className="settings-section-head">
-                    <h3>Manage accounts</h3>
-                    <span className="accounts-count">{sortedRoster.length} of {roster.length}</span>
+                    <h3>{t('Manage accounts')}</h3>
+                    <div className="settings-section-actions">
+                      <span className="accounts-count">{sortedRoster.length} of {roster.length}</span>
+                      <button type="button" className="ghost-button primary" onClick={() => setShowAddAccount(true)}>
+                        <Plus size={13} /> {t('Add account')}
+                      </button>
+                    </div>
                   </div>
                   <p className="wizard-hint">
                     Click a row to edit its label, category, HOT threshold, or avatar, or pull more history.
@@ -3791,11 +3866,12 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
                   </div>
                 </section>
               </>
-            ) : tab === 'system' ? (
+            ) : tab === 'system' || tab === 'notifications' ? (
               <div className="system-tab-grid">
+                {tab === 'system' ? <>
                 <section className="settings-section system-card">
                   <div className="settings-section-head">
-                    <h3>Refresh now</h3>
+                    <h3>{t('Refresh now')}</h3>
                     <button
                       type="button"
                       className="ghost-button settings-refresh"
@@ -3803,7 +3879,7 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
                       disabled={refreshing}
                     >
                       <RefreshCw size={14} className={refreshing ? 'spin' : ''} />
-                      <span>{refreshing ? 'Refreshing…' : 'Refresh'}</span>
+                      <span>{refreshing ? t('Refreshing…') : t('Refresh')}</span>
                     </button>
                   </div>
                   <p className="wizard-hint">
@@ -3819,7 +3895,7 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
                 <section className="settings-section system-card">
                   <div className="settings-section-head">
                     <h3>
-                      <HardDrive size={13} /> Disk usage
+                      <HardDrive size={13} /> {t('Disk usage')}
                     </h3>
                   </div>
                   {disk ? (
@@ -3843,9 +3919,12 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
                   )}
                 </section>
 
+                </> : null}
+
+                {tab === 'notifications' ? <>
                 <section className="settings-section system-card">
                   <h3>
-                    <MessageSquare size={13} /> Slack alerts
+                    <MessageSquare size={13} /> {t('Slack alerts')}
                   </h3>
                   <p className="wizard-hint">
                     {slackStatus
@@ -3861,7 +3940,7 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
                       onClick={sendSlackTest}
                       disabled={slackSending || !slackStatus?.configured}
                     >
-                      {slackSending ? 'Sending…' : 'Send test alert'}
+                      {slackSending ? t('Sending…') : t('Send test alert')}
                     </button>
                   </div>
                   {slackNotice ? <p className="settings-notice">{slackNotice}</p> : null}
@@ -3869,7 +3948,7 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
 
                 <section className="settings-section system-card system-card-wide">
                   <h3>
-                    <Megaphone size={13} /> Custom alert
+                    <Megaphone size={13} /> {t('Custom alert')}
                   </h3>
                   <p className="wizard-hint">
                     Send a one-off Slack message for anything that doesn't fit HOT posts, disk, or snapshot alerts.
@@ -3935,8 +4014,11 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
                   {customAlertNotice ? <p className="settings-notice">{customAlertNotice}</p> : null}
                 </section>
 
+                </> : null}
+
+                {tab === 'system' ? <>
                 <section className="settings-section system-card system-card-wide">
-                  <h3>Recent Apify runs</h3>
+                  <h3>{t('Recent Apify runs')}</h3>
                   <div className="settings-table">
                     {apifyLoading ? <p className="wizard-hint">Loading…</p> : null}
                     {apifyRuns.map((run) => (
@@ -3959,7 +4041,7 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
                 <section className="settings-section system-card">
                   <div className="settings-section-head">
                     <h3>
-                      <ScanText size={13} /> Cover OCR sweep
+                      <ScanText size={13} /> {t('Cover OCR sweep')}
                     </h3>
                   </div>
                   <p className="wizard-hint">
@@ -3978,19 +4060,30 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
                     </button>
                   </div>
                 </section>
+                </> : null}
               </div>
-            ) : tab === 'users' ? (
+            ) : tab === 'users' || tab === 'usage' ? (
               <>
+              {tab === 'users' ? (
               <div className="settings-list-width">
                 <section className="settings-section">
-                  <h3>Who can sign in</h3>
+                  <h3>{t('Who can sign in')}</h3>
                   <p className="wizard-hint">
                     Admins see this Settings page and can manage accounts, users, and diagnostics. Everyone else gets
                     the read-only dashboard.
                   </p>
                   <form className="add-user-form" onSubmit={addUser}>
                     <label className="modal-field">
-                      <span>Email</span>
+                      <span>{t('Display name')}</span>
+                      <input
+                        value={newUserDisplayName}
+                        onChange={(event) => setNewUserDisplayName(event.target.value)}
+                        placeholder="e.g. Esteban"
+                        required
+                      />
+                    </label>
+                    <label className="modal-field">
+                      <span>{t('Email')}</span>
                       <input
                         type="email"
                         value={newUserEmail}
@@ -4000,28 +4093,28 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
                       />
                     </label>
                     <label className="modal-field">
-                      <span>Queue role</span>
+                      <span>{t('Queue role')}</span>
                       <select value={newUserOperatingRole} onChange={(event) => setNewUserOperatingRole(event.target.value)}>
                         <option value="sales">Sales</option><option value="vc">Viral Coordinator</option><option value="pd">Post Designer</option><option value="trainee">Trainee</option>
                       </select>
                     </label>
                     <label className="modal-field">
-                      <span>Slack user ID</span>
+                      <span>{t('Slack user ID')}</span>
                       <input value={newUserSlackId} onChange={(event) => setNewUserSlackId(event.target.value.toUpperCase())} placeholder="U0123456789" />
                     </label>
                     <label className="modal-field-checkbox">
                       <input type="checkbox" checked={newUserIsAdmin} onChange={(event) => setNewUserIsAdmin(event.target.checked)} />
-                      <span>Admin (full Settings access)</span>
+                      <span>{t('Admin (full Settings access)')}</span>
                     </label>
                     <button type="submit" className="ghost-button primary" disabled={addingUser}>
-                      {addingUser ? 'Adding…' : 'Add'}
+                      {addingUser ? t('Adding…') : t('Add')}
                     </button>
                   </form>
                   {usersNotice ? <p className="settings-notice">{usersNotice}</p> : null}
                 </section>
 
                 <section className="settings-section">
-                  <h3>People with access</h3>
+                  <h3>{t('People with access')}</h3>
                   <p className="wizard-hint">
                     Role and Queue account assignment live on the same row per person now -- there
                     used to be a second, separate list here just for accounts, keyed off a
@@ -4036,18 +4129,39 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
                       return (
                         <div className="settings-row settings-row-wide" key={user.email}>
                           <div className="settings-row-account">
-                            <strong>{user.email}</strong>
+                            <span className="settings-user-avatar" aria-hidden="true">
+                              <span>{(user.display_name || user.email.split('@')[0]).split(/\s+/).map((word) => word.slice(0, 1)).join('').slice(0, 2).toUpperCase()}</span>
+                              {user.avatar_url ? <img src={settingsUserAvatar(user.avatar_url)} alt="" referrerPolicy="no-referrer" onError={(event) => { event.currentTarget.hidden = true; }} /> : null}
+                            </span>
+                            <div className="settings-user-copy">
+                              <strong>{user.display_name || user.email.split('@')[0]}</strong>
+                            <small>{user.email}</small>
                             <span>{user.role === 'admin' ? 'Admin' : 'Viewer'} · {(user.operating_role || 'sales').toUpperCase()}</span>
+                            </div>
                           </div>
                           <div className="settings-row-controls queue-user-controls">
+                            <input
+                              defaultValue={user.display_name || user.email.split('@')[0]}
+                              aria-label={`Display name for ${user.email}`}
+                              placeholder="Display name"
+                              onBlur={(event) => {
+                                const value = event.target.value.trim();
+                                if (value && value !== (user.display_name || '')) updateUser(user, { display_name: value });
+                              }}
+                            />
                             <select value={user.operating_role || 'sales'} aria-label={`Queue role for ${user.email}`} onChange={(event) => updateUser(user, { operating_role: event.target.value })} disabled={userActionEmail === user.email}>
                               <option value="sales">Sales</option><option value="vc">VC</option><option value="pd">PD</option><option value="trainee">Trainee</option>
                             </select>
                             <input defaultValue={user.slack_user_id || ''} aria-label={`Slack user ID for ${user.email}`} placeholder="Slack ID" onBlur={(event) => { if (event.target.value.trim() !== (user.slack_user_id || '')) updateUser(user, { slack_user_id: event.target.value.trim().toUpperCase() }); }} />
-                            {/* Admin is set once at creation via the Add User checkbox, same
-                                additive-flag model as Queue -- per-row, the only thing anyone
-                                manages here day to day is the Queue role, so no separate
-                                Make admin/Make viewer toggle lives in this row anymore. */}
+                            <label className="settings-user-admin-toggle">
+                              <input
+                                type="checkbox"
+                                checked={user.role === 'admin'}
+                                onChange={(event) => updateUser(user, { role: event.target.checked ? 'admin' : 'viewer' })}
+                                disabled={userActionEmail === user.email || user.email === userEmail}
+                              />
+                              <span>Admin</span>
+                            </label>
                             <button
                               type="button"
                               className="ghost-button ghost-button-danger"
@@ -4082,9 +4196,11 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
                   </div>
                 </section>
               </div>
+              ) : null}
 
+              {tab === 'usage' ? (
               <section className="settings-section usage-section">
-                <h3>Usage</h3>
+                <h3>{t('Usage')}</h3>
                 <p className="wizard-hint">
                   Who actually opens sentientdash.app, how often, and when — last {usage?.days ?? 30} days.
                 </p>
@@ -4127,14 +4243,14 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
                         {usage.users.map((person) => (
                           <div className="usage-row-group" key={person.email}>
                             <div className="usage-rowlabel">
-                              <strong>{person.email}</strong>
+                              <strong>{userDisplayName(person.email)}</strong>
                               <span className={`usage-role-pill ${person.role}`}>{person.role}</span>
                             </div>
                             {person.daily.map((d) => (
                               <div
                                 key={d.date}
                                 className="usage-cell"
-                                title={`${person.email} · ${d.date} · ${d.count} request${d.count === 1 ? '' : 's'}`}
+                                title={`${userDisplayName(person.email)} · ${d.date} · ${d.count} request${d.count === 1 ? '' : 's'}`}
                                 style={{ background: usageCellColor(d.count) }}
                               />
                             ))}
@@ -4178,7 +4294,7 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
                           {usage.users.map((person) => (
                             <div className="usage-detail-row" key={person.email}>
                               <div className="usage-detail-account">
-                                <strong>{person.email}</strong>
+                                <strong>{userDisplayName(person.email)}</strong>
                                 <span className={`usage-role-pill ${person.role}`}>{person.role}</span>
                               </div>
                               <div className="usage-detail-stats">
@@ -4204,11 +4320,12 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
                   </>
                 )}
               </section>
+              ) : null}
               </>
             ) : (
               <div className="settings-list-width">
                 <section className="settings-section">
-                  <h3>Queue production report</h3>
+                  <h3>{t('Queue production report')}</h3>
                   <p className="wizard-hint">
                     Same data Queue's own Admin overlay used to show in a second, separate panel --
                     one Reports tab here instead of two admin tools telling the same story.
@@ -4260,7 +4377,7 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
                     </section>
 
                     <section className="settings-section">
-                      <h3>Designer workload</h3>
+                      <h3>{t('Designer workload')}</h3>
                       <div className="settings-table">
                         {(report.designers || []).map((designer) => (
                           <div className="settings-row" key={designer.email}>
@@ -4284,7 +4401,7 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
                     </section>
 
                     <section className="settings-section">
-                      <h3>Assigned posts ({(report.assignedPosts || []).length})</h3>
+                      <h3>{t('Assigned posts')} ({(report.assignedPosts || []).length})</h3>
                       <div className="settings-table">
                         {(report.assignedPosts || []).map((post) => (
                           <div className="settings-row" key={post.id}>
@@ -4311,6 +4428,9 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
             )}
         </div>
       </div>
+      {showAddAccount ? (
+        <AddAccountWizard onClose={() => setShowAddAccount(false)} onAccountCreated={handleAccountCreated} />
+      ) : null}
     </div>
   );
 }

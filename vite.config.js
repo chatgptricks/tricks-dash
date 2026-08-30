@@ -279,6 +279,7 @@ export default defineConfig({
       input: {
         dashboard: resolve(__dirname, 'index.html'),
         queue: resolve(__dirname, 'queue.html'),
+        settings: resolve(__dirname, 'settings.html'),
       },
     },
   },
