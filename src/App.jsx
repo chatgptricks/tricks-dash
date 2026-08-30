@@ -2795,7 +2795,13 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
   const [usersLoading, setUsersLoading] = useState(false);
   const [usersNotice, setUsersNotice] = useState('');
   const [newUserEmail, setNewUserEmail] = useState('');
-  const [newUserRole, setNewUserRole] = useState('viewer');
+  // Admin is an orthogonal flag layered on top of a Queue role, same as
+  // everywhere else a person's role is shown (Queue's own roster appends
+  // "Admin" onto whatever operating role someone has, never treats it as a
+  // competing option on the same dropdown) -- not a separate "Access:
+  // Viewer/Admin" tier that used to sit next to an unrelated "Queue role"
+  // dropdown for what the backend treats as the same one is_admin boolean.
+  const [newUserIsAdmin, setNewUserIsAdmin] = useState(false);
   const [newUserOperatingRole, setNewUserOperatingRole] = useState('sales');
   const [newUserSlackId, setNewUserSlackId] = useState('');
   const [addingUser, setAddingUser] = useState(false);
@@ -3316,7 +3322,7 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
       const response = await apiFetch(`${API_BASE}/api/admin/users`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ email, role: newUserRole, operating_role: newUserOperatingRole, is_admin: String(newUserRole === 'admin'), slack_user_id: newUserSlackId.trim() }),
+        body: new URLSearchParams({ email, role: newUserIsAdmin ? 'admin' : 'viewer', operating_role: newUserOperatingRole, is_admin: String(newUserIsAdmin), slack_user_id: newUserSlackId.trim() }),
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) {
@@ -3325,7 +3331,7 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
       }
       setUsers(body.users || []);
       setNewUserEmail('');
-      setNewUserRole('viewer');
+      setNewUserIsAdmin(false);
       setNewUserOperatingRole('sales');
       setNewUserSlackId('');
       setUsersNotice(`Added @${email}.`);
@@ -3994,13 +4000,6 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
                       />
                     </label>
                     <label className="modal-field">
-                      <span>Access</span>
-                      <select value={newUserRole} onChange={(event) => setNewUserRole(event.target.value)}>
-                        <option value="viewer">Viewer</option>
-                        <option value="admin">Admin</option>
-                      </select>
-                    </label>
-                    <label className="modal-field">
                       <span>Queue role</span>
                       <select value={newUserOperatingRole} onChange={(event) => setNewUserOperatingRole(event.target.value)}>
                         <option value="sales">Sales</option><option value="vc">Viral Coordinator</option><option value="pd">Post Designer</option><option value="trainee">Trainee</option>
@@ -4009,6 +4008,10 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
                     <label className="modal-field">
                       <span>Slack user ID</span>
                       <input value={newUserSlackId} onChange={(event) => setNewUserSlackId(event.target.value.toUpperCase())} placeholder="U0123456789" />
+                    </label>
+                    <label className="modal-field-checkbox">
+                      <input type="checkbox" checked={newUserIsAdmin} onChange={(event) => setNewUserIsAdmin(event.target.checked)} />
+                      <span>Admin (full Settings access)</span>
                     </label>
                     <button type="submit" className="ghost-button primary" disabled={addingUser}>
                       {addingUser ? 'Adding…' : 'Add'}
