@@ -4396,20 +4396,22 @@ body {
 }
 
 .admin-page-header {
+  /* Same chrome as .topbar (Dashboard/Queue/Tracker/Insights) instead of a
+     one-off hardcoded-dark bar -- it used to stay near-black regardless of
+     the light/dark toggle while its text inherited the theme's --text
+     color, which turns near-black in light mode: header text became
+     invisible against its own background and people got stuck on the page
+     with no visible way back out. Following the same surface/line/shadow
+     tokens as everywhere else means it just follows the theme correctly,
+     and reads as the same tool rather than a bolted-on admin console. */
   display: flex;
   align-items: center;
   gap: 14px;
   padding: 16px 24px;
   border-bottom: 1px solid var(--line);
-  background: rgba(6, 6, 6, 0.96);
-  /* Background here is deliberately always dark, independent of the
-     light/dark theme toggle (the body below it does follow the theme).
-     Text/icon colors must therefore be hardcoded too rather than left to
-     inherit theme variables -- in light mode --text/--text-strong turn
-     near-black, which on this near-black bar made the whole header read as
-     a blank strip with an invisible "Back to dashboard" control (people
-     got stuck on the page with no visible way out). */
-  color: #f5f5f5;
+  background: rgba(var(--surface-1-rgb), 0.96);
+  color: var(--text-strong);
+  box-shadow: var(--shadow);
   position: sticky;
   top: 0;
   z-index: 5;
@@ -4422,17 +4424,7 @@ body {
   letter-spacing: -0.01em;
   text-align: center;
   flex: 1;
-  color: #f5f5f5;
-}
-
-.admin-page-header .ghost-button {
-  color: #f5f5f5;
-  border-color: rgba(255, 255, 255, 0.16);
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.admin-page-header .ghost-button:hover {
-  background: rgba(255, 255, 255, 0.12);
+  color: var(--text-strong);
 }
 
 .admin-page-header-spacer {
@@ -4913,6 +4905,103 @@ body {
   height: 30px;
   padding: 0 11px;
   font-size: 11px;
+}
+
+/* Role controls and Queue-account assignment used to be two separate lists
+   keyed off two different endpoints (/api/admin/users and
+   /api/admin/queue/designer-accounts) for what's mostly the same set of
+   people -- unified onto one row per person instead: role/Slack controls on
+   top, the accounts they manage in Queue underneath. */
+.settings-row-wide {
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.settings-row-accounts {
+  display: flex;
+  flex: 1 1 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(var(--edge), 0.07);
+}
+
+.settings-row-accounts-label {
+  color: rgba(var(--ink), 0.45);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  flex: 0 0 auto;
+}
+
+.queue-designer-account-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.queue-designer-account-chips button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 9px;
+  border: 1px solid rgba(var(--accent-rgb), 0.3);
+  border-radius: 999px;
+  background: rgba(var(--accent-rgb), 0.1);
+  color: var(--accent-ink);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.queue-designer-account-chips button:hover {
+  border-color: rgba(var(--accent-rgb), 0.55);
+  background: rgba(var(--accent-rgb), 0.16);
+}
+
+.queue-designer-account-chips em {
+  color: rgba(var(--ink), 0.4);
+  font-size: 11px;
+  font-style: normal;
+}
+
+.queue-designer-add {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.queue-designer-add select {
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid rgba(var(--edge), 0.1);
+  border-radius: 7px;
+  background: rgba(var(--edge), 0.04);
+  color: var(--text-strong);
+  font-size: 11px;
+}
+
+.queue-designer-add .ghost-button {
+  height: 28px;
+  padding: 0 10px;
+  font-size: 11px;
+}
+
+@media (max-width: 620px) {
+  .settings-row-accounts {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .queue-designer-add {
+    margin-left: 0;
+  }
 }
 
 .settings-unit {

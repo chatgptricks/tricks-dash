@@ -321,14 +321,6 @@ function AdminAssignmentTable({ tasks, onOpen, headingKey = 'allAssignedPosts', 
   return <section className="queue-admin-assignments"><header><div><p className="scheduler-eyebrow">{t(headingKey)}</p><h3>{tasks.length} {t(countKey)}</h3></div></header>{tasks.length ? <div className="queue-admin-assignment-table" role="table"><div className="queue-admin-assignment-head" role="row"><span>{t('post')}</span><span>{t('designer')}</span><span>{t('scheduled')}</span><span>{t('priority')}</span><span>{t('productionPoints')}</span><span>{t('status')}</span></div>{tasks.map((task) => <button type="button" role="row" key={task.id} className={`queue-admin-assignment-row state-${task.status} priority-${task.priority || 'medium'}${hotClass(task)}${task.isDraft ? ' is-draft' : ''}`} onClick={() => onOpen(task)}><span className="queue-admin-assignment-post">{cover(task) ? <img src={cover(task)} alt="" /> : <span className="queue-admin-assignment-empty">@</span>}<span><b>{task.post.title || accountMention(task.post.account) || t('post')}</b><small>{task.post.account ? accountMention(task.post.account) : t('accountToSelect')} · {task.brief || task.post.caption || t('post')}</small>{task.recommendedAccounts?.length ? <em>{task.recommendedAccounts.map((account) => `@${account}`).join(' · ')}</em> : null}{isHotTask(task) ? <i className="queue-hot-badge">🔥 {hotText(task)}</i> : null}</span></span><span className="queue-admin-assignment-designer"><b>{task.designerEmail ? displayName(task.designerEmail) : '—'}</b><small>{task.designerEmail || ''}</small></span><span className="queue-admin-assignment-time"><b>{task.scheduledDate ? displayDate(task.scheduledDate, language) : '—'}</b><small>{task.scheduledStartMinutes == null ? '—' : `${time(task.scheduledStartMinutes)} · ${task.durationMinutes} ${t('minutes')}`}</small></span><span className="queue-admin-assignment-priority"><PriorityBadge priority={task.priority} /></span><span className="queue-admin-assignment-pp"><b>{task.productionPoints} PP</b><small>{task.tags?.filter((tag) => tag !== 'hot').slice(0, 2).join(' · ') || t('noTags')}</small></span><span className="queue-admin-assignment-status"><i>{statusCopy(task.status, t, task.isDraft)}</i></span></button>)}</div> : <p className="queue-admin-assignment-empty-state">{t('noAssignedPosts')}</p>}</section>;
 }
 
-function AdminTools({ report, loading, error, onClose, onOpen }) {
-  const { t } = useQueuePreferences();
-  const totals = report?.totals || {};
-  const metric = (status, label) => <div key={status}><span>{label}</span><strong>{totals[status]?.count || 0}</strong><small>{totals[status]?.points || 0} PP</small></div>;
-  const priorityMetric = (priority) => <div key={priority} className={`priority-${priority}`}><span>{priorityCopy(priority, t)}</span><strong>{report?.priorities?.[priority]?.count || 0}</strong><small>{report?.priorities?.[priority]?.points || 0} PP</small></div>;
-  return <section className="queue-admin-tools"><header><div><p className="scheduler-eyebrow">{t('adminWorkspace')}</p><h2>{t('productionReports')}</h2></div><button type="button" onClick={onClose} aria-label={t('close')}><X size={16} /></button></header>{loading ? <div className="queue-admin-loading"><LoaderCircle className="queue-spin" />{t('loadingReport')}</div> : null}{error ? <p className="queue-admin-error">{error}</p> : null}{report ? <><div className="queue-admin-metrics">{metric('pool', t('inPool'))}{metric('scheduled', t('scheduled'))}{metric('in_progress', t('inProgress'))}{metric('completed', t('readyToClose'))}{metric('closed', t('closed'))}{['low', 'medium', 'high', 'urgent'].map(priorityMetric)}</div><div className="queue-admin-designers"><div><h3>{t('designerWorkload')}</h3><p>{t('workloadHelp')}</p></div><div className="queue-admin-designer-list">{report.designers.map((designer) => <span key={designer.email}><b>{displayName(designer.email)}</b><small>{designer.activeRequests} {t('activeRequests')} · {designer.productionPoints} PP · {designer.urgentRequests} {t('priorityUrgent')}</small><em>{designer.highPriorityRequests} {t('highPriority')} · {designer.closedRequests} {t('closed')} · {designer.averageActualMinutes == null ? '—' : `${designer.averageActualMinutes} min`} {t('averageTime')}</em></span>)}</div></div><a className="queue-admin-settings" href={`${import.meta.env.BASE_URL}?view=admin`} target="_blank" rel="noreferrer"><Settings size={14} />{t('openSettings')}</a><AdminAssignmentTable tasks={report.assignedPosts || []} onOpen={onOpen} /></> : null}</section>;
-}
-
 function TicketPanel({ tickets, loading, error, onClose, onReview, canReview }) {
   const { t, language } = useQueuePreferences();
   const [tab, setTab] = useState('pending');
@@ -652,13 +644,9 @@ function QueueApp({ user }) {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [draft, setDraft] = useState(() => { try { return JSON.parse(window.localStorage.getItem(DRAFT_KEY) || '[]'); } catch { return []; } });
   const [liveStatus, setLiveStatus] = useState('connecting');
-  const [adminOpen, setAdminOpen] = useState(false);
   const [archive, setArchive] = useState(false);
   const [poolDropActive, setPoolDropActive] = useState(false);
   const [designerScope, setDesignerScope] = useState('');
-  const [report, setReport] = useState(null);
-  const [reportLoading, setReportLoading] = useState(false);
-  const [reportError, setReportError] = useState('');
   const [ticketsOpen, setTicketsOpen] = useState(false);
   const [tickets, setTickets] = useState([]);
   const [ticketsLoading, setTicketsLoading] = useState(false);
@@ -676,7 +664,6 @@ function QueueApp({ user }) {
   const loadRef = useRef(null);
   const liveRevisionRef = useRef(0);
   const liveRefreshTimerRef = useRef(null);
-  const adminOpenRef = useRef(adminOpen);
   const ticketsOpenRef = useRef(ticketsOpen);
   const loadedOnceRef = useRef(false);
 
@@ -719,7 +706,6 @@ function QueueApp({ user }) {
   useEffect(() => { json('/api/dashboard/me').then(setViewer).catch(() => {}); }, []);
   useEffect(() => { draftRef.current = draft; }, [draft]);
   useEffect(() => { openRef.current = open; }, [open]);
-  useEffect(() => { adminOpenRef.current = adminOpen; }, [adminOpen]);
   useEffect(() => { ticketsOpenRef.current = ticketsOpen; }, [ticketsOpen]);
   useEffect(() => { const id = Number(new URLSearchParams(window.location.search).get('task')); if (!id) return; json(`/api/dashboard/queue/v2/requests/${id}`).then(({ request }) => { setOpen(request); if (request.scheduledDate) setDate(request.scheduledDate); }).catch((err) => notify(err.message, 'error')); }, [notify]);
   useEffect(() => { if (!open?.id) { setHistory([]); return; } setDetailNotice(null); setHistoryLoading(true); json(`/api/dashboard/queue/v2/requests/${open.id}/history`).then((result) => setHistory(result.events || [])).catch(() => setHistory([])).finally(() => setHistoryLoading(false)); }, [open?.id]);
@@ -757,14 +743,6 @@ function QueueApp({ user }) {
   }, [applyDraft, notify, t]);
   persistDraftsRef.current = persistDrafts;
 
-  const loadReport = useCallback(async ({ silent = false } = {}) => {
-    if (!silent) setReportLoading(true);
-    setReportError('');
-    try { setReport(await json('/api/dashboard/queue/v2/admin-report')); }
-    catch (err) { setReportError(err.message || 'Could not load the admin report.'); }
-    finally { if (!silent) setReportLoading(false); }
-  }, []);
-
   const loadTickets = useCallback(async ({ silent = false } = {}) => {
     if (!silent) setTicketsLoading(true);
     setTicketsError('');
@@ -794,13 +772,12 @@ function QueueApp({ user }) {
           if (openRef.current?.id) {
             json(`/api/dashboard/queue/v2/requests/${openRef.current.id}/history`).then((result) => setHistory(result.events || [])).catch(() => {});
           }
-          if (adminOpenRef.current) loadReport({ silent: true });
           if (ticketsOpenRef.current) loadTickets({ silent: true });
         }, 90);
       },
     });
     return () => { controller.abort(); window.clearTimeout(liveRefreshTimerRef.current); };
-  }, [data?.viewer?.email, loadReport, loadTickets]);
+  }, [data?.viewer?.email, loadTickets]);
 
   const coordinator = data?.viewer && (data.viewer.isAdmin || data.viewer.operatingRoles?.includes('vc'));
   const pool = useMemo(() => {
@@ -839,7 +816,6 @@ function QueueApp({ user }) {
     return poolRequests.length > 0 && poolRequests.every((task) => task.isHot || task.tags?.includes('hot')) && pickPool.length > 0;
   }, [data, pickPool]);
   const pickAvailable = !coordinator && !assigned.some((task) => ['scheduled', 'in_progress'].includes(task.status)) && pickPool.length > 0;
-  const toggleAdminTools = async () => { const next = !adminOpen; setAdminOpen(next); if (next && !reportLoading) await loadReport(); };
   const toggleTickets = async () => { const next = !ticketsOpen; setTicketsOpen(next); if (next) await loadTickets(); };
   const pickRequest = async (task) => {
     setPickBusy(true);
@@ -939,7 +915,7 @@ function QueueApp({ user }) {
   const reviewTicket = async (ticketId, reviewAction) => {
     try {
       await json(`/api/dashboard/queue/v2/tickets/${ticketId}/review`, { method: 'POST', body: new URLSearchParams({ action: reviewAction }) });
-      await Promise.all([load({ silent: true }), loadTickets({ silent: true }), adminOpen ? loadReport({ silent: true }) : Promise.resolve()]);
+      await Promise.all([load({ silent: true }), loadTickets({ silent: true })]);
       notify(t('ticketReviewed'));
     } catch (err) {
       setTicketsError(err.message || 'Could not review request.');
@@ -968,7 +944,7 @@ function QueueApp({ user }) {
           {coordinator ? <button type="button" className="queue-create-button" onClick={() => setCreateOpen(true)}><Plus size={14} />{t('createPost')}</button> : null}
           {data?.viewer ? <button type="button" className={`queue-ticket-button${ticketsOpen ? ' is-active' : ''}`} onClick={toggleTickets}><ClipboardList size={14} />{t('tickets')}{data.pendingTicketCount ? <b>{data.pendingTicketCount}</b> : null}</button> : null}
           {pickAvailable ? <button type="button" className={`queue-pick-button${pickOpen ? ' is-active' : ''}`} onClick={() => setPickOpen(true)}><Check size={14} />{t('pick')}</button> : null}
-          {data?.viewer?.isAdmin ? <button type="button" className={`queue-admin-button${adminOpen ? ' is-active' : ''}`} onClick={toggleAdminTools}><BarChart3 size={14} />{t('admin')}</button> : null}
+          {data?.viewer?.isAdmin ? <a className="queue-admin-button" href={`${import.meta.env.BASE_URL}?view=admin&settingsTab=reports`} target="_blank" rel="noreferrer"><BarChart3 size={14} />{t('admin')}</a> : null}
         </div>
         <nav className="queue-actions-nav" aria-label={t('dashboard')}>
           <a href={`${import.meta.env.BASE_URL}tracker.html`} target="_blank" rel="noreferrer">Tracker</a><a href={`${import.meta.env.BASE_URL}insights.html`} target="_blank" rel="noreferrer">Insights</a><span className="queue-nav-current" aria-current="page">Queue</span><a href={import.meta.env.BASE_URL} target="_blank" rel="noreferrer"><ArrowLeft size={14} />{t('dashboard')}</a>
@@ -981,7 +957,7 @@ function QueueApp({ user }) {
     {toast ? <div className={`queue-toast is-${toast.type}`} role="status">{toast.type === 'success' ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}<span>{toast.message}</span><button type="button" onClick={() => setToast(null)}><X size={14} /></button></div> : null}
     {loading ? <section className="queue-state"><LoaderCircle className="queue-spin" /><p>{t('loadingSchedule')}</p></section> : null}
     {error ? <section className="queue-state queue-error"><p>{error}</p><button type="button" onClick={load}>{t('tryAgain')}</button></section> : null}
-    {data ? adminOpen ? <AdminTools report={report} loading={reportLoading} error={reportError} onClose={() => setAdminOpen(false)} onOpen={setOpen} /> : <>
+    {data ? <>
       <section className="scheduler-toolbar"><div><p className="scheduler-eyebrow">{coordinator ? t('coordinatorSchedule') : t('mySchedule')}</p><h2>{displayDate(date, language)}</h2></div>{coordinator ? <label className="scheduler-designer-filter">{t('assignedView')}<select value={designerScope} onChange={(event) => setDesignerScope(event.target.value)}><option value="">{t('allUsers')}</option>{(data.schedulerUsers || data.designers).map((person) => <option key={person.email} value={person.email}>{displayName(person.email)}</option>)}</select></label> : null}<div className="scheduler-nav"><button type="button" aria-label="Previous day" onClick={() => setDate(shiftDay(date, -1))}><ChevronLeft size={17} /></button><button type="button" onClick={() => setDate(DAY())}>{t('today')}</button><button type="button" aria-label="Next day" onClick={() => setDate(shiftDay(date, 1))}><ChevronRight size={17} /></button></div><button type="button" className={`scheduler-archive-toggle${archive ? ' is-on' : ''}`} onClick={() => setArchive((value) => !value)}><Archive size={14} />{archive ? t('liveQueue') : t('archive')}</button>{coordinator && draft.length ? <button type="button" className="scheduler-submit" onClick={submit}><Send size={14} />{t('submit')} {draft.length} {draft.length > 1 ? t('changes') : t('change')}</button> : null}</section>
       {coordinator && !archive ? <section className={`scheduler-pool${poolDropActive ? ' is-drop-target' : ''}`} onDragOver={poolDragOver} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setPoolDropActive(false); }} onDrop={poolDrop} aria-label={t('poolDropHint')}><header><div><p className="scheduler-eyebrow">{t('productionPool')}</p><h2>{pool.length} {t('readyToSchedule')}</h2></div><small>{poolDropActive ? t('poolDropHint') : t('visibleSchedule')}</small></header><div className="scheduler-pool-list">{pool.map((task) => <PoolCard key={task.id} task={task} onOpen={setOpen} />)}{!pool.length ? <p className="scheduler-empty">{t('emptyPool')}</p> : null}</div></section> : null}
       {archive ? <section className="queue-archive-list"><header><p className="scheduler-eyebrow">{t('archive')}</p><h2>{archived.length} {t('cancelled')}</h2></header>{archived.length ? archived.map((task) => <button type="button" key={task.id} className={`priority-${task.priority || 'medium'}${hotClass(task)}`} onClick={() => setOpen(task)}><span>{cover(task) ? <img src={cover(task)} alt="" /> : '@'}</span><div><b>@{task.post.account}</b><small>{task.cancellationReason || t('cancelled')}</small>{isHotTask(task) ? <i className="queue-hot-badge">🔥 {hotText(task)}</i> : null}</div><em>{displayTimestamp(task.updatedAt, language)}</em></button>) : <p className="scheduler-empty">{t('noArchived')}</p>}</section> : <>{coordinator && draft.length ? <><DraftAccounts draft={draft} designers={data.designers} onAccountsChange={changeDraftAccounts} /><div className="scheduler-draft-actions"><span><Clock3 size={13} />{t('sharedDrafts')}</span><button type="button" onClick={clearDrafts}>{t('clearDrafts')}</button></div></> : null}<Scheduler data={data} draft={draft} setDraft={setDraft} onDraftChange={persistDrafts} selectedDate={date} designerScope={designerScope} onOpen={setOpen} onError={(message) => notify(message, 'error')} onCreateTimeBlock={createTimeBlock} />{coordinator ? <AdminAssignmentTable tasks={upcoming} onOpen={setOpen} headingKey="upcomingProduction" countKey="activeRequests" /> : <DesignerAssignments tasks={assigned} onOpen={setOpen} />}</>}

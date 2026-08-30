@@ -127,11 +127,12 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     checks['Pool and scheduled blocks render'] = document.querySelectorAll('.queue-pool-card').length === 1 && document.querySelectorAll('.scheduler-block').length === 2;
     checks['Account badge and resize handles render'] = Boolean(document.querySelector('.scheduler-account-badges')) && document.querySelectorAll('.scheduler-resize-handle').length >= 2;
     checks['All dashboard users render as PD-capable'] = document.querySelectorAll('.scheduler-row').length === 4 && document.querySelectorAll('.scheduler-row.is-non-queue-user').length === 0;
-    await click(document.querySelector('.queue-admin-button'));
-    checks['Admin Overview hides scheduler'] = !document.querySelector('.scheduler-canvas') && !document.querySelector('.scheduler-pool');
-    checks['Admin Overview links to full Settings instead of embedding user management'] = Boolean(document.querySelector('.queue-admin-settings')) && !document.querySelector('.queue-user-management-list');
-    await click(document.querySelector('.queue-admin-tools > header button'));
-    checks['Closing Admin restores scheduler'] = Boolean(document.querySelector('.scheduler-canvas'));
+    // Admin is a plain link to the unified Settings tool's Reports tab now --
+    // no more separate overlay/report-fetching duplicated here.
+    const adminLink = document.querySelector('.queue-admin-button');
+    checks['Admin links to the unified Settings Reports tab'] = adminLink?.tagName === 'A'
+      && /\?view=admin&settingsTab=reports/.test(adminLink.getAttribute('href') || '')
+      && adminLink.getAttribute('target') === '_blank';
 
     await click(document.querySelector('.queue-ticket-button'));
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 50)); });
