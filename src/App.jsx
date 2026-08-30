@@ -20,6 +20,7 @@ import {
   LogOut,
   MessageCircle,
   MessageSquare,
+  Moon,
   MoreHorizontal,
   Plus,
   Power,
@@ -33,6 +34,7 @@ import {
   Send,
   Settings,
   SlidersHorizontal,
+  Sun,
   TrendingUp,
   Users,
   X,
@@ -248,35 +250,240 @@ function useSectionFavicon(section) {
 // ---------------------------------------------------------------------------
 // Language + theme
 // ---------------------------------------------------------------------------
-// Two compact toggles. Language is a two-state switch rather than a dropdown
-// because there are exactly two options -- a select would be a click more for
-// the same result.
-function PrefToggles() {
-  const { lang, theme, setLang, setTheme } = usePrefs();
+// One Settings entry point (gear icon) instead of a prefs strip, a separate
+// admin gear, and an account-menu avatar as three unrelated controls. Same
+// shape as the Settings button on Queue/Tracker/Insights: accent, theme and
+// language live together with account info and, for admins, the same
+// designer-account assignment tool Queue's Admin Tools panel exposes.
+function SettingsMenu({ email, isAdmin, onSignOut, onOpenAdminSettings }) {
+  const { t, lang, theme, setLang, setTheme } = usePrefs();
+  const [accent, setAccentState] = useState(() => {
+    try { return window.localStorage.getItem('sentient.accent') || 'lime'; } catch { return 'lime'; }
+  });
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  // Shares the exact 'sentient.accent' key + data-accent attribute Queue
+  // already uses, so picking an accent on either page carries over to the
+  // other rather than being a second, independent preference.
+  useEffect(() => {
+    document.documentElement.setAttribute('data-accent', accent);
+  }, [accent]);
+
+  const setAccent = (value) => {
+    try { window.localStorage.setItem('sentient.accent', value); } catch { /* private mode */ }
+    setAccentState(value);
+  };
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onPointerDown = (event) => {
+      if (!ref.current?.contains(event.target)) setOpen(false);
+    };
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [open]);
+
   return (
-    <div className="pref-toggles">
-      <div className="lang-toggle" role="group" aria-label="Language">
-        {['en', 'es'].map((code) => (
-          <button
-            key={code}
-            type="button"
-            className={lang === code ? 'lang-option is-on' : 'lang-option'}
-            onClick={() => setLang(code)}
-            aria-pressed={lang === code}
-          >
-            {code === 'en' ? 'ENG' : 'ES'}
-          </button>
-        ))}
-      </div>
+    <div className="settings-menu" ref={ref}>
       <button
         type="button"
-        className="theme-toggle"
-        onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-        aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
-        title={theme === 'dark' ? 'Light theme' : 'Dark theme'}
+        className={open ? 'settings-menu-trigger is-active' : 'settings-menu-trigger'}
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        aria-label={t('Settings')}
+        title={t('Settings')}
       >
-        {theme === 'dark' ? '☀️' : '🌙'}
+        <Settings size={16} />
       </button>
+      {open ? (
+        <div className="settings-menu-panel" role="menu">
+          <div className="settings-menu-section">
+            <span>{t('Accent color')}</span>
+            <div className="settings-accent-picker">
+              {['lime', 'blue', 'coral'].map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  className={accent === value ? `accent-${value} is-on` : `accent-${value}`}
+                  onClick={() => setAccent(value)}
+                  aria-label={`${value} accent`}
+                />
+              ))}
+            </div>
+          </div>
+          <div className="settings-menu-section">
+            <span>{t('Theme')}</span>
+            <div className="settings-menu-segment">
+              <button type="button" className={theme === 'dark' ? 'is-on' : ''} onClick={() => setTheme('dark')}><Moon size={13} />{t('Dark')}</button>
+              <button type="button" className={theme === 'light' ? 'is-on' : ''} onClick={() => setTheme('light')}><Sun size={13} />{t('Light')}</button>
+            </div>
+          </div>
+          <div className="settings-menu-section">
+            <span>{t('Language')}</span>
+            <div className="lang-toggle" role="group" aria-label="Language">
+              {['en', 'es'].map((code) => (
+                <button
+                  key={code}
+                  type="button"
+                  className={lang === code ? 'lang-option is-on' : 'lang-option'}
+                  onClick={() => setLang(code)}
+                  aria-pressed={lang === code}
+                >
+                  {code === 'en' ? 'ENG' : 'ES'}
+                </button>
+              ))}
+            </div>
+          </div>
+          {isAdmin ? (
+            <div className="settings-menu-section settings-menu-admin">
+              <span>{t('Admin')}</span>
+              <button type="button" className="settings-menu-link" onClick={() => { setOpen(false); onOpenAdminSettings(); }}>
+                <Settings size={13} />
+                {t('Open full settings')}
+              </button>
+              <AdminAccountAssignments />
+            </div>
+          ) : null}
+          <div className="settings-menu-footer">
+            <small>{email}</small>
+            <button type="button" className="settings-menu-signout" onClick={onSignOut}>
+              <LogOut size={13} />
+              {t('Sign out')}
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+// Mirrors Queue's AdminUserManagement (queue.jsx) against the same
+// /api/admin/queue/designer-accounts endpoints -- duplicated rather than
+// imported since Queue is a separate Vite entry with its own bundle, but
+// kept intentionally close so the two stay easy to compare and update
+// together.
+function AdminAccountAssignments() {
+  const { t } = usePrefs();
+  const [users, setUsers] = useState([]);
+  const [designerAccounts, setDesignerAccounts] = useState([]);
+  const [accounts, setAccounts] = useState([]);
+  const [choices, setChoices] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState('');
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const [userRes, designerRes, accountRes] = await Promise.all([
+        apiFetch(`${API_BASE}/api/admin/users`),
+        apiFetch(`${API_BASE}/api/admin/queue/designer-accounts`),
+        apiFetch(`${API_BASE}/api/admin/accounts`),
+      ]);
+      const [userBody, designerBody, accountBody] = await Promise.all([
+        userRes.ok ? userRes.json() : {},
+        designerRes.ok ? designerRes.json() : {},
+        accountRes.ok ? accountRes.json() : {},
+      ]);
+      setUsers(userBody.users || []);
+      setDesignerAccounts(designerBody.designers || []);
+      setAccounts((accountBody.accounts || []).filter((account) => account.group === 'sentient' && account.is_active !== false));
+    } catch (cause) {
+      setError(cause.message || t('Could not update account ownership.'));
+    } finally {
+      setLoading(false);
+    }
+  }, [t]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const updateAccount = async (designerEmail, accountHandle, method) => {
+    const key = `${designerEmail}:${accountHandle}`;
+    setBusy(key);
+    setError('');
+    try {
+      const query = new URLSearchParams({ designer_email: designerEmail, account_handle: accountHandle });
+      const url = `${API_BASE}/api/admin/queue/designer-accounts${method === 'DELETE' ? `?${query.toString()}` : ''}`;
+      const response = await apiFetch(url, method === 'POST' ? { method, body: query } : { method });
+      if (!response.ok) {
+        const detail = await response.json().catch(() => ({}));
+        throw new Error(detail.detail || `HTTP ${response.status}`);
+      }
+      const body = await response.json();
+      setDesignerAccounts(body.designers || []);
+      setChoices((current) => ({ ...current, [designerEmail]: '' }));
+    } catch (cause) {
+      setError(cause.message || t('Could not update account ownership.'));
+    } finally {
+      setBusy('');
+    }
+  };
+
+  if (loading) {
+    return <div className="settings-admin-loading"><RotateCcw size={13} className="spin" />{t('Loading users…')}</div>;
+  }
+
+  return (
+    <div className="settings-admin-accounts">
+      {error ? <p className="settings-admin-error">{error}</p> : null}
+      {users.length ? (
+        <div className="settings-admin-account-list">
+          {users.map((user) => {
+            const managed = designerAccounts.find((item) => item.email === user.email) || { accounts: [] };
+            const available = accounts.filter((account) => !managed.accounts.includes(account.handle));
+            return (
+              <article key={user.email}>
+                <header><b>{user.email}</b></header>
+                <div className="settings-admin-account-chips">
+                  {managed.accounts.map((handle) => (
+                    <button
+                      type="button"
+                      key={handle}
+                      title={t('Remove account')}
+                      onClick={() => updateAccount(user.email, handle, 'DELETE')}
+                      disabled={Boolean(busy)}
+                    >
+                      @{handle} <X size={11} />
+                    </button>
+                  ))}
+                  {!managed.accounts.length ? <em>—</em> : null}
+                </div>
+                <div className="settings-admin-account-add">
+                  <select
+                    value={choices[user.email] || ''}
+                    aria-label={`${t('Choose Sentient account')} ${user.email}`}
+                    onChange={(event) => setChoices((current) => ({ ...current, [user.email]: event.target.value }))}
+                    disabled={Boolean(busy)}
+                  >
+                    <option value="">{t('Choose Sentient account')}</option>
+                    {available.map((account) => (
+                      <option key={account.handle} value={account.handle}>@{account.handle}</option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => updateAccount(user.email, choices[user.email], 'POST')}
+                    disabled={!choices[user.email] || Boolean(busy)}
+                  >
+                    {t('Assign')}
+                  </button>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="settings-admin-empty">{t('No users available.')}</p>
+      )}
     </div>
   );
 }
@@ -662,13 +869,13 @@ function buildDatePresets(ranges) {
 
 function DevRolePreview({ isDev }) {
   const [open, setOpen] = useState(false);
-  const active = window.localStorage.getItem('sentient.queueRolePreview') || '';
+  const active = window.sessionStorage.getItem('sentient.queueRolePreview') || '';
   if (!isDev) return null;
   const label = { sales: 'Sales', pd: 'Post Designer', vc: 'Viral Coordinator', admin: 'Admin' }[active] || 'Dev';
   const choose = (event) => {
     const role = event.target.value;
-    if (role) window.localStorage.setItem('sentient.queueRolePreview', role);
-    else window.localStorage.removeItem('sentient.queueRolePreview');
+    if (role) window.sessionStorage.setItem('sentient.queueRolePreview', role);
+    else window.sessionStorage.removeItem('sentient.queueRolePreview');
     window.location.reload();
   };
   return <div className="dev-role-preview"><button type="button" onClick={() => setOpen((value) => !value)} aria-expanded={open}><span>DEV</span>{label}</button>{open ? <div className="dev-role-preview-panel"><strong>Role preview</strong><p>Only visible to Esteban.</p><label>Active role<select value={active} onChange={choose}><option value="">Dev · full access</option><option value="sales">Sales</option><option value="pd">Post Designer</option><option value="vc">Viral Coordinator</option><option value="admin">Admin</option></select></label></div> : null}</div>;
@@ -1606,22 +1813,14 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
                   <ExternalLink size={12} className="tool-link-out" aria-hidden="true" />
                 </a>
 
-                <PrefToggles />
-
                 <span className="tool-divider" aria-hidden="true" />
 
-                {isAdmin ? (
-                  <button
-                    className="tool-icon"
-                    type="button"
-                    onClick={() => setShowSettings(true)}
-                    title="Settings — thresholds, history import, refresh"
-                    aria-label="Settings"
-                  >
-                    <Settings size={15} className={refreshing ? 'spin' : ''} />
-                  </button>
-                ) : null}
-                <AccountMenu email={userEmail} onSignOut={onSignOut} />
+                <SettingsMenu
+                  email={userEmail}
+                  isAdmin={isAdmin}
+                  onSignOut={onSignOut}
+                  onOpenAdminSettings={() => setShowSettings(true)}
+                />
               </div>
 
             </div>
@@ -2342,51 +2541,8 @@ function ListEditor({ draft, accounts, onSave, onDelete, onClose }) {
 // pixel from a navigation link, with nothing to tell them apart. Behind a menu
 // it takes a deliberate second click, and the menu is also the only place the
 // signed-in email was ever shown (it used to hide in a title attribute).
-function AccountMenu({ email, onSignOut }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-
-  useEffect(() => {
-    if (!open) return undefined;
-    const onPointerDown = (event) => {
-      if (!ref.current?.contains(event.target)) setOpen(false);
-    };
-    const onKeyDown = (event) => {
-      if (event.key === 'Escape') setOpen(false);
-    };
-    document.addEventListener('mousedown', onPointerDown);
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('mousedown', onPointerDown);
-      document.removeEventListener('keydown', onKeyDown);
-    };
-  }, [open]);
-
-  const initial = (email || '?').trim().charAt(0).toUpperCase();
-
-  return (
-    <div className="account-menu" ref={ref}>
-      <button
-        type="button"
-        className="account-menu-trigger"
-        onClick={() => setOpen((value) => !value)}
-        aria-expanded={open}
-        aria-label={email ? `Account: ${email}` : 'Account'}
-      >
-        {initial}
-      </button>
-      {open ? (
-        <div className="account-menu-panel" role="menu">
-          <p className="account-menu-email">{email || 'Signed in'}</p>
-          <button type="button" role="menuitem" className="account-menu-item" onClick={onSignOut}>
-            <LogOut size={14} />
-            Sign out
-          </button>
-        </div>
-      ) : null}
-    </div>
-  );
-}
+// AccountMenu's avatar-trigger + sign-out panel is now folded into
+// SettingsMenu above (one entry point instead of two adjacent controls).
 
 // A filter that lives behind a compact trigger instead of an always-open card.
 //

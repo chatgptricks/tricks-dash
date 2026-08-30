@@ -1,12 +1,14 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import ReactDOM from 'react-dom/client';
-import { AlertTriangle, Archive, ArrowLeft, BarChart3, BellRing, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Clock3, Download, History, LoaderCircle, LogOut, Moon, Palette, Paperclip, Pencil, Radio, Send, Settings, Sun, WifiOff, X } from 'lucide-react';
+import { AlertTriangle, Archive, ArrowLeft, Ban, BarChart3, BellRing, CalendarDays, CalendarPlus, Check, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Clock3, Coffee, Download, History, LoaderCircle, LocateFixed, LogOut, Moon, Paperclip, Pencil, Plus, Radio, Send, Settings, Sun, TimerReset, WifiOff, X } from 'lucide-react';
 import { browserPopupRedirectResolver, getRedirectResult, onAuthStateChanged, signOut } from 'firebase/auth';
 import { describeSignInError, firebaseAuth as auth, startGoogleSignIn } from './firebase';
 import { clearSsoCookie, startSsoRefresh, trySsoSignIn } from './sso';
 import { API_BASE, apiFetch } from './api';
 import { PrefsProvider } from './prefsContext';
 import { SelectedPost, SlideDownload } from './postDetail';
+import chatgptricksProfileImage from './assets/chatgptricks-profile.jpg';
+import traselvelorealProfileImage from './assets/traselveloreal-profile.jpg';
 import { QUEUE_DAY_END, QUEUE_DAY_START, planQueueDrop } from './queuePlanner';
 import { followQueueLive } from './queueLive';
 import './queue.css';
@@ -14,30 +16,111 @@ import './queue.css';
 const DAY = (value = new Date()) => `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
 const shiftDay = (date, amount) => { const value = new Date(`${date}T12:00:00`); value.setDate(value.getDate() + amount); return DAY(value); };
 const time = (minutes) => { const normalized = ((minutes % 1440) + 1440) % 1440; return `${String(Math.floor(normalized / 60)).padStart(2, '0')}:${String(normalized % 60).padStart(2, '0')}`; };
+const minutesFromTime = (value) => { const [hour, minute] = String(value || '00:00').split(':').map(Number); return Math.max(0, Math.min(1430, hour * 60 + minute)); };
 const currentMinutes = (value = new Date()) => value.getHours() * 60 + value.getMinutes();
 const cover = (task) => task?.post?.coverUrl ? `${API_BASE}${task.post.coverUrl}` : '';
+const accountMention = (value) => { const clean = String(value || '').trim().replace(/^@/, ''); return clean ? `@${clean}` : ''; };
 const locale = (language) => language === 'es' ? 'es-CR' : 'en-US';
 const displayDate = (value, language) => new Date(`${value}T12:00:00`).toLocaleDateString(locale(language), { weekday: 'long', month: 'short', day: 'numeric' });
 const displayTimestamp = (value, language) => new Date(value).toLocaleString(locale(language), { timeZone: 'America/Costa_Rica', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 const DRAFT_KEY = 'sentient.queueDrafts.v2';
 const PRIORITIES = ['low', 'medium', 'high', 'urgent'];
 let activeQueueDragId = null;
+const ACCOUNT_PROFILE_FALLBACKS = { chatgptricks: chatgptricksProfileImage, traselveloreal: traselvelorealProfileImage };
+const USER_DISPLAY_NAMES = Object.freeze({
+  'esteban@sentientagency.io': 'Esteban',
+  'louis@sentientagency.io': 'Louis',
+  'ivan@sentientagency.io': 'Ivan',
+  'sergio@sentientagency.io': 'Sergio',
+  'victor@sentientagency.io': 'Victor',
+  'egor@sentientagency.io': 'Egor',
+  'santiagoflhi@gmail.com': 'Santiago',
+  'dsflorezl@gmail.com': 'Florez',
+  'sara1107giraldo@gmail.com': 'Sara',
+  'sebastianruizurquijo@gmail.com': 'Sebastian',
+  'tevi@sentientagency.io': 'Tevi',
+  'gabo@sentientagency.io': 'Gabo',
+});
+const displayName = (value) => {
+  const raw = String(value || '').trim();
+  const key = raw.toLowerCase();
+  if (USER_DISPLAY_NAMES[key]) return USER_DISPLAY_NAMES[key];
+  const local = key.includes('@') ? key.split('@')[0] : key;
+  const words = local.replace(/[0-9]+/g, '').replace(/[._-]+/g, ' ').trim().split(/\s+/).filter(Boolean);
+  return words.length ? words.map((word) => `${word.slice(0, 1).toUpperCase()}${word.slice(1).toLowerCase()}`).join(' ') : 'User';
+};
+const initialsFor = (value) => displayName(value).split(/\s+/).map((word) => word.slice(0, 1)).join('').slice(0, 2).toUpperCase();
+const userAvatar = (value) => {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (raw.startsWith('/api/')) return `${API_BASE}${raw}`;
+  return raw;
+};
 
 const COPY = {
   en: {
-    productionQueue: 'Production Queue', dashboard: 'Dashboard', admin: 'Admin', coordinatorSchedule: 'Coordinator schedule', mySchedule: 'My production schedule', today: 'Today', submit: 'Submit', change: 'change', changes: 'changes', productionPool: 'Production pool', readyToSchedule: 'ready to schedule', visibleSchedule: 'The window shows 8 hours. Scroll to explore the full 24-hour day.', emptyPool: 'No requests are waiting in the pool.', myAssignedWork: 'My assigned work', upcomingProduction: 'Upcoming production', activeRequest: 'active request', activeRequests: 'active requests', noActiveAssignments: 'No active assignments', emptyAssignments: 'When a coordinator schedules work for you, it will appear here.', post: 'Post', scheduled: 'Scheduled', deadline: 'Deadline', scope: 'Scope', status: 'Status', noTags: 'No tags', designer: 'Designer', now: 'Now', loadingSchedule: 'Loading schedule…', tryAgain: 'Try again', queueAccess: 'Queue is available to production coordinators and designers.', rolePreview: 'Role preview', onlyEsteban: 'Only visible to Esteban.', activeRole: 'Active role', devFullAccess: 'Dev · full access', postDesigner: 'Post Designer', viralCoordinator: 'Viral Coordinator', productionReports: 'Production reports', adminWorkspace: 'Admin workspace', loadingReport: 'Loading report…', inPool: 'In pool', inProgress: 'In progress', readyToClose: 'Ready to close', closed: 'Closed', cancelled: 'Cancelled', designerWorkload: 'Designer workload', workloadHelp: 'Active work, delivery health and actual production time.', allAssignedPosts: 'All assigned posts', assignedPostsCount: 'assigned posts', noAssignedPosts: 'No assigned posts yet.', openSettings: 'Open dashboard settings', startWork: 'Start work', markComplete: 'Mark complete', publishedLink: 'Published Instagram link', closeRequest: 'Close request', returnInProgress: 'Return to in progress', openPublished: 'Open published post', cancellationReason: 'Cancellation reason (optional)', cancelRequest: 'Cancel request', brief: 'Brief', notes: 'Notes', references: 'References', minutes: 'minutes', sourcePost: 'Source post', assignment: 'Assignment', recommendedAccounts: 'Recommended accounts', editRequest: 'Edit request', saveChanges: 'Save changes', cancel: 'Cancel', productionPoints: 'Production points', tags: 'Tags', referenceLinks: 'Reference links', oneLinkPerLine: 'One link per line', signIn: 'Sign in with Google', signingIn: 'Signing in…', signInHelp: 'Sign in with Google to open your production schedule.', allDesigners: 'All designers', noAccounts: 'No accounts yet', noRecommendedAccount: 'No recommended account', unsavedDrafts: 'Draft schedule changes are saved in this browser.', clearDrafts: 'Discard drafts', archive: 'Archive', liveQueue: 'Live Queue', noArchived: 'No cancelled requests.', extra: 'NEXT DAY', overdue: 'OVERDUE', atRisk: 'AT RISK', attachments: 'Files & references', uploadFiles: 'Upload files', noFiles: 'No files attached.', history: 'Activity history', noHistory: 'No activity yet.', resendSlack: 'Resend Slack DM', slackSent: 'Slack DM sent.', slackFailed: 'Slack DM failed. Check the user Slack ID and try again.', requestUpdated: 'Request updated.', scheduleSubmitted: 'Schedule submitted.', deliveryHealth: 'Delivery health', onTime: 'On-time rate', averageTime: 'Average actual time', completedJobs: 'Closed jobs', draftsSaved: 'Drafts saved', movedJobs: 'reflowed jobs', close: 'Close', filesUploaded: 'Files uploaded.', deadlineError: 'This request cannot fit before its deadline.', invalidDay: 'Requests can be scheduled on any day.', assignedView: 'Designer view', uploadFailed: 'Some files could not be uploaded.', sourceCaption: 'Source caption', cancelledReason: 'Cancellation reason', draftWarning: 'You have unsubmitted Queue changes.', movedAfterActive: 'Another post is already in progress. This request was moved after it and remains scheduled.',
-    priority: 'Priority', priorityLow: 'Low', priorityMedium: 'Medium', priorityHigh: 'High', priorityUrgent: 'Urgent', priorityMix: 'Priority mix', highPriority: 'High priority', tentative: 'Pending submit', tentativeBy: 'Temporary placement by', liveConnected: 'Live', liveConnecting: 'Connecting', liveOffline: 'Reconnecting', sharedDrafts: 'Temporary changes are shared live with assigned designers.', draftSyncFailed: 'The temporary placement could not be shared. Queue was refreshed.',
+    productionQueue: 'Production Queue', dashboard: 'Dashboard', admin: 'Admin', coordinatorSchedule: 'Coordinator schedule', mySchedule: 'My production schedule', today: 'Today', submit: 'Submit', change: 'change', changes: 'changes', productionPool: 'Production pool', readyToSchedule: 'ready to schedule', visibleSchedule: 'The window shows 8 hours. Scroll to explore the full 24-hour day.', emptyPool: 'No requests are waiting in the pool.', myAssignedWork: 'My assigned work', upcomingProduction: 'Upcoming production', activeRequest: 'active request', activeRequests: 'active requests', noActiveAssignments: 'No active assignments', emptyAssignments: 'When a coordinator schedules work for you, it will appear here.', post: 'Post', scheduled: 'Scheduled', deadline: 'Deadline', scope: 'Scope', status: 'Status', noTags: 'No tags', designer: 'Designer', now: 'Now', centerNow: 'Center Now', loadingSchedule: 'Loading schedule…', tryAgain: 'Try again', queueAccess: 'Queue is available to every dashboard user.', rolePreview: 'Role preview', onlyEsteban: 'Only visible to Esteban.', activeRole: 'Active role', devFullAccess: 'Dev · full access', postDesigner: 'Post Designer', viralCoordinator: 'Viral Coordinator', salesRole: 'Sales', productionReports: 'Production reports', adminWorkspace: 'Admin workspace', loadingReport: 'Loading report…', inPool: 'In pool', inProgress: 'In progress', readyToClose: 'Ready to close', closed: 'Closed', cancelled: 'Cancelled', designerWorkload: 'Designer workload', workloadHelp: 'Active work, delivery health and actual production time.', allAssignedPosts: 'All assigned posts', assignedPostsCount: 'assigned posts', noAssignedPosts: 'No assigned posts yet.', openSettings: 'Open dashboard settings', startWork: 'Start work', markComplete: 'Mark complete', publishedLink: 'Published Instagram link', closeRequest: 'Close request', returnInProgress: 'Return to in progress', openPublished: 'Open published post', cancellationReason: 'Cancellation reason (optional)', cancelRequest: 'Cancel request', brief: 'Brief', notes: 'Notes', references: 'References', minutes: 'minutes', sourcePost: 'Source post', assignment: 'Assignment', recommendedAccounts: 'Recommended accounts', editRequest: 'Edit request', saveChanges: 'Save changes', cancel: 'Cancel', productionPoints: 'Production points', tags: 'Tags', referenceLinks: 'Reference links', oneLinkPerLine: 'One link per line', signIn: 'Sign in with Google', signingIn: 'Signing in…', signInHelp: 'Sign in with Google to open your production schedule.', allDesigners: 'All designers', allUsers: 'All users', noAccounts: 'No accounts yet', noRecommendedAccount: 'No recommended account', unsavedDrafts: 'Draft schedule changes are saved in this browser.', clearDrafts: 'Discard drafts', archive: 'Archive', liveQueue: 'Live Queue', noArchived: 'No cancelled requests.', extra: 'NEXT DAY', overdue: 'OVERDUE', atRisk: 'AT RISK', attachments: 'Files & references', uploadFiles: 'Upload files', noFiles: 'No files attached.', history: 'Activity history', noHistory: 'No activity yet.', resendSlack: 'Resend Slack DM', slackSent: 'Slack DM sent.', slackFailed: 'Slack DM failed. Check the user Slack ID and try again.', requestUpdated: 'Request updated.', scheduleSubmitted: 'Schedule submitted.', deliveryHealth: 'Delivery health', onTime: 'On-time rate', averageTime: 'Average actual time', completedJobs: 'Closed jobs', draftsSaved: 'Drafts saved', movedJobs: 'reflowed jobs', close: 'Close', filesUploaded: 'Files uploaded.', deadlineError: 'This request cannot fit before its deadline.', invalidDay: 'Requests can be scheduled on any day.', assignedView: 'Scheduler view', uploadFailed: 'Some files could not be uploaded.', sourceCaption: 'Source caption', cancelledReason: 'Cancellation reason', draftWarning: 'You have unsubmitted Queue changes.', movedAfterActive: 'Another post is already in progress. This request was moved after it and remains scheduled.', notQueueParticipant: 'Not a Queue participant',
+    priority: 'Priority', priorityLow: 'Low', priorityMedium: 'Medium', priorityHigh: 'High', priorityUrgent: 'Urgent', priorityMix: 'Priority mix', highPriority: 'High priority', tentative: 'Pending submit', tentativeBy: 'Temporary placement by', liveConnected: 'Live', liveConnecting: 'Connecting', liveOffline: 'Reconnecting', sharedDrafts: 'Temporary changes are shared live with assigned designers.', draftSyncFailed: 'The temporary placement could not be shared. Queue was refreshed.', resizeBar: 'Resize production block', resizeLeft: 'from the left', resizeRight: 'from the right', adminOverview: 'Overview', userManagement: 'User Management', managedAccounts: 'Managed Sentient accounts', chooseSentientAccount: 'Choose Sentient account', assignAccount: 'Assign', removeAccount: 'Remove account', usersCount: 'users', loadingUsers: 'Loading users…', noUsers: 'No users available.', accountUpdateFailed: 'Could not update account ownership.',
+    settings: 'Settings', accentColor: 'Accent color', theme: 'Theme', language: 'Language', signOut: 'Sign out', darkTheme: 'Dark', lightTheme: 'Light', signedInAs: 'Signed in as', adminSettings: 'Admin',
   },
   es: {
-    productionQueue: 'Cola de producción', dashboard: 'Dashboard', admin: 'Admin', coordinatorSchedule: 'Agenda de coordinación', mySchedule: 'Mi agenda de producción', today: 'Hoy', submit: 'Enviar', change: 'cambio', changes: 'cambios', productionPool: 'Pool de producción', readyToSchedule: 'listos para programar', visibleSchedule: 'La ventana muestra 8 horas. Desplázate para explorar las 24 horas del día.', emptyPool: 'No hay requests esperando en el pool.', myAssignedWork: 'Mi trabajo asignado', upcomingProduction: 'Próxima producción', activeRequest: 'request activo', activeRequests: 'requests activos', noActiveAssignments: 'No tienes asignaciones activas', emptyAssignments: 'Cuando un coordinador programe trabajo para ti, aparecerá aquí.', post: 'Post', scheduled: 'Programado', deadline: 'Deadline', scope: 'Alcance', status: 'Estado', noTags: 'Sin tags', designer: 'Designer', now: 'Ahora', loadingSchedule: 'Cargando agenda…', tryAgain: 'Intentar de nuevo', queueAccess: 'Queue está disponible para coordinadores y diseñadores de producción.', rolePreview: 'Vista de rol', onlyEsteban: 'Visible solo para Esteban.', activeRole: 'Rol activo', devFullAccess: 'Dev · acceso completo', postDesigner: 'Post Designer', viralCoordinator: 'Viral Coordinator', productionReports: 'Reportes de producción', adminWorkspace: 'Espacio Admin', loadingReport: 'Cargando reporte…', inPool: 'En pool', inProgress: 'En progreso', readyToClose: 'Listo para cerrar', closed: 'Cerrado', cancelled: 'Cancelado', designerWorkload: 'Carga por designer', workloadHelp: 'Trabajo activo, salud de entrega y tiempo real de producción.', allAssignedPosts: 'Todos los posts asignados', assignedPostsCount: 'posts asignados', noAssignedPosts: 'Todavía no hay posts asignados.', openSettings: 'Abrir Settings del dashboard', startWork: 'Empezar trabajo', markComplete: 'Marcar como completado', publishedLink: 'Link publicado de Instagram', closeRequest: 'Cerrar request', returnInProgress: 'Volver a en progreso', openPublished: 'Abrir post publicado', cancellationReason: 'Motivo de cancelación (opcional)', cancelRequest: 'Cancelar request', brief: 'Brief', notes: 'Notas', references: 'Referencias', minutes: 'minutos', sourcePost: 'Post original', assignment: 'Asignación', recommendedAccounts: 'Cuentas recomendadas', editRequest: 'Editar request', saveChanges: 'Guardar cambios', cancel: 'Cancelar', productionPoints: 'Puntos de producción', tags: 'Tags', referenceLinks: 'Links de referencia', oneLinkPerLine: 'Un link por línea', signIn: 'Iniciar sesión con Google', signingIn: 'Iniciando sesión…', signInHelp: 'Inicia sesión con Google para abrir tu agenda de producción.', allDesigners: 'Todos los designers', noAccounts: 'Sin cuentas todavía', noRecommendedAccount: 'Sin cuenta recomendada', unsavedDrafts: 'Los cambios del scheduler se guardan en este navegador.', clearDrafts: 'Descartar cambios', archive: 'Archivo', liveQueue: 'Queue activo', noArchived: 'No hay requests cancelados.', extra: 'DÍA SIGUIENTE', overdue: 'VENCIDO', atRisk: 'EN RIESGO', attachments: 'Archivos y referencias', uploadFiles: 'Subir archivos', noFiles: 'No hay archivos adjuntos.', history: 'Historial de actividad', noHistory: 'Todavía no hay actividad.', resendSlack: 'Reenviar DM de Slack', slackSent: 'DM de Slack enviado.', slackFailed: 'Falló el DM de Slack. Revisa el Slack ID del usuario e intenta de nuevo.', requestUpdated: 'Request actualizado.', scheduleSubmitted: 'Scheduler enviado.', deliveryHealth: 'Salud de entrega', onTime: 'Entregas a tiempo', averageTime: 'Tiempo real promedio', completedJobs: 'Trabajos cerrados', draftsSaved: 'Cambios guardados', movedJobs: 'trabajos reacomodados', close: 'Cerrar', filesUploaded: 'Archivos subidos.', deadlineError: 'Este request no cabe antes de su deadline.', invalidDay: 'Los requests pueden programarse en cualquier día.', assignedView: 'Vista de designer', uploadFailed: 'Algunos archivos no pudieron subirse.', sourceCaption: 'Caption original', cancelledReason: 'Motivo de cancelación', draftWarning: 'Tienes cambios de Queue sin enviar.', movedAfterActive: 'Ya hay otro post en progreso. Este request se movió después y permanece programado.',
-    priority: 'Prioridad', priorityLow: 'Baja', priorityMedium: 'Media', priorityHigh: 'Alta', priorityUrgent: 'Urgente', priorityMix: 'Niveles de prioridad', highPriority: 'Prioridad alta', tentative: 'Pendiente de enviar', tentativeBy: 'Ubicación temporal por', liveConnected: 'En vivo', liveConnecting: 'Conectando', liveOffline: 'Reconectando', sharedDrafts: 'Los cambios temporales se comparten en vivo con los designers asignados.', draftSyncFailed: 'No se pudo compartir la ubicación temporal. Queue fue actualizado.',
+    productionQueue: 'Cola de producción', dashboard: 'Dashboard', admin: 'Admin', coordinatorSchedule: 'Agenda de coordinación', mySchedule: 'Mi agenda de producción', today: 'Hoy', submit: 'Enviar', change: 'cambio', changes: 'cambios', productionPool: 'Pool de producción', readyToSchedule: 'listos para programar', visibleSchedule: 'La ventana muestra 8 horas. Desplázate para explorar las 24 horas del día.', emptyPool: 'No hay requests esperando en el pool.', myAssignedWork: 'Mi trabajo asignado', upcomingProduction: 'Próxima producción', activeRequest: 'request activo', activeRequests: 'requests activos', noActiveAssignments: 'No tienes asignaciones activas', emptyAssignments: 'Cuando un coordinador programe trabajo para ti, aparecerá aquí.', post: 'Post', scheduled: 'Programado', deadline: 'Deadline', scope: 'Alcance', status: 'Estado', noTags: 'Sin tags', designer: 'Designer', now: 'Ahora', centerNow: 'Centrar ahora', loadingSchedule: 'Cargando agenda…', tryAgain: 'Intentar de nuevo', queueAccess: 'Queue está disponible para todos los usuarios del dashboard.', rolePreview: 'Vista de rol', onlyEsteban: 'Visible solo para Esteban.', activeRole: 'Rol activo', devFullAccess: 'Dev · acceso completo', postDesigner: 'Post Designer', viralCoordinator: 'Viral Coordinator', salesRole: 'Sales', productionReports: 'Reportes de producción', adminWorkspace: 'Espacio Admin', loadingReport: 'Cargando reporte…', inPool: 'En pool', inProgress: 'En progreso', readyToClose: 'Listo para cerrar', closed: 'Cerrado', cancelled: 'Cancelado', designerWorkload: 'Carga por designer', workloadHelp: 'Trabajo activo, salud de entrega y tiempo real de producción.', allAssignedPosts: 'Todos los posts asignados', assignedPostsCount: 'posts asignados', noAssignedPosts: 'Todavía no hay posts asignados.', openSettings: 'Abrir Settings del dashboard', startWork: 'Empezar trabajo', markComplete: 'Marcar como completado', publishedLink: 'Link publicado de Instagram', closeRequest: 'Cerrar request', returnInProgress: 'Volver a en progreso', openPublished: 'Abrir post publicado', cancellationReason: 'Motivo de cancelación (opcional)', cancelRequest: 'Cancelar request', brief: 'Brief', notes: 'Notas', references: 'Referencias', minutes: 'minutos', sourcePost: 'Post original', assignment: 'Asignación', recommendedAccounts: 'Cuentas recomendadas', editRequest: 'Editar request', saveChanges: 'Guardar cambios', cancel: 'Cancelar', productionPoints: 'Puntos de producción', tags: 'Tags', referenceLinks: 'Links de referencia', oneLinkPerLine: 'Un link por línea', signIn: 'Iniciar sesión', signingIn: 'Iniciando sesión…', signInHelp: 'Inicia sesión con Google para abrir tu agenda de producción.', allDesigners: 'Todos los designers', allUsers: 'Todos los usuarios', noAccounts: 'Sin cuentas todavía', noRecommendedAccount: 'Sin cuenta recomendada', unsavedDrafts: 'Los cambios del scheduler se guardan en este navegador.', clearDrafts: 'Descartar cambios', archive: 'Archivo', liveQueue: 'Queue activo', noArchived: 'No hay requests cancelados.', extra: 'DÍA SIGUIENTE', overdue: 'VENCIDO', atRisk: 'EN RIESGO', attachments: 'Archivos y referencias', uploadFiles: 'Subir archivos', noFiles: 'No hay archivos adjuntos.', history: 'Historial de actividad', noHistory: 'Todavía no hay actividad.', resendSlack: 'Reenviar DM de Slack', slackSent: 'DM de Slack enviado.', slackFailed: 'Falló el DM de Slack. Revisa el Slack ID del usuario e intenta de nuevo.', requestUpdated: 'Request actualizado.', scheduleSubmitted: 'Scheduler enviado.', deliveryHealth: 'Salud de entrega', onTime: 'Entregas a tiempo', averageTime: 'Tiempo real promedio', completedJobs: 'Trabajos cerrados', draftsSaved: 'Cambios guardados', movedJobs: 'trabajos reacomodados', close: 'Cerrar', filesUploaded: 'Archivos subidos.', deadlineError: 'Este request no cabe antes de su deadline.', invalidDay: 'Los requests pueden programarse en cualquier día.', assignedView: 'Vista del scheduler', uploadFailed: 'Algunos archivos no pudieron subirse.', sourceCaption: 'Caption original', cancelledReason: 'Motivo de cancelación', draftWarning: 'Tienes cambios de Queue sin enviar.', movedAfterActive: 'Ya hay otro post en progreso. Este request se movió después y permanece programado.', notQueueParticipant: 'No participa en Queue',
+    priority: 'Prioridad', priorityLow: 'Baja', priorityMedium: 'Media', priorityHigh: 'Alta', priorityUrgent: 'Urgente', priorityMix: 'Niveles de prioridad', highPriority: 'Prioridad alta', tentative: 'Pendiente de enviar', tentativeBy: 'Ubicación temporal por', liveConnected: 'En vivo', liveConnecting: 'Conectando', liveOffline: 'Reconectando', sharedDrafts: 'Los cambios temporales se comparten en vivo con los designers asignados.', draftSyncFailed: 'No se pudo compartir la ubicación temporal. Queue fue actualizado.', resizeBar: 'Redimensionar bloque de producción', resizeLeft: 'desde la izquierda', resizeRight: 'desde la derecha', adminOverview: 'Resumen', userManagement: 'Gestión de usuarios', managedAccounts: 'Cuentas Sentient administradas', chooseSentientAccount: 'Elegir cuenta de Sentient', assignAccount: 'Asignar', removeAccount: 'Quitar cuenta', usersCount: 'usuarios', loadingUsers: 'Cargando usuarios…', noUsers: 'No hay usuarios disponibles.', accountUpdateFailed: 'No se pudo actualizar la cuenta.',
+    settings: 'Ajustes', accentColor: 'Color de acento', theme: 'Tema', language: 'Idioma', signOut: 'Cerrar sesión', darkTheme: 'Oscuro', lightTheme: 'Claro', signedInAs: 'Sesión iniciada como', adminSettings: 'Admin',
   },
 };
+
+COPY.en.returnToPool = 'Return to pool';
+COPY.en.poolDropHint = 'Drop a scheduled request here to return it to the pool.';
+COPY.en.returnedToPool = 'Request returned to the pool.';
+COPY.es.returnToPool = 'Devolver al pool';
+COPY.es.poolDropHint = 'Suelta aquí un request programado para devolverlo al pool.';
+COPY.es.returnedToPool = 'Request devuelto al pool.';
+Object.assign(COPY.en, {
+  tickets: 'Requests', ticketInbox: 'Approval inbox', myRequests: 'My requests', ticketsPending: 'Pending', ticketsApproved: 'Approved', ticketsRejected: 'Rejected', approve: 'Approve', reject: 'Reject',
+  pick: 'Pick', pickTitle: 'Pick a request', pickHelp: 'Choose a request from the production pool.', hotPickHelp: 'There are no regular pool requests. Choose the highest-rate HOT post.', nextRequest: 'Next', assignRequest: 'Assign', noPickRequests: 'There are no requests available in the pool or HOT list.', pickedRequest: 'Request assigned to your schedule.', pickPriority: 'Priority', hotRate: 'HOT rate',
+  meeting: 'Meeting', break: 'Break', promo: 'Promo', focus: 'Focus time', other: 'Other', addTime: 'Add personal time', blockTitle: 'Title',
+  startTime: 'Start time', duration: 'Duration', noteOptional: 'Note (optional)', requestApproval: 'Request approval', pendingApproval: 'Pending approval',
+  approved: 'Approved', rejected: 'Rejected', ppRevision: 'PP revision', cancellationRequest: 'Cancellation', requestPPChange: 'Request PP change',
+  requestCancellation: 'Request cancellation', requestMove: 'Request move', moveRequest: 'Move request', moveTo: 'Move to', moveHelp: 'Choose an earlier or later time for this block.', requestedPP: 'Requested PP', requestReason: 'Reason (optional)', sendRequest: 'Send request',
+  ticketCreated: 'Request sent for approval.', ticketReviewed: 'Request reviewed.', noPendingTickets: 'No pending requests.', noApprovedTickets: 'No approved requests.', noRejectedTickets: 'No rejected requests.',
+  rightClickHint: 'Right-click your scheduler row to add meetings, breaks, promos, or focus time.', personalTime: 'Personal time',
+});
+Object.assign(COPY.es, {
+  tickets: 'Solicitudes', ticketInbox: 'Bandeja de aprobación', myRequests: 'Mis solicitudes', ticketsPending: 'Pendientes', ticketsApproved: 'Aprobadas', ticketsRejected: 'Rechazadas', approve: 'Aprobar', reject: 'Rechazar',
+  pick: 'Pick', pickTitle: 'Elegir un request', pickHelp: 'Elige un request del pool de producción.', hotPickHelp: 'No hay requests regulares en el pool. Elige el post HOT con mayor rate.', nextRequest: 'Siguiente', assignRequest: 'Asignar', noPickRequests: 'No hay requests disponibles en el pool ni en HOT.', pickedRequest: 'Request asignado a tu agenda.', pickPriority: 'Prioridad', hotRate: 'Rate HOT',
+  meeting: 'Meeting', break: 'Break', promo: 'Promo', focus: 'Tiempo de enfoque', other: 'Otro', addTime: 'Agregar tiempo personal', blockTitle: 'Título',
+  startTime: 'Hora de inicio', duration: 'Duración', noteOptional: 'Nota (opcional)', requestApproval: 'Solicitar aprobación', pendingApproval: 'Pendiente de aprobación',
+  approved: 'Aprobado', rejected: 'Rechazado', ppRevision: 'Revisión de PPs', cancellationRequest: 'Cancelación', requestPPChange: 'Solicitar cambio de PPs',
+  requestCancellation: 'Solicitar cancelación', requestMove: 'Solicitar mover', moveRequest: 'Solicitud de movimiento', moveTo: 'Mover a', moveHelp: 'Elige una hora más temprana o más tarde para este bloque.', requestedPP: 'PPs solicitados', requestReason: 'Motivo (opcional)', sendRequest: 'Enviar solicitud',
+  ticketCreated: 'Solicitud enviada para aprobación.', ticketReviewed: 'Solicitud revisada.', noPendingTickets: 'No hay solicitudes pendientes.', noApprovedTickets: 'No hay solicitudes aprobadas.', noRejectedTickets: 'No hay solicitudes rechazadas.',
+  rightClickHint: 'Haz click derecho en tu fila para agregar meetings, breaks, promos o tiempo de enfoque.', personalTime: 'Tiempo personal',
+});
+
+Object.assign(COPY.en, {
+  createPost: 'Create Post', createPostTitle: 'Create a Queue post', createPostHelp: 'Start a production request without a dashboard post.', targetAccount: 'Publishing account', accountToSelect: 'Account selected when assigned', chooseAccountLater: 'Choose later (optional)', postTitle: 'Post title', postTitlePlaceholder: 'e.g. AI tools carousel for next week', postType: 'Post type', postTypeImage: 'Image', postTypeCarousel: 'Carousel', postTypeReel: 'Reel', postTypePromo: 'Promo', postTypeStory: 'Story', postTypeOther: 'Other', titleRequired: 'Add a title for this post.', accountRequired: 'Choose a Sentient account.', postCreated: 'Post created in the production pool.',
+});
+Object.assign(COPY.es, {
+  createPost: 'Crear post', createPostTitle: 'Crear un post en Queue', createPostHelp: 'Inicia un request de producción sin un post del dashboard.', targetAccount: 'Cuenta de publicación', accountToSelect: 'Cuenta se elige al asignar', chooseAccountLater: 'Elegir después (opcional)', postTitle: 'Título del post', postTitlePlaceholder: 'ej. Carrusel de herramientas de IA para la próxima semana', postType: 'Tipo de post', postTypeImage: 'Imagen', postTypeCarousel: 'Carrusel', postTypeReel: 'Reel', postTypePromo: 'Promo', postTypeStory: 'Story', postTypeOther: 'Otro', titleRequired: 'Agrega un título para este post.', accountRequired: 'Elige una cuenta de Sentient.', postCreated: 'Post creado en el pool de producción.',
+});
 
 const QueuePreferencesContext = createContext({ language: 'en', t: (key) => key });
 const useQueuePreferences = () => useContext(QueuePreferencesContext);
 const statusCopy = (status, t, isDraft = false) => isDraft ? t('tentative') : ({ pool: t('inPool'), scheduled: t('scheduled'), in_progress: t('inProgress'), completed: t('readyToClose'), closed: t('closed'), cancelled: t('cancelled') }[status] || status);
 const priorityCopy = (priority, t) => ({ low: t('priorityLow'), medium: t('priorityMedium'), high: t('priorityHigh'), urgent: t('priorityUrgent') }[priority] || t('priorityMedium'));
+const hotIntensity = (value) => {
+  const multiplier = Number(value);
+  if (!Number.isFinite(multiplier) || multiplier < 3.5) return 'low';
+  if (multiplier < 4.5) return 'medium';
+  if (multiplier < 6) return 'high';
+  return 'critical';
+};
+const isHotTask = (task) => Boolean(task?.isHot || task?.tags?.includes('hot'));
+const hotClass = (task) => isHotTask(task) ? ` hot-intensity-${hotIntensity(task.hotMultiplier)}` : '';
+const hotText = (task) => {
+  const multiplier = Number(task?.hotMultiplier);
+  return Number.isFinite(multiplier) && multiplier > 0 ? `HOT ${multiplier.toFixed(2)}×` : 'HOT';
+};
 
 async function json(path, options) {
   const response = await apiFetch(`${API_BASE}${path}`, options);
@@ -48,7 +131,7 @@ async function json(path, options) {
 
 function queuePost(task) {
   const type = task.post?.type || 'Image';
-  return { ...task.post, postKey: `${task.post?.account}:${task.post?.shortcode}`, account: task.post?.account, shortcode: task.post?.shortcode, coverUrl: task.post?.coverUrl, caption: task.post?.caption || '', postDate: task.post?.publishedAt, postType: type, type, isVideo: String(type).toLowerCase().includes('video') || String(type).toLowerCase().includes('reel'), showsHotBadge: false };
+  return { ...task.post, postKey: `${task.post?.account}:${task.post?.shortcode}`, account: task.post?.account, shortcode: task.post?.shortcode, title: task.post?.title || task.title || '', isCustom: Boolean(task.post?.isCustom || task.isCustom), coverUrl: task.post?.coverUrl, caption: task.post?.caption || '', postDate: task.post?.publishedAt, postType: type, type, isVideo: String(type).toLowerCase().includes('video') || String(type).toLowerCase().includes('reel'), showsHotBadge: false };
 }
 
 function AuthGate({ notice, setNotice }) {
@@ -58,18 +141,34 @@ function AuthGate({ notice, setNotice }) {
   return <main className="queue-auth"><section><h1>{t('productionQueue')}</h1><p>{notice || t('signInHelp')}</p><button type="button" onClick={signIn} disabled={busy}>{busy ? t('signingIn') : t('signIn')}</button></section></main>;
 }
 
-function QueuePreferences() {
-  const { language, setLanguage, theme, setTheme, accent, setAccent } = useQueuePreferences();
-  return <div className="queue-preferences"><div className="queue-language" aria-label="Language"><button type="button" className={language === 'en' ? 'is-on' : ''} onClick={() => setLanguage('en')}>EN</button><button type="button" className={language === 'es' ? 'is-on' : ''} onClick={() => setLanguage('es')}>ES</button></div><button type="button" className="queue-theme-toggle" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} title={theme === 'dark' ? 'Use light theme' : 'Use dark theme'}>{theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}</button><div className="queue-accent-picker" title="Accent color"><Palette size={13} />{['lime', 'blue', 'coral'].map((value) => <button type="button" key={value} className={`accent-${value}${accent === value ? ' is-on' : ''}`} onClick={() => setAccent(value)} aria-label={`${value} accent`} />)}</div></div>;
+/* One Settings entry point instead of a bare prefs strip plus a separate
+   avatar/sign-out button: accent, theme and language live together with the
+   account info, and (for admins) the same account-assignment tool that used
+   to only be reachable inside Admin Tools -> User Management. Meant to be
+   the same shape as the Settings button on Dashboard/Tracker/Insights. */
+function QueueSettings({ isAdmin, userEmail, onSignOut }) {
+  const { t, language, setLanguage, theme, setTheme, accent, setAccent } = useQueuePreferences();
+  const [open, setOpen] = useState(false);
+  return <div className="queue-settings">
+    <button type="button" className={`queue-settings-trigger${open ? ' is-active' : ''}`} onClick={() => setOpen((value) => !value)} aria-expanded={open} aria-label={t('settings')} title={t('settings')}><Settings size={16} /></button>
+    {open ? <><button type="button" className="queue-overlay-backdrop" onClick={() => setOpen(false)} aria-label={t('close')} /><div className="queue-settings-panel" role="dialog" aria-label={t('settings')}>
+      <header><p className="scheduler-eyebrow">{t('settings')}</p><button type="button" onClick={() => setOpen(false)} aria-label={t('close')}><X size={14} /></button></header>
+      <section className="queue-settings-section"><span>{t('accentColor')}</span><div className="queue-accent-picker">{['lime', 'blue', 'coral'].map((value) => <button type="button" key={value} className={`accent-${value}${accent === value ? ' is-on' : ''}`} onClick={() => setAccent(value)} aria-label={`${value} accent`} />)}</div></section>
+      <section className="queue-settings-section"><span>{t('theme')}</span><div className="queue-settings-segment"><button type="button" className={theme === 'dark' ? 'is-on' : ''} onClick={() => setTheme('dark')}><Moon size={13} />{t('darkTheme')}</button><button type="button" className={theme === 'light' ? 'is-on' : ''} onClick={() => setTheme('light')}><Sun size={13} />{t('lightTheme')}</button></div></section>
+      <section className="queue-settings-section"><span>{t('language')}</span><div className="queue-language" aria-label="Language"><button type="button" className={language === 'en' ? 'is-on' : ''} onClick={() => setLanguage('en')}>EN</button><button type="button" className={language === 'es' ? 'is-on' : ''} onClick={() => setLanguage('es')}>ES</button></div></section>
+      {isAdmin ? <section className="queue-settings-section queue-settings-admin"><span>{t('adminSettings')}</span><a className="queue-settings-link" href={`${import.meta.env.BASE_URL}?view=admin`} target="_blank" rel="noreferrer"><Settings size={13} />{t('openSettings')}</a><AdminUserManagement /></section> : null}
+      <footer><small>{t('signedInAs')} {userEmail}</small><button type="button" className="queue-settings-signout" onClick={onSignOut}><LogOut size={13} />{t('signOut')}</button></footer>
+    </div></> : null}
+  </div>;
 }
 
 function DevRolePreview({ isDev }) {
   const { t } = useQueuePreferences();
   const [open, setOpen] = useState(false);
-  const active = window.localStorage.getItem('sentient.queueRolePreview') || '';
+  const active = window.sessionStorage.getItem('sentient.queueRolePreview') || '';
   if (!isDev) return null;
   const label = { sales: 'Sales', pd: t('postDesigner'), vc: t('viralCoordinator'), admin: t('admin') }[active] || 'Dev';
-  const choose = (event) => { const role = event.target.value; if (role) window.localStorage.setItem('sentient.queueRolePreview', role); else window.localStorage.removeItem('sentient.queueRolePreview'); window.location.reload(); };
+  const choose = (event) => { const role = event.target.value; if (role) window.sessionStorage.setItem('sentient.queueRolePreview', role); else window.sessionStorage.removeItem('sentient.queueRolePreview'); window.location.reload(); };
   return <div className="dev-role-preview"><button type="button" onClick={() => setOpen((value) => !value)} aria-expanded={open}><span>DEV</span>{label}</button>{open ? <div className="dev-role-preview-panel"><strong>{t('rolePreview')}</strong><p>{t('onlyEsteban')}</p><label>{t('activeRole')}<select value={active} onChange={choose}><option value="">{t('devFullAccess')}</option><option value="sales">Sales</option><option value="pd">{t('postDesigner')}</option><option value="vc">{t('viralCoordinator')}</option><option value="admin">{t('admin')}</option></select></label></div> : null}</div>;
 }
 
@@ -78,38 +177,255 @@ function PriorityBadge({ priority = 'medium' }) {
   return <span className={`queue-priority-badge priority-${priority}`}>{priorityCopy(priority, t)}</span>;
 }
 
-function TaskBlock({ task, editable, onOpen }) {
+function TaskBlock({ task, editable, onOpen, onResizeStart, accountAvatars = {} }) {
   const { t } = useQueuePreferences();
+  const pendingTickets = Array.isArray(task.pendingTickets) ? task.pendingTickets : [];
+  const pendingTicketLabel = pendingTickets.map((ticket) => ticket.type === 'pp_revision' ? t('ppRevision') : ticket.type === 'move' ? t('moveRequest') : t('cancellationRequest')).join(' · ');
   const left = task.scheduledStartMinutes ?? QUEUE_DAY_START;
   const planned = task.durationMinutes || 10;
   let width = planned;
   if (['completed', 'closed'].includes(task.status) && task.actualStartedAt && task.completedAt) width = Math.min(planned, Math.max(10, Math.round((new Date(task.completedAt) - new Date(task.actualStartedAt)) / 60000)));
   const extra = (task.scheduledStartMinutes ?? 0) + width > QUEUE_DAY_END;
-  return <button type="button" draggable={editable && task.status === 'scheduled'} className={`scheduler-block state-${task.status} priority-${task.priority || 'medium'}${task.isDraft ? ' is-draft' : ''}${extra ? ' is-extra' : ''}`} style={{ left: `${(left / QUEUE_DAY_END) * 100}%`, width: `${(width / QUEUE_DAY_END) * 100}%` }} onDragStart={(event) => { activeQueueDragId = task.id; event.dataTransfer.setData('queue-task', String(task.id)); }} onDragEnd={() => { activeQueueDragId = null; }} onClick={() => onOpen(task)} title={`${task.post.account} · ${priorityCopy(task.priority, t)} · ${task.productionPoints} PP · ${statusCopy(task.status, t, task.isDraft)}`}>
-    {cover(task) ? <img src={cover(task)} alt="" /> : null}<span className="scheduler-block-copy"><b>@{task.post.account}</b><small>{task.isDraft ? `${t('tentative')} · ` : ''}{priorityCopy(task.priority, t)} · {task.productionPoints} PP · {time(task.scheduledStartMinutes ?? QUEUE_DAY_START)}</small></span>{task.isDraft ? <span className="scheduler-draft-badge">{t('tentative')}</span> : null}{extra ? <span className="scheduler-extra">{t('extra')}</span> : null}{task.recommendedAccounts?.length ? <span className="scheduler-account-bubbles">{task.recommendedAccounts.map((account) => <i key={account} title={`@${account}`}>@{account.slice(0, 1)}</i>)}</span> : null}
+  const canResize = editable && task.status === 'scheduled';
+  const accountImage = (account) => { const value = accountAvatars?.[account] || ACCOUNT_PROFILE_FALLBACKS[String(account).toLowerCase()]; return value ? (String(value).startsWith('http') || String(value).startsWith('/') && !String(value).startsWith('/api/') ? String(value) : `${API_BASE}${value}`) : ''; };
+  return <button type="button" draggable={editable && task.status === 'scheduled'} className={`scheduler-block state-${task.status} priority-${task.priority || 'medium'}${hotClass(task)}${task.isDraft ? ' is-draft' : ''}${extra ? ' is-extra' : ''}${pendingTickets.length ? ' has-pending-ticket' : ''}`} style={{ left: `${(left / QUEUE_DAY_END) * 100}%`, width: `${(width / QUEUE_DAY_END) * 100}%` }} onDragStart={(event) => { activeQueueDragId = task.id; event.dataTransfer.setData('queue-task', String(task.id)); }} onDragEnd={() => { activeQueueDragId = null; }} onClick={(event) => { if (event.target.closest('.scheduler-resize-handle')) return; onOpen(task); }} title={`${accountMention(task.post.account) || task.post.title || t('post')} · ${priorityCopy(task.priority, t)} · ${task.productionPoints} PP · ${statusCopy(task.status, t, task.isDraft)}${pendingTicketLabel ? ` · ${pendingTicketLabel}` : ''}`}>
+    {cover(task) ? <img src={cover(task)} alt="" /> : null}<span className="scheduler-block-copy"><b>{task.post.title || accountMention(task.post.account) || t('post')}</b><small>{task.post.title && task.post.account ? `${accountMention(task.post.account)} · ` : ''}{task.isDraft ? `${t('tentative')} · ` : ''}{priorityCopy(task.priority, t)} · {task.productionPoints} PP · {time(task.scheduledStartMinutes ?? QUEUE_DAY_START)}</small></span><span className={`scheduler-priority-mark priority-${task.priority || 'medium'}`}>{priorityCopy(task.priority, t)}</span>{pendingTickets.length ? <span className="scheduler-ticket-marker" title={pendingTicketLabel}><ClipboardList size={11} /><b>{pendingTickets.length}</b></span> : null}{isHotTask(task) ? <span className="queue-hot-badge">🔥 {hotText(task)}</span> : null}{task.isDraft ? <span className="scheduler-draft-badge">{t('tentative')}</span> : null}{extra ? <span className="scheduler-extra">{t('extra')}</span> : null}{task.recommendedAccounts?.length ? <span className="scheduler-account-badges">{task.recommendedAccounts.map((account) => <i key={account} title={`@${account}`}><span className="scheduler-account-avatar">{accountImage(account) ? <img src={accountImage(account)} alt="" loading="lazy" onError={(event) => { event.currentTarget.hidden = true; }} /> : `@${account.slice(0, 1)}`}</span><b>@{account}</b></i>)}</span> : null}{canResize ? <><span className="scheduler-resize-handle scheduler-resize-handle-left" role="separator" aria-label={`${t('resizeBar')} ${t('resizeLeft')}`} onPointerDown={(event) => onResizeStart(event, task, 'left')} /><span className="scheduler-resize-handle scheduler-resize-handle-right" role="separator" aria-label={`${t('resizeBar')} ${t('resizeRight')}`} onPointerDown={(event) => onResizeStart(event, task, 'right')} /></> : null}
   </button>;
 }
 
+function TimeBlock({ block }) {
+  const { t } = useQueuePreferences();
+  const Icon = ({ meeting: CalendarDays, break: Coffee, promo: TimerReset, focus: Clock3, other: CalendarPlus }[block.category] || CalendarPlus);
+  const start = Number(block.scheduledStartMinutes || 0);
+  const duration = Math.max(10, Number(block.durationMinutes || 10));
+  return <div className={`scheduler-time-block category-${block.category || 'other'} status-${block.status}`} style={{ left: `${(start / QUEUE_DAY_END) * 100}%`, width: `${(duration / QUEUE_DAY_END) * 100}%` }} title={`${block.title} · ${time(start)} · ${duration} min · ${block.status === 'pending' ? t('pendingApproval') : t('approved')}`}><Icon size={13} /><span><b>{block.title || t(block.category || 'other')}</b><small>{time(start)} · {duration} min</small></span>{block.status === 'pending' ? <i>{t('pendingApproval')}</i> : null}</div>;
+}
+
+function TimeBlockForm({ form, setForm, busy, onClose, onSubmit }) {
+  const { t, language } = useQueuePreferences();
+  if (!form) return null;
+  const valid = form.durationMinutes >= 10 && form.durationMinutes % 10 === 0 && form.startMinutes + form.durationMinutes <= QUEUE_DAY_END;
+  return <><button type="button" className="scheduler-context-backdrop" aria-label={t('close')} onClick={onClose} /><form className="scheduler-time-form" style={{ left: form.x, top: form.y }} onSubmit={(event) => { event.preventDefault(); if (valid) onSubmit(); }}><header><div><p className="scheduler-eyebrow">{t('personalTime')}</p><h3>{t('addTime')}</h3><small>{displayDate(form.scheduledDate, language)}</small></div><button type="button" onClick={onClose} aria-label={t('close')}><X size={14} /></button></header><div className="scheduler-time-form-grid"><label>{t('meeting')} / {t('break')}<select value={form.category} onChange={(event) => setForm((current) => ({ ...current, category: event.target.value }))}><option value="meeting">{t('meeting')}</option><option value="break">{t('break')}</option><option value="promo">{t('promo')}</option><option value="focus">{t('focus')}</option><option value="other">{t('other')}</option></select></label><label>{t('startTime')}<input type="time" step="600" value={time(form.startMinutes)} onChange={(event) => setForm((current) => ({ ...current, startMinutes: Math.round(minutesFromTime(event.target.value) / 10) * 10 }))} /></label><label>{t('duration')}<input type="number" min="10" max={Math.max(10, QUEUE_DAY_END - form.startMinutes)} step="10" value={form.durationMinutes} onChange={(event) => setForm((current) => ({ ...current, durationMinutes: Number(event.target.value) }))} /></label><label>{t('blockTitle')}<input value={form.title} maxLength="80" placeholder={t(form.category)} onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} /></label><label className="is-wide">{t('noteOptional')}<textarea value={form.note} maxLength="500" onChange={(event) => setForm((current) => ({ ...current, note: event.target.value }))} /></label></div><button type="submit" className="scheduler-primary" disabled={busy || !valid}>{busy ? <LoaderCircle className="queue-spin" size={14} /> : <CalendarPlus size={14} />}{t('requestApproval')}</button></form></>;
+}
+
+function CreatePostModal({ tags = [], onClose, onCreated }) {
+  const { t } = useQueuePreferences();
+  const [form, setForm] = useState({ title: '', postType: 'Image', productionPoints: 3, priority: 'medium', brief: '', notes: '', references: '' });
+  const [tagSet, setTagSet] = useState(() => new Set());
+  const [attachmentFiles, setAttachmentFiles] = useState([]);
+  const [createdRequestId, setCreatedRequestId] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    const onKey = (event) => { if (event.key === 'Escape' && !saving) onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose, saving]);
+
+  const toggleTag = (tag) => setTagSet((current) => {
+    const next = new Set(current);
+    if (next.has(tag)) next.delete(tag); else next.add(tag);
+    return next;
+  });
+
+  const submit = async (event) => {
+    event.preventDefault();
+    if (!form.title.trim()) { setError(t('titleRequired')); return; }
+    if (!Number.isInteger(Number(form.productionPoints)) || Number(form.productionPoints) < 1) { setError('Production points must be at least 1.'); return; }
+    setSaving(true);
+    setError('');
+    try {
+      let requestId = createdRequestId;
+      let createdRequest = null;
+      if (!requestId) {
+        const body = new FormData();
+        body.append('title', form.title.trim());
+        body.append('post_type', form.postType);
+        body.append('production_points', String(form.productionPoints));
+        body.append('priority', form.priority);
+        body.append('brief', form.brief);
+        body.append('notes', form.notes);
+        body.append('references', JSON.stringify(form.references.split(/\n|,/).map((item) => item.trim()).filter(Boolean)));
+        body.append('tags', [...tagSet].join(','));
+        const response = await apiFetch(`${API_BASE}/api/dashboard/queue/v2/create`, { method: 'POST', body });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.detail || 'Could not create this Queue post.');
+        createdRequest = result.request;
+        requestId = createdRequest?.id;
+        setCreatedRequestId(requestId);
+      }
+      const failed = [];
+      for (const file of attachmentFiles) {
+        try {
+          const fileBody = new FormData();
+          fileBody.append('file', file);
+          const response = await apiFetch(`${API_BASE}/api/dashboard/queue/v2/requests/${requestId}/attachments`, { method: 'POST', body: fileBody });
+          if (!response.ok) failed.push(file);
+        } catch { failed.push(file); }
+      }
+      if (failed.length) {
+        setAttachmentFiles(failed);
+        throw new Error(`The post is already in the Pool, but ${failed.length} file${failed.length === 1 ? '' : 's'} failed to upload. Send again to retry only those files.`);
+      }
+      await onCreated(createdRequest || { id: requestId });
+    } catch (reason) {
+      setError(reason.message || 'Could not create this Queue post.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const tagOptions = tags.filter((tag) => tag !== 'hot');
+  const typeOptions = [
+    ['Image', 'postTypeImage'], ['Carousel', 'postTypeCarousel'], ['Reel', 'postTypeReel'],
+    ['Promo', 'postTypePromo'], ['Story', 'postTypeStory'], ['Other', 'postTypeOther'],
+  ];
+
+  return <div className="queue-create-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) onClose(); }}>
+    <form className="queue-create-modal" onSubmit={submit} aria-labelledby="queue-create-title">
+      <header className="queue-create-head"><div><p className="scheduler-eyebrow">Queue</p><h2 id="queue-create-title">{t('createPostTitle')}</h2><small>{t('createPostHelp')}</small></div><button type="button" onClick={onClose} aria-label={t('close')} disabled={saving}><X size={16} /></button></header>
+      <div className="queue-create-grid">
+        <label className="is-wide"><span>{t('postTitle')} <i>required</i></span><input value={form.title} maxLength="160" autoFocus onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} placeholder={t('postTitlePlaceholder')} /></label>
+        <label><span>{t('postType')}</span><select value={form.postType} onChange={(event) => setForm((current) => ({ ...current, postType: event.target.value }))}>{typeOptions.map(([value, key]) => <option key={value} value={value}>{t(key)}</option>)}</select></label>
+        <label><span>{t('productionPoints')} <i>required</i></span><input type="number" min="1" step="1" value={form.productionPoints} onChange={(event) => setForm((current) => ({ ...current, productionPoints: event.target.value }))} /></label>
+        <label><span>{t('priority')} <i>required</i></span><select value={form.priority} onChange={(event) => setForm((current) => ({ ...current, priority: event.target.value }))}>{PRIORITIES.map((priority) => <option key={priority} value={priority}>{priorityCopy(priority, t)}</option>)}</select></label>
+      </div>
+      <label className="queue-create-note"><span>{t('brief')} <i>optional</i></span><textarea value={form.brief} onChange={(event) => setForm((current) => ({ ...current, brief: event.target.value }))} rows={3} /></label>
+      <label className="queue-create-note"><span>{t('notes')} <i>optional</i></span><textarea value={form.notes} onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))} rows={2} /></label>
+      <label className="queue-create-note"><span>{t('referenceLinks')} <i>optional</i></span><textarea value={form.references} onChange={(event) => setForm((current) => ({ ...current, references: event.target.value }))} placeholder={t('oneLinkPerLine')} rows={2} /></label>
+      <label className="queue-create-files"><span>{t('attachments')} <i>optional · up to 20 MB each</i></span><input type="file" multiple onChange={(event) => setAttachmentFiles([...event.target.files])} />{attachmentFiles.length ? <small>{attachmentFiles.map((file) => file.name).join(' · ')}</small> : null}</label>
+      {tagOptions.length ? <fieldset className="queue-create-fieldset"><legend>{t('tags')} <i>optional</i></legend><div className="queue-tag-picker">{tagOptions.map((tag) => <button type="button" key={tag} className={tagSet.has(tag) ? 'is-on' : ''} onClick={() => toggleTag(tag)}>{tag}</button>)}</div></fieldset> : null}
+      {error ? <p className="queue-create-error" role="alert">{error}</p> : null}
+      <footer className="queue-create-actions"><button type="button" className="scheduler-secondary" onClick={onClose} disabled={saving}>{t('cancel')}</button><button type="submit" className="scheduler-primary" disabled={saving}>{saving ? <LoaderCircle className="queue-spin" size={14} /> : <Plus size={14} />}{t('createPost')}</button></footer>
+    </form>
+  </div>;
+}
+
 function PoolCard({ task, onOpen }) {
-  return <article className={`queue-pool-card priority-${task.priority || 'medium'}`} draggable onDragStart={(event) => { activeQueueDragId = task.id; event.dataTransfer.setData('queue-task', String(task.id)); }} onDragEnd={() => { activeQueueDragId = null; }}><button type="button" onClick={() => onOpen(task)}>{cover(task) ? <img src={cover(task)} alt="" /> : <span className="queue-pool-empty">@</span>}<span><b>@{task.post.account}</b><small>{task.productionPoints} PP · {task.durationMinutes} min</small></span><PriorityBadge priority={task.priority} /></button><div>{task.tags?.map((tag) => <i key={tag}>{tag}</i>)}</div></article>;
+  const { t } = useQueuePreferences();
+  return <article className={`queue-pool-card priority-${task.priority || 'medium'}${hotClass(task)}${task.isDraft ? ' is-draft' : ''}`} draggable onDragStart={(event) => { activeQueueDragId = task.id; event.dataTransfer.setData('queue-task', String(task.id)); }} onDragEnd={() => { activeQueueDragId = null; }}><button type="button" onClick={() => onOpen(task)}>{cover(task) ? <img src={cover(task)} alt="" /> : <span className="queue-pool-empty">@</span>}<span><b>{task.post.title || accountMention(task.post.account) || t('post')}</b><small>{task.post.title && task.post.account ? `${accountMention(task.post.account)} · ` : task.post.account ? `${accountMention(task.post.account)} · ` : `${t('accountToSelect')} · `}{task.productionPoints} PP · {task.durationMinutes} min</small>{task.isDraft ? <em>{t('returnToPool')}</em> : null}</span><span className="queue-pool-card-badges"><PriorityBadge priority={task.priority} />{isHotTask(task) ? <i className="queue-hot-badge">🔥 {hotText(task)}</i> : null}</span></button><div>{task.tags?.filter((tag) => tag !== 'hot').map((tag) => <i key={tag}>{tag}</i>)}</div></article>;
 }
 
 function DesignerAssignments({ tasks, onOpen }) {
   const { t, language } = useQueuePreferences();
-  return <section className="designer-assignments"><header><div><p className="scheduler-eyebrow">{t('myAssignedWork')}</p><h2>{t('upcomingProduction')}</h2></div><small>{tasks.length} {tasks.length === 1 ? t('activeRequest') : t('activeRequests')}</small></header>{tasks.length ? <div className="designer-assignment-table" role="table"><div className="designer-assignment-head" role="row"><span>{t('post')}</span><span>{t('scheduled')}</span><span>{t('priority')}</span><span>{t('scope')}</span><span>{t('status')}</span></div>{tasks.map((task) => <button type="button" role="row" key={task.id} className={`designer-assignment-row state-${task.status} priority-${task.priority || 'medium'}${task.isDraft ? ' is-draft' : ''}`} onClick={() => onOpen(task)}><span className="designer-assignment-post">{cover(task) ? <img src={cover(task)} alt="" /> : <span className="designer-assignment-empty">@</span>}<span><b>@{task.post.account}</b><small>{task.brief || task.post.caption || t('post')}</small></span></span><span className="designer-assignment-time"><b>{displayDate(task.scheduledDate, language)}</b><small>{time(task.scheduledStartMinutes ?? QUEUE_DAY_START)} · {task.durationMinutes} {t('minutes')}</small></span><span className="designer-assignment-priority"><PriorityBadge priority={task.priority} /></span><span className="designer-assignment-pp"><b>{task.productionPoints} PP</b><small>{task.tags?.slice(0, 2).join(' · ') || t('noTags')}</small></span><span className="designer-assignment-status"><i>{statusCopy(task.status, t, task.isDraft)}</i>{task.isDraft ? <small>{t('tentativeBy')} {task.draftCoordinatorEmail?.split('@')[0]}</small> : null}</span></button>)}</div> : <div className="designer-assignments-empty"><CalendarDays size={18} /><strong>{t('noActiveAssignments')}</strong><span>{t('emptyAssignments')}</span></div>}</section>;
+  return <section className="designer-assignments"><header><div><p className="scheduler-eyebrow">{t('myAssignedWork')}</p><h2>{t('upcomingProduction')}</h2></div><small>{tasks.length} {tasks.length === 1 ? t('activeRequest') : t('activeRequests')}</small></header>{tasks.length ? <div className="designer-assignment-table" role="table"><div className="designer-assignment-head" role="row"><span>{t('post')}</span><span>{t('scheduled')}</span><span>{t('priority')}</span><span>{t('scope')}</span><span>{t('status')}</span></div>{tasks.map((task) => <button type="button" role="row" key={task.id} className={`designer-assignment-row state-${task.status} priority-${task.priority || 'medium'}${hotClass(task)}${task.isDraft ? ' is-draft' : ''}`} onClick={() => onOpen(task)}><span className="designer-assignment-post">{cover(task) ? <img src={cover(task)} alt="" /> : <span className="designer-assignment-empty">@</span>}<span><b>{task.post.title || accountMention(task.post.account) || t('post')}</b><small>{task.post.account ? accountMention(task.post.account) : t('accountToSelect')} · {task.brief || task.post.caption || t('post')}</small></span></span><span className="designer-assignment-time"><b>{displayDate(task.scheduledDate, language)}</b><small>{time(task.scheduledStartMinutes ?? QUEUE_DAY_START)} · {task.durationMinutes} {t('minutes')}</small></span><span className="designer-assignment-priority"><PriorityBadge priority={task.priority} />{isHotTask(task) ? <i className="queue-hot-badge">🔥 {hotText(task)}</i> : null}</span><span className="designer-assignment-pp"><b>{task.productionPoints} PP</b><small>{task.tags?.filter((tag) => tag !== 'hot').slice(0, 2).join(' · ') || t('noTags')}</small></span><span className="designer-assignment-status"><i>{statusCopy(task.status, t, task.isDraft)}</i>{task.isDraft ? <small>{t('tentativeBy')} {displayName(task.draftCoordinatorEmail)}</small> : null}</span></button>)}</div> : <div className="designer-assignments-empty"><CalendarDays size={18} /><strong>{t('noActiveAssignments')}</strong><span>{t('emptyAssignments')}</span></div>}</section>;
 }
 
-function AdminAssignmentTable({ tasks, onOpen }) {
+function AdminAssignmentTable({ tasks, onOpen, headingKey = 'allAssignedPosts', countKey = 'assignedPostsCount' }) {
   const { t, language } = useQueuePreferences();
-  return <section className="queue-admin-assignments"><header><div><p className="scheduler-eyebrow">{t('allAssignedPosts')}</p><h3>{tasks.length} {t('assignedPostsCount')}</h3></div></header>{tasks.length ? <div className="queue-admin-assignment-table" role="table"><div className="queue-admin-assignment-head" role="row"><span>{t('post')}</span><span>{t('designer')}</span><span>{t('scheduled')}</span><span>{t('priority')}</span><span>{t('productionPoints')}</span><span>{t('status')}</span></div>{tasks.map((task) => <button type="button" role="row" key={task.id} className={`queue-admin-assignment-row state-${task.status} priority-${task.priority || 'medium'}${task.isDraft ? ' is-draft' : ''}`} onClick={() => onOpen(task)}><span className="queue-admin-assignment-post">{cover(task) ? <img src={cover(task)} alt="" /> : <span className="queue-admin-assignment-empty">@</span>}<span><b>@{task.post.account}</b><small>{task.brief || task.post.caption || t('post')}</small>{task.recommendedAccounts?.length ? <em>{task.recommendedAccounts.map((account) => `@${account}`).join(' · ')}</em> : null}</span></span><span className="queue-admin-assignment-designer"><b>{task.designerEmail?.split('@')[0] || '—'}</b><small>{task.designerEmail || ''}</small></span><span className="queue-admin-assignment-time"><b>{task.scheduledDate ? displayDate(task.scheduledDate, language) : '—'}</b><small>{task.scheduledStartMinutes == null ? '—' : `${time(task.scheduledStartMinutes)} · ${task.durationMinutes} ${t('minutes')}`}</small></span><span className="queue-admin-assignment-priority"><PriorityBadge priority={task.priority} /></span><span className="queue-admin-assignment-pp"><b>{task.productionPoints} PP</b><small>{task.tags?.slice(0, 2).join(' · ') || t('noTags')}</small></span><span className="queue-admin-assignment-status"><i>{statusCopy(task.status, t, task.isDraft)}</i></span></button>)}</div> : <p className="queue-admin-assignment-empty-state">{t('noAssignedPosts')}</p>}</section>;
+  return <section className="queue-admin-assignments"><header><div><p className="scheduler-eyebrow">{t(headingKey)}</p><h3>{tasks.length} {t(countKey)}</h3></div></header>{tasks.length ? <div className="queue-admin-assignment-table" role="table"><div className="queue-admin-assignment-head" role="row"><span>{t('post')}</span><span>{t('designer')}</span><span>{t('scheduled')}</span><span>{t('priority')}</span><span>{t('productionPoints')}</span><span>{t('status')}</span></div>{tasks.map((task) => <button type="button" role="row" key={task.id} className={`queue-admin-assignment-row state-${task.status} priority-${task.priority || 'medium'}${hotClass(task)}${task.isDraft ? ' is-draft' : ''}`} onClick={() => onOpen(task)}><span className="queue-admin-assignment-post">{cover(task) ? <img src={cover(task)} alt="" /> : <span className="queue-admin-assignment-empty">@</span>}<span><b>{task.post.title || accountMention(task.post.account) || t('post')}</b><small>{task.post.account ? accountMention(task.post.account) : t('accountToSelect')} · {task.brief || task.post.caption || t('post')}</small>{task.recommendedAccounts?.length ? <em>{task.recommendedAccounts.map((account) => `@${account}`).join(' · ')}</em> : null}{isHotTask(task) ? <i className="queue-hot-badge">🔥 {hotText(task)}</i> : null}</span></span><span className="queue-admin-assignment-designer"><b>{task.designerEmail ? displayName(task.designerEmail) : '—'}</b><small>{task.designerEmail || ''}</small></span><span className="queue-admin-assignment-time"><b>{task.scheduledDate ? displayDate(task.scheduledDate, language) : '—'}</b><small>{task.scheduledStartMinutes == null ? '—' : `${time(task.scheduledStartMinutes)} · ${task.durationMinutes} ${t('minutes')}`}</small></span><span className="queue-admin-assignment-priority"><PriorityBadge priority={task.priority} /></span><span className="queue-admin-assignment-pp"><b>{task.productionPoints} PP</b><small>{task.tags?.filter((tag) => tag !== 'hot').slice(0, 2).join(' · ') || t('noTags')}</small></span><span className="queue-admin-assignment-status"><i>{statusCopy(task.status, t, task.isDraft)}</i></span></button>)}</div> : <p className="queue-admin-assignment-empty-state">{t('noAssignedPosts')}</p>}</section>;
+}
+
+function AdminUserManagement() {
+  const { t } = useQueuePreferences();
+  const [users, setUsers] = useState([]);
+  const [designerAccounts, setDesignerAccounts] = useState([]);
+  const [accounts, setAccounts] = useState([]);
+  const [choices, setChoices] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState('');
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const [userBody, designerBody, accountBody] = await Promise.all([
+        json('/api/admin/users'),
+        json('/api/admin/queue/designer-accounts'),
+        json('/api/admin/accounts'),
+      ]);
+      setUsers(userBody.users || []);
+      setDesignerAccounts(designerBody.designers || []);
+      setAccounts((accountBody.accounts || []).filter((account) => account.group === 'sentient' && account.is_active !== false));
+    } catch (cause) {
+      setError(cause.message || t('accountUpdateFailed'));
+    } finally {
+      setLoading(false);
+    }
+  }, [t]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const updateAccount = async (designerEmail, accountHandle, method) => {
+    const key = `${designerEmail}:${accountHandle}`;
+    setBusy(key);
+    setError('');
+    try {
+      const query = new URLSearchParams({ designer_email: designerEmail, account_handle: accountHandle });
+      const body = method === 'POST' ? { method, body: query } : { method: 'DELETE', search: `?${query.toString()}` };
+      const response = await json(`/api/admin/queue/designer-accounts${body.search || ''}`, body.method === 'POST' ? body : { method: body.method });
+      setDesignerAccounts(response.designers || []);
+      setChoices((current) => ({ ...current, [designerEmail]: '' }));
+    } catch (cause) {
+      setError(cause.message || t('accountUpdateFailed'));
+    } finally {
+      setBusy('');
+    }
+  };
+
+  if (loading) return <div className="queue-user-management-loading"><LoaderCircle className="queue-spin" />{t('loadingUsers')}</div>;
+  return <section className="queue-user-management"><header><div><p className="scheduler-eyebrow">{t('userManagement')}</p><h3>{t('managedAccounts')}</h3></div><small>{users.length} {t('usersCount')}</small></header>{error ? <p className="queue-user-management-error">{error}</p> : null}{users.length ? <div className="queue-user-management-list">{users.map((user) => {
+    const managed = designerAccounts.find((item) => item.email === user.email) || { accounts: [] };
+    const available = accounts.filter((account) => !managed.accounts.includes(account.handle));
+    let explicitRoles = [];
+    try { explicitRoles = JSON.parse(user.operating_roles || '[]'); } catch { explicitRoles = []; }
+    if (!Array.isArray(explicitRoles) || !explicitRoles.length) explicitRoles = [user.operating_role || 'sales'];
+    const roleLabels = explicitRoles.filter((role) => String(role).toLowerCase() !== 'pd').map((role) => ({ vc: t('viralCoordinator'), sales: t('salesRole') }[String(role).toLowerCase()] || String(role).toUpperCase()));
+    if (user.is_admin) roleLabels.push(t('admin'));
+    const displayRole = roleLabels.join(' · ');
+    return <article key={user.email}><header><b>{displayName(user.email)}</b><small>{user.email}{displayRole ? ` · ${displayRole}` : ''}</small></header><div className="queue-user-management-accounts">{managed.accounts.map((handle) => <button type="button" key={handle} title={t('removeAccount')} onClick={() => updateAccount(user.email, handle, 'DELETE')} disabled={Boolean(busy)}>@{handle} <X size={11} /></button>)}{!managed.accounts.length ? <em>—</em> : null}</div><div className="queue-user-management-add"><select value={choices[user.email] || ''} aria-label={`${t('chooseSentientAccount')} ${user.email}`} onChange={(event) => setChoices((current) => ({ ...current, [user.email]: event.target.value }))} disabled={Boolean(busy)}><option value="">{t('chooseSentientAccount')}</option>{available.map((account) => <option key={account.handle} value={account.handle}>@{account.handle}</option>)}</select><button type="button" onClick={() => updateAccount(user.email, choices[user.email], 'POST')} disabled={!choices[user.email] || Boolean(busy)}>{t('assignAccount')}</button></div></article>;
+  })}</div> : <p className="queue-user-management-empty">{t('noUsers')}</p>}</section>;
 }
 
 function AdminTools({ report, loading, error, onClose, onOpen }) {
   const { t } = useQueuePreferences();
+  const [tab, setTab] = useState('overview');
   const totals = report?.totals || {};
   const metric = (status, label) => <div key={status}><span>{label}</span><strong>{totals[status]?.count || 0}</strong><small>{totals[status]?.points || 0} PP</small></div>;
   const priorityMetric = (priority) => <div key={priority} className={`priority-${priority}`}><span>{priorityCopy(priority, t)}</span><strong>{report?.priorities?.[priority]?.count || 0}</strong><small>{report?.priorities?.[priority]?.points || 0} PP</small></div>;
-  return <section className="queue-admin-tools"><header><div><p className="scheduler-eyebrow">{t('adminWorkspace')}</p><h2>{t('productionReports')}</h2></div><button type="button" onClick={onClose} aria-label={t('close')}><X size={16} /></button></header>{loading ? <div className="queue-admin-loading"><LoaderCircle className="queue-spin" />{t('loadingReport')}</div> : null}{error ? <p className="queue-admin-error">{error}</p> : null}{report ? <><div className="queue-admin-metrics">{metric('pool', t('inPool'))}{metric('scheduled', t('scheduled'))}{metric('in_progress', t('inProgress'))}{metric('completed', t('readyToClose'))}{metric('closed', t('closed'))}{['low', 'medium', 'high', 'urgent'].map(priorityMetric)}</div><div className="queue-admin-designers"><div><h3>{t('designerWorkload')}</h3><p>{t('workloadHelp')}</p></div><div className="queue-admin-designer-list">{report.designers.map((designer) => <span key={designer.email}><b>{designer.email.split('@')[0]}</b><small>{designer.activeRequests} {t('activeRequests')} · {designer.productionPoints} PP · {designer.urgentRequests} {t('priorityUrgent')}</small><em>{designer.highPriorityRequests} {t('highPriority')} · {designer.closedRequests} {t('closed')} · {designer.averageActualMinutes == null ? '—' : `${designer.averageActualMinutes} min`} {t('averageTime')}</em></span>)}</div></div><a className="queue-admin-settings" href={`${import.meta.env.BASE_URL}?view=admin`} target="_blank" rel="noreferrer"><Settings size={14} />{t('openSettings')}</a><AdminAssignmentTable tasks={report.assignedPosts || []} onOpen={onOpen} /></> : null}</section>;
+  return <section className="queue-admin-tools"><header><div><p className="scheduler-eyebrow">{t('adminWorkspace')}</p><h2>{t('productionReports')}</h2></div><button type="button" onClick={onClose} aria-label={t('close')}><X size={16} /></button></header><nav className="queue-admin-tabs" role="tablist" aria-label={t('adminWorkspace')}><button type="button" role="tab" aria-selected={tab === 'overview'} className={tab === 'overview' ? 'is-active' : ''} onClick={() => setTab('overview')}>{t('adminOverview')}</button><button type="button" role="tab" aria-selected={tab === 'users'} className={tab === 'users' ? 'is-active' : ''} onClick={() => setTab('users')}>{t('userManagement')}</button></nav>{tab === 'users' ? <AdminUserManagement /> : <>{loading ? <div className="queue-admin-loading"><LoaderCircle className="queue-spin" />{t('loadingReport')}</div> : null}{error ? <p className="queue-admin-error">{error}</p> : null}{report ? <><div className="queue-admin-metrics">{metric('pool', t('inPool'))}{metric('scheduled', t('scheduled'))}{metric('in_progress', t('inProgress'))}{metric('completed', t('readyToClose'))}{metric('closed', t('closed'))}{['low', 'medium', 'high', 'urgent'].map(priorityMetric)}</div><div className="queue-admin-designers"><div><h3>{t('designerWorkload')}</h3><p>{t('workloadHelp')}</p></div><div className="queue-admin-designer-list">{report.designers.map((designer) => <span key={designer.email}><b>{displayName(designer.email)}</b><small>{designer.activeRequests} {t('activeRequests')} · {designer.productionPoints} PP · {designer.urgentRequests} {t('priorityUrgent')}</small><em>{designer.highPriorityRequests} {t('highPriority')} · {designer.closedRequests} {t('closed')} · {designer.averageActualMinutes == null ? '—' : `${designer.averageActualMinutes} min`} {t('averageTime')}</em></span>)}</div></div><a className="queue-admin-settings" href={`${import.meta.env.BASE_URL}?view=admin`} target="_blank" rel="noreferrer"><Settings size={14} />{t('openSettings')}</a><AdminAssignmentTable tasks={report.assignedPosts || []} onOpen={onOpen} /></> : null}</>}</section>;
+}
+
+function TicketPanel({ tickets, loading, error, onClose, onReview, canReview }) {
+  const { t, language } = useQueuePreferences();
+  const [tab, setTab] = useState('pending');
+  const [busy, setBusy] = useState('');
+  const items = tickets.filter((ticket) => ticket.status === tab);
+  const counts = {
+    pending: tickets.filter((ticket) => ticket.status === 'pending').length,
+    approved: tickets.filter((ticket) => ticket.status === 'approved').length,
+    rejected: tickets.filter((ticket) => ticket.status === 'rejected').length,
+  };
+  const tabs = [
+    { status: 'pending', label: 'ticketsPending', empty: 'noPendingTickets' },
+    { status: 'approved', label: 'ticketsApproved', empty: 'noApprovedTickets' },
+    { status: 'rejected', label: 'ticketsRejected', empty: 'noRejectedTickets' },
+  ];
+  const emptyMessage = tabs.find((item) => item.status === tab)?.empty || 'noPendingTickets';
+  const review = async (ticket, action) => { setBusy(`${ticket.id}:${action}`); try { await onReview(ticket.id, action); } finally { setBusy(''); } };
+  const ticketTitle = (ticket) => ticket.type === 'move' ? t('moveRequest') : ticket.type === 'time_block' ? (ticket.title || t(ticket.category || 'other')) : ticket.type === 'pp_revision' ? t('ppRevision') : t('cancellationRequest');
+  const ticketMeta = (ticket) => {
+    if (ticket.type === 'move') {
+      const account = ticket.request?.post?.account ? `@${ticket.request.post.account}` : t('post');
+      return `${account} · ${ticket.scheduledDate || '—'} · ${time(ticket.scheduledStartMinutes ?? 0)}`;
+    }
+    if (ticket.type === 'time_block') return `${displayDate(ticket.scheduledDate, language)} · ${time(ticket.scheduledStartMinutes)} · ${ticket.durationMinutes} min`;
+    const account = ticket.request?.post?.account ? `@${ticket.request.post.account}` : t('post');
+    if (ticket.type === 'pp_revision') return `${account} · ${ticket.request?.productionPoints || '—'} PP → ${ticket.requestedProductionPoints} PP`;
+    return `${account} · ${statusCopy(ticket.request?.status, t)}`;
+  };
+  return <><button type="button" className="queue-overlay-backdrop" onClick={onClose} aria-label={t('close')} /><aside className="queue-ticket-panel" aria-label={t(canReview ? 'ticketInbox' : 'myRequests')}>
+    <header><div><p className="scheduler-eyebrow">{t('tickets')}</p><h2>{t(canReview ? 'ticketInbox' : 'myRequests')}</h2></div><button type="button" onClick={onClose} aria-label={t('close')}><X size={16} /></button></header>
+    <nav role="tablist">{tabs.map((item) => <button key={item.status} type="button" role="tab" aria-selected={tab === item.status} className={tab === item.status ? 'is-active' : ''} onClick={() => setTab(item.status)}>{t(item.label)} <b>{counts[item.status]}</b></button>)}</nav>
+    <div className="queue-ticket-list">
+      {loading ? <div className="queue-ticket-state"><LoaderCircle className="queue-spin" />{t('loadingSchedule')}</div> : null}
+      {error ? <p className="queue-ticket-error">{error}</p> : null}
+      {!loading && !items.length ? <div className="queue-ticket-empty"><ClipboardList size={20} /><span>{t(emptyMessage)}</span></div> : null}
+      {items.map((ticket) => <article key={ticket.id} className={`ticket-${ticket.type} status-${ticket.status}`}><header><span>{ticket.type === 'time_block' ? <CalendarPlus size={14} /> : ticket.type === 'pp_revision' ? <TimerReset size={14} /> : ticket.type === 'move' ? <TimerReset size={14} /> : <Ban size={14} />}</span><div><b>{ticketTitle(ticket)}</b><small>{displayName(ticket.requesterEmail)} · {displayTimestamp(ticket.createdAt, language)}</small></div><i>{ticket.status === 'pending' ? t('ticketsPending') : t(ticket.status)}</i></header><p>{ticketMeta(ticket)}</p>{ticket.reason ? <blockquote>{ticket.reason}</blockquote> : null}{ticket.status === 'pending' && canReview ? <footer><button type="button" className="is-approve" disabled={Boolean(busy)} onClick={() => review(ticket, 'approve')}>{busy === `${ticket.id}:approve` ? <LoaderCircle className="queue-spin" size={13} /> : <Check size={13} />}{t('approve')}</button><button type="button" className="is-reject" disabled={Boolean(busy)} onClick={() => review(ticket, 'reject')}>{busy === `${ticket.id}:reject` ? <LoaderCircle className="queue-spin" size={13} /> : <X size={13} />}{t('reject')}</button></footer> : ticket.status === 'pending' ? <small className="ticket-reviewer">{t('pendingApproval')}</small> : <small className="ticket-reviewer">{ticket.reviewerEmail ? displayName(ticket.reviewerEmail) : '—'} · {ticket.reviewedAt ? displayTimestamp(ticket.reviewedAt, language) : ''}</small>}</article>)}
+    </div>
+  </aside></>;
 }
 
 function AttachmentList({ task, busy, onUpload, onDownload }) {
@@ -119,32 +435,54 @@ function AttachmentList({ task, busy, onUpload, onDownload }) {
 
 function HistoryList({ events, loading }) {
   const { t, language } = useQueuePreferences();
-  return <section className="queue-detail-section"><h3><History size={13} />{t('history')}</h3>{loading ? <LoaderCircle className="queue-spin" size={16} /> : events?.length ? <ol className="queue-history">{events.map((event, index) => <li key={`${event.createdAt}-${index}`}><span className={`history-dot type-${event.type}`} /><div><b>{event.type.replaceAll('_', ' ')}</b><small>{event.actorEmail?.split('@')[0]} · {displayTimestamp(event.createdAt, language)}</small></div></li>)}</ol> : <p className="queue-detail-empty">{t('noHistory')}</p>}</section>;
+  return <section className="queue-detail-section"><h3><History size={13} />{t('history')}</h3>{loading ? <LoaderCircle className="queue-spin" size={16} /> : events?.length ? <ol className="queue-history">{events.map((event, index) => <li key={`${event.createdAt}-${index}`}><span className={`history-dot type-${event.type}`} /><div><b>{event.type.replaceAll('_', ' ')}</b><small>{displayName(event.actorEmail)} · {displayTimestamp(event.createdAt, language)}</small></div></li>)}</ol> : <p className="queue-detail-empty">{t('noHistory')}</p>}</section>;
 }
 
-function Detail({ task, tags, canCoordinate, isOwner, notice, history, historyLoading, onClose, onAction, onCancel, onEdit, onNotify, onUpload, onDownload }) {
+function Detail({ task, tags, canCoordinate, isOwner, pendingTickets = [], onReviewTicket, notice, history, historyLoading, onClose, onAction, onCancel, onEdit, onNotify, onUpload, onDownload, onRequestPP, onRequestCancellation, onRequestMove }) {
   const { t } = useQueuePreferences();
   const [link, setLink] = useState(task?.finalPermalink || '');
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [requestMode, setRequestMode] = useState('');
+  const [requestedPP, setRequestedPP] = useState(task?.productionPoints || 1);
+  const [moveDate, setMoveDate] = useState(task?.scheduledDate || '');
+  const [moveStart, setMoveStart] = useState(time(task?.scheduledStartMinutes ?? QUEUE_DAY_START));
+  const [requestReason, setRequestReason] = useState('');
   const [form, setForm] = useState({});
-  useEffect(() => { setLink(task?.finalPermalink || ''); setReason(''); setEditing(false); setForm({ productionPoints: task?.productionPoints || 1, priority: task?.priority || 'medium', tags: task?.tags || [], brief: task?.brief || '', notes: task?.notes || '', references: task?.references?.join('\n') || '' }); }, [task?.id]);
+  useEffect(() => { setLink(task?.finalPermalink || ''); setReason(''); setEditing(false); setRequestMode(''); setRequestedPP(task?.productionPoints || 1); setMoveDate(task?.scheduledDate || ''); setMoveStart(time(task?.scheduledStartMinutes ?? QUEUE_DAY_START)); setRequestReason(''); setForm({ productionPoints: task?.productionPoints || 1, priority: task?.priority || 'medium', tags: task?.tags || [], brief: task?.brief || '', notes: task?.notes || '', references: task?.references?.join('\n') || '' }); }, [task?.id]);
   useEffect(() => { if (!task) return undefined; const close = (event) => { if (event.key === 'Escape') onClose(); }; document.addEventListener('keydown', close); return () => document.removeEventListener('keydown', close); }, [task, onClose]);
   if (!task) return null;
   const run = async (callback) => { setBusy(true); try { await callback(); } finally { setBusy(false); } };
   const save = () => run(async () => { const saved = await onEdit({ ...form, productionPoints: Number(form.productionPoints), references: form.references.split('\n').map((item) => item.trim()).filter(Boolean) }); if (saved) setEditing(false); });
-  const metric = (label, value) => <div className="metric" key={label}><span>{label}</span><strong>{value || '—'}</strong></div>;
+  const sendDesignerRequest = () => run(async () => { const sent = requestMode === 'pp' ? await onRequestPP(Number(requestedPP), requestReason) : requestMode === 'move' ? await onRequestMove(moveDate, minutesFromTime(moveStart), requestReason) : await onRequestCancellation(requestReason); if (sent) { setRequestMode(''); setRequestReason(''); } });
+  const canRequestChange = !canCoordinate && isOwner && !task.isDraft && ['scheduled', 'in_progress', 'completed'].includes(task.status);
+  const designerRequestActions = canRequestChange ? <div className="queue-designer-ticket-actions">{!requestMode ? <><button type="button" disabled={busy || !['scheduled', 'in_progress'].includes(task.status)} onClick={() => { setRequestedPP(task.productionPoints); setRequestMode('pp'); }}><TimerReset size={13} />{t('requestPPChange')}</button><button type="button" disabled={busy || task.status !== 'scheduled'} onClick={() => { setMoveDate(task.scheduledDate || ''); setMoveStart(time(task.scheduledStartMinutes ?? QUEUE_DAY_START)); setRequestMode('move'); }}><Clock3 size={13} />{t('requestMove')}</button><button type="button" disabled={busy} onClick={() => setRequestMode('cancel')}><Ban size={13} />{t('requestCancellation')}</button></> : <div className="queue-designer-ticket-form">{requestMode === 'pp' ? <label>{t('requestedPP')}<input type="number" min="1" value={requestedPP} onChange={(event) => setRequestedPP(event.target.value)} /></label> : requestMode === 'move' ? <><strong>{t('moveRequest')}</strong><small>{t('moveHelp')}</small><label>{t('moveTo')}<input type="date" value={moveDate} onChange={(event) => setMoveDate(event.target.value)} /><input type="time" step="600" value={moveStart} onChange={(event) => setMoveStart(event.target.value)} /></label></> : <strong>{t('requestCancellation')}</strong>}<label>{t('requestReason')}<textarea value={requestReason} onChange={(event) => setRequestReason(event.target.value)} /></label><div><button type="button" className="is-send" disabled={busy || (requestMode === 'pp' && (!requestedPP || Number(requestedPP) === Number(task.productionPoints))) || (requestMode === 'move' && (!moveDate || !moveStart || (moveDate === task.scheduledDate && minutesFromTime(moveStart) === Number(task.scheduledStartMinutes))))} onClick={sendDesignerRequest}>{busy ? <LoaderCircle className="queue-spin" size={13} /> : <Send size={13} />}{t('sendRequest')}</button><button type="button" disabled={busy} onClick={() => { setRequestMode(''); setRequestReason(''); }}>{t('cancel')}</button></div></div>}</div> : null;
+  const coordinatorTicketActions = canCoordinate && pendingTickets.length ? <div className="queue-coordinator-ticket-actions"><strong>{t('ticketInbox')}</strong>{pendingTickets.map((ticket) => <article key={ticket.id}><span>{ticket.type === 'pp_revision' ? t('ppRevision') : ticket.type === 'move' ? t('moveRequest') : t('cancellationRequest')}</span><small>{ticket.type === 'pp_revision' ? `${task.productionPoints} PP → ${ticket.requestedProductionPoints} PP` : ticket.type === 'move' ? `${ticket.scheduledDate || '—'} · ${time(ticket.scheduledStartMinutes ?? 0)}` : t('requestCancellation')}{ticket.reason ? ` · ${ticket.reason}` : ''}</small><div><button type="button" className="is-approve" disabled={busy} onClick={() => run(() => onReviewTicket(ticket.id, 'approve'))}><Check size={12} />{t('approve')}</button><button type="button" className="is-reject" disabled={busy} onClick={() => run(() => onReviewTicket(ticket.id, 'reject'))}><X size={12} />{t('reject')}</button></div></article>)}</div> : null;
+  const metric = (label, value) => <React.Fragment key={label}><div className="metric"><span>{label}</span><strong>{value || '—'}</strong></div>{label === t('recommendedAccounts') ? <>{designerRequestActions}{coordinatorTicketActions}</> : null}</React.Fragment>;
   const toggleTag = (tag) => setForm((current) => ({ ...current, tags: current.tags.includes(tag) ? current.tags.filter((item) => item !== tag) : [...current.tags, tag] }));
-  return <><button className="sidebar-backdrop" type="button" onClick={onClose} aria-label={t('close')} /><aside className="right-rail is-open queue-request-rail" role="dialog" aria-modal="true" aria-label="Queue request details"><button className="rail-close-button" type="button" onClick={onClose} aria-label={t('close')}><X size={16} /></button><section className="panel detail"><SelectedPost post={queuePost(task)} /><span className={`queue-detail-status${task.isDraft ? ' is-draft' : ''}`}>{statusCopy(task.status, t, task.isDraft)}</span></section><section className="panel caption-panel queue-rail-caption"><header className="panel-header caption-header"><div><p className="section-label">{editing ? t('editRequest') : t('sourceCaption')}</p><h2>@{task.post.account}</h2></div>{canCoordinate && !editing && task.status !== 'cancelled' ? <button type="button" className="ghost-button" onClick={() => setEditing(true)} title={t('editRequest')}><Pencil size={15} />{t('editRequest')}</button> : null}</header>{task.isDraft ? <p className="queue-detail-notice is-draft">{t('tentativeBy')} {task.draftCoordinatorEmail?.split('@')[0]}. {t('sharedDrafts')}</p> : null}{notice ? <p className={`queue-detail-notice is-${notice.type || 'success'}`}>{notice.message}</p> : null}{editing ? <div className="queue-detail-editor"><label>{t('productionPoints')}<input type="number" min="1" value={form.productionPoints || ''} onChange={(event) => setForm((current) => ({ ...current, productionPoints: event.target.value }))} /></label><label>{t('priority')}<select value={form.priority || 'medium'} onChange={(event) => setForm((current) => ({ ...current, priority: event.target.value }))}>{PRIORITIES.map((priority) => <option key={priority} value={priority}>{priorityCopy(priority, t)}</option>)}</select></label><fieldset><legend>{t('tags')}</legend><div className="queue-tag-picker">{tags.map((tag) => <button type="button" key={tag} className={form.tags.includes(tag) ? 'is-on' : ''} onClick={() => toggleTag(tag)}>{tag}</button>)}</div></fieldset><label>{t('brief')}<textarea value={form.brief || ''} onChange={(event) => setForm((current) => ({ ...current, brief: event.target.value }))} /></label><label>{t('notes')}<textarea value={form.notes || ''} onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))} /></label><label>{t('referenceLinks')}<textarea value={form.references || ''} onChange={(event) => setForm((current) => ({ ...current, references: event.target.value }))} placeholder={t('oneLinkPerLine')} /></label></div> : <div className="queue-detail-scroll"><div className="queue-detail-copy"><p>{task.brief || task.post.caption || '—'}</p>{task.notes ? <section><h3>{t('notes')}</h3><p>{task.notes}</p></section> : null}{task.references?.length ? <section><h3>{t('references')}</h3>{task.references.map((item) => <a key={item} href={item} target="_blank" rel="noreferrer">{item}</a>)}</section> : null}{task.cancellationReason ? <section><h3>{t('cancelledReason')}</h3><p>{task.cancellationReason}</p></section> : null}</div><SlideDownload post={queuePost(task)} /><AttachmentList task={task} busy={busy} onUpload={(files) => run(() => onUpload(files))} onDownload={(file) => run(() => onDownload(file))} /><HistoryList events={history} loading={historyLoading} /></div>}<footer className="queue-detail-actions">{editing ? <><button className="scheduler-primary" disabled={busy || !form.productionPoints || !form.priority} onClick={save}>{t('saveChanges')}</button><button className="scheduler-secondary" disabled={busy} onClick={() => setEditing(false)}>{t('cancel')}</button></> : <>{task.status === 'scheduled' && isOwner && !task.isDraft ? <button className="scheduler-primary" disabled={busy} onClick={() => run(() => onAction('start'))}>{t('startWork')}</button> : null}{task.status === 'in_progress' && isOwner ? <button className="scheduler-primary" disabled={busy} onClick={() => run(() => onAction('complete'))}>{t('markComplete')}</button> : null}{task.status === 'completed' && isOwner ? <div className="scheduler-close-form"><label>{t('publishedLink')}<input value={link} onChange={(event) => setLink(event.target.value)} placeholder="https://instagram.com/p/..." /></label><button className="scheduler-primary" disabled={busy || !link.trim()} onClick={() => run(() => onAction('close', link))}>{t('closeRequest')}</button><button className="scheduler-secondary" disabled={busy} onClick={() => run(() => onAction('start'))}>{t('returnInProgress')}</button></div> : null}{task.status === 'closed' && task.finalPermalink ? <a className="scheduler-primary" href={task.finalPermalink} target="_blank" rel="noreferrer">{t('openPublished')}</a> : null}{canCoordinate && task.designerEmail && task.status !== 'cancelled' && !task.isDraft ? <button className="scheduler-secondary" disabled={busy} onClick={() => run(onNotify)}><BellRing size={14} />{t('resendSlack')}</button> : null}{canCoordinate && !['closed', 'cancelled'].includes(task.status) ? <div className="scheduler-cancel"><input value={reason} onChange={(event) => setReason(event.target.value)} placeholder={t('cancellationReason')} /><button className="scheduler-danger" disabled={busy} onClick={() => run(() => onCancel(reason))}>{t('cancelRequest')}</button></div> : null}</>}</footer></section><section className="panel stats-panel">{metric(t('assignment'), task.designerEmail?.split('@')[0] || statusCopy(task.status, t, task.isDraft))}{metric(t('priority'), priorityCopy(task.priority, t))}{metric(t('scope'), `${task.productionPoints} PP · ${task.durationMinutes} ${t('minutes')}`)}{metric(t('recommendedAccounts'), task.recommendedAccounts?.map((account) => `@${account}`).join(' · '))}</section></aside></>;
+  return <><button className="sidebar-backdrop" type="button" onClick={onClose} aria-label={t('close')} /><aside className="right-rail is-open queue-request-rail" role="dialog" aria-modal="true" aria-label="Queue request details"><button className="rail-close-button" type="button" onClick={onClose} aria-label={t('close')}><X size={16} /></button><section className="panel detail"><SelectedPost post={queuePost(task)} /><span className={`queue-detail-status${task.isDraft ? ' is-draft' : ''}`}>{statusCopy(task.status, t, task.isDraft)}</span></section><section className="panel caption-panel queue-rail-caption"><header className="panel-header caption-header"><div><p className="section-label">{editing ? t('editRequest') : task.isCustom ? t('createPost') : t('sourceCaption')}</p><h2>{task.post.title || `@${task.post.account}`}</h2>{task.post.title ? <small className="queue-custom-account">@{task.post.account}</small> : null}</div>{canCoordinate && !editing && task.status !== 'cancelled' ? <button type="button" className="ghost-button" onClick={() => setEditing(true)} title={t('editRequest')}><Pencil size={15} />{t('editRequest')}</button> : null}</header>{task.isDraft ? <p className="queue-detail-notice is-draft">{t('tentativeBy')} {displayName(task.draftCoordinatorEmail)}. {t('sharedDrafts')}</p> : null}{notice ? <p className={`queue-detail-notice is-${notice.type || 'success'}`}>{notice.message}</p> : null}{editing ? <div className="queue-detail-editor"><label>{t('productionPoints')}<input type="number" min="1" value={form.productionPoints || ''} onChange={(event) => setForm((current) => ({ ...current, productionPoints: event.target.value }))} /></label><label>{t('priority')}<select value={form.priority || 'medium'} onChange={(event) => setForm((current) => ({ ...current, priority: event.target.value }))}>{PRIORITIES.map((priority) => <option key={priority} value={priority}>{priorityCopy(priority, t)}</option>)}</select></label><fieldset><legend>{t('tags')}</legend><div className="queue-tag-picker">{tags.map((tag) => <button type="button" key={tag} className={form.tags.includes(tag) ? 'is-on' : ''} onClick={() => toggleTag(tag)}>{tag}</button>)}</div></fieldset><label>{t('brief')}<textarea value={form.brief || ''} onChange={(event) => setForm((current) => ({ ...current, brief: event.target.value }))} /></label><label>{t('notes')}<textarea value={form.notes || ''} onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))} /></label><label>{t('referenceLinks')}<textarea value={form.references || ''} onChange={(event) => setForm((current) => ({ ...current, references: event.target.value }))} placeholder={t('oneLinkPerLine')} /></label></div> : <div className="queue-detail-scroll"><div className="queue-detail-copy"><p>{task.title || task.brief || task.post.caption || '—'}</p>{task.notes ? <section><h3>{t('notes')}</h3><p>{task.notes}</p></section> : null}{task.references?.length ? <section><h3>{t('references')}</h3>{task.references.map((item) => <a key={item} href={item} target="_blank" rel="noreferrer">{item}</a>)}</section> : null}{task.cancellationReason ? <section><h3>{t('cancelledReason')}</h3><p>{task.cancellationReason}</p></section> : null}</div>{!task.isCustom ? <SlideDownload post={queuePost(task)} /> : null}<AttachmentList task={task} busy={busy} onUpload={(files) => run(() => onUpload(files))} onDownload={(file) => run(() => onDownload(file))} /><HistoryList events={history} loading={historyLoading} /></div>}<footer className="queue-detail-actions">{editing ? <><button className="scheduler-primary" disabled={busy || !form.productionPoints || !form.priority} onClick={save}>{t('saveChanges')}</button><button className="scheduler-secondary" disabled={busy} onClick={() => setEditing(false)}>{t('cancel')}</button></> : <>{task.status === 'scheduled' && isOwner && !task.isDraft ? <button className="scheduler-primary" disabled={busy} onClick={() => run(() => onAction('start'))}>{t('startWork')}</button> : null}{task.status === 'in_progress' && isOwner ? <button className="scheduler-primary" disabled={busy} onClick={() => run(() => onAction('complete'))}>{t('markComplete')}</button> : null}{task.status === 'completed' && isOwner ? <div className="scheduler-close-form"><label>{t('publishedLink')}<input value={link} onChange={(event) => setLink(event.target.value)} placeholder="https://instagram.com/p/..." /></label><button className="scheduler-primary" disabled={busy || !link.trim()} onClick={() => run(() => onAction('close', link))}>{t('closeRequest')}</button><button className="scheduler-secondary" disabled={busy} onClick={() => run(() => onAction('start'))}>{t('returnInProgress')}</button></div> : null}{task.status === 'closed' && task.finalPermalink ? <a className="scheduler-primary" href={task.finalPermalink} target="_blank" rel="noreferrer">{t('openPublished')}</a> : null}{canCoordinate && task.designerEmail && task.status !== 'cancelled' && !task.isDraft ? <button className="scheduler-secondary" disabled={busy} onClick={() => run(onNotify)}><BellRing size={14} />{t('resendSlack')}</button> : null}{canCoordinate && !['closed', 'cancelled'].includes(task.status) ? <div className="scheduler-cancel"><input value={reason} onChange={(event) => setReason(event.target.value)} placeholder={t('cancellationReason')} /><button className="scheduler-danger" disabled={busy} onClick={() => run(() => onCancel(reason))}>{t('cancelRequest')}</button></div> : null}</>}</footer></section><section className="panel stats-panel">{metric(t('assignment'), task.designerEmail ? displayName(task.designerEmail) : statusCopy(task.status, t, task.isDraft))}{metric(t('priority'), priorityCopy(task.priority, t))}{metric(t('scope'), `${task.productionPoints} PP · ${task.durationMinutes} ${t('minutes')}`)}{metric(t('recommendedAccounts'), task.recommendedAccounts?.map((account) => `@${account}`).join(' · '))}</section></aside></>;
 }
 
-function Scheduler({ data, draft, setDraft, onDraftChange, selectedDate, designerScope, onOpen, onError }) {
+function schedulerUserRole(user, t) {
+  const roles = user?.roles || user?.operatingRoles || [];
+  const labels = [];
+  if (roles.includes('vc')) labels.push(t('viralCoordinator'));
+  if (roles.includes('sales')) labels.push(t('salesRole'));
+  if (user?.isAdmin) labels.push(t('admin'));
+  return labels.join(' · ');
+}
+
+function Scheduler({ data, draft, setDraft, onDraftChange, selectedDate, designerScope, onOpen, onError, onCreateTimeBlock }) {
   const { t, language } = useQueuePreferences();
   const coordinator = data.viewer.isAdmin || data.viewer.operatingRoles?.includes('vc');
   const [now, setNow] = useState(() => new Date());
   const [dropPreview, setDropPreview] = useState(null);
+  const [resizeState, setResizeState] = useState(null);
+  const [timeBlockForm, setTimeBlockForm] = useState(null);
+  const [timeBlockBusy, setTimeBlockBusy] = useState(false);
   const scrollRef = useRef(null);
+  const resizeRef = useRef(null);
   useEffect(() => { const timer = window.setInterval(() => setNow(new Date()), 15000); return () => window.clearInterval(timer); }, []);
   const today = selectedDate === DAY(now);
   const allTasks = useMemo(() => {
@@ -152,7 +490,19 @@ function Scheduler({ data, draft, setDraft, onDraftChange, selectedDate, designe
     [...(data.planningRequests || []), ...data.requests, ...(data.liveDrafts || []), ...draft].forEach((task) => byId.set(task.id, task));
     return [...byId.values()];
   }, [data.planningRequests, data.requests, data.liveDrafts, draft]);
-  const visibleDesigners = designerScope ? data.designers.filter((designer) => designer.email === designerScope) : data.designers;
+  const planningTasks = useMemo(() => [
+    ...allTasks,
+    ...(data.timeBlocks || []).map((block) => ({
+      id: `time-${block.id}`,
+      status: 'in_progress',
+      designerEmail: block.requesterEmail,
+      scheduledDate: block.scheduledDate,
+      scheduledStartMinutes: block.scheduledStartMinutes,
+      durationMinutes: block.durationMinutes,
+    })),
+  ], [allTasks, data.timeBlocks]);
+  const schedulerUsers = data.schedulerUsers || data.designers;
+  const visibleDesigners = designerScope ? schedulerUsers.filter((designer) => designer.email === designerScope) : schedulerUsers;
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
       const scroller = scrollRef.current;
@@ -163,14 +513,52 @@ function Scheduler({ data, draft, setDraft, onDraftChange, selectedDate, designe
       scroller.scrollLeft = (firstMinute / QUEUE_DAY_END) * track.offsetWidth;
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [selectedDate, data.designers.length]);
+  }, [selectedDate, schedulerUsers.length]);
+  const centerNow = () => {
+    const scroller = scrollRef.current;
+    const track = scroller?.querySelector('.scheduler-track');
+    if (!scroller || !track) return;
+    const minute = selectedDate === DAY() ? currentMinutes() : 12 * 60;
+    const trackStart = track.offsetLeft;
+    const target = trackStart + (minute / QUEUE_DAY_END) * track.offsetWidth - scroller.clientWidth / 2;
+    const maxScroll = Math.max(0, scroller.scrollWidth - scroller.clientWidth);
+    const left = Math.max(0, Math.min(maxScroll, target));
+    if (typeof scroller.scrollTo === 'function') scroller.scrollTo({ left, behavior: 'smooth' });
+    else scroller.scrollLeft = left;
+  };
+  const openTimeBlockForm = (event, designer) => {
+    if (designer.email !== data.viewer.email || event.target.closest('.scheduler-block,.scheduler-time-block')) return;
+    event.preventDefault();
+    const rect = event.currentTarget.getBoundingClientRect();
+    const startMinutes = Math.min(1430, Math.max(0, Math.round((((event.clientX - rect.left) / rect.width) * QUEUE_DAY_END) / 10) * 10));
+    const panelWidth = 326;
+    const panelHeight = 390;
+    setTimeBlockForm({ category: 'meeting', title: '', note: '', scheduledDate: selectedDate, startMinutes, durationMinutes: 30, x: Math.max(12, Math.min(window.innerWidth - panelWidth - 12, event.clientX)), y: Math.max(12, Math.min(window.innerHeight - panelHeight - 12, event.clientY)) });
+  };
+  const submitTimeBlock = async () => {
+    if (!timeBlockForm) return;
+    setTimeBlockBusy(true);
+    try {
+      const saved = await onCreateTimeBlock(timeBlockForm);
+      if (saved) setTimeBlockForm(null);
+    } finally {
+      setTimeBlockBusy(false);
+    }
+  };
+  useEffect(() => { setTimeBlockForm(null); }, [selectedDate]);
   const planForEvent = (event, designer) => {
     const id = Number(activeQueueDragId || event.dataTransfer.getData('queue-task'));
     const source = allTasks.find((task) => task.id === id);
     if (!source || source.status === 'in_progress') return { ok: false, error: 'This request cannot be moved.' };
+    const targetUser = schedulerUsers.find((user) => user.email === designer);
+    if (!targetUser?.isQueueDesigner) return { ok: false, error: 'Only Post Designers can receive Queue work.' };
     const rect = event.currentTarget.getBoundingClientRect();
     const pointer = Math.min(1430, Math.max(0, Math.round((((event.clientX - rect.left) / rect.width) * QUEUE_DAY_END) / 10) * 10));
-    return planQueueDrop({ tasks: allTasks, target: source, designerEmail: designer, scheduledDate: selectedDate, desiredStart: pointer });
+    const result = planQueueDrop({ tasks: planningTasks, target: source, designerEmail: designer, scheduledDate: selectedDate, desiredStart: pointer });
+    if (!result.ok) return result;
+    const allowedAccounts = new Set((targetUser.accounts || []).map((account) => String(account).toLowerCase()));
+    const target = { ...result.target, recommendedAccounts: (result.target.recommendedAccounts || []).filter((account) => allowedAccounts.has(String(account).replace(/^@/, '').toLowerCase())) };
+    return { ...result, target, tasks: result.tasks.map((task) => task.id === target.id ? target : task) };
   };
   const previewDrop = (event, designer) => { event.preventDefault(); if (!coordinator) return; event.dataTransfer.dropEffect = 'move'; const result = planForEvent(event, designer); setDropPreview(result.ok ? { designer, ...result } : null); };
   const drop = (event, designer) => {
@@ -187,6 +575,61 @@ function Scheduler({ data, draft, setDraft, onDraftChange, selectedDate, designe
     setDraft(nextDraft);
     onDraftChange(nextDraft);
   };
+  const startResize = (event, task, edge) => {
+    if (!coordinator || task.status !== 'scheduled') return;
+    const track = event.currentTarget.closest('.scheduler-track');
+    if (!track) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const baseStart = Number(task.scheduledStartMinutes ?? 0);
+    const baseDuration = Math.max(10, Number(task.durationMinutes || Number(task.productionPoints || 1) * 10));
+    const nextState = { task, edge, track, baseStart, baseEnd: baseStart + baseDuration, baseDuration, preview: { ...task, isDraft: true, draftCoordinatorEmail: data.viewer.email } };
+    resizeRef.current = nextState;
+    setResizeState(nextState);
+  };
+  useEffect(() => {
+    if (!resizeState) return undefined;
+    const onMove = (event) => {
+      const current = resizeRef.current;
+      if (!current?.track) return;
+      const rect = current.track.getBoundingClientRect();
+      if (!rect.width) return;
+      const rawMinute = ((event.clientX - rect.left) / rect.width) * QUEUE_DAY_END;
+      const pointer = Math.max(0, Math.min(QUEUE_DAY_END, Math.round(rawMinute / 10) * 10));
+      const others = planningTasks.filter((item) => item.id !== current.task.id && item.designerEmail === current.task.designerEmail && item.scheduledDate === current.task.scheduledDate && !['pool', 'cancelled'].includes(item.status)).map((item) => ({ start: Number(item.scheduledStartMinutes ?? 0), end: Number(item.scheduledStartMinutes ?? 0) + Math.max(10, Number(item.durationMinutes || Number(item.productionPoints || 1) * 10)) }));
+      const previousEnd = Math.max(0, ...others.filter((item) => item.end <= current.baseStart).map((item) => item.end));
+      const nextStart = Math.min(QUEUE_DAY_END, ...others.filter((item) => item.start >= current.baseEnd).map((item) => item.start));
+      let start = current.baseStart;
+      let end = current.baseEnd;
+      if (current.edge === 'right') {
+        end = Math.max(current.baseStart + 10, Math.min(pointer, Number.isFinite(nextStart) ? nextStart : QUEUE_DAY_END));
+      } else {
+        start = Math.max(previousEnd, Math.min(pointer, current.baseEnd - 10));
+        end = current.baseEnd;
+      }
+      start = Math.round(start / 10) * 10;
+      end = Math.max(start + 10, Math.round(end / 10) * 10);
+      const duration = end - start;
+      const preview = { ...current.task, scheduledStartMinutes: start, durationMinutes: duration, productionPoints: Math.max(1, duration / 10), status: 'scheduled', isDraft: true, draftCoordinatorEmail: data.viewer.email };
+      const next = { ...current, preview };
+      resizeRef.current = next;
+      setResizeState(next);
+    };
+    const onUp = () => {
+      const current = resizeRef.current;
+      resizeRef.current = null;
+      setResizeState(null);
+      if (!current?.preview) return;
+      const currentById = new Map(draft.map((task) => [task.id, task]));
+      currentById.set(current.preview.id, current.preview);
+      const nextDraft = [...currentById.values()];
+      setDraft(nextDraft);
+      onDraftChange(nextDraft);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp, { once: true });
+    return () => { window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); };
+  }, [resizeState, planningTasks, data.viewer.email, draft, onDraftChange, setDraft]);
   const merged = (designer) => allTasks.filter((task) => {
     if (task.designerEmail !== designer || task.scheduledDate !== selectedDate || ['pool', 'cancelled'].includes(task.status)) return false;
     return true;
@@ -195,13 +638,50 @@ function Scheduler({ data, draft, setDraft, onDraftChange, selectedDate, designe
   const previewNextDay = dropPreview && dropPreview.target.scheduledDate !== selectedDate;
   const previewWidth = dropPreview ? Math.max(0.8, (dropPreview.target.durationMinutes / QUEUE_DAY_END) * 100) : 0;
   const previewLeft = dropPreview ? (previewNextDay ? Math.max(0, 100 - previewWidth) : (dropPreview.target.scheduledStartMinutes / QUEUE_DAY_END) * 100) : 0;
-  return <section className="scheduler" ref={scrollRef}><div className="scheduler-canvas"><div className="scheduler-time-head"><span>{t('designer')}</span><div>{Array.from({ length: 24 }, (_, hour) => <b key={hour} style={{ left: `${hour * (100 / 24)}%` }}>{time(hour * 60)}</b>)}</div></div>{visibleDesigners.map((designer) => <div className="scheduler-row" key={designer.email}><header><b>{designer.email.split('@')[0]}</b><small>{designer.accounts?.map((account) => `@${account}`).join(' · ') || t('noAccounts')}</small></header><div className="scheduler-track" onDragOver={(event) => previewDrop(event, designer.email)} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setDropPreview(null); }} onDrop={(event) => drop(event, designer.email)}>{Array.from({ length: 25 }, (_, hour) => <i key={hour} style={{ left: `${hour * (100 / 24)}%` }} />)}{dropPreview?.designer === designer.email ? <span className={`scheduler-drop-preview${previewNextDay ? ' is-next-day' : ''}`} style={{ left: `${previewLeft}%`, width: `${previewWidth}%` }}><b>@{dropPreview.target.post.account}</b><small>{previewNextDay ? `${displayDate(dropPreview.target.scheduledDate, language)} · ` : ''}{time(dropPreview.target.scheduledStartMinutes)} · {dropPreview.target.durationMinutes} min</small></span> : null}{merged(designer.email).map((task) => <TaskBlock key={task.id} task={task} editable={coordinator && (!task.isDraft || task.draftCoordinatorEmail === data.viewer.email)} onOpen={onOpen} />)}</div></div>)}{today ? <div className="scheduler-day-overlay"><span className="scheduler-now-global" style={{ left: `${nowPosition}%` }}><b>{t('now')}</b></span></div> : null}</div></section>;
+  return <div className="scheduler-shell">
+    <section className="scheduler" ref={scrollRef}>
+      <div className="scheduler-canvas">
+        <div className="scheduler-time-head"><span>{t('designer')}</span><div>{Array.from({ length: 24 }, (_, hour) => <b key={hour} style={{ left: `${hour * (100 / 24)}%` }}>{time(hour * 60)}</b>)}</div></div>
+        {visibleDesigners.map((designer) => {
+          const queueEligible = designer.isQueueDesigner !== false;
+          const initials = initialsFor(designer.email);
+          const role = schedulerUserRole(designer, t);
+          const accounts = designer.accounts?.map((account) => `@${account}`).join(' · ') || t('noAccounts');
+          const accountAvatars = designer.accountAvatars || {};
+          const tasks = merged(designer.email);
+          const timeBlocks = (data.timeBlocks || []).filter((block) => block.requesterEmail === designer.email && block.scheduledDate === selectedDate);
+          return <div className={`scheduler-row${queueEligible ? '' : ' is-non-queue-user'}`} key={designer.email}>
+            <header><div className="scheduler-user-identity"><span className="scheduler-user-avatar"><span aria-hidden="true">{initials}</span>{userAvatar(designer.avatarUrl) ? <img src={userAvatar(designer.avatarUrl)} alt="" referrerPolicy="no-referrer" onError={(event) => { event.currentTarget.hidden = true; }} /> : null}</span><span className="scheduler-user-copy"><b>{displayName(designer.email)}</b><small>{[role, accounts].filter(Boolean).join(' · ')}</small></span></div></header>
+            <div className="scheduler-track" onContextMenu={(event) => openTimeBlockForm(event, designer)} onDragOver={(event) => previewDrop(event, designer.email)} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setDropPreview(null); }} onDrop={(event) => drop(event, designer.email)}>
+              {Array.from({ length: 25 }, (_, hour) => <i key={hour} style={{ left: `${hour * (100 / 24)}%` }} />)}
+              {timeBlocks.map((block) => <TimeBlock key={block.id} block={block} />)}
+              {dropPreview?.designer === designer.email ? <span className={`scheduler-drop-preview${previewNextDay ? ' is-next-day' : ''}`} style={{ left: `${previewLeft}%`, width: `${previewWidth}%` }}><b>@{dropPreview.target.post.account}</b><small>{previewNextDay ? `${displayDate(dropPreview.target.scheduledDate, language)} · ` : ''}{time(dropPreview.target.scheduledStartMinutes)} · {dropPreview.target.durationMinutes} min</small></span> : null}
+              {tasks.map((task) => { const renderTask = resizeState?.preview?.id === task.id ? resizeState.preview : task; return <TaskBlock key={task.id} task={renderTask} editable={coordinator && (!renderTask.isDraft || renderTask.draftCoordinatorEmail === data.viewer.email)} accountAvatars={accountAvatars} onResizeStart={startResize} onOpen={onOpen} />; })}
+            </div>
+          </div>;
+        })}
+        {today ? <div className="scheduler-day-overlay"><span className="scheduler-now-global" style={{ left: `${nowPosition}%` }}><b>{t('now')}</b></span></div> : null}
+      </div>
+    </section>
+    <button type="button" className="scheduler-center-now" onClick={centerNow} title={t('centerNow')} aria-label={t('centerNow')}><LocateFixed size={15} /><span>{t('centerNow')}</span></button>
+    <TimeBlockForm form={timeBlockForm} setForm={setTimeBlockForm} busy={timeBlockBusy} onClose={() => setTimeBlockForm(null)} onSubmit={submitTimeBlock} />
+  </div>;
 }
 
 function DraftAccounts({ draft, designers, onAccountsChange }) {
   const { t, language } = useQueuePreferences();
   const toggle = (task, account) => { const selected = task.recommendedAccounts || []; onAccountsChange(task.id, selected.includes(account) ? selected.filter((item) => item !== account) : [...selected, account]); };
-  return <section className="scheduler-drafts"><header><div><b>{t('draftsSaved')}</b><small>{t('sharedDrafts')}</small></div></header>{draft.map((task) => { const designer = designers.find((item) => item.email === task.designerEmail); const selected = task.recommendedAccounts || []; return <article key={task.id}><div><b>@{task.post.account} → {designer?.email.split('@')[0]}</b><small>{displayDate(task.scheduledDate, language)} · {time(task.scheduledStartMinutes)} · {task.productionPoints} PP</small></div><fieldset><legend>{t('recommendedAccounts')}</legend>{designer?.accounts?.length ? designer.accounts.map((account) => <label key={account}><input type="checkbox" checked={selected.includes(account)} onChange={() => toggle(task, account)} /><span>@{account}</span></label>) : <small>{t('noRecommendedAccount')}</small>}</fieldset></article>; })}</section>;
+  return <section className="scheduler-drafts"><header><div><b>{t('draftsSaved')}</b><small>{t('sharedDrafts')}</small></div></header>{draft.map((task) => { const designer = designers.find((item) => item.email === task.designerEmail); const selected = task.recommendedAccounts || []; return <article key={task.id}><div><b>@{task.post.account} → {displayName(designer?.email)}</b><small>{displayDate(task.scheduledDate, language)} · {time(task.scheduledStartMinutes)} · {task.productionPoints} PP</small></div><fieldset><legend>{t('recommendedAccounts')}</legend>{designer?.accounts?.length ? designer.accounts.map((account) => <label key={account}><input type="checkbox" checked={selected.includes(account)} onChange={() => toggle(task, account)} /><span>@{account}</span></label>) : <small>{t('noRecommendedAccount')}</small>}</fieldset></article>; })}</section>;
+}
+
+function PickModal({ requests, hotFallback = false, busy, onClose, onAssign }) {
+  const { t } = useQueuePreferences();
+  const [index, setIndex] = useState(0);
+  const candidate = requests[index % Math.max(1, requests.length)];
+  if (!candidate) return <div className="queue-pick-backdrop" role="presentation"><section className="queue-pick-modal" role="dialog" aria-modal="true" aria-label={t('pickTitle')}><header><div><p className="scheduler-eyebrow">{t('pick')}</p><h2>{t('pickTitle')}</h2></div><button type="button" onClick={onClose} aria-label={t('close')}><X size={16} /></button></header><div className="queue-pick-empty"><ClipboardList size={24} /><p>{t('noPickRequests')}</p></div></section></div>;
+  const thumbnail = cover(candidate);
+  const hotMultiplier = Number(candidate.hotMultiplier);
+  return <div className="queue-pick-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) onClose(); }}><section className="queue-pick-modal" role="dialog" aria-modal="true" aria-label={t('pickTitle')}><header><div><p className="scheduler-eyebrow">{t('pick')}</p><h2>{t('pickTitle')}</h2><small>{hotFallback ? t('hotPickHelp') : t('pickHelp')} · {index + 1}/{requests.length}</small></div><button type="button" onClick={onClose} aria-label={t('close')}><X size={16} /></button></header><article className={`queue-pick-card priority-${candidate.priority || 'medium'}${hotClass(candidate)}`}>{thumbnail ? <img src={thumbnail} alt="" /> : <span className="queue-pick-empty-image">@</span>}<div className="queue-pick-content"><div className="queue-pick-account"><b>@{candidate.post.account}</b><span className={`queue-pick-priority priority-${candidate.priority || 'medium'}`}>{t(`priority${(candidate.priority || 'medium').slice(0, 1).toUpperCase()}${(candidate.priority || 'medium').slice(1)}`)}</span>{isHotTask(candidate) ? <span className="queue-hot-badge">🔥 {hotText(candidate)}</span> : null}</div><p>{candidate.brief || candidate.post.caption || t('post')}</p><div className="queue-pick-meta"><span>{candidate.productionPoints} PP</span><span>{candidate.durationMinutes} {t('minutes')}</span>{candidate.tags?.filter((tag) => tag !== 'hot').slice(0, 3).map((tag) => <i key={tag}>{tag}</i>)}</div></div></article><footer><button type="button" className="scheduler-secondary" disabled={busy || requests.length < 2} onClick={() => setIndex((current) => (current + 1) % requests.length)}><ChevronRight size={14} />{t('nextRequest')}</button><button type="button" className="scheduler-primary" disabled={busy} onClick={() => onAssign(candidate)}>{busy ? <LoaderCircle className="queue-spin" size={14} /> : <Check size={14} />}{t('assignRequest')}</button></footer></section></div>;
 }
 
 function QueueApp({ user }) {
@@ -220,10 +700,18 @@ function QueueApp({ user }) {
   const [liveStatus, setLiveStatus] = useState('connecting');
   const [adminOpen, setAdminOpen] = useState(false);
   const [archive, setArchive] = useState(false);
+  const [poolDropActive, setPoolDropActive] = useState(false);
   const [designerScope, setDesignerScope] = useState('');
   const [report, setReport] = useState(null);
   const [reportLoading, setReportLoading] = useState(false);
   const [reportError, setReportError] = useState('');
+  const [ticketsOpen, setTicketsOpen] = useState(false);
+  const [tickets, setTickets] = useState([]);
+  const [ticketsLoading, setTicketsLoading] = useState(false);
+  const [ticketsError, setTicketsError] = useState('');
+  const [pickOpen, setPickOpen] = useState(false);
+  const [pickBusy, setPickBusy] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
   const draftRef = useRef(draft);
   const draftSyncingRef = useRef(false);
   const draftHydratedRef = useRef(false);
@@ -235,6 +723,7 @@ function QueueApp({ user }) {
   const liveRevisionRef = useRef(0);
   const liveRefreshTimerRef = useRef(null);
   const adminOpenRef = useRef(adminOpen);
+  const ticketsOpenRef = useRef(ticketsOpen);
   const loadedOnceRef = useRef(false);
 
   const notify = useCallback((message, type = 'success') => { setToast({ message, type }); window.setTimeout(() => setToast(null), 6000); }, []);
@@ -277,6 +766,7 @@ function QueueApp({ user }) {
   useEffect(() => { draftRef.current = draft; }, [draft]);
   useEffect(() => { openRef.current = open; }, [open]);
   useEffect(() => { adminOpenRef.current = adminOpen; }, [adminOpen]);
+  useEffect(() => { ticketsOpenRef.current = ticketsOpen; }, [ticketsOpen]);
   useEffect(() => { const id = Number(new URLSearchParams(window.location.search).get('task')); if (!id) return; json(`/api/dashboard/queue/v2/requests/${id}`).then(({ request }) => { setOpen(request); if (request.scheduledDate) setDate(request.scheduledDate); }).catch((err) => notify(err.message, 'error')); }, [notify]);
   useEffect(() => { if (!open?.id) { setHistory([]); return; } setDetailNotice(null); setHistoryLoading(true); json(`/api/dashboard/queue/v2/requests/${open.id}/history`).then((result) => setHistory(result.events || [])).catch(() => setHistory([])).finally(() => setHistoryLoading(false)); }, [open?.id]);
 
@@ -286,8 +776,9 @@ function QueueApp({ user }) {
     const version = ++draftSaveVersionRef.current;
     draftSyncingRef.current = true;
     const changes = optimistic.map((task) => ({
-      id: task.id, designerEmail: task.designerEmail, scheduledDate: task.scheduledDate,
-      scheduledStartMinutes: task.scheduledStartMinutes, recommendedAccounts: task.recommendedAccounts || [],
+      id: task.id, status: task.status, designerEmail: task.designerEmail, scheduledDate: task.scheduledDate,
+      scheduledStartMinutes: task.scheduledStartMinutes, productionPoints: task.productionPoints,
+      recommendedAccounts: task.recommendedAccounts || [],
     }));
     const request = draftSavePromiseRef.current.catch(() => {}).then(() => json('/api/dashboard/queue/v2/drafts', {
       method: 'POST', body: new URLSearchParams({ changes: JSON.stringify(changes) }),
@@ -320,6 +811,19 @@ function QueueApp({ user }) {
     finally { if (!silent) setReportLoading(false); }
   }, []);
 
+  const loadTickets = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setTicketsLoading(true);
+    setTicketsError('');
+    try {
+      const result = await json('/api/dashboard/queue/v2/tickets');
+      setTickets(result.tickets || []);
+    } catch (err) {
+      setTicketsError(err.message || 'Could not load requests.');
+    } finally {
+      if (!silent) setTicketsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (!data?.viewer?.email) return undefined;
     if (import.meta.env.MODE === 'test') { setLiveStatus('live'); return undefined; }
@@ -337,20 +841,97 @@ function QueueApp({ user }) {
             json(`/api/dashboard/queue/v2/requests/${openRef.current.id}/history`).then((result) => setHistory(result.events || [])).catch(() => {});
           }
           if (adminOpenRef.current) loadReport({ silent: true });
+          if (ticketsOpenRef.current) loadTickets({ silent: true });
         }, 90);
       },
     });
     return () => { controller.abort(); window.clearTimeout(liveRefreshTimerRef.current); };
-  }, [data?.viewer?.email, loadReport]);
+  }, [data?.viewer?.email, loadReport, loadTickets]);
 
   const coordinator = data?.viewer && (data.viewer.isAdmin || data.viewer.operatingRoles?.includes('vc'));
-  const pool = useMemo(() => { const drafted = new Set((data?.liveDrafts || []).map((task) => task.id)); return data?.requests.filter((task) => task.status === 'pool' && !drafted.has(task.id)) || []; }, [data]);
+  const pool = useMemo(() => {
+    const byId = new Map();
+    (data?.requests || []).filter((task) => task.status === 'pool').forEach((task) => byId.set(task.id, task));
+    // A live draft is the authoritative temporary state for its request. A
+    // scheduled draft must therefore remove the committed pool copy before
+    // Submit; a return-to-pool draft replaces it with the provisional card.
+    (data?.liveDrafts || []).forEach((task) => {
+      if (task.status === 'pool') byId.set(task.id, task);
+      else byId.delete(task.id);
+    });
+    return [...byId.values()];
+  }, [data]);
   const archived = useMemo(() => data?.requests.filter((task) => task.status === 'cancelled') || [], [data]);
+  const upcoming = useMemo(() => {
+    if (!coordinator) return [];
+    const byId = new Map();
+    [...(data?.planningRequests || []), ...(data?.liveDrafts || [])].forEach((task) => {
+      if (task.designerEmail && ['scheduled', 'in_progress', 'completed'].includes(task.status)) byId.set(task.id, task);
+    });
+    return [...byId.values()].sort((a, b) => `${a.scheduledDate || ''}-${String(a.scheduledStartMinutes ?? 0).padStart(4, '0')}-${a.id}`.localeCompare(`${b.scheduledDate || ''}-${String(b.scheduledStartMinutes ?? 0).padStart(4, '0')}-${b.id}`));
+  }, [coordinator, data]);
   const assigned = useMemo(() => { const byId = new Map((data?.assignedRequests || []).map((task) => [task.id, task])); (data?.liveDrafts || []).filter((task) => task.designerEmail === data?.viewer?.email).forEach((task) => byId.set(task.id, task)); return [...byId.values()].sort((a, b) => `${a.scheduledDate}-${String(a.scheduledStartMinutes).padStart(4, '0')}`.localeCompare(`${b.scheduledDate}-${String(b.scheduledStartMinutes).padStart(4, '0')}`)); }, [data]);
+  const pickPool = useMemo(() => {
+    const poolRequests = (data?.pickRequests || []).filter((task) => task.status === 'pool');
+    const regularRequests = poolRequests.filter((task) => !(task.isHot || task.tags?.includes('hot')));
+    if (regularRequests.length) return poolRequests;
+    if (poolRequests.length) return [...poolRequests].sort((a, b) => (Number(b.hotMultiplier) || 0) - (Number(a.hotMultiplier) || 0));
+    return (data?.hotPickRequests || []).filter((task) => task.status === 'pool').sort((a, b) => (Number(b.hotMultiplier) || 0) - (Number(a.hotMultiplier) || 0));
+  }, [data]);
+  const pickHotFallback = useMemo(() => {
+    const poolRequests = (data?.pickRequests || []).filter((task) => task.status === 'pool');
+    return poolRequests.length > 0 && poolRequests.every((task) => task.isHot || task.tags?.includes('hot')) && pickPool.length > 0;
+  }, [data, pickPool]);
+  const pickAvailable = !coordinator && !assigned.some((task) => ['scheduled', 'in_progress'].includes(task.status)) && pickPool.length > 0;
   const toggleAdminTools = async () => { const next = !adminOpen; setAdminOpen(next); if (next && !reportLoading) await loadReport(); };
-  const submit = async () => { try { await draftSavePromiseRef.current.catch(() => {}); const changes = draftRef.current.map((task) => ({ id: task.id, designerEmail: task.designerEmail, scheduledDate: task.scheduledDate, scheduledStartMinutes: task.scheduledStartMinutes, recommendedAccounts: task.recommendedAccounts || [] })); const result = await json('/api/dashboard/queue/v2/submit', { method: 'POST', body: new URLSearchParams({ changes: JSON.stringify(changes) }) }); applyDraft([]); await load({ silent: true }); const sent = result.notifications?.sent || 0; const failed = result.notifications?.failed || 0; notify(`${t('scheduleSubmitted')} ${sent} DM${sent === 1 ? '' : 's'} sent${failed ? ` · ${failed} failed` : ''}.`, failed ? 'warning' : 'success'); } catch (err) { notify(err.message, 'error'); } };
+  const toggleTickets = async () => { const next = !ticketsOpen; setTicketsOpen(next); if (next) await loadTickets(); };
+  const pickRequest = async (task) => {
+    setPickBusy(true);
+    try {
+      const result = await json('/api/dashboard/queue/v2/pick', { method: 'POST', body: new URLSearchParams({ request_id: String(task.id) }) });
+      setPickOpen(false);
+      await load({ silent: true });
+      notify(t('pickedRequest'));
+      return result;
+    } catch (err) {
+      notify(err.message || t('draftSyncFailed'), 'error');
+      await load({ silent: true }).catch(() => {});
+      return null;
+    } finally { setPickBusy(false); }
+  };
+  const submit = async () => { try { await draftSavePromiseRef.current.catch(() => {}); const changes = draftRef.current.map((task) => ({ id: task.id, status: task.status, designerEmail: task.designerEmail, scheduledDate: task.scheduledDate, scheduledStartMinutes: task.scheduledStartMinutes, productionPoints: task.productionPoints, recommendedAccounts: task.recommendedAccounts || [] })); const result = await json('/api/dashboard/queue/v2/submit', { method: 'POST', body: new URLSearchParams({ changes: JSON.stringify(changes) }) }); applyDraft([]); await load({ silent: true }); const sent = result.notifications?.sent || 0; const failed = result.notifications?.failed || 0; notify(`${t('scheduleSubmitted')} ${sent} DM${sent === 1 ? '' : 's'} sent${failed ? ` · ${failed} failed` : ''}.`, failed ? 'warning' : 'success'); } catch (err) { notify(err.message, 'error'); } };
   const clearDrafts = async () => { try { await draftSavePromiseRef.current.catch(() => {}); await json('/api/dashboard/queue/v2/drafts/clear', { method: 'POST', body: new URLSearchParams() }); applyDraft([]); await load({ silent: true }); } catch (err) { notify(err.message, 'error'); } };
   const changeDraftAccounts = (requestId, accounts) => persistDrafts(draftRef.current.map((task) => task.id === requestId ? { ...task, recommendedAccounts: accounts } : task));
+  const dragTask = (event) => {
+    const id = Number(activeQueueDragId || event.dataTransfer?.getData('queue-task'));
+    return [...draftRef.current, ...(data?.liveDrafts || []), ...(data?.planningRequests || []), ...(data?.requests || [])].find((task) => task.id === id);
+  };
+  const poolDragOver = (event) => {
+    if (!coordinator || dragTask(event)?.status !== 'scheduled') return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    setPoolDropActive(true);
+  };
+  const poolDrop = async (event) => {
+    event.preventDefault();
+    if (!coordinator) return;
+    const source = dragTask(event);
+    setPoolDropActive(false);
+    activeQueueDragId = null;
+    if (!source || source.status !== 'scheduled') return;
+    const remainingDrafts = draftRef.current.filter((task) => task.id !== source.id);
+    const returned = { id: source.id, status: 'pool', designerEmail: null, scheduledDate: null, scheduledStartMinutes: null, productionPoints: source.productionPoints, recommendedAccounts: source.recommendedAccounts || [] };
+    try {
+      await draftSavePromiseRef.current.catch(() => {});
+      await json('/api/dashboard/queue/v2/submit', { method: 'POST', body: new URLSearchParams({ changes: JSON.stringify([returned]) }) });
+      applyDraft(remainingDrafts);
+      await load({ silent: true });
+      notify(t('returnedToPool'));
+    } catch (err) {
+      await load({ silent: true }).catch(() => {});
+      notify(err.message, 'error');
+    }
+  };
   const closeDetail = () => { openRef.current = null; setOpen(null); };
   const action = async (actionName, value) => { try { const body = value ? new URLSearchParams(actionName === 'close' ? { final_permalink: value } : {}) : undefined; const result = await json(`/api/dashboard/queue/v2/requests/${open.id}/${actionName}`, { method: 'POST', body }); closeDetail(); await load({ silent: true }); notify(result.deferred ? `${t('movedAfterActive')} ${result.scheduledDate} · ${time(result.scheduledStartMinutes)}.` : t('requestUpdated'), result.deferred ? 'warning' : 'success'); } catch (err) { setDetailNotice({ message: err.message, type: 'error' }); } };
   const cancel = async (reason) => { try { await json(`/api/dashboard/queue/v2/requests/${open.id}/cancel`, { method: 'POST', body: new URLSearchParams({ reason }) }); closeDetail(); await load({ silent: true }); notify(t('requestUpdated')); } catch (err) { setDetailNotice({ message: err.message, type: 'error' }); } };
@@ -358,18 +939,101 @@ function QueueApp({ user }) {
   const resend = async () => { try { const result = await json(`/api/dashboard/queue/v2/requests/${open.id}/notify`, { method: 'POST' }); setDetailNotice({ message: result.sent ? t('slackSent') : t('slackFailed'), type: result.sent ? 'success' : 'error' }); const events = await json(`/api/dashboard/queue/v2/requests/${open.id}/history`); setHistory(events.events || []); } catch (err) { setDetailNotice({ message: err.message, type: 'error' }); } };
   const upload = async (files) => { let current = open; let failures = 0; for (const file of files) { const body = new FormData(); body.append('file', file); try { const result = await json(`/api/dashboard/queue/v2/requests/${open.id}/attachments`, { method: 'POST', body }); current = result.request; } catch { failures += 1; } } setOpen(current); setDetailNotice({ message: failures ? t('uploadFailed') : t('filesUploaded'), type: failures ? 'error' : 'success' }); await load({ silent: true }); };
   const download = async (file) => { const response = await apiFetch(`${API_BASE}/api/dashboard/queue/v2/requests/${open.id}/attachments/${file.id}`); if (!response.ok) throw new Error((await response.json().catch(() => ({}))).detail || 'Download failed.'); const blob = await response.blob(); const href = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = href; link.download = file.name; document.body.appendChild(link); link.click(); link.remove(); window.setTimeout(() => URL.revokeObjectURL(href), 30000); };
+  const createTimeBlock = async (form) => {
+    try {
+      await json('/api/dashboard/queue/v2/tickets/time-block', { method: 'POST', body: new URLSearchParams({ category: form.category, scheduled_date: form.scheduledDate, scheduled_start_minutes: String(form.startMinutes), duration_minutes: String(form.durationMinutes), title: form.title, note: form.note }) });
+      await load({ silent: true });
+      notify(t('ticketCreated'));
+      return true;
+    } catch (err) {
+      notify(err.message, 'error');
+      return false;
+    }
+  };
+  const requestPP = async (productionPoints, reason) => {
+    try {
+      await json('/api/dashboard/queue/v2/tickets/pp-revision', { method: 'POST', body: new URLSearchParams({ request_id: String(open.id), production_points: String(productionPoints), reason }) });
+      notify(t('ticketCreated'));
+      return true;
+    } catch (err) {
+      setDetailNotice({ message: err.message, type: 'error' });
+      return false;
+    }
+  };
+  const requestCancellation = async (reason) => {
+    try {
+      await json('/api/dashboard/queue/v2/tickets/cancellation', { method: 'POST', body: new URLSearchParams({ request_id: String(open.id), reason }) });
+      notify(t('ticketCreated'));
+      return true;
+    } catch (err) {
+      setDetailNotice({ message: err.message, type: 'error' });
+      return false;
+    }
+  };
+  const requestMove = async (scheduledDate, scheduledStartMinutes, reason) => {
+    try {
+      await json('/api/dashboard/queue/v2/tickets/move', { method: 'POST', body: new URLSearchParams({ request_id: String(open.id), scheduled_date: scheduledDate, scheduled_start_minutes: String(scheduledStartMinutes), reason }) });
+      notify(t('ticketCreated'));
+      return true;
+    } catch (err) {
+      setDetailNotice({ message: err.message, type: 'error' });
+      return false;
+    }
+  };
+  const reviewTicket = async (ticketId, reviewAction) => {
+    try {
+      await json(`/api/dashboard/queue/v2/tickets/${ticketId}/review`, { method: 'POST', body: new URLSearchParams({ action: reviewAction }) });
+      await Promise.all([load({ silent: true }), loadTickets({ silent: true }), adminOpen ? loadReport({ silent: true }) : Promise.resolve()]);
+      notify(t('ticketReviewed'));
+    } catch (err) {
+      setTicketsError(err.message || 'Could not review request.');
+      throw err;
+    }
+  };
+  const openPendingTickets = useMemo(() => {
+    if (!open?.id) return [];
+    const fromTask = (open.pendingTickets || []).map((ticket) => ({ ...ticket }));
+    const fromInbox = tickets.filter((ticket) => ticket.status === 'pending' && Number(ticket.requestId) === Number(open.id)).map((ticket) => ({
+      id: ticket.id, type: ticket.type, requestedProductionPoints: ticket.requestedProductionPoints,
+      scheduledDate: ticket.scheduledDate, scheduledStartMinutes: ticket.scheduledStartMinutes, reason: ticket.reason,
+    }));
+    return [...new Map([...fromTask, ...fromInbox].map((ticket) => [ticket.id, ticket])).values()];
+  }, [open, tickets]);
+  useEffect(() => {
+    if (open?.id && coordinator) loadTickets({ silent: true }).catch(() => {});
+  }, [open?.id, coordinator, loadTickets]);
 
   return <main className="queue-page scheduler-page">
-    <header className="queue-topbar"><div className="queue-brand"><CalendarDays size={22} /><div><span>sentientdash.app</span><h1>{t('productionQueue')}</h1></div></div><div className="queue-actions"><span className={`queue-live-status is-${liveStatus}`} title={liveStatus === 'live' ? t('liveConnected') : liveStatus === 'offline' ? t('liveOffline') : t('liveConnecting')}>{liveStatus === 'offline' ? <WifiOff size={12} /> : <Radio size={12} />}<b>{liveStatus === 'live' ? t('liveConnected') : liveStatus === 'offline' ? t('liveOffline') : t('liveConnecting')}</b></span><QueuePreferences />{data?.viewer?.isAdmin ? <button type="button" className={`queue-admin-button${adminOpen ? ' is-active' : ''}`} onClick={toggleAdminTools}><BarChart3 size={14} />{t('admin')}</button> : null}<a href={`${import.meta.env.BASE_URL}tracker.html`} target="_blank" rel="noreferrer">Tracker</a><a href={`${import.meta.env.BASE_URL}insights.html`} target="_blank" rel="noreferrer">Insights</a><span className="queue-nav-current" aria-current="page">Queue</span><a href={import.meta.env.BASE_URL} target="_blank" rel="noreferrer"><ArrowLeft size={14} />{t('dashboard')}</a><button type="button" className="queue-avatar" title={user.email} onClick={() => { clearSsoCookie(); signOut(auth); }}><LogOut size={14} /></button></div></header>
+    <header className="queue-topbar">
+      <div className="queue-brand"><CalendarDays size={22} /><div><span>sentientdash.app</span><h1>{t('productionQueue')}</h1></div></div>
+      <div className="queue-actions">
+        <div className="queue-actions-group queue-actions-primary">
+          <span className={`queue-live-status is-${liveStatus}`} title={liveStatus === 'live' ? t('liveConnected') : liveStatus === 'offline' ? t('liveOffline') : t('liveConnecting')}>{liveStatus === 'offline' ? <WifiOff size={12} /> : <Radio size={12} />}<b>{liveStatus === 'live' ? t('liveConnected') : liveStatus === 'offline' ? t('liveOffline') : t('liveConnecting')}</b></span>
+          {coordinator ? <button type="button" className="queue-create-button" onClick={() => setCreateOpen(true)}><Plus size={14} />{t('createPost')}</button> : null}
+          {data?.viewer ? <button type="button" className={`queue-ticket-button${ticketsOpen ? ' is-active' : ''}`} onClick={toggleTickets}><ClipboardList size={14} />{t('tickets')}{data.pendingTicketCount ? <b>{data.pendingTicketCount}</b> : null}</button> : null}
+          {pickAvailable ? <button type="button" className={`queue-pick-button${pickOpen ? ' is-active' : ''}`} onClick={() => setPickOpen(true)}><Check size={14} />{t('pick')}</button> : null}
+          {data?.viewer?.isAdmin ? <button type="button" className={`queue-admin-button${adminOpen ? ' is-active' : ''}`} onClick={toggleAdminTools}><BarChart3 size={14} />{t('admin')}</button> : null}
+        </div>
+        <nav className="queue-actions-nav" aria-label={t('dashboard')}>
+          <a href={`${import.meta.env.BASE_URL}tracker.html`} target="_blank" rel="noreferrer">Tracker</a><a href={`${import.meta.env.BASE_URL}insights.html`} target="_blank" rel="noreferrer">Insights</a><span className="queue-nav-current" aria-current="page">Queue</span><a href={import.meta.env.BASE_URL} target="_blank" rel="noreferrer"><ArrowLeft size={14} />{t('dashboard')}</a>
+        </nav>
+        <div className="queue-actions-group queue-actions-account">
+          <QueueSettings isAdmin={Boolean(data?.viewer?.isAdmin)} userEmail={user.email} onSignOut={() => { clearSsoCookie(); signOut(auth); }} />
+        </div>
+      </div>
+    </header>
     {toast ? <div className={`queue-toast is-${toast.type}`} role="status">{toast.type === 'success' ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}<span>{toast.message}</span><button type="button" onClick={() => setToast(null)}><X size={14} /></button></div> : null}
     {loading ? <section className="queue-state"><LoaderCircle className="queue-spin" /><p>{t('loadingSchedule')}</p></section> : null}
     {error ? <section className="queue-state queue-error"><p>{error}</p><button type="button" onClick={load}>{t('tryAgain')}</button></section> : null}
-    {data ? <>{adminOpen ? <AdminTools report={report} loading={reportLoading} error={reportError} onClose={() => setAdminOpen(false)} onOpen={setOpen} /> : null}
-      <section className="scheduler-toolbar"><div><p className="scheduler-eyebrow">{coordinator ? t('coordinatorSchedule') : t('mySchedule')}</p><h2>{displayDate(date, language)}</h2></div>{coordinator ? <label className="scheduler-designer-filter">{t('assignedView')}<select value={designerScope} onChange={(event) => setDesignerScope(event.target.value)}><option value="">{t('allDesigners')}</option>{data.designers.map((designer) => <option key={designer.email} value={designer.email}>{designer.email.split('@')[0]}</option>)}</select></label> : null}<div className="scheduler-nav"><button type="button" aria-label="Previous day" onClick={() => setDate(shiftDay(date, -1))}><ChevronLeft size={17} /></button><button type="button" onClick={() => setDate(DAY())}>{t('today')}</button><button type="button" aria-label="Next day" onClick={() => setDate(shiftDay(date, 1))}><ChevronRight size={17} /></button></div><button type="button" className={`scheduler-archive-toggle${archive ? ' is-on' : ''}`} onClick={() => setArchive((value) => !value)}><Archive size={14} />{archive ? t('liveQueue') : t('archive')}</button>{coordinator && draft.length ? <button type="button" className="scheduler-submit" onClick={submit}><Send size={14} />{t('submit')} {draft.length} {draft.length > 1 ? t('changes') : t('change')}</button> : null}</section>
-      {coordinator && !archive ? <section className="scheduler-pool"><header><div><p className="scheduler-eyebrow">{t('productionPool')}</p><h2>{pool.length} {t('readyToSchedule')}</h2></div><small>{t('visibleSchedule')}</small></header><div className="scheduler-pool-list">{pool.map((task) => <PoolCard key={task.id} task={task} onOpen={setOpen} />)}{!pool.length ? <p className="scheduler-empty">{t('emptyPool')}</p> : null}</div></section> : null}
-      {archive ? <section className="queue-archive-list"><header><p className="scheduler-eyebrow">{t('archive')}</p><h2>{archived.length} {t('cancelled')}</h2></header>{archived.length ? archived.map((task) => <button type="button" key={task.id} onClick={() => setOpen(task)}><span>{cover(task) ? <img src={cover(task)} alt="" /> : '@'}</span><div><b>@{task.post.account}</b><small>{task.cancellationReason || t('cancelled')}</small></div><em>{displayTimestamp(task.updatedAt, language)}</em></button>) : <p className="scheduler-empty">{t('noArchived')}</p>}</section> : <>{coordinator && draft.length ? <><DraftAccounts draft={draft} designers={data.designers} onAccountsChange={changeDraftAccounts} /><div className="scheduler-draft-actions"><span><Clock3 size={13} />{t('sharedDrafts')}</span><button type="button" onClick={clearDrafts}>{t('clearDrafts')}</button></div></> : null}<Scheduler data={data} draft={draft} setDraft={setDraft} onDraftChange={persistDrafts} selectedDate={date} designerScope={designerScope} onOpen={setOpen} onError={(message) => notify(message, 'error')} />{!coordinator ? <DesignerAssignments tasks={assigned} onOpen={setOpen} /> : null}</>}
+    {data ? adminOpen ? <AdminTools report={report} loading={reportLoading} error={reportError} onClose={() => setAdminOpen(false)} onOpen={setOpen} /> : <>
+      <section className="scheduler-toolbar"><div><p className="scheduler-eyebrow">{coordinator ? t('coordinatorSchedule') : t('mySchedule')}</p><h2>{displayDate(date, language)}</h2></div>{coordinator ? <label className="scheduler-designer-filter">{t('assignedView')}<select value={designerScope} onChange={(event) => setDesignerScope(event.target.value)}><option value="">{t('allUsers')}</option>{(data.schedulerUsers || data.designers).map((person) => <option key={person.email} value={person.email}>{displayName(person.email)}</option>)}</select></label> : null}<div className="scheduler-nav"><button type="button" aria-label="Previous day" onClick={() => setDate(shiftDay(date, -1))}><ChevronLeft size={17} /></button><button type="button" onClick={() => setDate(DAY())}>{t('today')}</button><button type="button" aria-label="Next day" onClick={() => setDate(shiftDay(date, 1))}><ChevronRight size={17} /></button></div><button type="button" className={`scheduler-archive-toggle${archive ? ' is-on' : ''}`} onClick={() => setArchive((value) => !value)}><Archive size={14} />{archive ? t('liveQueue') : t('archive')}</button>{coordinator && draft.length ? <button type="button" className="scheduler-submit" onClick={submit}><Send size={14} />{t('submit')} {draft.length} {draft.length > 1 ? t('changes') : t('change')}</button> : null}</section>
+      {coordinator && !archive ? <section className={`scheduler-pool${poolDropActive ? ' is-drop-target' : ''}`} onDragOver={poolDragOver} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setPoolDropActive(false); }} onDrop={poolDrop} aria-label={t('poolDropHint')}><header><div><p className="scheduler-eyebrow">{t('productionPool')}</p><h2>{pool.length} {t('readyToSchedule')}</h2></div><small>{poolDropActive ? t('poolDropHint') : t('visibleSchedule')}</small></header><div className="scheduler-pool-list">{pool.map((task) => <PoolCard key={task.id} task={task} onOpen={setOpen} />)}{!pool.length ? <p className="scheduler-empty">{t('emptyPool')}</p> : null}</div></section> : null}
+      {archive ? <section className="queue-archive-list"><header><p className="scheduler-eyebrow">{t('archive')}</p><h2>{archived.length} {t('cancelled')}</h2></header>{archived.length ? archived.map((task) => <button type="button" key={task.id} className={`priority-${task.priority || 'medium'}${hotClass(task)}`} onClick={() => setOpen(task)}><span>{cover(task) ? <img src={cover(task)} alt="" /> : '@'}</span><div><b>@{task.post.account}</b><small>{task.cancellationReason || t('cancelled')}</small>{isHotTask(task) ? <i className="queue-hot-badge">🔥 {hotText(task)}</i> : null}</div><em>{displayTimestamp(task.updatedAt, language)}</em></button>) : <p className="scheduler-empty">{t('noArchived')}</p>}</section> : <>{coordinator && draft.length ? <><DraftAccounts draft={draft} designers={data.designers} onAccountsChange={changeDraftAccounts} /><div className="scheduler-draft-actions"><span><Clock3 size={13} />{t('sharedDrafts')}</span><button type="button" onClick={clearDrafts}>{t('clearDrafts')}</button></div></> : null}<Scheduler data={data} draft={draft} setDraft={setDraft} onDraftChange={persistDrafts} selectedDate={date} designerScope={designerScope} onOpen={setOpen} onError={(message) => notify(message, 'error')} onCreateTimeBlock={createTimeBlock} />{coordinator ? <AdminAssignmentTable tasks={upcoming} onOpen={setOpen} headingKey="upcomingProduction" countKey="activeRequests" /> : <DesignerAssignments tasks={assigned} onOpen={setOpen} />}</>}
     </> : null}
-    <Detail task={open} tags={data?.tags || []} canCoordinate={coordinator} isOwner={open?.designerEmail === data?.viewer.email || data?.viewer.isAdmin} notice={detailNotice} history={history} historyLoading={historyLoading} onClose={closeDetail} onAction={action} onCancel={cancel} onEdit={edit} onNotify={resend} onUpload={upload} onDownload={download} />
+    {ticketsOpen && data?.viewer ? <TicketPanel tickets={tickets} loading={ticketsLoading} error={ticketsError} onClose={() => setTicketsOpen(false)} onReview={reviewTicket} canReview={Boolean(coordinator)} /> : null}
+    {pickOpen ? <PickModal requests={pickPool} hotFallback={pickHotFallback} busy={pickBusy} onClose={() => setPickOpen(false)} onAssign={pickRequest} /> : null}
+    {createOpen ? <CreatePostModal tags={data?.tags || []} onClose={() => setCreateOpen(false)} onCreated={async () => { await load({ silent: true }); setCreateOpen(false); notify(t('postCreated')); }} /> : null}
+    <Detail task={open} tags={data?.tags || []} canCoordinate={coordinator} isOwner={open?.designerEmail === data?.viewer.email || data?.viewer.isAdmin} pendingTickets={openPendingTickets} onReviewTicket={reviewTicket} notice={detailNotice} history={history} historyLoading={historyLoading} onClose={closeDetail} onAction={action} onCancel={cancel} onEdit={edit} onNotify={resend} onUpload={upload} onDownload={download} onRequestPP={requestPP} onRequestCancellation={requestCancellation} onRequestMove={requestMove} />
     <DevRolePreview isDev={Boolean(viewer?.is_dev || data?.viewer?.isDev)} />
   </main>;
 }

@@ -223,18 +223,56 @@ table.hist-table td{text-align:left;padding:11px 8px;white-space:nowrap}
 :root[data-theme='light'] #authGate button{background:rgba(122,106,0,.14);color:#3d3600;
   border-color:rgba(122,106,0,.5)}
 
-/* language + theme toggles */
-.pref-toggles{display:inline-flex;align-items:center;gap:6px}
+/* language toggle -- now nested inside the Settings panel below */
 .lang-toggle{display:inline-flex;align-items:center;height:32px;padding:2px;
   border:1px solid var(--line);border-radius:8px}
 .lang-option{height:26px;padding:0 8px;border:0;border-radius:6px;background:none;
   color:var(--muted);font-size:11px;font-weight:800;font-family:inherit;cursor:pointer}
 .lang-option:hover{color:var(--text)}
 .lang-option.is-on{background:rgba(var(--edge),.1);color:var(--text)}
-.theme-toggle{display:grid;place-items:center;width:32px;height:32px;padding:0;
-  border:1px solid var(--line);border-radius:8px;background:none;font-size:14px;
-  line-height:1;cursor:pointer}
-.theme-toggle:hover{border-color:rgba(var(--edge),.3);background:rgba(var(--edge),.06)}
+
+/* Settings: one gear-icon entry point (accent, theme, language, admin link,
+   sign out) -- same shape repeated across Dashboard/Queue/Tracker/Insights,
+   each page implementing it locally since none of them share a bundle. */
+:root[data-accent='blue']{--accent-rgb:96,165,250;--accent:#60a5fa;--accent-text:#60a5fa;--accent-ink:#dbeafe}
+:root[data-accent='coral']{--accent-rgb:251,113,133;--accent:#fb7185;--accent-text:#fb7185;--accent-ink:#ffe4e6}
+.settings-menu{position:relative}
+.settings-menu-trigger{display:grid;place-items:center;width:32px;height:32px;padding:0;
+  border:1px solid var(--line);border-radius:8px;background:var(--panel-2);color:var(--muted);
+  font-size:14px;line-height:1;cursor:pointer}
+.settings-menu-trigger:hover,.settings-menu-trigger.is-active{border-color:rgba(var(--accent-rgb),.45);color:var(--text)}
+.settings-menu-panel{position:absolute;top:calc(100% + 8px);right:0;z-index:60;display:none;gap:2px;
+  width:280px;max-height:calc(100dvh - 90px);overflow:auto;padding:6px;border:1px solid var(--line);
+  border-radius:12px;background:var(--panel);box-shadow:0 18px 44px rgba(var(--shade),.5)}
+.settings-menu-panel.is-open{display:grid}
+.settings-menu-section{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 8px}
+.settings-menu-section>span{color:var(--muted);font-size:11px;font-weight:750}
+.settings-accent-picker{display:flex;align-items:center;gap:6px}
+.settings-accent-picker button{width:18px;height:18px;padding:0;border:1px solid rgba(255,255,255,.35);
+  border-radius:50%;cursor:pointer}
+.settings-accent-picker button.is-on{box-shadow:0 0 0 2px var(--panel),0 0 0 3px var(--accent)}
+.settings-accent-picker .accent-lime{background:#f5ff00}
+.settings-accent-picker .accent-blue{background:#60a5fa}
+.settings-accent-picker .accent-coral{background:#fb7185}
+.settings-menu-segment{display:flex;padding:2px;border:1px solid var(--line);border-radius:7px;background:var(--panel-2)}
+.settings-menu-segment button{display:inline-flex;align-items:center;gap:5px;min-height:27px;padding:0 8px;
+  border:0;border-radius:5px;background:transparent;color:var(--muted);font-size:10px;font-weight:750;
+  font-family:inherit;cursor:pointer}
+.settings-menu-segment button.is-on{background:rgba(var(--accent-rgb),.18);color:var(--accent-text)}
+.settings-menu-admin{display:none;flex-direction:column;align-items:stretch;gap:8px;margin-top:2px;
+  padding-top:11px;border-top:1px solid var(--line)}
+.settings-menu-admin.is-visible{display:flex}
+.settings-menu-admin>span{font-size:9px;font-weight:850;letter-spacing:.06em;text-transform:uppercase}
+.settings-menu-link{display:inline-flex;align-items:center;gap:6px;align-self:flex-start;min-height:28px;
+  padding:0 8px;border:1px solid rgba(var(--accent-rgb),.32);border-radius:7px;background:rgba(var(--accent-rgb),.08);
+  color:var(--accent-text);font-size:11px;font-weight:750;text-decoration:none}
+.settings-menu-footer{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:2px;
+  padding:10px 8px 6px;border-top:1px solid var(--line)}
+.settings-menu-footer small{overflow:hidden;color:var(--muted);font-size:10px;text-overflow:ellipsis;white-space:nowrap}
+.settings-menu-signout{display:inline-flex;flex:0 0 auto;align-items:center;gap:5px;min-height:28px;padding:0 8px;
+  border:1px solid rgba(255,107,107,.32);border-radius:7px;background:rgba(255,107,107,.08);color:#ff9b9b;
+  font-size:10px;font-weight:750;font-family:inherit;cursor:pointer}
+@media(max-width:620px){.settings-menu-panel{position:fixed;top:auto;right:8px;bottom:8px;left:8px;width:auto;max-height:70dvh}}
 
 .avatar-fallback{display:inline-flex;align-items:center;justify-content:center;
   background:rgba(var(--edge),.1);color:var(--muted-2);font-weight:800;
@@ -256,12 +294,40 @@ table.hist-table td{text-align:left;padding:11px 8px;white-space:nowrap}
       <h1>Tracker<span>.</span></h1>
     </div>
     <div class="top-actions">
-      <div class="pref-toggles">
-        <div class="lang-toggle" role="group" aria-label="Language">
-          <button type="button" class="lang-option" data-lang="en">ENG</button>
-          <button type="button" class="lang-option" data-lang="es">ES</button>
+      <div class="settings-menu" id="settingsMenu">
+        <button type="button" class="settings-menu-trigger" id="settingsTrigger" aria-label="Settings" aria-expanded="false" title="Settings">⚙</button>
+        <div class="settings-menu-panel" id="settingsPanel" role="dialog" aria-label="Settings">
+          <div class="settings-menu-section">
+            <span data-i18n="Accent color">Accent color</span>
+            <div class="settings-accent-picker" id="settingsAccentPicker">
+              <button type="button" class="accent-lime" data-accent-choice="lime" aria-label="lime accent"></button>
+              <button type="button" class="accent-blue" data-accent-choice="blue" aria-label="blue accent"></button>
+              <button type="button" class="accent-coral" data-accent-choice="coral" aria-label="coral accent"></button>
+            </div>
+          </div>
+          <div class="settings-menu-section">
+            <span data-i18n="Theme">Theme</span>
+            <div class="settings-menu-segment" id="settingsThemeSegment">
+              <button type="button" data-theme-choice="dark">🌙 <span data-i18n="Dark">Dark</span></button>
+              <button type="button" data-theme-choice="light">☀️ <span data-i18n="Light">Light</span></button>
+            </div>
+          </div>
+          <div class="settings-menu-section">
+            <span data-i18n="Language">Language</span>
+            <div class="lang-toggle" role="group" aria-label="Language">
+              <button type="button" class="lang-option" data-lang="en">ENG</button>
+              <button type="button" class="lang-option" data-lang="es">ES</button>
+            </div>
+          </div>
+          <div class="settings-menu-admin" id="settingsAdmin">
+            <span data-i18n="Admin">Admin</span>
+            <a class="settings-menu-link" href="./index.html?view=admin" target="_blank" rel="noreferrer">⚙ <span data-i18n="Open full settings">Open full settings</span></a>
+          </div>
+          <div class="settings-menu-footer">
+            <small id="settingsEmail"></small>
+            <button type="button" class="settings-menu-signout" id="settingsSignOut">⎋ <span data-i18n="Sign out">Sign out</span></button>
+          </div>
         </div>
-        <button type="button" class="theme-toggle" id="themeBtn" aria-label="Toggle theme"></button>
       </div>
       <button class="linkbtn" id="shareBtn" title="Copy a link to this exact view">Copy link</button>
       <a class="linkbtn" href="./insights.html">Insights</a>
@@ -938,6 +1004,11 @@ window.__onInsightsUnauthorized = () => {
   gate.classList.remove('hidden');
 };
 
+// The Settings panel's sign-out button lives in a classic <script> below,
+// outside this module's scope -- expose a global the same way as the other
+// __-prefixed bridges on this page.
+window.__signOut = () => { ssoClearCookie(); signOut(auth); };
+
 // Picks the user back up when the redirect fallback returns them here.
 getRedirectResult(auth).catch((err) => { gateText.textContent = describeSignInError(err); });
 
@@ -975,6 +1046,7 @@ onAuthStateChanged(auth, async (user) => {
     return;
   }
   window.__firebaseIdToken = await user.getIdToken();
+  window.__signedInEmail = user.email || '';
   gate.classList.add('hidden');
   ssoStartRefresh();
   if (!booted) {
@@ -990,7 +1062,7 @@ onAuthStateChanged(auth, async (user) => {
    itself, so switching back is an exact restore rather than a reverse
    lookup -- which would mistranslate any word that appears in both maps. */
 const PREF_LANG = 'sentient.lang', PREF_THEME = 'sentient.theme';
-const ES = {"Copy link": "Copiar link", "Dashboard": "Dashboard", "Insights": "Insights", "Tracker": "Tracker", "Sign in with your Google account to continue.": "Iniciá sesión con tu cuenta de Google para continuar.", "Sign in with Google": "Iniciar sesión con Google", "Sign out": "Cerrar sesión", "Copy a link to this exact view": "Copiar link a esta vista exacta", "Loading…": "Cargando…", "Loading...": "Cargando...", "Toggle theme": "Cambiar tema", "Language": "Idioma", "Accounts tracked": "Cuentas seguidas", "Leader": "Líder", "Top 7d grower": "Mayor crecimiento 7d", "Leaderboard": "Tabla de posiciones", "All tracked accounts": "Todas las cuentas seguidas", "Search accounts": "Buscar cuentas", "All accounts": "Todas las cuentas", "Favourites": "Favoritos", "Ours": "Nuestras", "Competitors": "Competidores", "Account": "Cuenta", "Followers": "Seguidores", "Posts": "Posts", "1 day": "1 día", "7 days": "7 días", "30 days": "30 días", "Avg likes (30d)": "Likes prom. (30d)", "Engagement trend": "Tendencia de engagement", "Last snapshot": "Última captura", "with follower data": "con datos de seguidores", "followers": "seguidores", "Historical stats": "Estadísticas históricas", "Total followers": "Seguidores totales", "Date": "Fecha"};
+const ES = {"Copy link": "Copiar link", "Dashboard": "Dashboard", "Insights": "Insights", "Tracker": "Tracker", "Sign in with your Google account to continue.": "Iniciá sesión con tu cuenta de Google para continuar.", "Sign in with Google": "Iniciar sesión con Google", "Sign out": "Cerrar sesión", "Copy a link to this exact view": "Copiar link a esta vista exacta", "Loading…": "Cargando…", "Loading...": "Cargando...", "Toggle theme": "Cambiar tema", "Language": "Idioma", "Accounts tracked": "Cuentas seguidas", "Leader": "Líder", "Top 7d grower": "Mayor crecimiento 7d", "Leaderboard": "Tabla de posiciones", "All tracked accounts": "Todas las cuentas seguidas", "Search accounts": "Buscar cuentas", "All accounts": "Todas las cuentas", "Favourites": "Favoritos", "Ours": "Nuestras", "Competitors": "Competidores", "Account": "Cuenta", "Followers": "Seguidores", "Posts": "Posts", "1 day": "1 día", "7 days": "7 días", "30 days": "30 días", "Avg likes (30d)": "Likes prom. (30d)", "Engagement trend": "Tendencia de engagement", "Last snapshot": "Última captura", "with follower data": "con datos de seguidores", "followers": "seguidores", "Historical stats": "Estadísticas históricas", "Total followers": "Seguidores totales", "Date": "Fecha", "Settings": "Ajustes", "Accent color": "Color de acento", "Theme": "Tema", "Dark": "Oscuro", "Light": "Claro", "Admin": "Admin", "Open full settings": "Abrir Settings completo"};
 
 function readPref(key, allowed, fallback) {
   try { const v = localStorage.getItem(key); if (allowed.includes(v)) return v; } catch {}
@@ -1005,11 +1077,9 @@ function setTheme(next) {
   theme = next;
   document.documentElement.setAttribute('data-theme', theme);
   try { localStorage.setItem(PREF_THEME, theme); } catch {}
-  const btn = document.getElementById('themeBtn');
-  if (btn) {
-    btn.textContent = theme === 'dark' ? '☀️' : '🌙';
-    btn.title = theme === 'dark' ? 'Light theme' : 'Dark theme';
-  }
+  document.querySelectorAll('#settingsThemeSegment button').forEach((b) => {
+    b.classList.toggle('is-on', b.dataset.themeChoice === theme);
+  });
   // Chart.js bakes colours in at construction, so a live chart keeps the old
   // palette until it is rebuilt.
   if (typeof window.__rerenderCharts === 'function') window.__rerenderCharts();
@@ -1080,11 +1150,83 @@ function setLang(next) {
 document.querySelectorAll('.lang-option').forEach((b) => {
   b.addEventListener('click', () => setLang(b.dataset.lang));
 });
-document.getElementById('themeBtn')?.addEventListener('click', () => {
-  setTheme(theme === 'dark' ? 'light' : 'dark');
-});
 setTheme(theme);
 applyI18n();
+
+/* --- Settings panel: accent, theme, language, admin link, sign out ------
+   Same shape as the Dashboard/Queue Settings menu, wired locally since this
+   page has no build step or shared component to import it from. */
+const PREF_ACCENT = 'sentient.accent';
+function readAccent() {
+  try {
+    const v = localStorage.getItem(PREF_ACCENT);
+    if (['lime', 'blue', 'coral'].includes(v)) return v;
+  } catch {}
+  return 'lime';
+}
+function setAccent(next) {
+  document.documentElement.setAttribute('data-accent', next);
+  try { localStorage.setItem(PREF_ACCENT, next); } catch {}
+  document.querySelectorAll('#settingsAccentPicker button').forEach((b) => {
+    b.classList.toggle('is-on', b.dataset.accentChoice === next);
+  });
+}
+setAccent(readAccent());
+document.querySelectorAll('#settingsAccentPicker button').forEach((b) => {
+  b.addEventListener('click', () => setAccent(b.dataset.accentChoice));
+});
+document.querySelectorAll('#settingsThemeSegment button').forEach((b) => {
+  b.addEventListener('click', () => setTheme(b.dataset.themeChoice));
+});
+
+const settingsMenu = document.getElementById('settingsMenu');
+const settingsTrigger = document.getElementById('settingsTrigger');
+const settingsPanel = document.getElementById('settingsPanel');
+function closeSettings() {
+  settingsPanel.classList.remove('is-open');
+  settingsTrigger.classList.remove('is-active');
+  settingsTrigger.setAttribute('aria-expanded', 'false');
+}
+let adminChecked = false;
+function checkAdminForSettings() {
+  // Deferred until the panel is actually opened (rather than on page load)
+  // so this never races the sign-in flow and fires __onInsightsUnauthorized
+  // before Firebase has produced a token.
+  if (adminChecked || !window.__firebaseIdToken) return;
+  adminChecked = true;
+  authedFetch('/api/dashboard/me').then((me) => {
+    const isAdmin = Boolean(me && (me.is_admin || (Array.isArray(me.operating_roles) && me.operating_roles.includes('admin')) || me.operating_role === 'admin'));
+    document.getElementById('settingsAdmin').classList.toggle('is-visible', isAdmin);
+  }).catch(() => { adminChecked = false; });
+}
+function openSettings() {
+  document.getElementById('settingsEmail').textContent = window.__signedInEmail || '';
+  settingsPanel.classList.add('is-open');
+  settingsTrigger.classList.add('is-active');
+  settingsTrigger.setAttribute('aria-expanded', 'true');
+  checkAdminForSettings();
+}
+settingsTrigger.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (settingsPanel.classList.contains('is-open')) closeSettings(); else openSettings();
+});
+document.addEventListener('click', (e) => {
+  if (!settingsMenu.contains(e.target)) closeSettings();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeSettings();
+});
+document.getElementById('settingsSignOut').addEventListener('click', () => {
+  closeSettings();
+  window.__signOut && window.__signOut();
+});
+
+// Admin-only "Open full settings" link -- best-effort: if the check fails
+// (offline, not booted yet) the section just stays hidden.
+authedFetch('/api/dashboard/me').then((me) => {
+  const isAdmin = Boolean(me && (me.is_admin || (Array.isArray(me.operating_roles) && me.operating_roles.includes('admin')) || me.operating_role === 'admin'));
+  document.getElementById('settingsAdmin').classList.toggle('is-visible', isAdmin);
+}).catch(() => {});
 
 </script>
 </body>
