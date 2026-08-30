@@ -9,7 +9,7 @@ import { PrefsProvider } from './prefsContext';
 import { SelectedPost, SlideDownload } from './postDetail';
 import chatgptricksProfileImage from './assets/chatgptricks-profile.jpg';
 import traselvelorealProfileImage from './assets/traselveloreal-profile.jpg';
-import { QUEUE_DAY_END, QUEUE_DAY_START, planQueueDrop } from './queuePlanner';
+import { QUEUE_DAY_END, QUEUE_DAY_START, minutesPerPPOf, planQueueDrop } from './queuePlanner';
 import { followQueueLive } from './queueLive';
 import './queue.css';
 
@@ -40,6 +40,7 @@ const USER_DISPLAY_NAMES = Object.freeze({
   'sebastianruizurquijo@gmail.com': 'Sebastian',
   'tevi@sentientagency.io': 'Tevi',
   'gabo@sentientagency.io': 'Gabo',
+  'trainee@sentientagency.io': 'Trainee',
 });
 const displayName = (value) => {
   const raw = String(value || '').trim();
@@ -69,6 +70,9 @@ const COPY = {
     settings: 'Ajustes', accentColor: 'Color de acento', theme: 'Tema', language: 'Idioma', signOut: 'Cerrar sesión', darkTheme: 'Oscuro', lightTheme: 'Claro', signedInAs: 'Sesión iniciada como', adminSettings: 'Admin',
   },
 };
+
+COPY.en.traineeRole = 'Trainee';
+COPY.es.traineeRole = 'Trainee';
 
 COPY.en.returnToPool = 'Return to pool';
 COPY.en.poolDropHint = 'Drop a scheduled request here to return it to the pool.';
@@ -167,9 +171,9 @@ function DevRolePreview({ isDev }) {
   const [open, setOpen] = useState(false);
   const active = window.sessionStorage.getItem('sentient.queueRolePreview') || '';
   if (!isDev) return null;
-  const label = { sales: 'Sales', pd: t('postDesigner'), vc: t('viralCoordinator'), admin: t('admin') }[active] || 'Dev';
+  const label = { sales: 'Sales', pd: t('postDesigner'), vc: t('viralCoordinator'), trainee: t('traineeRole'), admin: t('admin') }[active] || 'Dev';
   const choose = (event) => { const role = event.target.value; if (role) window.sessionStorage.setItem('sentient.queueRolePreview', role); else window.sessionStorage.removeItem('sentient.queueRolePreview'); window.location.reload(); };
-  return <div className="dev-role-preview"><button type="button" onClick={() => setOpen((value) => !value)} aria-expanded={open}><span>DEV</span>{label}</button>{open ? <div className="dev-role-preview-panel"><strong>{t('rolePreview')}</strong><p>{t('onlyEsteban')}</p><label>{t('activeRole')}<select value={active} onChange={choose}><option value="">{t('devFullAccess')}</option><option value="sales">Sales</option><option value="pd">{t('postDesigner')}</option><option value="vc">{t('viralCoordinator')}</option><option value="admin">{t('admin')}</option></select></label></div> : null}</div>;
+  return <div className="dev-role-preview"><button type="button" onClick={() => setOpen((value) => !value)} aria-expanded={open}><span>DEV</span>{label}</button>{open ? <div className="dev-role-preview-panel"><strong>{t('rolePreview')}</strong><p>{t('onlyEsteban')}</p><label>{t('activeRole')}<select value={active} onChange={choose}><option value="">{t('devFullAccess')}</option><option value="sales">Sales</option><option value="pd">{t('postDesigner')}</option><option value="vc">{t('viralCoordinator')}</option><option value="trainee">{t('traineeRole')}</option><option value="admin">{t('admin')}</option></select></label></div> : null}</div>;
 }
 
 function PriorityBadge({ priority = 'medium' }) {
@@ -372,7 +376,7 @@ function AdminUserManagement() {
     let explicitRoles = [];
     try { explicitRoles = JSON.parse(user.operating_roles || '[]'); } catch { explicitRoles = []; }
     if (!Array.isArray(explicitRoles) || !explicitRoles.length) explicitRoles = [user.operating_role || 'sales'];
-    const roleLabels = explicitRoles.filter((role) => String(role).toLowerCase() !== 'pd').map((role) => ({ vc: t('viralCoordinator'), sales: t('salesRole') }[String(role).toLowerCase()] || String(role).toUpperCase()));
+    const roleLabels = explicitRoles.filter((role) => String(role).toLowerCase() !== 'pd').map((role) => ({ vc: t('viralCoordinator'), sales: t('salesRole'), trainee: t('traineeRole') }[String(role).toLowerCase()] || String(role).toUpperCase()));
     if (user.is_admin) roleLabels.push(t('admin'));
     const displayRole = roleLabels.join(' · ');
     return <article key={user.email}><header><b>{displayName(user.email)}</b><small>{user.email}{displayRole ? ` · ${displayRole}` : ''}</small></header><div className="queue-user-management-accounts">{managed.accounts.map((handle) => <button type="button" key={handle} title={t('removeAccount')} onClick={() => updateAccount(user.email, handle, 'DELETE')} disabled={Boolean(busy)}>@{handle} <X size={11} /></button>)}{!managed.accounts.length ? <em>—</em> : null}</div><div className="queue-user-management-add"><select value={choices[user.email] || ''} aria-label={`${t('chooseSentientAccount')} ${user.email}`} onChange={(event) => setChoices((current) => ({ ...current, [user.email]: event.target.value }))} disabled={Boolean(busy)}><option value="">{t('chooseSentientAccount')}</option>{available.map((account) => <option key={account.handle} value={account.handle}>@{account.handle}</option>)}</select><button type="button" onClick={() => updateAccount(user.email, choices[user.email], 'POST')} disabled={!choices[user.email] || Boolean(busy)}>{t('assignAccount')}</button></div></article>;
@@ -469,6 +473,7 @@ function schedulerUserRole(user, t) {
   const labels = [];
   if (roles.includes('vc')) labels.push(t('viralCoordinator'));
   if (roles.includes('sales')) labels.push(t('salesRole'));
+  if (roles.includes('trainee')) labels.push(t('traineeRole'));
   if (user?.isAdmin) labels.push(t('admin'));
   return labels.join(' · ');
 }
@@ -554,7 +559,14 @@ function Scheduler({ data, draft, setDraft, onDraftChange, selectedDate, designe
     if (!targetUser?.isQueueDesigner) return { ok: false, error: 'Only Post Designers can receive Queue work.' };
     const rect = event.currentTarget.getBoundingClientRect();
     const pointer = Math.min(1430, Math.max(0, Math.round((((event.clientX - rect.left) / rect.width) * QUEUE_DAY_END) / 10) * 10));
-    const result = planQueueDrop({ tasks: planningTasks, target: source, designerEmail: designer, scheduledDate: selectedDate, desiredStart: pointer });
+    const result = planQueueDrop({
+      tasks: planningTasks,
+      target: source,
+      designerEmail: designer,
+      scheduledDate: selectedDate,
+      desiredStart: pointer,
+      minutesPerPP: Number(targetUser.minutesPerPP || 10),
+    });
     if (!result.ok) return result;
     const allowedAccounts = new Set((targetUser.accounts || []).map((account) => String(account).toLowerCase()));
     const target = { ...result.target, recommendedAccounts: (result.target.recommendedAccounts || []).filter((account) => allowedAccounts.has(String(account).replace(/^@/, '').toLowerCase())) };
@@ -582,8 +594,9 @@ function Scheduler({ data, draft, setDraft, onDraftChange, selectedDate, designe
     event.preventDefault();
     event.stopPropagation();
     const baseStart = Number(task.scheduledStartMinutes ?? 0);
-    const baseDuration = Math.max(10, Number(task.durationMinutes || Number(task.productionPoints || 1) * 10));
-    const nextState = { task, edge, track, baseStart, baseEnd: baseStart + baseDuration, baseDuration, preview: { ...task, isDraft: true, draftCoordinatorEmail: data.viewer.email } };
+    const minutesPerPP = minutesPerPPOf(task);
+    const baseDuration = Math.max(minutesPerPP, Number(task.durationMinutes || Number(task.productionPoints || 1) * minutesPerPP));
+    const nextState = { task, edge, track, minutesPerPP, baseStart, baseEnd: baseStart + baseDuration, baseDuration, preview: { ...task, isDraft: true, draftCoordinatorEmail: data.viewer.email } };
     resizeRef.current = nextState;
     setResizeState(nextState);
   };
@@ -596,21 +609,24 @@ function Scheduler({ data, draft, setDraft, onDraftChange, selectedDate, designe
       if (!rect.width) return;
       const rawMinute = ((event.clientX - rect.left) / rect.width) * QUEUE_DAY_END;
       const pointer = Math.max(0, Math.min(QUEUE_DAY_END, Math.round(rawMinute / 10) * 10));
-      const others = planningTasks.filter((item) => item.id !== current.task.id && item.designerEmail === current.task.designerEmail && item.scheduledDate === current.task.scheduledDate && !['pool', 'cancelled'].includes(item.status)).map((item) => ({ start: Number(item.scheduledStartMinutes ?? 0), end: Number(item.scheduledStartMinutes ?? 0) + Math.max(10, Number(item.durationMinutes || Number(item.productionPoints || 1) * 10)) }));
+      const others = planningTasks.filter((item) => item.id !== current.task.id && item.designerEmail === current.task.designerEmail && item.scheduledDate === current.task.scheduledDate && !['pool', 'cancelled'].includes(item.status)).map((item) => { const unit = minutesPerPPOf(item); return { start: Number(item.scheduledStartMinutes ?? 0), end: Number(item.scheduledStartMinutes ?? 0) + Math.max(unit, Number(item.durationMinutes || Number(item.productionPoints || 1) * unit)) }; });
       const previousEnd = Math.max(0, ...others.filter((item) => item.end <= current.baseStart).map((item) => item.end));
       const nextStart = Math.min(QUEUE_DAY_END, ...others.filter((item) => item.start >= current.baseEnd).map((item) => item.start));
+      const unit = current.minutesPerPP;
       let start = current.baseStart;
-      let end = current.baseEnd;
+      let productionPoints = Math.max(1, Number(current.task.productionPoints || Math.round(current.baseDuration / unit)));
       if (current.edge === 'right') {
-        end = Math.max(current.baseStart + 10, Math.min(pointer, Number.isFinite(nextStart) ? nextStart : QUEUE_DAY_END));
+        const maxPoints = Math.max(1, Math.floor(((Number.isFinite(nextStart) ? nextStart : QUEUE_DAY_END) - start) / unit));
+        productionPoints = Math.max(1, Math.min(maxPoints, Math.round((pointer - start) / unit)));
       } else {
-        start = Math.max(previousEnd, Math.min(pointer, current.baseEnd - 10));
-        end = current.baseEnd;
+        const minimumStart = Math.ceil(previousEnd / 10) * 10;
+        start = Math.max(minimumStart, Math.min(pointer, current.baseEnd - 10));
+        start = Math.round(start / 10) * 10;
+        const maxPoints = Math.max(1, Math.floor(((Number.isFinite(nextStart) ? nextStart : QUEUE_DAY_END) - start) / unit));
+        productionPoints = Math.max(1, Math.min(maxPoints, Math.round((current.baseEnd - start) / unit)));
       }
-      start = Math.round(start / 10) * 10;
-      end = Math.max(start + 10, Math.round(end / 10) * 10);
-      const duration = end - start;
-      const preview = { ...current.task, scheduledStartMinutes: start, durationMinutes: duration, productionPoints: Math.max(1, duration / 10), status: 'scheduled', isDraft: true, draftCoordinatorEmail: data.viewer.email };
+      const duration = productionPoints * unit;
+      const preview = { ...current.task, scheduledStartMinutes: start, minutesPerPP: unit, durationMinutes: duration, productionPoints, status: 'scheduled', isDraft: true, draftCoordinatorEmail: data.viewer.email };
       const next = { ...current, preview };
       resizeRef.current = next;
       setResizeState(next);
@@ -646,12 +662,13 @@ function Scheduler({ data, draft, setDraft, onDraftChange, selectedDate, designe
           const queueEligible = designer.isQueueDesigner !== false;
           const initials = initialsFor(designer.email);
           const role = schedulerUserRole(designer, t);
+          const ppUnit = Number(designer.minutesPerPP || 10) !== 10 ? `${designer.minutesPerPP} min/PP` : '';
           const accounts = designer.accounts?.map((account) => `@${account}`).join(' · ') || t('noAccounts');
           const accountAvatars = designer.accountAvatars || {};
           const tasks = merged(designer.email);
           const timeBlocks = (data.timeBlocks || []).filter((block) => block.requesterEmail === designer.email && block.scheduledDate === selectedDate);
           return <div className={`scheduler-row${queueEligible ? '' : ' is-non-queue-user'}`} key={designer.email}>
-            <header><div className="scheduler-user-identity"><span className="scheduler-user-avatar"><span aria-hidden="true">{initials}</span>{userAvatar(designer.avatarUrl) ? <img src={userAvatar(designer.avatarUrl)} alt="" referrerPolicy="no-referrer" onError={(event) => { event.currentTarget.hidden = true; }} /> : null}</span><span className="scheduler-user-copy"><b>{displayName(designer.email)}</b><small>{[role, accounts].filter(Boolean).join(' · ')}</small></span></div></header>
+            <header><div className="scheduler-user-identity"><span className="scheduler-user-avatar"><span aria-hidden="true">{initials}</span>{userAvatar(designer.avatarUrl) ? <img src={userAvatar(designer.avatarUrl)} alt="" referrerPolicy="no-referrer" onError={(event) => { event.currentTarget.hidden = true; }} /> : null}</span><span className="scheduler-user-copy"><b>{displayName(designer.email)}</b><small>{[role, ppUnit, accounts].filter(Boolean).join(' · ')}</small></span></div></header>
             <div className="scheduler-track" onContextMenu={(event) => openTimeBlockForm(event, designer)} onDragOver={(event) => previewDrop(event, designer.email)} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setDropPreview(null); }} onDrop={(event) => drop(event, designer.email)}>
               {Array.from({ length: 25 }, (_, hour) => <i key={hour} style={{ left: `${hour * (100 / 24)}%` }} />)}
               {timeBlocks.map((block) => <TimeBlock key={block.id} block={block} />)}
@@ -872,11 +889,13 @@ function QueueApp({ user }) {
   }, [coordinator, data]);
   const assigned = useMemo(() => { const byId = new Map((data?.assignedRequests || []).map((task) => [task.id, task])); (data?.liveDrafts || []).filter((task) => task.designerEmail === data?.viewer?.email).forEach((task) => byId.set(task.id, task)); return [...byId.values()].sort((a, b) => `${a.scheduledDate}-${String(a.scheduledStartMinutes).padStart(4, '0')}`.localeCompare(`${b.scheduledDate}-${String(b.scheduledStartMinutes).padStart(4, '0')}`)); }, [data]);
   const pickPool = useMemo(() => {
-    const poolRequests = (data?.pickRequests || []).filter((task) => task.status === 'pool');
+    const minutesPerPP = Number(data?.viewer?.minutesPerPP || 10);
+    const forViewer = (task) => ({ ...task, minutesPerPP, durationMinutes: Number(task.productionPoints || 1) * minutesPerPP });
+    const poolRequests = (data?.pickRequests || []).filter((task) => task.status === 'pool').map(forViewer);
     const regularRequests = poolRequests.filter((task) => !(task.isHot || task.tags?.includes('hot')));
     if (regularRequests.length) return poolRequests;
     if (poolRequests.length) return [...poolRequests].sort((a, b) => (Number(b.hotMultiplier) || 0) - (Number(a.hotMultiplier) || 0));
-    return (data?.hotPickRequests || []).filter((task) => task.status === 'pool').sort((a, b) => (Number(b.hotMultiplier) || 0) - (Number(a.hotMultiplier) || 0));
+    return (data?.hotPickRequests || []).filter((task) => task.status === 'pool').map(forViewer).sort((a, b) => (Number(b.hotMultiplier) || 0) - (Number(a.hotMultiplier) || 0));
   }, [data]);
   const pickHotFallback = useMemo(() => {
     const poolRequests = (data?.pickRequests || []).filter((task) => task.status === 'pool');

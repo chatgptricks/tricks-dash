@@ -41,4 +41,15 @@ const nextDayOccupied = planQueueDrop({
 assert.equal(nextDayOccupied.target.scheduledDate, '2026-09-02');
 assert.equal(nextDayOccupied.target.scheduledStartMinutes, 50, 'cross-day collisions must also advance');
 
+const traineeAssignment = planQueueDrop({
+  tasks: [],
+  target: { ...target, productionPoints: 3, durationMinutes: 30 },
+  designerEmail: 'trainee@sentientagency.io',
+  scheduledDate: '2026-09-01',
+  desiredStart: 600,
+  minutesPerPP: 16,
+});
+assert.equal(traineeAssignment.target.minutesPerPP, 16, 'the target designer controls the PP unit');
+assert.equal(traineeAssignment.target.durationMinutes, 48, 'three trainee PP must occupy 48 minutes');
+
 console.log('Queue planner rules passed.');

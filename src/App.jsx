@@ -4082,7 +4082,7 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
                     <label className="modal-field">
                       <span>Queue role</span>
                       <select value={newUserOperatingRole} onChange={(event) => setNewUserOperatingRole(event.target.value)}>
-                        <option value="sales">Sales</option><option value="vc">Viral Coordinator</option><option value="pd">Post Designer</option>
+                        <option value="sales">Sales</option><option value="vc">Viral Coordinator</option><option value="pd">Post Designer</option><option value="trainee">Trainee</option>
                       </select>
                     </label>
                     <label className="modal-field">
@@ -4108,7 +4108,7 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
                         </div>
                         <div className="settings-row-controls queue-user-controls">
                           <select value={user.operating_role || 'sales'} aria-label={`Queue role for ${user.email}`} onChange={(event) => updateUser(user, { operating_role: event.target.value })} disabled={userActionEmail === user.email}>
-                            <option value="sales">Sales</option><option value="vc">VC</option><option value="pd">PD</option>
+                            <option value="sales">Sales</option><option value="vc">VC</option><option value="pd">PD</option><option value="trainee">Trainee</option>
                           </select>
                           <input defaultValue={user.slack_user_id || ''} aria-label={`Slack user ID for ${user.email}`} placeholder="Slack ID" onBlur={(event) => { if (event.target.value.trim() !== (user.slack_user_id || '')) updateUser(user, { slack_user_id: event.target.value.trim().toUpperCase() }); }} />
                           <button

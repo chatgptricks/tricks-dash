@@ -6,7 +6,11 @@ export const QUEUE_BUFFER_MINUTES = 0;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const scheduled = (task) => task.status === 'scheduled' && task.designerEmail && task.scheduledDate;
 const fixed = (task) => ['in_progress', 'completed', 'closed'].includes(task.status) && task.designerEmail && task.scheduledDate;
-const durationOf = (task) => Math.max(10, Number(task.durationMinutes || Number(task.productionPoints || 1) * 10));
+export const minutesPerPPOf = (task) => Math.max(1, Number(task?.minutesPerPP || 10));
+const durationOf = (task) => {
+  const minutesPerPP = minutesPerPPOf(task);
+  return Math.max(minutesPerPP, Number(task.durationMinutes || Number(task.productionPoints || 1) * minutesPerPP));
+};
 
 function dateValue(value) {
   return Math.floor(Date.parse(`${value}T00:00:00Z`) / DAY_MS);
@@ -47,19 +51,25 @@ export function intervalsConflict(start, duration, otherStart, otherDuration, bu
  * Existing work owns its slot; the dropped request advances to the first
  * collision-free position, including the following day when necessary.
  */
-export function planQueueDrop({ tasks, target, designerEmail, scheduledDate, desiredStart }) {
+export function planQueueDrop({ tasks, target, designerEmail, scheduledDate, desiredStart, minutesPerPP }) {
   if (!target || target.status === 'in_progress') return { ok: false, error: 'This request cannot be moved.' };
+  const targetMinutesPerPP = Math.max(1, Number(minutesPerPP || target.minutesPerPP || 10));
+  const assignedTarget = minutesPerPP ? {
+    ...target,
+    minutesPerPP: targetMinutesPerPP,
+    durationMinutes: Number(target.productionPoints || 1) * targetMinutesPerPP,
+  } : target;
   const row = tasks.filter((task) => task.id !== target.id && task.designerEmail === designerEmail && (scheduled(task) || fixed(task)));
   const occupied = row.map((task) => ({
     id: task.id,
     start: absoluteStart(task, scheduledDate),
     duration: durationOf(task),
   }));
-  const duration = durationOf(target);
+  const duration = durationOf(assignedTarget);
   const start = nextFreeStart(desiredStart, duration, occupied);
   const position = splitAbsolute(scheduledDate, start);
   const plannedTarget = {
-    ...target,
+    ...assignedTarget,
     ...position,
     designerEmail,
     durationMinutes: duration,
