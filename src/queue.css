@@ -764,6 +764,8 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
    its Queue side view after creation. */
 .queue-create-button { display:inline-flex; align-items:center; gap:6px; min-height:29px; padding:0 10px; border:1px solid rgba(var(--accent-rgb),.5); border-radius:7px; background:rgba(var(--accent-rgb),.14); color:var(--q-accent); font-size:10px; font-weight:900; }
 .queue-create-button:hover,.queue-create-button:focus-visible { border-color:rgba(var(--accent-rgb),.8); background:rgba(var(--accent-rgb),.22); }
+.queue-overview-button { display:inline-flex; align-items:center; gap:6px; min-height:29px; padding:0 9px; border:1px solid var(--q-line); border-radius:7px; background:var(--q-panel-2); color:var(--q-muted); font-size:10px; font-weight:800; line-height:1; }
+.queue-overview-button:hover,.queue-overview-button:focus-visible,.queue-overview-button.is-active { border-color:rgba(var(--accent-rgb),.5); background:rgba(var(--accent-rgb),.1); color:var(--q-accent); }
 .queue-create-backdrop { position:fixed; inset:0; z-index:120; display:grid; place-items:center; padding:20px; background:rgba(0,0,0,.64); backdrop-filter:blur(6px); }
 .queue-create-modal { display:grid; gap:13px; width:min(640px,100%); max-height:calc(100dvh - 40px); overflow:auto; padding:18px; border:1px solid rgba(var(--accent-rgb),.32); border-radius:15px; background:var(--q-panel); box-shadow:0 30px 90px rgba(0,0,0,.7); }
 .queue-create-head { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; padding-bottom:12px; border-bottom:1px solid var(--q-line); }
