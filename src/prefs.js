@@ -7,6 +7,7 @@
 export const LANGS = ['en', 'es'];
 export const THEMES = ['dark', 'light'];
 export const ACCENT_PRESETS = Object.freeze({
+  green: '#00ac80',
   lime: '#f5ff00',
   blue: '#60a5fa',
   coral: '#fb7185',

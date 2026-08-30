@@ -13,7 +13,11 @@ that.
 - The installed PWA is named `Sentient Dash`, has standalone/portrait metadata, safe-area layout, mobile icons, a service worker, offline state, and an update-ready flow.
 - Primary mobile navigation exposes five sections from the start: Home, Research, Queue, Tracker, and Insights. Admin/Dev Settings is a separate sixth route opened from the profile sheet.
 - Home is role-aware: PD-first users land on their production day; VC/Admin users get team, pool, and approval status. Queue preserves live drafts, submit-and-notify, Pick, requests, tickets, time blocks, and coordinator assignment actions in touch-first sheets.
-- Mobile preferences use the same local-storage keys as desktop for language, light/dark theme, preset accent, and custom accent.
+- Home and Tracker prioritize the desktop Tracker favorites and show exact total followers plus the current day's follower delta. Tracker also shows an aggregate follower total and daily growth.
+- Research has the complete touch-first filter set: account, post format, media, date presets/custom range, minimum likes/comments, promos, hidden posts, and all supported sort modes. Every mobile form control is at least 16px to prevent iOS focus zoom.
+- Queue's Agenda includes a compact 24-hour day map with plain status bars and blocked-time markers above the detailed assignments.
+- Mobile Settings supports live Account label/group/HOT-threshold editing, activation, avatar refresh, and Slack test/custom notifications with optional images.
+- Mobile preferences use the same local-storage keys as desktop for light/dark theme, preset accent, and custom accent. Base surfaces remain neutral black/gray or white/gray; Sentient green, neon yellow, blue, coral, and a true custom picker are available globally.
 - Verification: production Vite build, dedicated mobile jsdom smoke test, existing Dashboard/Queue/Settings smokes, Queue planner tests, and 390x844 visual QA.
 
 ## Latest change: standalone Settings command center (2026-08-30)
