@@ -349,7 +349,6 @@ function SettingsMenu({ email, isAdmin, onSignOut, onOpenAdminSettings }) {
                 <Settings size={13} />
                 {t('Open full settings')}
               </button>
-              <AdminAccountAssignments />
             </div>
           ) : null}
           <div className="settings-menu-footer">
@@ -365,128 +364,6 @@ function SettingsMenu({ email, isAdmin, onSignOut, onOpenAdminSettings }) {
   );
 }
 
-// Mirrors Queue's AdminUserManagement (queue.jsx) against the same
-// /api/admin/queue/designer-accounts endpoints -- duplicated rather than
-// imported since Queue is a separate Vite entry with its own bundle, but
-// kept intentionally close so the two stay easy to compare and update
-// together.
-function AdminAccountAssignments() {
-  const { t } = usePrefs();
-  const [users, setUsers] = useState([]);
-  const [designerAccounts, setDesignerAccounts] = useState([]);
-  const [accounts, setAccounts] = useState([]);
-  const [choices, setChoices] = useState({});
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [busy, setBusy] = useState('');
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const [userRes, designerRes, accountRes] = await Promise.all([
-        apiFetch(`${API_BASE}/api/admin/users`),
-        apiFetch(`${API_BASE}/api/admin/queue/designer-accounts`),
-        apiFetch(`${API_BASE}/api/admin/accounts`),
-      ]);
-      const [userBody, designerBody, accountBody] = await Promise.all([
-        userRes.ok ? userRes.json() : {},
-        designerRes.ok ? designerRes.json() : {},
-        accountRes.ok ? accountRes.json() : {},
-      ]);
-      setUsers(userBody.users || []);
-      setDesignerAccounts(designerBody.designers || []);
-      setAccounts((accountBody.accounts || []).filter((account) => account.group === 'sentient' && account.is_active !== false));
-    } catch (cause) {
-      setError(cause.message || t('Could not update account ownership.'));
-    } finally {
-      setLoading(false);
-    }
-  }, [t]);
-
-  useEffect(() => { load(); }, [load]);
-
-  const updateAccount = async (designerEmail, accountHandle, method) => {
-    const key = `${designerEmail}:${accountHandle}`;
-    setBusy(key);
-    setError('');
-    try {
-      const query = new URLSearchParams({ designer_email: designerEmail, account_handle: accountHandle });
-      const url = `${API_BASE}/api/admin/queue/designer-accounts${method === 'DELETE' ? `?${query.toString()}` : ''}`;
-      const response = await apiFetch(url, method === 'POST' ? { method, body: query } : { method });
-      if (!response.ok) {
-        const detail = await response.json().catch(() => ({}));
-        throw new Error(detail.detail || `HTTP ${response.status}`);
-      }
-      const body = await response.json();
-      setDesignerAccounts(body.designers || []);
-      setChoices((current) => ({ ...current, [designerEmail]: '' }));
-    } catch (cause) {
-      setError(cause.message || t('Could not update account ownership.'));
-    } finally {
-      setBusy('');
-    }
-  };
-
-  if (loading) {
-    return <div className="settings-admin-loading"><RotateCcw size={13} className="spin" />{t('Loading users…')}</div>;
-  }
-
-  return (
-    <div className="settings-admin-accounts">
-      {error ? <p className="settings-admin-error">{error}</p> : null}
-      {users.length ? (
-        <div className="settings-admin-account-list">
-          {users.map((user) => {
-            const managed = designerAccounts.find((item) => item.email === user.email) || { accounts: [] };
-            const available = accounts.filter((account) => !managed.accounts.includes(account.handle));
-            return (
-              <article key={user.email}>
-                <header><b>{user.email}</b></header>
-                <div className="settings-admin-account-chips">
-                  {managed.accounts.map((handle) => (
-                    <button
-                      type="button"
-                      key={handle}
-                      title={t('Remove account')}
-                      onClick={() => updateAccount(user.email, handle, 'DELETE')}
-                      disabled={Boolean(busy)}
-                    >
-                      @{handle} <X size={11} />
-                    </button>
-                  ))}
-                  {!managed.accounts.length ? <em>—</em> : null}
-                </div>
-                <div className="settings-admin-account-add">
-                  <select
-                    value={choices[user.email] || ''}
-                    aria-label={`${t('Choose Sentient account')} ${user.email}`}
-                    onChange={(event) => setChoices((current) => ({ ...current, [user.email]: event.target.value }))}
-                    disabled={Boolean(busy)}
-                  >
-                    <option value="">{t('Choose Sentient account')}</option>
-                    {available.map((account) => (
-                      <option key={account.handle} value={account.handle}>@{account.handle}</option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    onClick={() => updateAccount(user.email, choices[user.email], 'POST')}
-                    disabled={!choices[user.email] || Boolean(busy)}
-                  >
-                    {t('Assign')}
-                  </button>
-                </div>
-              </article>
-            );
-          })}
-        </div>
-      ) : (
-        <p className="settings-admin-empty">{t('No users available.')}</p>
-      )}
-    </div>
-  );
-}
 
 const PREDICT_URL = 'https://chatgptricks.github.io/cortex/';
 // How long a HOT post keeps showing its badge. Deliberately the SAME window as

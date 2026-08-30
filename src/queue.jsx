@@ -160,7 +160,7 @@ function QueueSettings({ isAdmin, userEmail, onSignOut }) {
       <section className="queue-settings-section"><span>{t('accentColor')}</span><div className="queue-accent-picker">{['lime', 'blue', 'coral'].map((value) => <button type="button" key={value} className={`accent-${value}${accent === value ? ' is-on' : ''}`} onClick={() => setAccent(value)} aria-label={`${value} accent`} />)}</div></section>
       <section className="queue-settings-section"><span>{t('theme')}</span><div className="queue-settings-segment"><button type="button" className={theme === 'dark' ? 'is-on' : ''} onClick={() => setTheme('dark')}><Moon size={13} />{t('darkTheme')}</button><button type="button" className={theme === 'light' ? 'is-on' : ''} onClick={() => setTheme('light')}><Sun size={13} />{t('lightTheme')}</button></div></section>
       <section className="queue-settings-section"><span>{t('language')}</span><div className="queue-language" aria-label="Language"><button type="button" className={language === 'en' ? 'is-on' : ''} onClick={() => setLanguage('en')}>EN</button><button type="button" className={language === 'es' ? 'is-on' : ''} onClick={() => setLanguage('es')}>ES</button></div></section>
-      {isAdmin ? <section className="queue-settings-section queue-settings-admin"><span>{t('adminSettings')}</span><a className="queue-settings-link" href={`${import.meta.env.BASE_URL}?view=admin`} target="_blank" rel="noreferrer"><Settings size={13} />{t('openSettings')}</a><AdminUserManagement /></section> : null}
+      {isAdmin ? <section className="queue-settings-section queue-settings-admin"><span>{t('adminSettings')}</span><a className="queue-settings-link" href={`${import.meta.env.BASE_URL}?view=admin`} target="_blank" rel="noreferrer"><Settings size={13} />{t('openSettings')}</a></section> : null}
       <footer><small>{t('signedInAs')} {userEmail}</small><button type="button" className="queue-settings-signout" onClick={onSignOut}><LogOut size={13} />{t('signOut')}</button></footer>
     </div></> : null}
   </div>;
@@ -321,75 +321,12 @@ function AdminAssignmentTable({ tasks, onOpen, headingKey = 'allAssignedPosts', 
   return <section className="queue-admin-assignments"><header><div><p className="scheduler-eyebrow">{t(headingKey)}</p><h3>{tasks.length} {t(countKey)}</h3></div></header>{tasks.length ? <div className="queue-admin-assignment-table" role="table"><div className="queue-admin-assignment-head" role="row"><span>{t('post')}</span><span>{t('designer')}</span><span>{t('scheduled')}</span><span>{t('priority')}</span><span>{t('productionPoints')}</span><span>{t('status')}</span></div>{tasks.map((task) => <button type="button" role="row" key={task.id} className={`queue-admin-assignment-row state-${task.status} priority-${task.priority || 'medium'}${hotClass(task)}${task.isDraft ? ' is-draft' : ''}`} onClick={() => onOpen(task)}><span className="queue-admin-assignment-post">{cover(task) ? <img src={cover(task)} alt="" /> : <span className="queue-admin-assignment-empty">@</span>}<span><b>{task.post.title || accountMention(task.post.account) || t('post')}</b><small>{task.post.account ? accountMention(task.post.account) : t('accountToSelect')} · {task.brief || task.post.caption || t('post')}</small>{task.recommendedAccounts?.length ? <em>{task.recommendedAccounts.map((account) => `@${account}`).join(' · ')}</em> : null}{isHotTask(task) ? <i className="queue-hot-badge">🔥 {hotText(task)}</i> : null}</span></span><span className="queue-admin-assignment-designer"><b>{task.designerEmail ? displayName(task.designerEmail) : '—'}</b><small>{task.designerEmail || ''}</small></span><span className="queue-admin-assignment-time"><b>{task.scheduledDate ? displayDate(task.scheduledDate, language) : '—'}</b><small>{task.scheduledStartMinutes == null ? '—' : `${time(task.scheduledStartMinutes)} · ${task.durationMinutes} ${t('minutes')}`}</small></span><span className="queue-admin-assignment-priority"><PriorityBadge priority={task.priority} /></span><span className="queue-admin-assignment-pp"><b>{task.productionPoints} PP</b><small>{task.tags?.filter((tag) => tag !== 'hot').slice(0, 2).join(' · ') || t('noTags')}</small></span><span className="queue-admin-assignment-status"><i>{statusCopy(task.status, t, task.isDraft)}</i></span></button>)}</div> : <p className="queue-admin-assignment-empty-state">{t('noAssignedPosts')}</p>}</section>;
 }
 
-function AdminUserManagement() {
-  const { t } = useQueuePreferences();
-  const [users, setUsers] = useState([]);
-  const [designerAccounts, setDesignerAccounts] = useState([]);
-  const [accounts, setAccounts] = useState([]);
-  const [choices, setChoices] = useState({});
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [busy, setBusy] = useState('');
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const [userBody, designerBody, accountBody] = await Promise.all([
-        json('/api/admin/users'),
-        json('/api/admin/queue/designer-accounts'),
-        json('/api/admin/accounts'),
-      ]);
-      setUsers(userBody.users || []);
-      setDesignerAccounts(designerBody.designers || []);
-      setAccounts((accountBody.accounts || []).filter((account) => account.group === 'sentient' && account.is_active !== false));
-    } catch (cause) {
-      setError(cause.message || t('accountUpdateFailed'));
-    } finally {
-      setLoading(false);
-    }
-  }, [t]);
-
-  useEffect(() => { load(); }, [load]);
-
-  const updateAccount = async (designerEmail, accountHandle, method) => {
-    const key = `${designerEmail}:${accountHandle}`;
-    setBusy(key);
-    setError('');
-    try {
-      const query = new URLSearchParams({ designer_email: designerEmail, account_handle: accountHandle });
-      const body = method === 'POST' ? { method, body: query } : { method: 'DELETE', search: `?${query.toString()}` };
-      const response = await json(`/api/admin/queue/designer-accounts${body.search || ''}`, body.method === 'POST' ? body : { method: body.method });
-      setDesignerAccounts(response.designers || []);
-      setChoices((current) => ({ ...current, [designerEmail]: '' }));
-    } catch (cause) {
-      setError(cause.message || t('accountUpdateFailed'));
-    } finally {
-      setBusy('');
-    }
-  };
-
-  if (loading) return <div className="queue-user-management-loading"><LoaderCircle className="queue-spin" />{t('loadingUsers')}</div>;
-  return <section className="queue-user-management"><header><div><p className="scheduler-eyebrow">{t('userManagement')}</p><h3>{t('managedAccounts')}</h3></div><small>{users.length} {t('usersCount')}</small></header>{error ? <p className="queue-user-management-error">{error}</p> : null}{users.length ? <div className="queue-user-management-list">{users.map((user) => {
-    const managed = designerAccounts.find((item) => item.email === user.email) || { accounts: [] };
-    const available = accounts.filter((account) => !managed.accounts.includes(account.handle));
-    let explicitRoles = [];
-    try { explicitRoles = JSON.parse(user.operating_roles || '[]'); } catch { explicitRoles = []; }
-    if (!Array.isArray(explicitRoles) || !explicitRoles.length) explicitRoles = [user.operating_role || 'sales'];
-    const roleLabels = explicitRoles.filter((role) => String(role).toLowerCase() !== 'pd').map((role) => ({ vc: t('viralCoordinator'), sales: t('salesRole'), trainee: t('traineeRole') }[String(role).toLowerCase()] || String(role).toUpperCase()));
-    if (user.is_admin) roleLabels.push(t('admin'));
-    const displayRole = roleLabels.join(' · ');
-    return <article key={user.email}><header><b>{displayName(user.email)}</b><small>{user.email}{displayRole ? ` · ${displayRole}` : ''}</small></header><div className="queue-user-management-accounts">{managed.accounts.map((handle) => <button type="button" key={handle} title={t('removeAccount')} onClick={() => updateAccount(user.email, handle, 'DELETE')} disabled={Boolean(busy)}>@{handle} <X size={11} /></button>)}{!managed.accounts.length ? <em>—</em> : null}</div><div className="queue-user-management-add"><select value={choices[user.email] || ''} aria-label={`${t('chooseSentientAccount')} ${user.email}`} onChange={(event) => setChoices((current) => ({ ...current, [user.email]: event.target.value }))} disabled={Boolean(busy)}><option value="">{t('chooseSentientAccount')}</option>{available.map((account) => <option key={account.handle} value={account.handle}>@{account.handle}</option>)}</select><button type="button" onClick={() => updateAccount(user.email, choices[user.email], 'POST')} disabled={!choices[user.email] || Boolean(busy)}>{t('assignAccount')}</button></div></article>;
-  })}</div> : <p className="queue-user-management-empty">{t('noUsers')}</p>}</section>;
-}
-
 function AdminTools({ report, loading, error, onClose, onOpen }) {
   const { t } = useQueuePreferences();
-  const [tab, setTab] = useState('overview');
   const totals = report?.totals || {};
   const metric = (status, label) => <div key={status}><span>{label}</span><strong>{totals[status]?.count || 0}</strong><small>{totals[status]?.points || 0} PP</small></div>;
   const priorityMetric = (priority) => <div key={priority} className={`priority-${priority}`}><span>{priorityCopy(priority, t)}</span><strong>{report?.priorities?.[priority]?.count || 0}</strong><small>{report?.priorities?.[priority]?.points || 0} PP</small></div>;
-  return <section className="queue-admin-tools"><header><div><p className="scheduler-eyebrow">{t('adminWorkspace')}</p><h2>{t('productionReports')}</h2></div><button type="button" onClick={onClose} aria-label={t('close')}><X size={16} /></button></header><nav className="queue-admin-tabs" role="tablist" aria-label={t('adminWorkspace')}><button type="button" role="tab" aria-selected={tab === 'overview'} className={tab === 'overview' ? 'is-active' : ''} onClick={() => setTab('overview')}>{t('adminOverview')}</button><button type="button" role="tab" aria-selected={tab === 'users'} className={tab === 'users' ? 'is-active' : ''} onClick={() => setTab('users')}>{t('userManagement')}</button></nav>{tab === 'users' ? <AdminUserManagement /> : <>{loading ? <div className="queue-admin-loading"><LoaderCircle className="queue-spin" />{t('loadingReport')}</div> : null}{error ? <p className="queue-admin-error">{error}</p> : null}{report ? <><div className="queue-admin-metrics">{metric('pool', t('inPool'))}{metric('scheduled', t('scheduled'))}{metric('in_progress', t('inProgress'))}{metric('completed', t('readyToClose'))}{metric('closed', t('closed'))}{['low', 'medium', 'high', 'urgent'].map(priorityMetric)}</div><div className="queue-admin-designers"><div><h3>{t('designerWorkload')}</h3><p>{t('workloadHelp')}</p></div><div className="queue-admin-designer-list">{report.designers.map((designer) => <span key={designer.email}><b>{displayName(designer.email)}</b><small>{designer.activeRequests} {t('activeRequests')} · {designer.productionPoints} PP · {designer.urgentRequests} {t('priorityUrgent')}</small><em>{designer.highPriorityRequests} {t('highPriority')} · {designer.closedRequests} {t('closed')} · {designer.averageActualMinutes == null ? '—' : `${designer.averageActualMinutes} min`} {t('averageTime')}</em></span>)}</div></div><a className="queue-admin-settings" href={`${import.meta.env.BASE_URL}?view=admin`} target="_blank" rel="noreferrer"><Settings size={14} />{t('openSettings')}</a><AdminAssignmentTable tasks={report.assignedPosts || []} onOpen={onOpen} /></> : null}</>}</section>;
+  return <section className="queue-admin-tools"><header><div><p className="scheduler-eyebrow">{t('adminWorkspace')}</p><h2>{t('productionReports')}</h2></div><button type="button" onClick={onClose} aria-label={t('close')}><X size={16} /></button></header>{loading ? <div className="queue-admin-loading"><LoaderCircle className="queue-spin" />{t('loadingReport')}</div> : null}{error ? <p className="queue-admin-error">{error}</p> : null}{report ? <><div className="queue-admin-metrics">{metric('pool', t('inPool'))}{metric('scheduled', t('scheduled'))}{metric('in_progress', t('inProgress'))}{metric('completed', t('readyToClose'))}{metric('closed', t('closed'))}{['low', 'medium', 'high', 'urgent'].map(priorityMetric)}</div><div className="queue-admin-designers"><div><h3>{t('designerWorkload')}</h3><p>{t('workloadHelp')}</p></div><div className="queue-admin-designer-list">{report.designers.map((designer) => <span key={designer.email}><b>{displayName(designer.email)}</b><small>{designer.activeRequests} {t('activeRequests')} · {designer.productionPoints} PP · {designer.urgentRequests} {t('priorityUrgent')}</small><em>{designer.highPriorityRequests} {t('highPriority')} · {designer.closedRequests} {t('closed')} · {designer.averageActualMinutes == null ? '—' : `${designer.averageActualMinutes} min`} {t('averageTime')}</em></span>)}</div></div><a className="queue-admin-settings" href={`${import.meta.env.BASE_URL}?view=admin`} target="_blank" rel="noreferrer"><Settings size={14} />{t('openSettings')}</a><AdminAssignmentTable tasks={report.assignedPosts || []} onOpen={onOpen} /></> : null}</section>;
 }
 
 function TicketPanel({ tickets, loading, error, onClose, onReview, canReview }) {
