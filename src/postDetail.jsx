@@ -145,7 +145,7 @@ export const CoverImage = memo(function CoverImage({ className, post, priority =
       ) : (
         <div className="cover-fallback">
           <div>{post.postType || post.type}</div>
-          <strong>{post.shortcode}</strong>
+          <strong>{post.title || post.shortcode}</strong>
         </div>
       )}
       {children}
