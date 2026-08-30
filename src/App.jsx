@@ -67,6 +67,33 @@ import traselveloralProfileImage from './assets/traselveloreal-profile.jpg';
 // password prompt anywhere anymore.
 const LEGACY_REFRESH_PASSWORD = 'sentient2026';
 
+// Account onboarding can outlive the Settings tab (and often the browser
+// refresh that an admin uses to check whether the scrape is done). Keep the
+// small client-side record locally, then reconcile it with the server's
+// backfill-status endpoint while the worker is alive. The actual import data
+// remains server-side; this is only UI state and never contains credentials.
+const SETTINGS_ACCOUNT_BACKFILLS_KEY = 'sentientdash.settings.accountBackfills.v1';
+
+function readSettingsAccountBackfills() {
+  if (typeof window === 'undefined') return [];
+  try {
+    const value = JSON.parse(window.localStorage.getItem(SETTINGS_ACCOUNT_BACKFILLS_KEY) || '[]');
+    return Array.isArray(value) ? value.filter((task) => task && task.handle) : [];
+  } catch {
+    return [];
+  }
+}
+
+function persistSettingsAccountBackfills(tasks) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(SETTINGS_ACCOUNT_BACKFILLS_KEY, JSON.stringify(tasks));
+  } catch {
+    // Storage can be unavailable in private browsing; the in-memory state
+    // still keeps the current Settings view useful.
+  }
+}
+
 const ACCOUNT_PROFILE_IMAGES = {
   chatgptricks: chatgptricksProfileImage,
   traselveloreal: traselveloralProfileImage,
@@ -2812,6 +2839,12 @@ export function SettingsPanel({
   const [importCount, setImportCount] = useState({});
   const [importing, setImporting] = useState('');
   const [importNotice, setImportNotice] = useState({});
+  // New-account imports are intentionally tracked separately from the manual
+  // "Extract history" control. This record survives a Settings reload and
+  // remains visible until the background worker reports completion.
+  const [accountBackfills, setAccountBackfills] = useState(readSettingsAccountBackfills);
+  const [accountBackfillNow, setAccountBackfillNow] = useState(Date.now());
+  const accountBackfillRemoveTimers = useRef(new Map());
 
   // System tab
   const [disk, setDisk] = useState(null);
@@ -2847,6 +2880,134 @@ export function SettingsPanel({
     } catch (error) {
       // Keep whatever roster we already had rather than blanking the panel.
     }
+  }, []);
+
+  const patchAccountBackfill = useCallback((handle, patch) => {
+    setAccountBackfills((current) => {
+      const next = current.map((task) => (task.handle === handle ? { ...task, ...patch, updatedAt: Date.now() } : task));
+      persistSettingsAccountBackfills(next);
+      return next;
+    });
+  }, []);
+
+  const addAccountBackfill = useCallback((account) => {
+    const task = {
+      id: `${account.handle}-${Date.now()}`,
+      handle: account.handle,
+      label: account.label || account.handle,
+      group: account.group || 'sentient',
+      avatarUrl: account.avatarUrl || '',
+      phase: 'starting',
+      startedAt: Date.now(),
+      serverProgress: { phase: 'queued' },
+      added: 0,
+      error: '',
+    };
+    setAccountBackfills((current) => {
+      const next = [...current.filter((item) => item.handle !== task.handle), task];
+      persistSettingsAccountBackfills(next);
+      return next;
+    });
+    return task;
+  }, []);
+
+  const dismissAccountBackfill = useCallback((handle) => {
+    const timer = accountBackfillRemoveTimers.current.get(handle);
+    if (timer) {
+      clearTimeout(timer);
+      accountBackfillRemoveTimers.current.delete(handle);
+    }
+    setAccountBackfills((current) => {
+      const next = current.filter((task) => task.handle !== handle);
+      persistSettingsAccountBackfills(next);
+      return next;
+    });
+  }, []);
+
+  const activeAccountBackfillHandles = accountBackfills
+    .filter((task) => ['starting', 'importing', 'waiting'].includes(task.phase))
+    .map((task) => task.handle)
+    .join('|');
+
+  // Keep elapsed-time copy fresh without forcing the entire Settings panel to
+  // re-render every second when there is no onboarding work in flight.
+  useEffect(() => {
+    if (!accountBackfills.some((task) => ['starting', 'importing', 'waiting'].includes(task.phase))) return undefined;
+    const timer = setInterval(() => setAccountBackfillNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [accountBackfills]);
+
+  // A backfill is a process on the API, not a request held open by the browser.
+  // Polling here lets Settings reconnect after a reload and pick up the exact
+  // phase/count the worker is currently reporting.
+  useEffect(() => {
+    const handles = activeAccountBackfillHandles.split('|').filter(Boolean);
+    if (!unlocked || !handles.length) return undefined;
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const statusResponse = await apiFetch(`${API_BASE}/api/admin/accounts/backfill-status`);
+        const status = await statusResponse.json().catch(() => ({}));
+        if (cancelled) return;
+        const activeHandle = status.handle || '';
+        for (const handle of handles) {
+          if (status.running) {
+            if (activeHandle === handle) {
+              patchAccountBackfill(handle, { phase: 'importing', serverProgress: status.progress || null, error: '' });
+            } else {
+              patchAccountBackfill(handle, {
+                phase: 'waiting',
+                serverProgress: null,
+                waitingFor: activeHandle,
+                error: '',
+              });
+            }
+            continue;
+          }
+          // The worker keeps the completed handle in its status payload. Do
+          // not turn an unrelated/no-op status response into a false success.
+          if (activeHandle !== handle) continue;
+          if (status.error) {
+            patchAccountBackfill(handle, { phase: 'error', error: status.error, serverProgress: status.progress || null });
+          } else {
+            patchAccountBackfill(handle, {
+              phase: 'done',
+              added: status.result?.added ?? 0,
+              serverProgress: { phase: 'inserting', done: 1, total: 1 },
+              error: '',
+            });
+            onAccountsChanged?.();
+            await loadRoster();
+          }
+        }
+      } catch {
+        // A transient status failure should not hide the task or call it done.
+      }
+    };
+    poll();
+    const timer = setInterval(poll, 4000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [unlocked, activeAccountBackfillHandles, patchAccountBackfill, onAccountsChanged, loadRoster]);
+
+  // Keep the completed acknowledgement visible briefly so an admin can see
+  // that the import actually finished, then remove it from localStorage.
+  useEffect(() => {
+    for (const task of accountBackfills) {
+      if (task.phase !== 'done' || accountBackfillRemoveTimers.current.has(task.handle)) continue;
+      const timer = setTimeout(() => {
+        accountBackfillRemoveTimers.current.delete(task.handle);
+        dismissAccountBackfill(task.handle);
+      }, 9000);
+      accountBackfillRemoveTimers.current.set(task.handle, timer);
+    }
+  }, [accountBackfills, dismissAccountBackfill]);
+
+  useEffect(() => () => {
+    for (const timer of accountBackfillRemoveTimers.current.values()) clearTimeout(timer);
+    accountBackfillRemoveTimers.current.clear();
   }, []);
 
   const loadSystemStatus = useCallback(async () => {
@@ -3510,6 +3671,7 @@ export function SettingsPanel({
 
   const handleAccountCreated = async (account, legacyPassword) => {
     setShowAddAccount(false);
+    addAccountBackfill(account);
     await loadRoster();
     setNotice(`@${account.handle} added. Initial history import is starting in the background.`);
 
@@ -3524,11 +3686,28 @@ export function SettingsPanel({
     const params = { password: legacyPassword, results_limit: String(account.resultsLimit || 2000) };
     if (account.dateFrom) params.date_from = account.dateFrom;
     if (account.dateTo) params.date_to = account.dateTo;
-    apiFetch(`${API_BASE}/api/admin/accounts/backfill-bg/${encodeURIComponent(account.handle)}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams(params),
-    }).catch(() => setNotice(`@${account.handle} was added, but its initial history import could not be started.`));
+    try {
+      const response = await apiFetch(`${API_BASE}/api/admin/accounts/backfill-bg/${encodeURIComponent(account.handle)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams(params),
+      });
+      const started = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const message = started.detail || 'Could not start the initial history import.';
+        patchAccountBackfill(account.handle, { phase: 'error', error: message });
+        setNotice(`@${account.handle} was added, but its initial history import could not be started.`);
+      } else if (started.already_running) {
+        const message = `Another import (@${started.handle || 'another account'}) is already running. Try again once it finishes.`;
+        patchAccountBackfill(account.handle, { phase: 'error', error: message });
+        setNotice(`@${account.handle} was added, but its initial history import is waiting for another import to finish.`);
+      } else {
+        patchAccountBackfill(account.handle, { phase: 'importing', serverProgress: { phase: 'queued' }, error: '' });
+      }
+    } catch {
+      patchAccountBackfill(account.handle, { phase: 'error', error: 'Network error while starting the initial history import.' });
+      setNotice(`@${account.handle} was added, but its initial history import could not be started.`);
+    }
     onAccountsChanged?.();
   };
 
@@ -3616,6 +3795,69 @@ export function SettingsPanel({
             </div>
           ) : tab === 'accounts' ? (
               <>
+                {accountBackfills.length ? (
+                  <section className="settings-section settings-account-backfill-progress" aria-live="polite">
+                    <div className="settings-section-head">
+                      <div>
+                        <span className="settings-command-kicker">Account onboarding</span>
+                        <h3>Initial history import</h3>
+                      </div>
+                      <span className="settings-account-backfill-count">
+                        {accountBackfills.filter((task) => ['starting', 'importing', 'waiting'].includes(task.phase)).length
+                          ? 'In progress'
+                          : 'Recent'}
+                      </span>
+                    </div>
+                    <p className="wizard-hint">
+                      New accounts stay here while their history is collected. This status survives a reload and clears after the import finishes.
+                    </p>
+                    <div className="settings-account-backfill-list">
+                      {accountBackfills.map((task) => {
+                        const elapsedSec = Math.max(0, Math.round((accountBackfillNow - (task.startedAt || accountBackfillNow)) / 1000));
+                        const live = task.phase === 'importing' ? describeBackfillProgress(task.serverProgress, elapsedSec) : null;
+                        const statusText =
+                          task.phase === 'starting' ? 'Starting the import…' :
+                          task.phase === 'waiting' ? `Waiting for @${task.waitingFor || 'another account'} to finish…` :
+                          task.phase === 'done' ? `Imported ${task.added ?? 0} new post${task.added === 1 ? '' : 's'}.` :
+                          task.phase === 'error' ? task.error || 'Import could not be started.' :
+                          live?.text || `Importing post history… ${elapsedSec}s`;
+                        const percent = live?.percent;
+                        return (
+                          <article key={task.id || task.handle} className={`settings-account-backfill-card settings-account-backfill-${task.phase}`}>
+                            <span className="settings-account-backfill-avatar" aria-hidden="true">
+                              {task.avatarUrl ? <img src={task.avatarUrl} alt="" referrerPolicy="no-referrer" /> : (task.label || task.handle).slice(0, 2).toUpperCase()}
+                            </span>
+                            <div className="settings-account-backfill-main">
+                              <div className="settings-account-backfill-topline">
+                                <div>
+                                  <strong>@{task.handle}</strong>
+                                  <span>{task.label || task.handle}</span>
+                                </div>
+                                {['done', 'error'].includes(task.phase) ? (
+                                  <button
+                                    type="button"
+                                    className="settings-account-backfill-dismiss"
+                                    onClick={() => dismissAccountBackfill(task.handle)}
+                                    aria-label={`Dismiss import status for ${task.handle}`}
+                                  >
+                                    <X size={13} />
+                                  </button>
+                                ) : null}
+                              </div>
+                              <p>{statusText}</p>
+                              <div className="settings-account-backfill-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={percent ?? undefined}>
+                                {percent != null ? <span style={{ width: `${percent}%` }} /> : <span className="indeterminate" />}
+                              </div>
+                            </div>
+                            <span className="settings-account-backfill-percent">
+                              {percent != null ? `${percent}%` : task.phase === 'done' ? '100%' : 'Live'}
+                            </span>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  </section>
+                ) : null}
                 <section className="settings-section">
                   <div className="settings-section-head">
                     <h3>{t('Manage accounts')}</h3>

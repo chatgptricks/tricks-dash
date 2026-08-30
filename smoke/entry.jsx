@@ -4,6 +4,7 @@ import { act } from 'react';
 import App from '../src/App.jsx';
 
 const POSTS = Array.from({ length: 12 }).map((_, i) => ({
+  id: i + 1,
   postKey: `chatgptricks:SC${i}`,
   shortcode: `SC${i}`,
   account: 'chatgptricks',
@@ -201,6 +202,7 @@ const el = document.getElementById('root') || document.body.appendChild(document
     qa('.filter-trigger-active').map(t => t.textContent.trim()).join(' , ') || 'none',
     '| search:', JSON.stringify(q('.topbar-search input')?.value),
     '| tab:', q('.group-tab-active')?.textContent, '| count:', q('.results-count')?.textContent);
+  inter['cover fallback uses cached API route'] = document.querySelector('.post-media img.cover-image')?.getAttribute('src')?.includes('/api/dashboard/covers/chatgptricks/');
   const card = q('.post-card');
   if (card) { await click(card); }
   await act(async () => { await new Promise(r => setTimeout(r, 200)); });
