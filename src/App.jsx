@@ -1585,14 +1585,17 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
   // backend enforces the real boundary on every /api/admin/* call either way.
   if (showSettings && isAdmin) {
     return (
-      <SettingsPanel
-        accounts={accounts}
-        onClose={() => setShowSettings(false)}
-        onRefresh={handleRefresh}
-        refreshing={refreshing}
-        refreshNotice={refreshNotice}
-        onAccountsChanged={() => loadDashboard(undefined, { silent: true })}
-      />
+      <>
+        <SettingsPanel
+          accounts={accounts}
+          onClose={() => setShowSettings(false)}
+          onRefresh={handleRefresh}
+          refreshing={refreshing}
+          refreshNotice={refreshNotice}
+          onAccountsChanged={() => loadDashboard(undefined, { silent: true })}
+        />
+        <DevRolePreview isDev={isDev} />
+      </>
     );
   }
 
