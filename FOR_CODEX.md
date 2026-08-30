@@ -38,7 +38,8 @@ that.
 - Settings → Accounts now records every new account's initial history import in `localStorage` and renders a persistent onboarding section with the account, phase, elapsed progress, percentage, and completion/error state.
 - The panel reconnects to `/api/admin/accounts/backfill-status` every four seconds, so a Settings reload does not lose visibility while the server-side Apify import continues. Completion stays visible briefly before its local UI record is cleared; credentials are never stored.
 - Dashboard and Queue cover resolution now falls back to Cortex's cached `/api/dashboard/covers/{account}/{post_id}` route when an Instagram CDN URL is missing or expired. Queue no longer prefixes absolute CDN URLs with the API origin.
-- Verification: Settings, Queue, and mobile smoke tests plus a `VITE_SKIP_PUBLIC=1` production build. This change is local-only for now; no production deploy was made.
+- Reload counts now uses the same fresh Apify result to re-cache a missing/expired cover in Cortex and adds a cache-busting retry token in the browser, so a failed card image can recover from the card's `...` menu.
+- Verification: Settings, Queue, and mobile smoke tests plus a `VITE_SKIP_PUBLIC=1` production build. This change is released to production only after both source repositories pass their checks.
 
 ## What this is
 

@@ -2,6 +2,7 @@ import { createRoot } from 'react-dom/client';
 import { StrictMode } from 'react';
 import { act } from 'react';
 import App from '../src/App.jsx';
+import { coverSources } from '../src/postDetail.jsx';
 
 const POSTS = Array.from({ length: 12 }).map((_, i) => ({
   id: i + 1,
@@ -70,6 +71,12 @@ const el = document.getElementById('root') || document.body.appendChild(document
     'no eyebrow': !html.includes('Dash explorer'),
     'favicon set': (document.querySelector('link[rel="icon"]')?.href || '').startsWith('data:image/svg+xml'),
     'title has section': /sentientdash\.app/.test(document.title),
+    'cover reload busts cached URL': coverSources({
+      account: 'chatgptricks',
+      id: 1,
+      coverUrl: '/api/dashboard/covers/chatgptricks/1',
+      coverRefreshToken: 123,
+    })[0]?.endsWith('cover_reload=123') === true,
   };
   console.log('\n=== RENDER CHECKS ===');
   for (const [k, v] of Object.entries(checks)) console.log(`${v ? 'PASS' : 'FAIL'}  ${k}`);
