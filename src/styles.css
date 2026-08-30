@@ -6319,6 +6319,7 @@ body {
   box-shadow: 0 0 0 2px var(--surface-1), 0 0 0 3px var(--accent);
 }
 
+.settings-accent-picker .accent-green { background: #00ac80; }
 .settings-accent-picker .accent-lime { background: #f5ff00; }
 .settings-accent-picker .accent-blue { background: #60a5fa; }
 .settings-accent-picker .accent-coral { background: #fb7185; }

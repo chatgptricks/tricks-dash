@@ -252,6 +252,7 @@ table.hist-table td{text-align:left;padding:11px 8px;white-space:nowrap}
 .settings-accent-picker button{width:18px;height:18px;padding:0;border:1px solid rgba(255,255,255,.35);
   border-radius:50%;cursor:pointer}
 .settings-accent-picker button.is-on{box-shadow:0 0 0 2px var(--panel),0 0 0 3px var(--accent)}
+.settings-accent-picker .accent-green{background:#00ac80}
 .settings-accent-picker .accent-lime{background:#f5ff00}
 .settings-accent-picker .accent-blue{background:#60a5fa}
 .settings-accent-picker .accent-coral{background:#fb7185}
@@ -305,6 +306,7 @@ table.hist-table td{text-align:left;padding:11px 8px;white-space:nowrap}
           <div class="settings-menu-section">
             <span data-i18n="Accent color">Accent color</span>
             <div class="settings-accent-picker" id="settingsAccentPicker">
+              <button type="button" class="accent-green" data-accent-choice="green" aria-label="green accent"></button>
               <button type="button" class="accent-lime" data-accent-choice="lime" aria-label="lime accent"></button>
               <button type="button" class="accent-blue" data-accent-choice="blue" aria-label="blue accent"></button>
               <button type="button" class="accent-coral" data-accent-choice="coral" aria-label="coral accent"></button>
@@ -1163,7 +1165,7 @@ applyI18n();
    Same shape as the Dashboard/Queue Settings menu, wired locally since this
    page has no build step or shared component to import it from. */
 const PREF_ACCENT = 'sentient.accent';
-const ACCENT_PRESETS = { lime: '#f5ff00', blue: '#60a5fa', coral: '#fb7185' };
+const ACCENT_PRESETS = { green: '#00ac80', lime: '#f5ff00', blue: '#60a5fa', coral: '#fb7185' };
 function normalizeAccent(value) {
   const raw = String(value || '').trim().toLowerCase();
   if (ACCENT_PRESETS[raw]) return raw;
