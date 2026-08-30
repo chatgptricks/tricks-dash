@@ -190,18 +190,15 @@ function TimeBlockForm({ form, setForm, busy, onClose, onSubmit }) {
   return <><button type="button" className="scheduler-context-backdrop" aria-label={t('close')} onClick={onClose} /><form className="scheduler-time-form" style={{ left: form.x, top: form.y }} onSubmit={(event) => { event.preventDefault(); if (valid) onSubmit(); }}><header><div><p className="scheduler-eyebrow">{t('personalTime')}</p><h3>{t('addTime')}</h3><small>{displayDate(form.scheduledDate, language)}</small></div><button type="button" onClick={onClose} aria-label={t('close')}><X size={14} /></button></header><div className="scheduler-time-form-grid"><label>{t('meeting')} / {t('break')}<select value={form.category} onChange={(event) => setForm((current) => ({ ...current, category: event.target.value }))}><option value="meeting">{t('meeting')}</option><option value="break">{t('break')}</option><option value="promo">{t('promo')}</option><option value="focus">{t('focus')}</option><option value="other">{t('other')}</option></select></label><label>{t('startTime')}<input type="time" step="600" value={time(form.startMinutes)} onChange={(event) => setForm((current) => ({ ...current, startMinutes: Math.round(minutesFromTime(event.target.value) / 10) * 10 }))} /></label><label>{t('duration')}<input type="number" min="10" max={Math.max(10, QUEUE_DAY_END - form.startMinutes)} step="10" value={form.durationMinutes} onChange={(event) => setForm((current) => ({ ...current, durationMinutes: Number(event.target.value) }))} /></label><label>{t('blockTitle')}<input value={form.title} maxLength="80" placeholder={t(form.category)} onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} /></label><label className="is-wide">{t('noteOptional')}<textarea value={form.note} maxLength="500" onChange={(event) => setForm((current) => ({ ...current, note: event.target.value }))} /></label></div><button type="submit" className="scheduler-primary" disabled={busy || !valid}>{busy ? <LoaderCircle className="queue-spin" size={14} /> : <CalendarPlus size={14} />}{t('requestApproval')}</button></form></>;
 }
 
-function CreatePostModal({ accounts = [], tags = [], onClose, onCreated }) {
+function CreatePostModal({ tags = [], onClose, onCreated }) {
   const { t } = useQueuePreferences();
-  const [form, setForm] = useState({ account: accounts[0]?.handle || '', title: '', postType: 'Image', productionPoints: 3, priority: 'medium', brief: '', notes: '', references: '' });
+  const [form, setForm] = useState({ title: '', postType: 'Image', productionPoints: 3, priority: 'medium', brief: '', notes: '', references: '' });
   const [tagSet, setTagSet] = useState(() => new Set());
   const [attachmentFiles, setAttachmentFiles] = useState([]);
   const [createdRequestId, setCreatedRequestId] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    if (!form.account && accounts[0]?.handle) setForm((current) => ({ ...current, account: accounts[0].handle }));
-  }, [accounts, form.account]);
   useEffect(() => {
     const onKey = (event) => { if (event.key === 'Escape' && !saving) onClose(); };
     window.addEventListener('keydown', onKey);
@@ -225,7 +222,6 @@ function CreatePostModal({ accounts = [], tags = [], onClose, onCreated }) {
       let createdRequest = null;
       if (!requestId) {
         const body = new FormData();
-        if (form.account) body.append('account', form.account);
         body.append('title', form.title.trim());
         body.append('post_type', form.postType);
         body.append('production_points', String(form.productionPoints));
@@ -272,7 +268,6 @@ function CreatePostModal({ accounts = [], tags = [], onClose, onCreated }) {
     <form className="queue-create-modal" onSubmit={submit} aria-labelledby="queue-create-title">
       <header className="queue-create-head"><div><p className="scheduler-eyebrow">Queue</p><h2 id="queue-create-title">{t('createPostTitle')}</h2><small>{t('createPostHelp')}</small></div><button type="button" onClick={onClose} aria-label={t('close')} disabled={saving}><X size={16} /></button></header>
       <div className="queue-create-grid">
-        <label className="is-wide"><span>{t('targetAccount')} <i>optional</i></span><select value={form.account} onChange={(event) => setForm((current) => ({ ...current, account: event.target.value }))} disabled={saving}><option value="">{t('chooseAccountLater')}</option>{accounts.map((account) => <option key={account.handle} value={account.handle}>@{account.handle}{account.label && account.label !== account.handle ? ` · ${account.label}` : ''}</option>)}</select></label>
         <label className="is-wide"><span>{t('postTitle')} <i>required</i></span><input value={form.title} maxLength="160" autoFocus onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} placeholder={t('postTitlePlaceholder')} /></label>
         <label><span>{t('postType')}</span><select value={form.postType} onChange={(event) => setForm((current) => ({ ...current, postType: event.target.value }))}>{typeOptions.map(([value, key]) => <option key={value} value={value}>{t(key)}</option>)}</select></label>
         <label><span>{t('productionPoints')} <i>required</i></span><input type="number" min="1" step="1" value={form.productionPoints} onChange={(event) => setForm((current) => ({ ...current, productionPoints: event.target.value }))} /></label>
@@ -1013,7 +1008,7 @@ function QueueApp({ user }) {
     </> : null}
     {ticketsOpen && data?.viewer ? <TicketPanel tickets={tickets} loading={ticketsLoading} error={ticketsError} onClose={() => setTicketsOpen(false)} onReview={reviewTicket} canReview={Boolean(coordinator)} /> : null}
     {pickOpen ? <PickModal requests={pickPool} hotFallback={pickHotFallback} busy={pickBusy} onClose={() => setPickOpen(false)} onAssign={pickRequest} /> : null}
-    {createOpen ? <CreatePostModal accounts={data?.accounts || []} tags={data?.tags || []} onClose={() => setCreateOpen(false)} onCreated={async () => { await load({ silent: true }); setCreateOpen(false); notify(t('postCreated')); }} /> : null}
+    {createOpen ? <CreatePostModal tags={data?.tags || []} onClose={() => setCreateOpen(false)} onCreated={async () => { await load({ silent: true }); setCreateOpen(false); notify(t('postCreated')); }} /> : null}
     <Detail task={open} tags={data?.tags || []} canCoordinate={coordinator} isOwner={open?.designerEmail === data?.viewer.email || data?.viewer.isAdmin} pendingTickets={openPendingTickets} onReviewTicket={reviewTicket} notice={detailNotice} history={history} historyLoading={historyLoading} onClose={closeDetail} onAction={action} onCancel={cancel} onEdit={edit} onNotify={resend} onUpload={upload} onDownload={download} onRequestPP={requestPP} onRequestCancellation={requestCancellation} onRequestMove={requestMove} />
     <DevRolePreview isDev={Boolean(viewer?.is_dev || data?.viewer?.isDev)} />
   </main>;
