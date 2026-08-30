@@ -56,11 +56,18 @@ export function posterTheme(type) {
 
 export function coverSources(post) {
   const sources = [];
+  const refreshToken = post?.coverRefreshToken;
+  const withRefreshToken = (source) => {
+    if (refreshToken == null || refreshToken === '') return source;
+    const separator = source.includes('?') ? '&' : '?';
+    return `${source}${separator}cover_reload=${encodeURIComponent(String(refreshToken))}`;
+  };
   const add = (value) => {
     const raw = String(value || '').trim();
     if (!raw) return;
     const source = /^https?:\/\//i.test(raw) ? raw : raw.startsWith('/') ? `${API_BASE}${raw}` : `${API_BASE}/${raw}`;
-    if (!sources.includes(source)) sources.push(source);
+    const refreshedSource = withRefreshToken(source);
+    if (!sources.includes(refreshedSource)) sources.push(refreshedSource);
   };
 
   add(post?.coverUrl);
@@ -141,10 +148,11 @@ export const HotBadge = memo(function HotBadge({ post, large = false }) {
 export const CoverImage = memo(function CoverImage({ className, post, priority = false, children }) {
   const sources = useMemo(() => coverSources(post), [post]);
   const [sourceIndex, setSourceIndex] = useState(0);
+  const sourceKey = sources.join('|');
 
   useEffect(() => {
     setSourceIndex(0);
-  }, [post.shortcode, sources.length]);
+  }, [post.shortcode, sourceKey]);
 
   const activeSource = sources[sourceIndex];
 

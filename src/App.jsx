@@ -1598,8 +1598,16 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
     const response = await apiFetch(`${API_BASE}/api/dashboard/posts/reload`, { method: 'POST', body });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const data = await response.json();
-    patchPost(post.account, post.shortcode, { likes: data.likes, comments: data.comments });
-    return data;
+    // The API refresh also re-caches a fresh cover when the previous one was
+    // missing or expired. Bump a client-only token so the browser does not
+    // reuse a cached 404/502 for the same cover route and CoverImage starts
+    // from its first source again.
+    patchPost(post.account, post.shortcode, {
+      likes: data.likes,
+      comments: data.comments ?? post.comments,
+      coverRefreshToken: Date.now(),
+    });
+    return { ...data, coverRefreshed: data.cover_refreshed !== false };
   }, [patchPost]);
 
   const closeSidebar = useCallback(() => {
@@ -5402,11 +5410,10 @@ function PostMenu({ post, isPromo, onFlags, onReload, onAssign, canPool }) {
       if (key === 'reload' && result) {
         const before = result.likes_before;
         const after = result.likes;
-        setNote(
-          Number.isFinite(before) && Number.isFinite(after) && before !== after
-            ? `Likes ${currencyFormatter.format(before)} → ${currencyFormatter.format(after)}`
-            : 'Already up to date',
-        );
+        const countNote = Number.isFinite(before) && Number.isFinite(after) && before !== after
+          ? `Likes ${currencyFormatter.format(before)} → ${currencyFormatter.format(after)}`
+          : 'Already up to date';
+        setNote(`${countNote}${result.coverRefreshed ? ' · Cover refreshed' : ''}`);
         // Leave the menu open briefly so the result is actually readable.
         setBusy('');
         setTimeout(() => setOpen(false), 1400);
