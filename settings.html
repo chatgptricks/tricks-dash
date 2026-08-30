@@ -3,16 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Queue · sentientdash.app</title>
-    <meta name="description" content="Personal and team post-assignment queue for Sentient Dash." />
-    <link rel="icon" type="image/svg+xml" href="/queue-favicon.svg" />
+    <title>Settings · sentientdash.app</title>
+    <meta name="description" content="Sentient Dash command center for shared accounts, users, notifications, operations, usage, and reports." />
+    <link rel="icon" type="image/svg+xml" href="/settings-favicon.svg" />
     <script>
       (function () {
         try {
           var t = localStorage.getItem('sentient.theme');
-          if (t !== 'light' && t !== 'dark') {
-            t = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
-          }
+          if (t !== 'light' && t !== 'dark') t = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
           document.documentElement.setAttribute('data-theme', t);
           document.documentElement.setAttribute('data-accent', localStorage.getItem('sentient.accent') || 'lime');
         } catch (e) {
@@ -21,11 +19,10 @@
         }
       })();
     </script>
-    <script type="module" crossorigin src="/assets/queue-Syi2pIv1.js"></script>
+    <script type="module" crossorigin src="/assets/settings-uKgk2bEk.js"></script>
     <link rel="modulepreload" crossorigin href="/assets/traselveloreal-profile-CJL0UpKV.js">
-    <link rel="stylesheet" crossorigin href="/assets/queue-trOWub29.css">
+    <link rel="modulepreload" crossorigin href="/assets/styles-Cy8nG4hY.js">
+    <link rel="stylesheet" crossorigin href="/assets/styles-Qq5vXAWu.css">
   </head>
-  <body>
-    <div id="root"></div>
-  </body>
+  <body><div id="root"></div></body>
 </html>

@@ -1,0 +1,1 @@
+import{R as e,j as t,a as r}from"./traselveloreal-profile-CJL0UpKV.js";import{A as o}from"./styles-Cy8nG4hY.js";e.createRoot(document.getElementById("root")).render(t.jsx(r.StrictMode,{children:t.jsx(o,{})}));
