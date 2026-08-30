@@ -63,7 +63,7 @@ const el = document.getElementById('root') || document.body.appendChild(document
     'tracker link new tab': /href="[^"]*tracker\.html"[^>]*target="_blank"/.test(html)
       || (html.includes('tracker.html') && html.includes('target="_blank"')),
     'insights link': html.includes('insights.html'),
-    'account menu': html.includes('account-menu-trigger'),
+    'settings menu': html.includes('settings-menu-trigger'),
     'filter triggers': (html.match(/filter-trigger[ "]/g) || []).length >= 5,
     'no old filter-strip': !html.includes('filter-group-card'),
     'no eyebrow': !html.includes('Dash explorer'),
@@ -114,10 +114,14 @@ const el = document.getElementById('root') || document.body.appendChild(document
   await act(async () => { window.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true })); });
   inter['Cmd+K focuses search'] = document.activeElement === searchBox;
 
-  await click(q('.account-menu-trigger'));
-  inter['account menu opens'] = Boolean(q('.account-menu-panel'));
-  inter['menu shows the email'] = /sentientagency\.io/.test(q('.account-menu-email')?.textContent || '');
-  inter['sign out lives in the menu'] = /Sign out/.test(q('.account-menu-panel')?.textContent || '');
+  await click(q('.settings-menu-trigger'));
+  inter['settings menu opens'] = Boolean(q('.settings-menu-panel'));
+  inter['menu shows the email'] = /sentientagency\.io/.test(q('.settings-menu-footer')?.textContent || '');
+  inter['sign out lives in the menu'] = /Sign out/.test(q('.settings-menu-panel')?.textContent || '');
+  // Close it again -- later Escape presses for the filter popovers would
+  // otherwise close this too (same keydown listener), and the theme/language
+  // checks further down reopen it fresh right before they need it.
+  await click(q('.settings-menu-trigger'));
 
 
   const acctTrigger = qa('.filter-trigger').find((b) => /Account/.test(b.textContent));
@@ -266,16 +270,21 @@ const el = document.getElementById('root') || document.body.appendChild(document
   globalThis.fetch = realFetch; window.fetch = realFetch;
 
 
-  // ---- language + theme ----------------------------------------------------
+  // ---- language + theme (both live in the gear-icon Settings menu now,
+  // not standalone topbar toggles) --------------------------------------------
   inter['theme starts dark'] = document.documentElement.getAttribute('data-theme') === 'dark';
+  await click(q('.settings-menu-trigger'));
   inter['lang toggle present'] = qa('.lang-option').map(b => b.textContent.trim()).join('/') === 'ENG/ES';
-  const sun = q('.theme-toggle');
-  inter['sun shown in dark'] = /\u2600/.test(sun?.textContent || '');
-  await click(sun);
+  const themeButtons = qa('.settings-menu-segment button');
+  const darkButton = themeButtons.find((b) => /Dark/.test(b.textContent));
+  const lightButton = themeButtons.find((b) => /Light/.test(b.textContent));
+  inter['theme segment present'] = Boolean(darkButton) && Boolean(lightButton);
+  inter['dark segment shown as active'] = darkButton?.classList.contains('is-on');
+  await click(lightButton);
   inter['switches to light'] = document.documentElement.getAttribute('data-theme') === 'light';
-  inter['moon shown in light'] = /\uD83C\uDF19/.test(q('.theme-toggle')?.textContent || '');
+  inter['light segment shown as active'] = q('.settings-menu-segment button.is-on')?.textContent === lightButton.textContent;
   inter['theme persisted'] = localStorage.getItem('sentient.theme') === 'light';
-  await click(q('.theme-toggle'));
+  await click(darkButton);
   inter['switches back to dark'] = document.documentElement.getAttribute('data-theme') === 'dark';
 
   const es = qa('.lang-option').find(b => b.textContent.trim() === 'ES');
