@@ -704,6 +704,10 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
 .scheduler-account-badges i b { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .scheduler-block-copy { padding-bottom:16px; }
 .scheduler-block.is-draft .scheduler-block-copy { padding-top:11px; padding-bottom:16px; }
+.scheduler-block.has-pending-ticket { border-style:dotted; }
+.scheduler-ticket-marker { position:absolute; top:4px; left:5px; z-index:6; display:inline-flex; align-items:center; gap:2px; padding:2px 4px; border:1px solid rgba(255,214,102,.72); border-radius:999px; background:rgba(30,24,8,.86); color:#ffe08a; font-size:8px; font-style:normal; font-weight:900; line-height:1; }
+.scheduler-ticket-marker b { font-size:8px; }
+.scheduler-block.has-pending-ticket .scheduler-block-copy { padding-top:12px; }
 .designer-assignment-row.is-draft { background-image:linear-gradient(90deg,rgba(var(--accent-rgb),.075),transparent 42%); box-shadow:inset 3px 0 rgba(var(--accent-rgb),.68); }
 .designer-assignment-row.is-draft .designer-assignment-status { display:grid; gap:3px; }
 .designer-assignment-row.is-draft .designer-assignment-status i { border-style:dashed; border-color:rgba(var(--accent-rgb),.52); color:var(--q-accent); }
