@@ -534,7 +534,7 @@ function freshnessFraction(timestampMs) {
 function usageCellColor(count) {
   if (!count) return 'rgba(255,255,255,.05)';
   const intensity = Math.min(1, 0.16 + Math.log2(count + 1) / 7);
-  return `rgba(245,255,0,${intensity.toFixed(2)})`;
+  return `rgba(var(--accent-rgb),${intensity.toFixed(2)})`;
 }
 
 function typeLabel(value) {
