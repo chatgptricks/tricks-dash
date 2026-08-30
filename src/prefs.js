@@ -161,6 +161,24 @@ const ES = {
   'Signing in…': 'Iniciando sesión…',
   'Sign-in failed. Try again.': 'Falló el inicio de sesión. Probá de nuevo.',
   'Loading the post library': 'Cargando la librería de posts',
+
+  // settings menu (shared shape across Dashboard/Queue/Tracker/Insights)
+  'Accent color': 'Color de acento',
+  'Theme': 'Tema',
+  'Dark': 'Oscuro',
+  'Light': 'Claro',
+  'Language': 'Idioma',
+  'Sign out': 'Cerrar sesión',
+  'Signed in as': 'Sesión iniciada como',
+  'Admin': 'Admin',
+  'Open full settings': 'Abrir Settings completo',
+  'Manage designer accounts': 'Gestionar cuentas de designers',
+  'Loading users…': 'Cargando usuarios…',
+  'No users available.': 'No hay usuarios disponibles.',
+  'Could not update account ownership.': 'No se pudo actualizar la cuenta.',
+  'Choose Sentient account': 'Elegir cuenta de Sentient',
+  'Assign': 'Asignar',
+  'Remove account': 'Quitar cuenta',
 };
 
 export function makeT(lang) {

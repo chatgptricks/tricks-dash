@@ -5775,78 +5775,319 @@ body {
 
 /* --- account menu ------------------------------------------------------ */
 
-.account-menu {
+/* Settings: one gear-icon entry point folding in what used to be three
+   separate controls (prefs strip, admin-only gear, account avatar menu).
+   Same shape as Queue's .queue-settings*; duplicated rather than shared
+   since Queue and the dashboard are separate Vite entries/bundles. */
+:root[data-accent='blue'] { --accent-rgb: 96, 165, 250; --accent: #60a5fa; --accent-text: #60a5fa; --accent-ink: #dbeafe; }
+:root[data-accent='coral'] { --accent-rgb: 251, 113, 133; --accent: #fb7185; --accent-text: #fb7185; --accent-ink: #ffe4e6; }
+
+.settings-menu {
   position: relative;
 }
 
-.account-menu-trigger {
+.settings-menu-trigger {
   display: grid;
   place-items: center;
   width: 32px;
   height: 32px;
   padding: 0;
-  border: 1px solid rgba(var(--accent-rgb), 0.35);
-  border-radius: 50%;
-  background: rgba(var(--accent-rgb), 0.14);
-  color: var(--accent-text);
-  font-size: 13px;
-  font-weight: 700;
-  font-family: inherit;
+  border: 1px solid rgba(var(--edge), 0.14);
+  border-radius: 8px;
+  background: none;
+  color: rgba(var(--ink), 0.6);
   cursor: pointer;
 }
 
-.account-menu-trigger:hover {
-  background: rgba(var(--accent-rgb), 0.22);
+.settings-menu-trigger:hover,
+.settings-menu-trigger.is-active {
+  border-color: rgba(var(--accent-rgb), 0.45);
+  color: var(--text-strong);
 }
 
-.account-menu-panel {
+.settings-menu-panel {
   position: absolute;
   top: calc(100% + 6px);
   right: 0;
   z-index: 60;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 220px;
-  padding: 8px;
+  display: grid;
+  gap: 2px;
+  width: 280px;
+  max-height: calc(100dvh - 90px);
+  overflow: auto;
+  padding: 6px;
   border: 1px solid rgba(var(--edge), 0.14);
-  border-radius: 10px;
+  border-radius: 12px;
   background: var(--surface-1);
   box-shadow: 0 18px 44px rgba(var(--shade), 0.6);
 }
 
-/* The signed-in address used to live only in a title attribute on the
-   sign-out button, so you had to hover a destructive control to read it. */
-.account-menu-email {
-  margin: 0;
-  padding: 6px 8px;
-  overflow: hidden;
+.settings-menu-panel:has(.settings-menu-admin) {
+  width: 380px;
+}
+
+.settings-menu-section {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 8px;
+}
+
+.settings-menu-section > span {
+  color: rgba(var(--ink), 0.5);
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.settings-accent-picker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.settings-accent-picker button {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.settings-accent-picker button.is-on {
+  box-shadow: 0 0 0 2px var(--surface-1), 0 0 0 3px var(--accent);
+}
+
+.settings-accent-picker .accent-lime { background: #f5ff00; }
+.settings-accent-picker .accent-blue { background: #60a5fa; }
+.settings-accent-picker .accent-coral { background: #fb7185; }
+
+.settings-menu-segment {
+  display: flex;
+  padding: 2px;
+  border: 1px solid rgba(var(--edge), 0.14);
+  border-radius: 7px;
+  background: rgba(var(--edge), 0.04);
+}
+
+.settings-menu-segment button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 27px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
   color: rgba(var(--ink), 0.55);
-  font-size: 12px;
+  font-size: 10px;
+  font-weight: 750;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.settings-menu-segment button.is-on {
+  background: rgba(var(--accent-rgb), 0.18);
+  color: var(--accent-text);
+}
+
+.settings-menu-admin {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  margin-top: 2px;
+  padding-top: 11px;
+  border-top: 1px solid rgba(var(--edge), 0.1);
+}
+
+.settings-menu-admin > span {
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.settings-menu-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  min-height: 28px;
+  padding: 0 8px;
+  border: 1px solid rgba(var(--accent-rgb), 0.32);
+  border-radius: 7px;
+  background: rgba(var(--accent-rgb), 0.08);
+  color: var(--accent-text);
+  font-size: 11px;
+  font-weight: 750;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.settings-menu-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 2px;
+  padding: 10px 8px 6px;
+  border-top: 1px solid rgba(var(--edge), 0.1);
+}
+
+.settings-menu-footer small {
+  overflow: hidden;
+  color: rgba(var(--ink), 0.5);
+  font-size: 10px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.account-menu-item {
-  display: flex;
+.settings-menu-signout {
+  display: inline-flex;
+  flex: 0 0 auto;
   align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 8px;
-  border: 0;
-  border-top: 1px solid rgba(var(--edge), 0.08);
-  border-radius: 0 0 6px 6px;
-  background: none;
-  color: rgba(var(--ink), 0.9);
-  font-size: 13px;
+  gap: 5px;
+  min-height: 28px;
+  padding: 0 8px;
+  border: 1px solid rgba(255, 107, 107, 0.32);
+  border-radius: 7px;
+  background: rgba(255, 107, 107, 0.08);
+  color: #ff9b9b;
+  font-size: 10px;
+  font-weight: 750;
   font-family: inherit;
-  text-align: left;
   cursor: pointer;
 }
 
-.account-menu-item:hover {
-  background: rgba(226, 75, 74, 0.16);
+/* Designer-account assignment widget, embedded in the Settings admin
+   section -- narrower (280-380px) than the full admin page it was written
+   for, so it stacks to one column instead of the wide 3-column grid. */
+.settings-admin-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 8px;
+  color: rgba(var(--ink), 0.5);
+  font-size: 11px;
+}
+
+.settings-admin-error {
+  margin: 0 0 6px;
+  padding: 7px 8px;
+  border: 1px solid rgba(255, 107, 107, 0.3);
+  border-radius: 7px;
+  background: rgba(255, 107, 107, 0.08);
   color: #ff9b9b;
+  font-size: 10px;
+}
+
+.settings-admin-empty {
+  padding: 10px 8px;
+  color: rgba(var(--ink), 0.5);
+  font-size: 11px;
+}
+
+.settings-admin-account-list {
+  display: grid;
+  gap: 6px;
+  max-height: 260px;
+  overflow: auto;
+}
+
+.settings-admin-account-list article {
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid rgba(var(--edge), 0.1);
+  border-radius: 8px;
+  background: rgba(var(--edge), 0.03);
+}
+
+.settings-admin-account-list article > header b {
+  overflow: hidden;
+  color: var(--text-strong);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-admin-account-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+}
+
+.settings-admin-account-chips button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 24px;
+  padding: 3px 7px;
+  border: 1px solid rgba(var(--accent-rgb), 0.28);
+  border-radius: 999px;
+  background: rgba(var(--accent-rgb), 0.08);
+  color: var(--accent-text);
+  font-size: 9px;
+  font-weight: 800;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.settings-admin-account-chips em {
+  color: rgba(var(--ink), 0.4);
+  font-size: 10px;
+  font-style: normal;
+}
+
+.settings-admin-account-add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.settings-admin-account-add select {
+  flex: 1;
+  min-width: 120px;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid rgba(var(--edge), 0.14);
+  border-radius: 7px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 10px;
+}
+
+.settings-admin-account-add button {
+  min-height: 30px;
+  padding: 0 9px;
+  border: 1px solid rgba(var(--accent-rgb), 0.35);
+  border-radius: 7px;
+  background: rgba(var(--accent-rgb), 0.09);
+  color: var(--accent-text);
+  font-size: 10px;
+  font-weight: 800;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.settings-admin-account-add button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+@media (max-width: 620px) {
+  .settings-menu-panel,
+  .settings-menu-panel:has(.settings-menu-admin) {
+    position: fixed;
+    top: auto;
+    right: 8px;
+    bottom: 8px;
+    left: 8px;
+    width: auto;
+    max-height: 70dvh;
+  }
 }
 
 /* --- filter triggers --------------------------------------------------- */
@@ -7013,13 +7254,8 @@ body {
   filter: none;
 }
 
-/* Language + theme toggles, in the tool row. */
-.pref-toggles {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
+/* Language toggle, now nested inside the Settings panel (see .settings-menu*
+   below) rather than sitting bare in the tool row. */
 .lang-toggle {
   display: inline-flex;
   align-items: center;
@@ -7050,25 +7286,6 @@ body {
 .lang-option.is-on {
   background: rgba(var(--edge), 0.1);
   color: var(--text-strong);
-}
-
-.theme-toggle {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border: 1px solid rgba(var(--edge), 0.14);
-  border-radius: 8px;
-  background: none;
-  font-size: 14px;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.theme-toggle:hover {
-  border-color: rgba(var(--edge), 0.3);
-  background: rgba(var(--edge), 0.06);
 }
 
 /* ---------------------------------------------------------------------------

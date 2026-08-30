@@ -12,7 +12,10 @@ export const API_BASE = (import.meta.env.VITE_API_BASE || 'https://cortex-api-db
 // this doesn't add a round-trip to normal usage.
 export async function apiFetch(url, options = {}) {
   const headers = new Headers(options.headers || {});
-  const previewRole = window.localStorage.getItem('sentient.queueRolePreview');
+  // Role previews belong to the current top-level browsing context. Using
+  // sessionStorage keeps two Queue windows independent while still sharing
+  // the selected role between dashboard.html and queue.html in one window.
+  const previewRole = window.sessionStorage.getItem('sentient.queueRolePreview');
   if (previewRole) headers.set('X-Queue-Role-Preview', previewRole);
   if (firebaseAuth.currentUser) {
     try {
