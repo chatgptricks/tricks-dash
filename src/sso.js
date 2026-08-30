@@ -16,7 +16,7 @@
 // or long-lived credential), and it's re-minted periodically while a tab is
 // open so a long visit doesn't run out mid-session.
 import { signInWithCustomToken } from 'firebase/auth';
-import { firebaseAuth } from './firebase';
+import { authPersistenceReady, firebaseAuth } from './firebase';
 import { API_BASE } from './api';
 
 const COOKIE_NAME = 'sentient_sso';
@@ -74,6 +74,7 @@ export async function publishSsoCookie() {
 // true once the attempt (successful or not) is finished, so callers know
 // they've done everything they can before falling back to the login screen.
 export async function trySsoSignIn() {
+  await authPersistenceReady;
   const token = readCookie(COOKIE_NAME);
   if (!token) return false;
   try {

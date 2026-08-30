@@ -11,8 +11,10 @@
 import { initializeApp } from 'firebase/app';
 import {
   GoogleAuthProvider,
+  browserLocalPersistence,
   browserPopupRedirectResolver,
   getAuth,
+  setPersistence,
   signInWithPopup,
   signInWithRedirect,
 } from 'firebase/auth';
@@ -27,6 +29,12 @@ const firebaseConfig = {
 };
 export const firebaseApp = initializeApp(firebaseConfig);
 export const firebaseAuth = getAuth(firebaseApp);
+// Make the persistence mode explicit. Firebase defaults to local persistence
+// in most browsers, but mobile Safari and embedded webviews can otherwise
+// fall back to a session-only store. Keeping this promise shared ensures that
+// popup, redirect, and SSO sign-ins all use the same durable storage before
+// they start.
+export const authPersistenceReady = setPersistence(firebaseAuth, browserLocalPersistence).catch(() => null);
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });
 
@@ -47,6 +55,7 @@ const POPUP_FALLBACK_CODES = new Set([
 ]);
 
 export async function startGoogleSignIn() {
+  await authPersistenceReady;
   try {
     await signInWithPopup(firebaseAuth, googleProvider, browserPopupRedirectResolver);
     return null;

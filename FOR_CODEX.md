@@ -18,6 +18,7 @@ that.
 - Queue's Agenda includes a compact 24-hour day map with plain status bars and blocked-time markers above the detailed assignments.
 - Mobile Settings supports live Account label/group/HOT-threshold editing, activation, avatar refresh, and Slack test/custom notifications with optional images.
 - Mobile preferences use the same local-storage keys as desktop for light/dark theme, preset accent, and custom accent. Base surfaces remain neutral black/gray or white/gray; Sentient green, neon yellow, blue, coral, and a true custom picker are available globally.
+- Firebase auth now explicitly uses browser-local persistence before popup, redirect, and shared SSO flows, so the mobile login survives reloads and reopening the app when browser storage is available.
 - Verification: production Vite build, dedicated mobile jsdom smoke test, existing Dashboard/Queue/Settings smokes, Queue planner tests, and 390x844 visual QA.
 
 ## Latest change: standalone Settings command center (2026-08-30)
