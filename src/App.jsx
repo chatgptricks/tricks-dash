@@ -4044,14 +4044,10 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
                               <option value="sales">Sales</option><option value="vc">VC</option><option value="pd">PD</option><option value="trainee">Trainee</option>
                             </select>
                             <input defaultValue={user.slack_user_id || ''} aria-label={`Slack user ID for ${user.email}`} placeholder="Slack ID" onBlur={(event) => { if (event.target.value.trim() !== (user.slack_user_id || '')) updateUser(user, { slack_user_id: event.target.value.trim().toUpperCase() }); }} />
-                            <button
-                              type="button"
-                              className="ghost-button"
-                              onClick={() => updateUser(user, { role: user.role === 'admin' ? 'viewer' : 'admin' })}
-                              disabled={userActionEmail === user.email}
-                            >
-                              {user.role === 'admin' ? 'Make viewer' : 'Make admin'}
-                            </button>
+                            {/* Admin is set once at creation via the Add User checkbox, same
+                                additive-flag model as Queue -- per-row, the only thing anyone
+                                manages here day to day is the Queue role, so no separate
+                                Make admin/Make viewer toggle lives in this row anymore. */}
                             <button
                               type="button"
                               className="ghost-button ghost-button-danger"
