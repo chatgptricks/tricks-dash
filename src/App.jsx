@@ -119,6 +119,7 @@ const URL_DEFAULTS = {
   promo: '',
   post: '',
   view: '',
+  settingsTab: '',
 };
 
 // Each section has its own subdomain (hot.sentientdash.app, users.…). A
@@ -1593,6 +1594,7 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
           refreshing={refreshing}
           refreshNotice={refreshNotice}
           onAccountsChanged={() => loadDashboard(undefined, { silent: true })}
+          initialTab={initialUrl.settingsTab}
         />
         <DevRolePreview isDev={isDev} />
       </>
@@ -2765,7 +2767,7 @@ const WIZARD_STEPS = ['Account', 'Settings', 'Confirm'];
 // The password is asked for once when the panel opens and kept only in this
 // component's state -- never written to localStorage, so closing the panel or
 // reloading the page discards it.
-function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice, onAccountsChanged }) {
+function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice, onAccountsChanged, initialTab }) {
   // Firebase sign-in is the real gate now (only an allowlisted Google account
   // can reach this component at all), so the old shared-password unlock
   // screen is skipped entirely -- the fixed legacy value is supplied
@@ -2774,7 +2776,18 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
   const [unlocked, setUnlocked] = useState(true);
   const [checking, setChecking] = useState(false);
   const [notice, setNotice] = useState('');
-  const [tab, setTab] = useState('accounts'); // 'accounts' | 'system' | 'users'
+  // 'accounts' | 'system' | 'users' | 'reports'. Deep-linkable via
+  // ?view=admin&settingsTab=reports so Queue's Admin button can open straight
+  // to Reports instead of duplicating this tool as its own overlay.
+  const [tab, setTab] = useState(['accounts', 'system', 'users', 'reports'].includes(initialTab) ? initialTab : 'accounts');
+
+  // Reports tab -- the same production-report data Queue's admin overlay
+  // used to show in its own separate panel (totals, priorities, designer
+  // workload, assigned posts). One Reports tab here instead of two admin UIs
+  // that both talk to the same /admin-report endpoint.
+  const [report, setReport] = useState(null);
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportError, setReportError] = useState('');
 
   // Users tab -- the Google sign-in allowlist + admin/viewer roles, editable
   // here instead of through Render's environment variables.
@@ -2937,6 +2950,25 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
       loadDesignerAccounts();
     }
   }, [unlocked, tab, loadUsers, loadUsage, loadDesignerAccounts]);
+
+  const loadReport = useCallback(async () => {
+    setReportLoading(true);
+    setReportError('');
+    try {
+      const response = await apiFetch(`${API_BASE}/api/dashboard/queue/v2/admin-report`);
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.detail || `HTTP ${response.status}`);
+      setReport(body);
+    } catch (error) {
+      setReportError(error.message || 'Could not load the Queue report.');
+    } finally {
+      setReportLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (unlocked && tab === 'reports') loadReport();
+  }, [unlocked, tab, loadReport]);
 
   // While a sweep is running, poll so the "done" count moves without a manual
   // refresh -- same pattern as the background-task polling used elsewhere.
@@ -3474,6 +3506,15 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
             >
               Users
             </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tab === 'reports'}
+              className={tab === 'reports' ? 'settings-tab settings-tab-active' : 'settings-tab'}
+              onClick={() => setTab('reports')}
+            >
+              Reports
+            </button>
           </div>
 
           {notice ? <p className="settings-notice">{notice}</p> : null}
@@ -3932,7 +3973,7 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
                   </div>
                 </section>
               </div>
-            ) : (
+            ) : tab === 'users' ? (
               <>
               <div className="settings-list-width">
                 <section className="settings-section">
@@ -3978,50 +4019,67 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
 
                 <section className="settings-section">
                   <h3>People with access</h3>
+                  <p className="wizard-hint">
+                    Role and Queue account assignment live on the same row per person now -- there
+                    used to be a second, separate list here just for accounts, keyed off a
+                    different endpoint, which meant scrolling to two places to see one person's
+                    full access.
+                  </p>
                   <div className="settings-table">
                     {usersLoading ? <p className="wizard-hint">Loading…</p> : null}
-                    {users.map((user) => (
-                      <div className="settings-row" key={user.email}>
-                        <div className="settings-row-account">
-                          <strong>{user.email}</strong>
-                          <span>{user.role === 'admin' ? 'Admin' : 'Viewer'} · {(user.operating_role || 'sales').toUpperCase()}</span>
-                        </div>
-                        <div className="settings-row-controls queue-user-controls">
-                          <select value={user.operating_role || 'sales'} aria-label={`Queue role for ${user.email}`} onChange={(event) => updateUser(user, { operating_role: event.target.value })} disabled={userActionEmail === user.email}>
-                            <option value="sales">Sales</option><option value="vc">VC</option><option value="pd">PD</option><option value="trainee">Trainee</option>
-                          </select>
-                          <input defaultValue={user.slack_user_id || ''} aria-label={`Slack user ID for ${user.email}`} placeholder="Slack ID" onBlur={(event) => { if (event.target.value.trim() !== (user.slack_user_id || '')) updateUser(user, { slack_user_id: event.target.value.trim().toUpperCase() }); }} />
-                          <button
-                            type="button"
-                            className="ghost-button"
-                            onClick={() => updateUser(user, { role: user.role === 'admin' ? 'viewer' : 'admin' })}
-                            disabled={userActionEmail === user.email}
-                          >
-                            {user.role === 'admin' ? 'Make viewer' : 'Make admin'}
-                          </button>
-                          <button
-                            type="button"
-                            className="ghost-button ghost-button-danger"
-                            onClick={() => removeUser(user.email)}
-                            disabled={userActionEmail === user.email}
-                          >
-                            Remove
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                    {!usersLoading && !users.length ? <p className="wizard-hint">No one loaded yet.</p> : null}
-                  </div>
-                </section>
-
-                <section className="settings-section">
-                  <h3>Queue designer accounts</h3>
-                  <p className="wizard-hint">Accounts a coordinator may recommend when assigning work to each Post Designer.</p>
-                  <div className="queue-designer-settings">
-                    {designerAccounts.map((designer) => {
+                    {users.map((user) => {
+                      const designer = designerAccounts.find((item) => item.email === user.email) || { email: user.email, accounts: [] };
                       const available = roster.filter((account) => account.group === 'sentient' && account.is_active !== false && !designer.accounts.includes(account.handle));
-                      return <article key={designer.email}><header><strong>{designer.email}</strong><span>{designer.accounts.length} account{designer.accounts.length === 1 ? '' : 's'}</span></header><div className="queue-designer-account-chips">{designer.accounts.map((handle) => <button type="button" key={handle} onClick={() => removeDesignerAccount(designer.email, handle)} disabled={userActionEmail === designer.email}>@{handle} <X size={11} /></button>)}{!designer.accounts.length ? <em>No accounts assigned</em> : null}</div><div className="queue-designer-add"><select value={designerAccountChoice[designer.email] || ''} onChange={(event) => setDesignerAccountChoice((current) => ({ ...current, [designer.email]: event.target.value }))}><option value="">Choose Sentient account</option>{available.map((account) => <option key={account.handle} value={account.handle}>@{account.handle}</option>)}</select><button type="button" className="ghost-button" disabled={!designerAccountChoice[designer.email] || userActionEmail === designer.email} onClick={() => addDesignerAccount(designer.email)}>Assign</button></div></article>;
+                      return (
+                        <div className="settings-row settings-row-wide" key={user.email}>
+                          <div className="settings-row-account">
+                            <strong>{user.email}</strong>
+                            <span>{user.role === 'admin' ? 'Admin' : 'Viewer'} · {(user.operating_role || 'sales').toUpperCase()}</span>
+                          </div>
+                          <div className="settings-row-controls queue-user-controls">
+                            <select value={user.operating_role || 'sales'} aria-label={`Queue role for ${user.email}`} onChange={(event) => updateUser(user, { operating_role: event.target.value })} disabled={userActionEmail === user.email}>
+                              <option value="sales">Sales</option><option value="vc">VC</option><option value="pd">PD</option><option value="trainee">Trainee</option>
+                            </select>
+                            <input defaultValue={user.slack_user_id || ''} aria-label={`Slack user ID for ${user.email}`} placeholder="Slack ID" onBlur={(event) => { if (event.target.value.trim() !== (user.slack_user_id || '')) updateUser(user, { slack_user_id: event.target.value.trim().toUpperCase() }); }} />
+                            <button
+                              type="button"
+                              className="ghost-button"
+                              onClick={() => updateUser(user, { role: user.role === 'admin' ? 'viewer' : 'admin' })}
+                              disabled={userActionEmail === user.email}
+                            >
+                              {user.role === 'admin' ? 'Make viewer' : 'Make admin'}
+                            </button>
+                            <button
+                              type="button"
+                              className="ghost-button ghost-button-danger"
+                              onClick={() => removeUser(user.email)}
+                              disabled={userActionEmail === user.email}
+                            >
+                              Remove
+                            </button>
+                          </div>
+                          <div className="settings-row-accounts">
+                            <span className="settings-row-accounts-label">Queue accounts</span>
+                            <div className="queue-designer-account-chips">
+                              {designer.accounts.map((handle) => (
+                                <button type="button" key={handle} onClick={() => removeDesignerAccount(user.email, handle)} disabled={userActionEmail === user.email}>
+                                  @{handle} <X size={11} />
+                                </button>
+                              ))}
+                              {!designer.accounts.length ? <em>No accounts assigned</em> : null}
+                            </div>
+                            <div className="queue-designer-add">
+                              <select value={designerAccountChoice[user.email] || ''} onChange={(event) => setDesignerAccountChoice((current) => ({ ...current, [user.email]: event.target.value }))}>
+                                <option value="">Choose Sentient account</option>
+                                {available.map((account) => <option key={account.handle} value={account.handle}>@{account.handle}</option>)}
+                              </select>
+                              <button type="button" className="ghost-button" disabled={!designerAccountChoice[user.email] || userActionEmail === user.email} onClick={() => addDesignerAccount(user.email)}>Assign</button>
+                            </div>
+                          </div>
+                        </div>
+                      );
                     })}
+                    {!usersLoading && !users.length ? <p className="wizard-hint">No one loaded yet.</p> : null}
                   </div>
                 </section>
               </div>
@@ -4148,6 +4206,109 @@ function SettingsPanel({ accounts, onClose, onRefresh, refreshing, refreshNotice
                 )}
               </section>
               </>
+            ) : (
+              <div className="settings-list-width">
+                <section className="settings-section">
+                  <h3>Queue production report</h3>
+                  <p className="wizard-hint">
+                    Same data Queue's own Admin overlay used to show in a second, separate panel --
+                    one Reports tab here instead of two admin tools telling the same story.
+                  </p>
+                  {reportError ? <p className="settings-notice-error">{reportError}</p> : null}
+                  {reportLoading && !report ? <p className="wizard-hint">Loading…</p> : null}
+                </section>
+
+                {report ? (
+                  <>
+                    <section className="settings-section">
+                      <h3>Status</h3>
+                      <div className="system-tab-grid">
+                        {[
+                          ['pool', 'In pool'],
+                          ['scheduled', 'Scheduled'],
+                          ['in_progress', 'In progress'],
+                          ['completed', 'Ready to close'],
+                          ['closed', 'Closed'],
+                        ].map(([status, label]) => (
+                          <div className="system-card" key={status}>
+                            <div className="settings-section-head">
+                              <h3>{label}</h3>
+                            </div>
+                            <p className="wizard-hint">
+                              <strong>{report.totals?.[status]?.count || 0}</strong> requests ·{' '}
+                              {report.totals?.[status]?.points || 0} PP
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+
+                    <section className="settings-section">
+                      <h3>Priority</h3>
+                      <div className="system-tab-grid">
+                        {['low', 'medium', 'high', 'urgent'].map((priority) => (
+                          <div className="system-card" key={priority}>
+                            <div className="settings-section-head">
+                              <h3 style={{ textTransform: 'capitalize' }}>{priority}</h3>
+                            </div>
+                            <p className="wizard-hint">
+                              <strong>{report.priorities?.[priority]?.count || 0}</strong> requests ·{' '}
+                              {report.priorities?.[priority]?.points || 0} PP
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+
+                    <section className="settings-section">
+                      <h3>Designer workload</h3>
+                      <div className="settings-table">
+                        {(report.designers || []).map((designer) => (
+                          <div className="settings-row" key={designer.email}>
+                            <div className="settings-row-account">
+                              <strong>{designer.email}</strong>
+                              <span>
+                                {designer.activeRequests} active · {designer.productionPoints} PP ·{' '}
+                                {designer.urgentRequests} urgent
+                              </span>
+                            </div>
+                            <div className="settings-row-controls">
+                              <span className="settings-unit">
+                                {designer.highPriorityRequests} high · {designer.closedRequests} closed ·{' '}
+                                {designer.averageActualMinutes == null ? '—' : `${designer.averageActualMinutes} min`} avg
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                        {!(report.designers || []).length ? <p className="wizard-hint">No designer activity yet.</p> : null}
+                      </div>
+                    </section>
+
+                    <section className="settings-section">
+                      <h3>Assigned posts ({(report.assignedPosts || []).length})</h3>
+                      <div className="settings-table">
+                        {(report.assignedPosts || []).map((post) => (
+                          <div className="settings-row" key={post.id}>
+                            <div className="settings-row-account">
+                              <strong>{post.post?.title || post.post?.account || 'Post'}</strong>
+                              <span>
+                                {post.designerEmail || '—'} ·{' '}
+                                {post.scheduledDate ? `${post.scheduledDate} ${String(post.scheduledStartMinutes ?? '')}` : 'Unscheduled'}
+                              </span>
+                            </div>
+                            <div className="settings-row-controls">
+                              <span className="settings-unit" style={{ textTransform: 'capitalize' }}>{post.priority || 'medium'}</span>
+                              <span className="settings-unit">{post.productionPoints} PP</span>
+                              <span className="settings-unit" style={{ textTransform: 'capitalize' }}>{(post.status || '').replace('_', ' ')}</span>
+                            </div>
+                          </div>
+                        ))}
+                        {!(report.assignedPosts || []).length ? <p className="wizard-hint">Nothing assigned right now.</p> : null}
+                      </div>
+                    </section>
+                  </>
+                ) : null}
+              </div>
             )}
         </div>
       </div>
