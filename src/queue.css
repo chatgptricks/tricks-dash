@@ -712,3 +712,34 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
 .queue-detail-notice.is-draft { border-style:dashed; border-color:rgba(var(--accent-rgb),.34); background:rgba(var(--accent-rgb),.07); color:var(--q-accent)!important; }
 .queue-admin-assignment-row.is-draft { background-image:linear-gradient(90deg,rgba(var(--accent-rgb),.075),transparent 42%); box-shadow:inset 3px 0 rgba(var(--accent-rgb),.68); }
 .queue-admin-assignment-row.is-draft .queue-admin-assignment-status i { border-style:dashed; border-color:rgba(var(--accent-rgb),.52); color:var(--q-accent); }
+
+/* Manual Queue requests use the same compact working-surface language as the
+   scheduler. The form deliberately has no dashboard-post preview because a
+   custom request has no source media yet; uploaded files remain available in
+   its Queue side view after creation. */
+.queue-create-button { display:inline-flex; align-items:center; gap:6px; min-height:29px; padding:0 10px; border:1px solid rgba(var(--accent-rgb),.5); border-radius:7px; background:rgba(var(--accent-rgb),.14); color:var(--q-accent); font-size:10px; font-weight:900; }
+.queue-create-button:hover,.queue-create-button:focus-visible { border-color:rgba(var(--accent-rgb),.8); background:rgba(var(--accent-rgb),.22); }
+.queue-create-backdrop { position:fixed; inset:0; z-index:120; display:grid; place-items:center; padding:20px; background:rgba(0,0,0,.64); backdrop-filter:blur(6px); }
+.queue-create-modal { display:grid; gap:13px; width:min(640px,100%); max-height:calc(100dvh - 40px); overflow:auto; padding:18px; border:1px solid rgba(var(--accent-rgb),.32); border-radius:15px; background:var(--q-panel); box-shadow:0 30px 90px rgba(0,0,0,.7); }
+.queue-create-head { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; padding-bottom:12px; border-bottom:1px solid var(--q-line); }
+.queue-create-head h2 { margin:3px 0 4px; color:var(--q-text); font-size:20px; letter-spacing:-.02em; }
+.queue-create-head small { display:block; max-width:480px; color:var(--q-muted); font-size:10px; line-height:1.45; }
+.queue-create-head>button { display:grid; place-items:center; width:28px; height:28px; padding:0; border:1px solid var(--q-line); border-radius:7px; background:var(--q-panel-2); color:var(--q-muted); }
+.queue-create-head>button:hover { color:var(--q-text); }
+.queue-create-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.queue-create-grid label,.queue-create-note,.queue-create-files { display:grid; gap:5px; min-width:0; color:var(--q-muted); font-size:9px; font-weight:850; letter-spacing:.04em; text-transform:uppercase; }
+.queue-create-grid label.is-wide { grid-column:1/-1; }
+.queue-create-grid label>span,.queue-create-note>span,.queue-create-files>span,.queue-create-fieldset legend { display:block; }
+.queue-create-grid i,.queue-create-note i,.queue-create-files i,.queue-create-fieldset i { color:rgba(var(--ink),.34); font-style:normal; font-weight:650; letter-spacing:0; text-transform:none; }
+.queue-create-grid input,.queue-create-grid select,.queue-create-note textarea { width:100%; min-width:0; border:1px solid var(--q-line); border-radius:7px; background:var(--q-panel-2); color:var(--q-text); font:inherit; font-size:11px; font-weight:600; letter-spacing:0; text-transform:none; }
+.queue-create-grid input,.queue-create-grid select { height:34px; padding:0 8px; }
+.queue-create-note textarea { min-height:58px; padding:8px; resize:vertical; }
+.queue-create-files { gap:7px; padding:10px; border:1px dashed rgba(var(--edge),.2); border-radius:8px; background:rgba(var(--edge),.025); }
+.queue-create-files input { color:var(--q-muted); font-size:10px; }
+.queue-create-files small { overflow:hidden; color:var(--q-muted); font-size:9px; text-overflow:ellipsis; white-space:nowrap; }
+.queue-create-fieldset { min-width:0; padding:0; margin:0; border:0; }
+.queue-create-fieldset legend { margin-bottom:6px; color:var(--q-muted); font-size:9px; font-weight:850; letter-spacing:.04em; text-transform:uppercase; }
+.queue-create-error { margin:0; padding:8px 10px; border:1px solid rgba(255,107,107,.32); border-radius:7px; background:rgba(255,107,107,.08); color:#ff9b9b; font-size:10px; line-height:1.4; }
+.queue-create-actions { display:flex; justify-content:flex-end; gap:8px; padding-top:12px; border-top:1px solid var(--q-line); }
+.queue-create-actions button { margin-top:0; }
+@media (max-width:620px) { .queue-create-backdrop { padding:10px; } .queue-create-modal { padding:14px; } .queue-create-grid { grid-template-columns:1fr; } .queue-create-grid label.is-wide { grid-column:auto; } }
