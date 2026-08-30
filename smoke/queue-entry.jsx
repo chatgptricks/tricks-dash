@@ -6,7 +6,7 @@ const localDay = () => {
 };
 const day = localDay();
 const post = (account, shortcode) => ({ account, shortcode, caption: `${account} source post`, type: 'Image', coverUrl: '' });
-const base = { productionPoints: 3, durationMinutes: 30, priority: 'medium', tags: [], brief: '', notes: '', references: [], attachments: [], recommendedAccounts: [], coordinatorEmail: 'user05@example.com' };
+const base = { productionPoints: 3, minutesPerPP: 10, durationMinutes: 30, priority: 'medium', tags: [], brief: '', notes: '', references: [], attachments: [], recommendedAccounts: [], coordinatorEmail: 'user05@example.com' };
 const pool = { ...base, id: 1, post: post('chatgptricks', 'POOL1'), status: 'pool', designerEmail: null, scheduledDate: null, scheduledStartMinutes: null };
 const active = { ...base, id: 2, post: post('chatgptricks', 'ACTIVE1'), status: 'in_progress', designerEmail: 'user03@example.com', scheduledDate: day, scheduledStartMinutes: 540 };
 const scheduled = { ...base, id: 3, post: post('chatgptricks', 'NEXT1'), recommendedAccounts: ['chatgptricks'], status: 'scheduled', designerEmail: 'user03@example.com', scheduledDate: day, scheduledStartMinutes: 570 };
@@ -27,6 +27,7 @@ const payload = {
     { email: 'user03@example.com', isAdmin: true, roles: ['vc', 'pd'], isQueueDesigner: true, accounts: ['chatgptricks'], accountAvatars: { chatgptricks: '/api/dashboard/avatar/chatgptricks' } },
     { email: 'user05@example.com', isAdmin: true, roles: ['vc', 'pd'], isQueueDesigner: true, accounts: [] },
     { email: 'user06@example.com', isAdmin: false, roles: ['sales', 'pd'], isQueueDesigner: true, accounts: [] },
+    { email: 'user12@example.com', isAdmin: false, roles: ['trainee', 'pd'], minutesPerPP: 16, isQueueDesigner: true, accounts: [] },
   ],
   tags: ['copy'], priorities: ['low', 'medium', 'high', 'urgent'], hours: { start: 0, end: 1440 },
 };
@@ -125,7 +126,7 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     checks['Center Now control renders'] = Boolean(document.querySelector('.scheduler-center-now'));
     checks['Pool and scheduled blocks render'] = document.querySelectorAll('.queue-pool-card').length === 1 && document.querySelectorAll('.scheduler-block').length === 2;
     checks['Account badge and resize handles render'] = Boolean(document.querySelector('.scheduler-account-badges')) && document.querySelectorAll('.scheduler-resize-handle').length >= 2;
-    checks['All dashboard users render as PD-capable'] = document.querySelectorAll('.scheduler-row').length === 3 && document.querySelectorAll('.scheduler-row.is-non-queue-user').length === 0;
+    checks['All dashboard users render as PD-capable'] = document.querySelectorAll('.scheduler-row').length === 4 && document.querySelectorAll('.scheduler-row.is-non-queue-user').length === 0;
     await click(document.querySelector('.queue-admin-button'));
     checks['Admin tabs render'] = document.querySelectorAll('.queue-admin-tabs [role="tab"]').length === 2;
     checks['Admin Overview hides scheduler'] = !document.querySelector('.scheduler-canvas') && !document.querySelector('.scheduler-pool');
