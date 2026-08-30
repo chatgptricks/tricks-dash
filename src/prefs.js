@@ -168,7 +168,6 @@ const ES = {
   'Dark': 'Oscuro',
   'Light': 'Claro',
   'Language': 'Idioma',
-  'Sign out': 'Cerrar sesión',
   'Signed in as': 'Sesión iniciada como',
   'Admin': 'Admin',
   'Open full settings': 'Abrir Settings completo',
