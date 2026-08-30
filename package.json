@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "test:queue": "node scripts/test-queue.mjs",
     "smoke:queue": "node smoke/run-queue.mjs",
+    "smoke:settings": "node smoke/run-settings.mjs",
     "generate:data": "node scripts/build-data.mjs",
     "ocr:covers": "node scripts/ocr-covers.mjs"
   },

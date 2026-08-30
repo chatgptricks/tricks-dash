@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Settings · sentientdash.app</title>
+    <meta name="description" content="Sentient Dash command center for shared accounts, users, notifications, operations, usage, and reports." />
+    <link rel="icon" type="image/svg+xml" href="/settings-favicon.svg" />
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem('sentient.theme');
+          if (t !== 'light' && t !== 'dark') t = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+          document.documentElement.setAttribute('data-theme', t);
+          document.documentElement.setAttribute('data-accent', localStorage.getItem('sentient.accent') || 'lime');
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+          document.documentElement.setAttribute('data-accent', 'lime');
+        }
+      })();
+    </script>
+    <script type="module" src="/src/settings.jsx"></script>
+  </head>
+  <body><div id="root"></div></body>
+</html>
