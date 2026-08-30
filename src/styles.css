@@ -4402,6 +4402,14 @@ body {
   padding: 16px 24px;
   border-bottom: 1px solid var(--line);
   background: rgba(6, 6, 6, 0.96);
+  /* Background here is deliberately always dark, independent of the
+     light/dark theme toggle (the body below it does follow the theme).
+     Text/icon colors must therefore be hardcoded too rather than left to
+     inherit theme variables -- in light mode --text/--text-strong turn
+     near-black, which on this near-black bar made the whole header read as
+     a blank strip with an invisible "Back to dashboard" control (people
+     got stuck on the page with no visible way out). */
+  color: #f5f5f5;
   position: sticky;
   top: 0;
   z-index: 5;
@@ -4414,6 +4422,17 @@ body {
   letter-spacing: -0.01em;
   text-align: center;
   flex: 1;
+  color: #f5f5f5;
+}
+
+.admin-page-header .ghost-button {
+  color: #f5f5f5;
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.admin-page-header .ghost-button:hover {
+  background: rgba(255, 255, 255, 0.12);
 }
 
 .admin-page-header-spacer {
