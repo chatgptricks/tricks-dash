@@ -128,12 +128,8 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     checks['Account badge and resize handles render'] = Boolean(document.querySelector('.scheduler-account-badges')) && document.querySelectorAll('.scheduler-resize-handle').length >= 2;
     checks['All dashboard users render as PD-capable'] = document.querySelectorAll('.scheduler-row').length === 4 && document.querySelectorAll('.scheduler-row.is-non-queue-user').length === 0;
     await click(document.querySelector('.queue-admin-button'));
-    checks['Admin tabs render'] = document.querySelectorAll('.queue-admin-tabs [role="tab"]').length === 2;
     checks['Admin Overview hides scheduler'] = !document.querySelector('.scheduler-canvas') && !document.querySelector('.scheduler-pool');
-    await click([...document.querySelectorAll('.queue-admin-tabs [role="tab"]')].find((node) => /User Management|Gestión de usuarios/.test(node.textContent)));
-    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 100)); });
-    checks['User Management lists users and accounts'] = Boolean(document.querySelector('.queue-user-management-list')) && Boolean(document.querySelector('.queue-user-management-add select'));
-    checks['User Management hides scheduler'] = !document.querySelector('.scheduler-canvas') && !document.querySelector('.scheduler-pool');
+    checks['Admin Overview links to full Settings instead of embedding user management'] = Boolean(document.querySelector('.queue-admin-settings')) && !document.querySelector('.queue-user-management-list');
     await click(document.querySelector('.queue-admin-tools > header button'));
     checks['Closing Admin restores scheduler'] = Boolean(document.querySelector('.scheduler-canvas'));
 
