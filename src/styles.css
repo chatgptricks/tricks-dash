@@ -5184,6 +5184,199 @@ body {
   text-transform: none;
 }
 
+/* Persistent account onboarding status. It lives in Settings > Accounts so
+   an admin can leave the tab, reload, or return later without losing the
+   import's state while Apify and the API worker continue in the background. */
+.settings-account-backfill-progress {
+  gap: 10px;
+  padding: 15px 16px 16px;
+  border: 1px solid rgba(var(--accent-rgb), 0.22);
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(var(--accent-rgb), 0.08), rgba(var(--edge), 0.025));
+}
+
+.settings-account-backfill-progress .settings-command-kicker {
+  margin-bottom: 3px;
+}
+
+.settings-account-backfill-count {
+  flex: 0 0 auto;
+  padding: 4px 9px;
+  border: 1px solid rgba(var(--accent-rgb), 0.25);
+  border-radius: 999px;
+  color: var(--accent-ink);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.settings-account-backfill-list {
+  display: grid;
+  gap: 8px;
+}
+
+.settings-account-backfill-card {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px 11px;
+  border: 1px solid rgba(var(--edge), 0.09);
+  border-radius: 9px;
+  background: rgba(var(--edge), 0.035);
+}
+
+.settings-account-backfill-avatar {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  overflow: hidden;
+  border: 1px solid rgba(var(--accent-rgb), 0.24);
+  border-radius: 50%;
+  background: rgba(var(--accent-rgb), 0.12);
+  color: var(--accent-ink);
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.settings-account-backfill-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.settings-account-backfill-main {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.settings-account-backfill-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.settings-account-backfill-topline > div {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 7px;
+  min-width: 0;
+}
+
+.settings-account-backfill-topline strong {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.settings-account-backfill-topline span {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-account-backfill-main p {
+  margin: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-account-backfill-track {
+  position: relative;
+  height: 5px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(var(--edge), 0.12);
+}
+
+.settings-account-backfill-track span {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 300ms ease;
+}
+
+.settings-account-backfill-track span.indeterminate {
+  width: 42%;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  animation: settings-backfill-shimmer 1.45s ease-in-out infinite;
+}
+
+@keyframes settings-backfill-shimmer {
+  from { transform: translateX(-120%); }
+  to { transform: translateX(250%); }
+}
+
+.settings-account-backfill-percent {
+  min-width: 34px;
+  color: var(--accent-ink);
+  font-size: 10px;
+  font-weight: 850;
+  text-align: right;
+}
+
+.settings-account-backfill-dismiss {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.settings-account-backfill-dismiss:hover {
+  background: rgba(var(--edge), 0.09);
+  color: var(--text);
+}
+
+.settings-account-backfill-done {
+  border-color: rgba(70, 200, 130, 0.28);
+}
+
+.settings-account-backfill-done .settings-account-backfill-track span {
+  background: #3fbf7f;
+}
+
+.settings-account-backfill-error {
+  border-color: rgba(236, 95, 95, 0.3);
+}
+
+.settings-account-backfill-error .settings-account-backfill-main p {
+  color: #e99494;
+}
+
+@media (max-width: 600px) {
+  .settings-account-backfill-card {
+    grid-template-columns: 30px minmax(0, 1fr) auto;
+    gap: 8px;
+    padding: 9px;
+  }
+
+  .settings-account-backfill-avatar {
+    width: 30px;
+    height: 30px;
+  }
+}
+
 .settings-row-controls {
   display: flex;
   align-items: center;

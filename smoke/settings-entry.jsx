@@ -3,6 +3,10 @@ import { act } from 'react';
 const ok = (body) => ({ ok: true, status: 200, json: async () => body, text: async () => JSON.stringify(body) });
 const users = [{ email: 'esteban@sentientagency.io', display_name: 'Esteban', role: 'admin', operating_role: 'vc', operating_roles: '["vc","pd","dev"]', is_admin: 1, slack_user_id: 'U08UYJMPJ76', avatar_url: '/api/dashboard/user-avatar/U08UYJMPJ76' }];
 const accounts = [{ handle: 'chatgptricks', label: 'ChatGPTricks', group: 'sentient', group_name: 'sentient', hot_threshold: 600, is_active: true, followers: 1, total_posts: 1, avg_likes: 1 }];
+window.localStorage.setItem('sentientdash.settings.accountBackfills.v1', JSON.stringify([{
+  id: 'newaccount-1', handle: 'newaccount', label: 'New Account', group: 'sentient', phase: 'done',
+  startedAt: Date.now() - 18_000, serverProgress: { phase: 'inserting', done: 100, total: 100 }, added: 25, error: '',
+}]));
 const usage = {
   days: 30, active_users_7d: 1, active_users_30d: 1, total_users: 1, total_events_in_range: 12,
   day_keys: ['2026-08-30'], dow_labels: ['Mon'], global_dow_hour: [Array(24).fill(0)],
@@ -48,6 +52,15 @@ const clickTab = async (label) => {
     checks['Seven logical tabs render'] = document.querySelectorAll('.settings-tab').length === 7;
     checks['Overview command cards render'] = document.querySelectorAll('.settings-overview-card').length === 6;
     checks['Gear remains available'] = Boolean(document.querySelector('.settings-menu-trigger'));
+
+    await clickTab('Accounts');
+    checks['Account import progress is persistent'] = Boolean(document.querySelector('.settings-account-backfill-progress'))
+      && /@newaccount/.test(document.body.textContent)
+      && /Imported 25 new posts/.test(document.body.textContent);
+    await act(async () => {
+      document.querySelector('.settings-account-backfill-dismiss')?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
 
     await clickTab('Users');
     checks['Users centralizes identity and roles'] = Boolean(document.querySelector('[aria-label="Display name for esteban@sentientagency.io"]'))

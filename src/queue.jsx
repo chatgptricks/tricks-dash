@@ -7,7 +7,7 @@ import { clearSsoCookie, startSsoRefresh, trySsoSignIn } from './sso';
 import { API_BASE, apiFetch } from './api';
 import { PrefsProvider, usePrefs } from './prefsContext';
 import { ACCENT_CHOICES, accentHex } from './prefs';
-import { SelectedPost, SlideDownload } from './postDetail';
+import { SelectedPost, SlideDownload, coverUrlForPost } from './postDetail';
 import chatgptricksProfileImage from './assets/chatgptricks-profile.jpg';
 import traselvelorealProfileImage from './assets/traselveloreal-profile.jpg';
 import { QUEUE_DAY_END, QUEUE_DAY_START, minutesPerPPOf, planQueueDrop } from './queuePlanner';
@@ -19,7 +19,11 @@ const shiftDay = (date, amount) => { const value = new Date(`${date}T12:00:00`);
 const time = (minutes) => { const normalized = ((minutes % 1440) + 1440) % 1440; return `${String(Math.floor(normalized / 60)).padStart(2, '0')}:${String(normalized % 60).padStart(2, '0')}`; };
 const minutesFromTime = (value) => { const [hour, minute] = String(value || '00:00').split(':').map(Number); return Math.max(0, Math.min(1430, hour * 60 + minute)); };
 const currentMinutes = (value = new Date()) => value.getHours() * 60 + value.getMinutes();
-const cover = (task) => task?.post?.coverUrl ? `${API_BASE}${task.post.coverUrl}` : '';
+// Keep queue thumbnails in lockstep with Dashboard's cover resolution. In
+// particular, never prefix an already-absolute Instagram CDN URL with the
+// API origin (that produced an invalid URL), and use Cortex's cached cover
+// route when a newly imported post has no usable CDN URL yet.
+const cover = (task) => coverUrlForPost(task?.post);
 const accountMention = (value) => { const clean = String(value || '').trim().replace(/^@/, ''); return clean ? `@${clean}` : ''; };
 const locale = (language) => language === 'es' ? 'es-CR' : 'en-US';
 const displayDate = (value, language) => new Date(`${value}T12:00:00`).toLocaleDateString(locale(language), { weekday: 'long', month: 'short', day: 'numeric' });

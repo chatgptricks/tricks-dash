@@ -54,12 +54,33 @@ export function posterTheme(type) {
   return 'theme-carousel';
 }
 
-function coverSources(post) {
-  if (!post.coverUrl) return [];
-  if (post.coverUrl.startsWith('http')) return [post.coverUrl];
-  // Both accounts serve covers live from the Cortex backend now
-  // (/api/tricks-dash/covers/{id} and /api/traselveloreal/covers/{id}).
-  return [`${API_BASE}${post.coverUrl}`];
+export function coverSources(post) {
+  const sources = [];
+  const add = (value) => {
+    const raw = String(value || '').trim();
+    if (!raw) return;
+    const source = /^https?:\/\//i.test(raw) ? raw : raw.startsWith('/') ? `${API_BASE}${raw}` : `${API_BASE}/${raw}`;
+    if (!sources.includes(source)) sources.push(source);
+  };
+
+  add(post?.coverUrl);
+
+  // CDN URLs from Instagram expire, and newly backfilled accounts can have no
+  // cover URL at all until their first lazy download. Cortex exposes a
+  // durable, cached cover route keyed by the database post id; keep it as a
+  // second source so cards recover automatically instead of becoming a large
+  // black placeholder when the original URL is stale or missing.
+  const postId = post?.id ?? post?.postId ?? post?.post_id;
+  const account = String(post?.account || '').trim();
+  if (account && postId != null && /^\d+$/.test(String(postId))) {
+    add(`${API_BASE}/api/dashboard/covers/${encodeURIComponent(account)}/${encodeURIComponent(String(postId))}`);
+  }
+
+  return sources;
+}
+
+export function coverUrlForPost(post) {
+  return coverSources(post)[0] || '';
 }
 
 // Five escalating tiers matching the account thresholds worth calling out:

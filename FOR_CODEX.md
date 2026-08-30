@@ -33,6 +33,13 @@ that.
 - Slack profile photos are fetched server-side and served through the same-origin `/api/dashboard/user-avatar/{slack_id}` asset route, so Queue and Settings do not depend on fragile Slack CDN URLs.
 - Frontend verification: production build, Queue planner tests, Queue smoke, and Settings smoke. Backend verification: 16 pytest tests.
 
+## Latest change: persistent new-account import progress (2026-08-30)
+
+- Settings → Accounts now records every new account's initial history import in `localStorage` and renders a persistent onboarding section with the account, phase, elapsed progress, percentage, and completion/error state.
+- The panel reconnects to `/api/admin/accounts/backfill-status` every four seconds, so a Settings reload does not lose visibility while the server-side Apify import continues. Completion stays visible briefly before its local UI record is cleared; credentials are never stored.
+- Dashboard and Queue cover resolution now falls back to Cortex's cached `/api/dashboard/covers/{account}/{post_id}` route when an Instagram CDN URL is missing or expired. Queue no longer prefixes absolute CDN URLs with the API origin.
+- Verification: Settings, Queue, and mobile smoke tests plus a `VITE_SKIP_PUBLIC=1` production build. This change is local-only for now; no production deploy was made.
+
 ## What this is
 
 **Sentient Dash** (`sentientdash.app`) is Sentient Agency's internal
