@@ -4393,27 +4393,28 @@ body {
   overflow-y: auto;
   background: var(--bg);
   color: var(--text);
+  /* Same 18px page padding as .shell (Dashboard) / .queue-page (Queue) --
+     every tool's header is a rounded card floating inset from the viewport
+     edges, not a bar stretched flush to them. A first pass here only copied
+     the header's background color, which happened to render the same
+     near-black regardless in dark mode -- it still looked like a bolted-on
+     admin console because the actual shape (edge-to-edge, square corners,
+     no floating card) never changed. */
+  padding: 18px;
 }
 
 .admin-page-header {
-  /* Same chrome as .topbar (Dashboard/Queue/Tracker/Insights) instead of a
-     one-off hardcoded-dark bar -- it used to stay near-black regardless of
-     the light/dark toggle while its text inherited the theme's --text
-     color, which turns near-black in light mode: header text became
-     invisible against its own background and people got stuck on the page
-     with no visible way back out. Following the same surface/line/shadow
-     tokens as everywhere else means it just follows the theme correctly,
-     and reads as the same tool rather than a bolted-on admin console. */
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 16px 24px;
-  border-bottom: 1px solid var(--line);
+  padding: 13px 20px;
+  border: 1px solid var(--line);
+  border-radius: calc(var(--radius-xl) + 6px);
   background: rgba(var(--surface-1-rgb), 0.96);
   color: var(--text-strong);
   box-shadow: var(--shadow);
   position: sticky;
-  top: 0;
+  top: 18px;
   z-index: 5;
 }
 
@@ -4434,7 +4435,7 @@ body {
 .admin-page-body {
   max-width: 1600px;
   margin: 0 auto;
-  padding: 28px 40px 60px;
+  padding: 20px 20px 60px;
 }
 
 .admin-page-body .settings-body {
@@ -4478,6 +4479,30 @@ body {
 
 .add-user-form .modal-field {
   min-width: 220px;
+}
+
+/* Admin is a checkbox next to the Queue-role select now, not a competing
+   "Access" dropdown -- give it its own row height (36px, matching the
+   inputs/selects beside it) instead of inheriting .modal-field's stacked
+   label-above-control layout, which would leave it a different height and
+   baseline from every other field in this form. */
+.modal-field-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 36px;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.modal-field-checkbox input[type='checkbox'] {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: var(--accent);
 }
 
 /* --- Users tab: usage heatmap ------------------------------------------ */
@@ -4883,7 +4908,8 @@ body {
   flex: 0 0 auto;
 }
 
-.settings-row-controls input {
+.settings-row-controls input,
+.settings-row-controls select {
   width: 104px;
   height: 30px;
   padding: 0 8px;
@@ -4892,10 +4918,23 @@ body {
   background: rgba(var(--edge), 0.04);
   color: var(--text-strong);
   font-size: 12px;
+  font-weight: 500;
   box-sizing: border-box;
 }
 
-.settings-row-controls input:focus {
+/* The Queue-role <select> here used to fall back to unstyled native
+   chrome -- no height/border/background/font-size of its own -- so it sat
+   next to the Slack-ID input and the ghost buttons at a different height
+   and in the OS's own font, the exact "mismatched sizes" look this row was
+   accused of. Sharing the input rule above keeps every control in the row
+   on one visual scale. */
+.settings-row-controls select {
+  width: auto;
+  min-width: 90px;
+}
+
+.settings-row-controls input:focus,
+.settings-row-controls select:focus {
   border-color: rgba(var(--accent-rgb), 0.65);
   box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.1);
   outline: none;
