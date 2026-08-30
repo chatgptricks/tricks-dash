@@ -6,9 +6,16 @@
 
 export const LANGS = ['en', 'es'];
 export const THEMES = ['dark', 'light'];
+export const ACCENT_PRESETS = Object.freeze({
+  lime: '#f5ff00',
+  blue: '#60a5fa',
+  coral: '#fb7185',
+});
+export const ACCENT_CHOICES = Object.keys(ACCENT_PRESETS);
 
 const LANG_KEY = 'sentient.lang';
 const THEME_KEY = 'sentient.theme';
+const ACCENT_KEY = 'sentient.accent';
 
 export function readLang() {
   try {
@@ -28,9 +35,76 @@ export function readTheme() {
   return window.matchMedia?.('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
 }
 
+function normalizeHex(value) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (!/^#[0-9a-f]{3,8}$/.test(raw)) return '';
+  const short = raw.length === 4 || raw.length === 5;
+  const body = raw.slice(1, short ? 4 : 7);
+  if (body.length !== 3 && body.length !== 6) return '';
+  return `#${body.length === 3 ? body.split('').map((digit) => `${digit}${digit}`).join('') : body}`;
+}
+
+export function normalizeAccent(value) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (ACCENT_PRESETS[raw]) return raw;
+  return normalizeHex(raw) || 'lime';
+}
+
+export function accentHex(value) {
+  const normalized = normalizeAccent(value);
+  return ACCENT_PRESETS[normalized] || normalized;
+}
+
+function hexRgb(value) {
+  const hex = accentHex(value).slice(1);
+  return [0, 2, 4].map((offset) => parseInt(hex.slice(offset, offset + 2), 16));
+}
+
+function luminance([red, green, blue]) {
+  const channel = (value) => {
+    const scaled = value / 255;
+    return scaled <= 0.03928 ? scaled / 12.92 : ((scaled + 0.055) / 1.055) ** 2.4;
+  };
+  return (0.2126 * channel(red)) + (0.7152 * channel(green)) + (0.0722 * channel(blue));
+}
+
+function darken(hex, amount = 0.28) {
+  return `#${hex.slice(1).match(/../g).map((pair) => Math.round(parseInt(pair, 16) * (1 - amount)).toString(16).padStart(2, '0')).join('')}`;
+}
+
+export function readAccent() {
+  try {
+    return normalizeAccent(localStorage.getItem(ACCENT_KEY));
+  } catch { /* private mode */ }
+  return 'lime';
+}
+
+export function applyAccent(value, { persist = true } = {}) {
+  const normalized = normalizeAccent(value);
+  const hex = accentHex(normalized);
+  const rgb = hexRgb(normalized);
+  const root = document.documentElement;
+  const lightTheme = root.getAttribute('data-theme') === 'light';
+  const textColor = lightTheme && luminance(rgb) > 0.35 ? darken(hex, 0.28) : hex;
+  const inkColor = luminance(rgb) > 0.52 ? '#252600' : '#f5f8ff';
+  root.setAttribute('data-accent', normalized);
+  root.style.setProperty('--accent-rgb', rgb.join(', '));
+  root.style.setProperty('--accent', hex);
+  root.style.setProperty('--accent-text', textColor);
+  root.style.setProperty('--accent-ink', inkColor);
+  root.style.setProperty('--accent-soft', `rgba(${rgb.join(', ')}, 0.15)`);
+  if (persist) {
+    try { localStorage.setItem(ACCENT_KEY, normalized); } catch { /* private mode */ }
+  }
+  return normalized;
+}
+
 export function applyTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme);
   try { localStorage.setItem(THEME_KEY, theme); } catch { /* private mode */ }
+  // Light mode intentionally darkens bright accents for readable labels and
+  // borders. Re-apply the selected accent whenever the theme changes.
+  applyAccent(readAccent(), { persist: false });
 }
 
 export function applyLang(lang) {
@@ -212,6 +286,8 @@ const ES = {
 
   // settings menu (shared shape across Dashboard/Queue/Tracker/Insights)
   'Accent color': 'Color de acento',
+  'Custom color': 'Color personalizado',
+  'Custom': 'Personalizado',
   'Theme': 'Tema',
   'Dark': 'Oscuro',
   'Light': 'Claro',

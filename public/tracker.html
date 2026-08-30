@@ -254,6 +254,10 @@ table.hist-table td{text-align:left;padding:11px 8px;white-space:nowrap}
 .settings-accent-picker .accent-lime{background:#f5ff00}
 .settings-accent-picker .accent-blue{background:#60a5fa}
 .settings-accent-picker .accent-coral{background:#fb7185}
+.settings-custom-color{display:inline-flex;align-items:center;gap:5px;color:var(--muted);font-size:9px;font-weight:750;cursor:pointer}
+.settings-custom-color input{width:22px;height:22px;padding:0;border:1px solid rgba(var(--edge),.28);border-radius:50%;background:transparent;cursor:pointer;overflow:hidden}
+.settings-custom-color input::-webkit-color-swatch-wrapper{padding:0}.settings-custom-color input::-webkit-color-swatch{border:0;border-radius:50%}
+.settings-custom-color input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .settings-menu-segment{display:flex;padding:2px;border:1px solid var(--line);border-radius:7px;background:var(--panel-2)}
 .settings-menu-segment button{display:inline-flex;align-items:center;gap:5px;min-height:27px;padding:0 8px;
   border:0;border-radius:5px;background:transparent;color:var(--muted);font-size:10px;font-weight:750;
@@ -303,6 +307,7 @@ table.hist-table td{text-align:left;padding:11px 8px;white-space:nowrap}
               <button type="button" class="accent-lime" data-accent-choice="lime" aria-label="lime accent"></button>
               <button type="button" class="accent-blue" data-accent-choice="blue" aria-label="blue accent"></button>
               <button type="button" class="accent-coral" data-accent-choice="coral" aria-label="coral accent"></button>
+              <label class="settings-custom-color" title="Custom color"><input type="color" id="settingsCustomColor" aria-label="Custom color"><span>Custom</span></label>
             </div>
           </div>
           <div class="settings-menu-section">
@@ -1157,27 +1162,50 @@ applyI18n();
    Same shape as the Dashboard/Queue Settings menu, wired locally since this
    page has no build step or shared component to import it from. */
 const PREF_ACCENT = 'sentient.accent';
+const ACCENT_PRESETS = { lime: '#f5ff00', blue: '#60a5fa', coral: '#fb7185' };
+function normalizeAccent(value) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (ACCENT_PRESETS[raw]) return raw;
+  if (/^#[0-9a-f]{6}$/i.test(raw)) return raw;
+  if (/^#[0-9a-f]{3}$/i.test(raw)) return `#${raw.slice(1).split('').map((d) => d + d).join('')}`;
+  return 'lime';
+}
+function accentHex(value) { const normalized = normalizeAccent(value); return ACCENT_PRESETS[normalized] || normalized; }
+function accentRgb(value) { const hex = accentHex(value).slice(1); return [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16)); }
+function accentLuminance(rgb) { const channel = (v) => { const s = v / 255; return s <= .03928 ? s / 12.92 : ((s + .055) / 1.055) ** 2.4; }; return .2126 * channel(rgb[0]) + .7152 * channel(rgb[1]) + .0722 * channel(rgb[2]); }
+function accentText(value) { const hex = accentHex(value); const rgb = accentRgb(value); if (document.documentElement.getAttribute('data-theme') === 'light' && accentLuminance(rgb) > .35) return '#' + hex.slice(1).match(/../g).map((p) => Math.round(parseInt(p, 16) * .72).toString(16).padStart(2, '0')).join(''); return hex; }
 function readAccent() {
   try {
-    const v = localStorage.getItem(PREF_ACCENT);
-    if (['lime', 'blue', 'coral'].includes(v)) return v;
+    return normalizeAccent(localStorage.getItem(PREF_ACCENT));
   } catch {}
   return 'lime';
 }
 function setAccent(next) {
-  document.documentElement.setAttribute('data-accent', next);
-  try { localStorage.setItem(PREF_ACCENT, next); } catch {}
+  const normalized = normalizeAccent(next);
+  const rgb = accentRgb(normalized);
+  const root = document.documentElement;
+  root.setAttribute('data-accent', normalized);
+  root.style.setProperty('--accent-rgb', rgb.join(', '));
+  root.style.setProperty('--accent', accentHex(normalized));
+  root.style.setProperty('--accent-text', accentText(normalized));
+  root.style.setProperty('--accent-ink', accentLuminance(rgb) > .52 ? '#252600' : '#f5f8ff');
+  root.style.setProperty('--accent-soft', `rgba(${rgb.join(', ')}, .15)`);
+  try { localStorage.setItem(PREF_ACCENT, normalized); } catch {}
   document.querySelectorAll('#settingsAccentPicker button').forEach((b) => {
-    b.classList.toggle('is-on', b.dataset.accentChoice === next);
+    b.classList.toggle('is-on', b.dataset.accentChoice === normalized);
   });
+  const custom = document.getElementById('settingsCustomColor');
+  if (custom) custom.value = accentHex(normalized);
 }
 setAccent(readAccent());
 document.querySelectorAll('#settingsAccentPicker button').forEach((b) => {
   b.addEventListener('click', () => setAccent(b.dataset.accentChoice));
 });
+document.getElementById('settingsCustomColor')?.addEventListener('input', (event) => setAccent(event.target.value));
 document.querySelectorAll('#settingsThemeSegment button').forEach((b) => {
-  b.addEventListener('click', () => setTheme(b.dataset.themeChoice));
+  b.addEventListener('click', () => { setTheme(b.dataset.themeChoice); setAccent(readAccent()); });
 });
+window.addEventListener('storage', (event) => { if (event.key === PREF_ACCENT) setAccent(readAccent()); });
 
 const settingsMenu = document.getElementById('settingsMenu');
 const settingsTrigger = document.getElementById('settingsTrigger');

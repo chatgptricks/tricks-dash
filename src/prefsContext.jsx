@@ -3,9 +3,9 @@
 // any component either app renders (including the ones in postDetail.jsx)
 // can call usePrefs() without caring which entry point it's mounted in.
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { applyLang, applyTheme, makeT, readLang, readTheme } from './prefs';
+import { applyAccent, applyLang, applyTheme, makeT, readAccent, readLang, readTheme } from './prefs';
 
-const PrefsContext = createContext({ lang: 'en', theme: 'dark', t: (x) => x, setLang: () => {}, setTheme: () => {} });
+const PrefsContext = createContext({ lang: 'en', theme: 'dark', accent: 'lime', t: (x) => x, setLang: () => {}, setTheme: () => {}, setAccent: () => {} });
 export const usePrefs = () => useContext(PrefsContext);
 
 // lang/theme can be passed in as controlled props -- used by the Queue
@@ -17,6 +17,7 @@ export const usePrefs = () => useContext(PrefsContext);
 export function PrefsProvider({ children, lang: controlledLang, theme: controlledTheme }) {
   const [lang, setLangState] = useState(() => controlledLang ?? readLang());
   const [theme, setThemeState] = useState(() => controlledTheme ?? readTheme());
+  const [accent, setAccentState] = useState(() => readAccent());
   const isLangControlled = controlledLang !== undefined;
   const isThemeControlled = controlledTheme !== undefined;
   const effectiveLang = isLangControlled ? controlledLang : lang;
@@ -24,14 +25,26 @@ export function PrefsProvider({ children, lang: controlledLang, theme: controlle
 
   useEffect(() => { if (!isLangControlled) applyLang(effectiveLang); }, [effectiveLang, isLangControlled]);
   useEffect(() => { if (!isThemeControlled) applyTheme(effectiveTheme); }, [effectiveTheme, isThemeControlled]);
+  useEffect(() => { applyAccent(accent); }, [accent]);
+  useEffect(() => {
+    const onStorage = (event) => {
+      if (event.key === 'sentient.accent') setAccentState(readAccent());
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
+
+  const setAccent = (value) => setAccentState(applyAccent(value));
 
   const value = useMemo(() => ({
     lang: effectiveLang,
     theme: effectiveTheme,
+    accent,
     t: makeT(effectiveLang),
     setLang: isLangControlled ? () => {} : setLangState,
     setTheme: isThemeControlled ? () => {} : setThemeState,
-  }), [effectiveLang, effectiveTheme, isLangControlled, isThemeControlled]);
+    setAccent,
+  }), [effectiveLang, effectiveTheme, accent, isLangControlled, isThemeControlled]);
 
   return <PrefsContext.Provider value={value}>{children}</PrefsContext.Provider>;
 }
