@@ -675,6 +675,20 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
 .queue-designer-ticket-form>div { grid-column:1/-1; display:flex; gap:6px; }
 .queue-designer-ticket-form>div button { display:flex; align-items:center; justify-content:center; gap:5px; min-height:29px; padding:0 8px; border:1px solid rgba(var(--edge),.12); border-radius:6px; background:var(--surface-2); color:var(--text); font-size:9px; font-weight:800; }
 .queue-designer-ticket-form>div .is-send { border-color:rgba(var(--accent-rgb),.36); background:rgba(var(--accent-rgb),.09); color:var(--accent-ink); }
+.queue-trainee-review { display:grid; grid-column:1/-1; gap:7px; padding:10px; border:1px solid rgba(var(--accent-rgb),.24); border-radius:8px; background:linear-gradient(135deg,rgba(var(--accent-rgb),.1),transparent 78%),var(--surface-2); }
+.queue-trainee-review>strong { color:var(--text-strong); font-size:10px; line-height:1.35; }
+.queue-trainee-review>small { color:rgba(var(--ink),.58); font-size:9px; line-height:1.45; }
+.queue-trainee-review>label { display:grid; gap:4px; color:rgba(var(--ink),.56); font-size:8px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; }
+.queue-trainee-review input { width:100%; min-width:0; height:32px; padding:0 8px; border:1px solid rgba(var(--edge),.13); border-radius:6px; background:var(--surface-1); color:var(--text); font-size:10px; text-transform:none; }
+.queue-trainee-review>.scheduler-primary { justify-self:start; min-height:31px; padding:0 9px; font-size:9px; }
+.queue-trainee-review>a,.queue-ticket-link { display:inline-flex; align-items:center; width:max-content; color:var(--accent-ink); font-size:9px; font-weight:800; text-decoration:none; }
+.queue-trainee-review>a:hover,.queue-ticket-link:hover { text-decoration:underline; }
+.queue-trainee-review.is-pending { border-color:rgba(243,187,72,.38); background:linear-gradient(135deg,rgba(243,187,72,.12),transparent 78%),var(--surface-2); }
+.queue-trainee-review.is-pending>strong { color:#f3bb48; }
+.queue-trainee-review.is-approved { border-color:rgba(88,214,141,.32); background:linear-gradient(135deg,rgba(88,214,141,.12),transparent 78%),var(--surface-2); }
+.queue-trainee-review.is-approved>strong { color:#74dfa0; }
+.queue-trainee-review.is-rejected { border-color:rgba(255,119,119,.32); background:linear-gradient(135deg,rgba(255,119,119,.1),transparent 78%),var(--surface-2); }
+.queue-trainee-review.is-rejected>strong { color:#ff9b9b; }
 
 /* Admin tabs are standalone workspaces; the scheduler is intentionally absent. */
 .queue-admin-tools { min-height:calc(100dvh - 92px); }
