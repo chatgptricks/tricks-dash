@@ -219,6 +219,7 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
 .queue-settings-managed { margin-top:2px; padding-top:11px; border-top:1px solid var(--q-line); }
 .queue-settings-admin>span { font-size:9px; font-weight:850; letter-spacing:.06em; text-transform:uppercase; }
 .queue-settings-link { display:inline-flex; align-items:center; gap:6px; align-self:flex-start; min-height:28px; padding:0 8px; border:1px solid rgba(var(--accent-rgb),.32); border-radius:7px; background:rgba(var(--accent-rgb),.08); color:var(--q-accent); font-size:11px; font-weight:750; }
+.queue-settings-danger { display:inline-flex; align-items:center; gap:6px; align-self:flex-start; min-height:28px; padding:0 8px; border:1px solid rgba(255,107,107,.34); border-radius:7px; background:rgba(255,107,107,.08); color:#ff9b9b; font-size:11px; font-weight:750; }
 .queue-settings-admin .queue-user-management { padding:0; }
 .queue-settings-admin .queue-user-management>header { padding:8px 0 9px; }
 .queue-settings-panel>footer { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:2px; padding:10px; border-top:1px solid var(--q-line); }
@@ -805,5 +806,22 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
 .queue-account-request>header h3 { margin:0 0 3px; color:var(--q-text); font-size:12px; }
 .queue-account-request>header p { margin:0; color:var(--q-muted); font-size:10px; line-height:1.45; }
 .queue-account-request>.scheduler-secondary { justify-self:start; margin-top:0; }
+.queue-guide-layer { position:fixed; z-index:180; inset:0; pointer-events:auto; }
+.queue-guide-dim { position:absolute; inset:0; background:rgba(0,0,0,.7); backdrop-filter:blur(2px); }
+.queue-guide-highlight { position:fixed; z-index:1; border:2px solid var(--q-accent); border-radius:10px; box-shadow:0 0 0 9999px rgba(0,0,0,.22),0 0 0 5px rgba(var(--accent-rgb),.13),0 0 28px rgba(var(--accent-rgb),.55); pointer-events:none; transition:all .2s ease; }
+.queue-guide-card { position:fixed; z-index:2; display:grid; gap:9px; padding:16px; border:1px solid rgba(var(--accent-rgb),.5); border-radius:13px; background:var(--q-panel); box-shadow:0 20px 55px rgba(0,0,0,.65); }
+.queue-guide-card h2 { margin:0; color:var(--q-text); font-size:18px; letter-spacing:-.02em; }
+.queue-guide-card>p:not(.scheduler-eyebrow) { margin:0; color:var(--q-muted); font-size:11px; line-height:1.5; }
+.queue-guide-card footer { display:flex; align-items:center; justify-content:space-between; gap:8px; padding-top:5px; }
+.queue-guide-card footer>div { display:flex; gap:7px; }
+.queue-guide-card .scheduler-primary,.queue-guide-card .scheduler-secondary { min-height:29px; margin:0; font-size:10px; }
+.queue-guide-skip { padding:0; border:0; background:transparent; color:var(--q-muted); font-size:10px; font-weight:750; }
+.queue-guide-welcome { position:fixed; top:50%; left:50%; width:min(390px,calc(100vw - 32px)); transform:translate(-50%,-50%); text-align:center; }
+.queue-guide-welcome>p { max-width:300px; margin-inline:auto !important; }
+.queue-guide-language { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.queue-guide-language button { min-height:40px; border:1px solid var(--q-line); border-radius:8px; background:var(--q-panel-2); color:var(--q-text); font-size:12px; font-weight:800; }
+.queue-guide-language button:hover { border-color:var(--q-accent); color:var(--q-accent); }
+.queue-guide-welcome .queue-guide-skip { justify-self:center; margin-top:3px; }
+.queue-reset-modal { width:min(570px,100%); }
 @media (max-width:620px) { .queue-account-choice-grid { grid-template-columns:1fr; } }
 @media (max-width:620px) { .queue-create-backdrop { padding:10px; } .queue-create-modal { padding:14px; } .queue-create-grid { grid-template-columns:1fr; } .queue-create-grid label.is-wide { grid-column:auto; } }

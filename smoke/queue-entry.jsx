@@ -1,5 +1,7 @@
 import { act } from 'react';
 
+window.localStorage.setItem('sentient.queueGuide.v1', 'completed');
+
 const localDay = () => {
   const value = new Date();
   return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
@@ -143,7 +145,13 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     const settingsLink = document.querySelector('.queue-settings-admin .queue-settings-link');
     checks['Admin gear links to standalone Settings'] = settingsLink?.tagName === 'A'
       && /\/settings\.html$/.test(settingsLink.getAttribute('href') || '');
-    await click(document.querySelector('.queue-overlay-backdrop'));
+    const guideButton = [...document.querySelectorAll('.queue-settings-panel button')].find((node) => /Start guided tour|Iniciar guía/.test(node.textContent));
+    await click(guideButton);
+    checks['Guided tour starts from Settings'] = Boolean(document.querySelector('.queue-guide-welcome'));
+    await click([...document.querySelectorAll('.queue-guide-language button')].find((node) => /English/.test(node.textContent)));
+    checks['Guided tour highlights Queue controls'] = Boolean(document.querySelector('.queue-guide-highlight'));
+    await click(document.querySelector('.queue-guide-skip'));
+    if (document.querySelector('.queue-overlay-backdrop')) await click(document.querySelector('.queue-overlay-backdrop'));
 
     await click(document.querySelector('.queue-ticket-button'));
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 50)); });
