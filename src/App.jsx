@@ -290,10 +290,13 @@ function useSectionFavicon(section) {
 // shape as the Settings button on Queue/Tracker/Insights: accent, theme and
 // language live together with account info and, for admins, the same
 // designer-account assignment tool Queue's Admin Tools panel exposes.
-export function SettingsMenu({ email, isAdmin, isDev, onSignOut, showSettingsLink = true }) {
+export function SettingsMenu({ email, avatarUrl, isAdmin, isDev, onSignOut, showSettingsLink = true }) {
   const { t, lang, theme, setLang, setTheme, accent, setAccent } = usePrefs();
   const [open, setOpen] = useState(false);
+  const [avatarFailed, setAvatarFailed] = useState(false);
   const ref = useRef(null);
+
+  useEffect(() => { setAvatarFailed(false); }, [avatarUrl]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -318,10 +321,10 @@ export function SettingsMenu({ email, isAdmin, isDev, onSignOut, showSettingsLin
         className={open ? 'settings-menu-trigger is-active' : 'settings-menu-trigger'}
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
-        aria-label={t('Settings')}
+        aria-label={`${t('Settings')} · ${email || ''}`.trim()}
         title={t('Settings')}
       >
-        <Settings size={16} />
+        {avatarUrl && !avatarFailed ? <img src={avatarUrl} alt="" referrerPolicy="no-referrer" onError={() => setAvatarFailed(true)} /> : <span>{(email || '?').trim().charAt(0).toUpperCase()}</span>}
       </button>
       {open ? (
         <div className="settings-menu-panel" role="menu">
@@ -787,7 +790,7 @@ function DevRolePreview({ isDev }) {
   return <div className="dev-role-preview"><button type="button" onClick={() => setOpen((value) => !value)} aria-expanded={open}><span>DEV</span>{label}</button>{open ? <div className="dev-role-preview-panel"><strong>Role preview</strong><p>Only visible to Esteban.</p><label>Active role<select value={active} onChange={choose}><option value="">Dev · full access</option><option value="sales">Sales</option><option value="pd">Post Designer</option><option value="vc">Viral Coordinator</option><option value="admin">Admin</option></select></label></div> : null}</div>;
 }
 
-function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
+function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
   const [dashboard, setDashboard] = useState({ posts: [], summary: {} });
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1719,6 +1722,7 @@ function Dashboard({ userEmail, onSignOut, onUnauthorized }) {
 
                 <SettingsMenu
                   email={userEmail}
+                  avatarUrl={userPhoto}
                   isAdmin={isAdmin}
                   isDev={isDev}
                   onSignOut={onSignOut}
@@ -2777,7 +2781,7 @@ const WIZARD_STEPS = ['Account', 'Settings', 'Confirm'];
 // reloading the page discards it.
 export function SettingsPanel({
   accounts = [], onRefresh, refreshing = false, refreshNotice, onAccountsChanged,
-  initialTab, userEmail, isAdmin = false, isDev = false, onSignOut,
+  initialTab, userEmail, userPhoto, isAdmin = false, isDev = false, onSignOut,
 }) {
   const { t } = usePrefs();
   // Firebase sign-in is the real gate now (only an allowlisted Google account
@@ -3735,6 +3739,7 @@ export function SettingsPanel({
         </nav>
         <SettingsMenu
           email={userEmail}
+          avatarUrl={userPhoto}
           isAdmin={isAdmin}
           isDev={isDev}
           onSignOut={onSignOut}
@@ -5739,7 +5744,7 @@ function App() {
   if (unauthorized) {
     return <NotAuthorizedScreen email={authUser.email} onSignOut={handleSignOut} />;
   }
-  return <Dashboard userEmail={authUser.email} onSignOut={handleSignOut} onUnauthorized={handleUnauthorized} />;
+  return <Dashboard userEmail={authUser.email} userPhoto={authUser.photoURL || ''} onSignOut={handleSignOut} onUnauthorized={handleUnauthorized} />;
 }
 
 // Language and theme wrap the whole app, including the sign-in gate -- the

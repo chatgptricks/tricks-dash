@@ -129,6 +129,7 @@ function SettingsApp() {
       accounts={[]}
       initialTab={initialTab}
       userEmail={user.email}
+      userPhoto={user.photoURL || ''}
       isAdmin={Boolean(viewer.is_admin)}
       isDev={Boolean(viewer.is_dev)}
       onSignOut={handleSignOut}
