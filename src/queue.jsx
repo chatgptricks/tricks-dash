@@ -1,6 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import ReactDOM from 'react-dom/client';
-import { AlertTriangle, Archive, ArrowLeft, Ban, BarChart3, BellRing, CalendarDays, CalendarPlus, Check, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Clock3, Coffee, Download, History, LoaderCircle, LocateFixed, LogOut, Moon, Paperclip, Pencil, Plus, Radio, Send, Settings, Sun, TimerReset, WifiOff, X } from 'lucide-react';
+import { AlertTriangle, Archive, ArrowLeft, Ban, BarChart3, BellRing, CalendarDays, CalendarPlus, Check, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Clock3, Coffee, Download, History, Link2, LoaderCircle, LocateFixed, LogOut, Moon, Paperclip, Pencil, Plus, Radio, Send, Settings, Sun, TimerReset, WifiOff, X } from 'lucide-react';
 import { browserPopupRedirectResolver, getRedirectResult, onAuthStateChanged, signOut } from 'firebase/auth';
 import { describeSignInError, firebaseAuth as auth, startGoogleSignIn } from './firebase';
 import { clearSsoCookie, startSsoRefresh, trySsoSignIn } from './sso';
@@ -114,10 +114,10 @@ Object.assign(COPY.es, {
 });
 
 Object.assign(COPY.en, {
-  createPost: 'Create Post', createPostTitle: 'Create a Queue post', createPostHelp: 'Start a production request without a dashboard post.', targetAccount: 'Publishing account', accountToSelect: 'Account selected when assigned', chooseAccountLater: 'Choose later (optional)', postTitle: 'Post title', postTitlePlaceholder: 'e.g. AI tools carousel for next week', postType: 'Post type', postTypeImage: 'Image', postTypeCarousel: 'Carousel', postTypeReel: 'Reel', postTypePromo: 'Promo', postTypeStory: 'Story', postTypeOther: 'Other', titleRequired: 'Add a title for this post.', accountRequired: 'Choose a Sentient account.', postCreated: 'Post created in the production pool.',
+  createPost: 'Create Post', createPostTitle: 'Create a Queue post', createPostHelp: 'Start a production request without a dashboard post.', targetAccount: 'Publishing account', accountToSelect: 'Account selected when assigned', chooseAccountLater: 'Choose later (optional)', postTitle: 'Post title', postTitlePlaceholder: 'e.g. AI tools carousel for next week', postType: 'Post type', postTypeImage: 'Image', postTypeCarousel: 'Carousel', postTypeReel: 'Reel', postTypePromo: 'Promo', postTypeStory: 'Story', postTypeOther: 'Other', titleRequired: 'Add a title for this post.', accountRequired: 'Choose a Sentient account.', postCreated: 'Post created in the production pool.', sourceLink: 'Source link', sourceLinkHelp: 'Paste a public Reddit, X, Canva, LinkedIn, Facebook, Instagram, or other source link. Queue will try to bring in its title, description, and thumbnail.', getSourceDetails: 'Get details', gettingSourceDetails: 'Getting details…', sourcePreview: 'Source preview', sourceDetected: 'Details added without replacing fields you already edited.',
 });
 Object.assign(COPY.es, {
-  createPost: 'Crear post', createPostTitle: 'Crear un post en Queue', createPostHelp: 'Inicia un request de producción sin un post del dashboard.', targetAccount: 'Cuenta de publicación', accountToSelect: 'Cuenta se elige al asignar', chooseAccountLater: 'Elegir después (opcional)', postTitle: 'Título del post', postTitlePlaceholder: 'ej. Carrusel de herramientas de IA para la próxima semana', postType: 'Tipo de post', postTypeImage: 'Imagen', postTypeCarousel: 'Carrusel', postTypeReel: 'Reel', postTypePromo: 'Promo', postTypeStory: 'Story', postTypeOther: 'Otro', titleRequired: 'Agrega un título para este post.', accountRequired: 'Elige una cuenta de Sentient.', postCreated: 'Post creado en el pool de producción.',
+  createPost: 'Crear post', createPostTitle: 'Crear un post en Queue', createPostHelp: 'Inicia un request de producción sin un post del dashboard.', targetAccount: 'Cuenta de publicación', accountToSelect: 'Cuenta se elige al asignar', chooseAccountLater: 'Elegir después (opcional)', postTitle: 'Título del post', postTitlePlaceholder: 'ej. Carrusel de herramientas de IA para la próxima semana', postType: 'Tipo de post', postTypeImage: 'Imagen', postTypeCarousel: 'Carrusel', postTypeReel: 'Reel', postTypePromo: 'Promo', postTypeStory: 'Story', postTypeOther: 'Otro', titleRequired: 'Agrega un título para este post.', accountRequired: 'Elige una cuenta de Sentient.', postCreated: 'Post creado en el pool de producción.', sourceLink: 'Link de origen', sourceLinkHelp: 'Pega un link público de Reddit, X, Canva, LinkedIn, Facebook, Instagram u otra fuente. Queue intentará traer su título, descripción y miniatura.', getSourceDetails: 'Traer detalles', gettingSourceDetails: 'Obteniendo detalles…', sourcePreview: 'Vista previa del origen', sourceDetected: 'Se agregaron los detalles sin reemplazar campos que ya editaste.',
 });
 Object.assign(COPY.en, {
   traineeReview: 'Trainee review', sendForReview: 'Send for review', canvaLink: 'Canva design link',
@@ -375,6 +375,11 @@ function ResetQueueModal({ onClose, onReset }) {
 function CreatePostModal({ tags = [], onClose, onCreated }) {
   const { t } = useQueuePreferences();
   const [form, setForm] = useState({ title: '', postType: 'Image', productionPoints: 3, priority: 'medium', brief: '', notes: '', references: '' });
+  const [sourceUrl, setSourceUrl] = useState('');
+  const [sourcePreview, setSourcePreview] = useState(null);
+  const [sourceLoading, setSourceLoading] = useState(false);
+  const [titleEdited, setTitleEdited] = useState(false);
+  const [briefEdited, setBriefEdited] = useState(false);
   const [tagSet, setTagSet] = useState(() => new Set());
   const [attachmentFiles, setAttachmentFiles] = useState([]);
   const [createdRequestId, setCreatedRequestId] = useState(null);
@@ -392,6 +397,36 @@ function CreatePostModal({ tags = [], onClose, onCreated }) {
     if (next.has(tag)) next.delete(tag); else next.add(tag);
     return next;
   });
+
+  const fetchSource = async () => {
+    const candidate = sourceUrl.trim();
+    if (!candidate || sourceLoading) return;
+    setSourceLoading(true);
+    setError('');
+    try {
+      const result = await json('/api/dashboard/queue/v2/source-preview', { method: 'POST', body: new URLSearchParams({ source_url: candidate }) });
+      const preview = result.preview || {};
+      const extractedTitle = preview.title && String(preview.title).trim().toLowerCase() !== String(preview.platform || '').trim().toLowerCase() ? preview.title : '';
+      setSourcePreview(preview);
+      setSourceUrl(preview.sourceUrl || candidate);
+      setForm((current) => {
+        const references = current.references.split(/\n|,/).map((item) => item.trim()).filter(Boolean);
+        const reference = preview.sourceUrl || candidate;
+        if (reference && !references.includes(reference)) references.unshift(reference);
+        return {
+          ...current,
+          title: !titleEdited || !current.title.trim() ? (extractedTitle || current.title) : current.title,
+          brief: !briefEdited || !current.brief.trim() ? (preview.description || current.brief) : current.brief,
+          references: references.join('\n'),
+        };
+      });
+    } catch (reason) {
+      setSourcePreview(null);
+      setError(reason.message || 'Could not get source details.');
+    } finally {
+      setSourceLoading(false);
+    }
+  };
 
   const submit = async (event) => {
     event.preventDefault();
@@ -412,6 +447,10 @@ function CreatePostModal({ tags = [], onClose, onCreated }) {
         body.append('notes', form.notes);
         body.append('references', JSON.stringify(form.references.split(/\n|,/).map((item) => item.trim()).filter(Boolean)));
         body.append('tags', [...tagSet].join(','));
+        body.append('source_url', sourcePreview?.sourceUrl || sourceUrl.trim());
+        body.append('source_title', sourcePreview?.title || '');
+        body.append('source_description', sourcePreview?.description || '');
+        body.append('source_image_url', sourcePreview?.imageUrl || '');
         const response = await apiFetch(`${API_BASE}/api/dashboard/queue/v2/create`, { method: 'POST', body });
         const result = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(result.detail || 'Could not create this Queue post.');
@@ -449,13 +488,14 @@ function CreatePostModal({ tags = [], onClose, onCreated }) {
   return <div className="queue-create-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) onClose(); }}>
     <form className="queue-create-modal" onSubmit={submit} aria-labelledby="queue-create-title">
       <header className="queue-create-head"><div><p className="scheduler-eyebrow">Queue</p><h2 id="queue-create-title">{t('createPostTitle')}</h2><small>{t('createPostHelp')}</small></div><button type="button" onClick={onClose} aria-label={t('close')} disabled={saving}><X size={16} /></button></header>
+      <section className="queue-source-link"><header><div><span>{t('sourceLink')} <i>optional</i></span><small>{t('sourceLinkHelp')}</small></div></header><div><input type="url" value={sourceUrl} placeholder="https://www.reddit.com/..." onChange={(event) => { setSourceUrl(event.target.value); setSourcePreview(null); }} onBlur={() => { if (sourceUrl.trim() && !sourcePreview) fetchSource(); }} /><button type="button" className="scheduler-secondary" disabled={!sourceUrl.trim() || sourceLoading} onClick={fetchSource}>{sourceLoading ? <LoaderCircle className="queue-spin" size={14} /> : <Link2 size={14} />}{sourceLoading ? t('gettingSourceDetails') : t('getSourceDetails')}</button></div>{sourcePreview ? <article className="queue-source-preview"><div>{sourcePreview.imageUrl ? <img src={sourcePreview.imageUrl} alt="" referrerPolicy="no-referrer" onError={(event) => { event.currentTarget.parentElement.hidden = true; }} /> : null}</div><span><b>{sourcePreview.platform || t('sourcePreview')}</b><strong>{sourcePreview.title || sourcePreview.sourceUrl}</strong>{sourcePreview.description ? <small>{sourcePreview.description}</small> : null}</span></article> : null}</section>
       <div className="queue-create-grid">
-        <label className="is-wide"><span>{t('postTitle')} <i>required</i></span><input value={form.title} maxLength="160" autoFocus onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} placeholder={t('postTitlePlaceholder')} /></label>
+        <label className="is-wide"><span>{t('postTitle')} <i>required</i></span><input value={form.title} maxLength="160" autoFocus onChange={(event) => { setTitleEdited(true); setForm((current) => ({ ...current, title: event.target.value })); }} placeholder={t('postTitlePlaceholder')} /></label>
         <label><span>{t('postType')}</span><select value={form.postType} onChange={(event) => setForm((current) => ({ ...current, postType: event.target.value }))}>{typeOptions.map(([value, key]) => <option key={value} value={value}>{t(key)}</option>)}</select></label>
         <label><span>{t('productionPoints')} <i>required</i></span><input type="number" min="1" step="1" value={form.productionPoints} onChange={(event) => setForm((current) => ({ ...current, productionPoints: event.target.value }))} /></label>
         <label><span>{t('priority')} <i>required</i></span><select value={form.priority} onChange={(event) => setForm((current) => ({ ...current, priority: event.target.value }))}>{PRIORITIES.map((priority) => <option key={priority} value={priority}>{priorityCopy(priority, t)}</option>)}</select></label>
       </div>
-      <label className="queue-create-note"><span>{t('brief')} <i>optional</i></span><textarea value={form.brief} onChange={(event) => setForm((current) => ({ ...current, brief: event.target.value }))} rows={3} /></label>
+      <label className="queue-create-note"><span>{t('brief')} <i>optional</i></span><textarea value={form.brief} onChange={(event) => { setBriefEdited(true); setForm((current) => ({ ...current, brief: event.target.value })); }} rows={3} /></label>
       <label className="queue-create-note"><span>{t('notes')} <i>optional</i></span><textarea value={form.notes} onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))} rows={2} /></label>
       <label className="queue-create-note"><span>{t('referenceLinks')} <i>optional</i></span><textarea value={form.references} onChange={(event) => setForm((current) => ({ ...current, references: event.target.value }))} placeholder={t('oneLinkPerLine')} rows={2} /></label>
       <label className="queue-create-files"><span>{t('attachments')} <i>optional · up to 20 MB each</i></span><input type="file" multiple onChange={(event) => setAttachmentFiles([...event.target.files])} />{attachmentFiles.length ? <small>{attachmentFiles.map((file) => file.name).join(' · ')}</small> : null}</label>
