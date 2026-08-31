@@ -171,8 +171,10 @@ tbody tr:hover{background:rgba(var(--edge),.03)}
 :root[data-accent='coral']{--accent-rgb:251,113,133;--accent:#fb7185;--accent-text:#fb7185;--accent-ink:#ffe4e6}
 .settings-menu{position:relative}
 .settings-menu-trigger{display:grid;place-items:center;width:32px;height:32px;padding:0;
-  border:1px solid var(--line);border-radius:8px;background:var(--panel-2);color:var(--muted);
-  font-size:14px;line-height:1;cursor:pointer}
+  overflow:hidden;border:1px solid var(--line);border-radius:50%;background:var(--panel-2);color:var(--muted);
+  font-size:11px;font-weight:850;line-height:1;cursor:pointer}
+.settings-menu-trigger img{display:block;width:100%;height:100%;object-fit:cover}
+.settings-menu-trigger span{display:grid;width:100%;height:100%;place-items:center;background:rgba(var(--accent-rgb),.13);color:var(--accent-ink)}
 .settings-menu-trigger:hover,.settings-menu-trigger.is-active{border-color:rgba(var(--accent-rgb),.45);color:var(--text)}
 .settings-menu-panel{position:absolute;top:calc(100% + 8px);right:0;z-index:60;display:none;gap:2px;
   width:280px;max-height:calc(100dvh - 90px);overflow:auto;padding:6px;border:1px solid var(--line);
@@ -229,7 +231,7 @@ tbody tr:hover{background:rgba(var(--edge),.03)}
     </div>
     <div class="top-actions">
       <div class="settings-menu" id="settingsMenu">
-        <button type="button" class="settings-menu-trigger" id="settingsTrigger" aria-label="Settings" aria-expanded="false" title="Settings">⚙</button>
+        <button type="button" class="settings-menu-trigger" id="settingsTrigger" aria-label="Settings" aria-expanded="false" title="Settings"><span>?</span></button>
         <div class="settings-menu-panel" id="settingsPanel" role="dialog" aria-label="Settings">
           <div class="settings-menu-section">
             <span data-i18n="Accent color">Accent color</span>
@@ -1042,6 +1044,7 @@ onAuthStateChanged(auth, async (user) => {
   }
   window.__firebaseIdToken = await user.getIdToken();
   window.__signedInEmail = user.email || '';
+  setSettingsAvatar(user);
   gate.classList.add('hidden');
   ssoStartRefresh();
   if (!booted) {
@@ -1354,6 +1357,18 @@ window.addEventListener('storage', (event) => { if (event.key === PREF_ACCENT) s
 const settingsMenu = document.getElementById('settingsMenu');
 const settingsTrigger = document.getElementById('settingsTrigger');
 const settingsPanel = document.getElementById('settingsPanel');
+function setSettingsAvatar(user) {
+  const initial = (user?.email || '?').trim().charAt(0).toUpperCase();
+  settingsTrigger.replaceChildren();
+  if (user?.photoURL) {
+    const image = document.createElement('img');
+    image.alt = '';
+    image.referrerPolicy = 'no-referrer';
+    image.src = user.photoURL;
+    image.onerror = () => { settingsTrigger.replaceChildren(Object.assign(document.createElement('span'), { textContent: initial })); };
+    settingsTrigger.append(image);
+  } else settingsTrigger.append(Object.assign(document.createElement('span'), { textContent: initial }));
+}
 function closeSettings() {
   settingsPanel.classList.remove('is-open');
   settingsTrigger.classList.remove('is-active');
