@@ -46,7 +46,7 @@ const I18N = {
     blockTime: 'Block time', duration: 'Duration', reason: 'Reason', submitRequest: 'Submit request', requestSent: 'Request sent.',
     ppRevision: 'PP revision', cancellation: 'Cancellation', move: 'Move', newPPs: 'Requested PPs',
     followers: 'Followers', totalFollowers: 'Total followers', todayGrowth: 'Today growth', todayFollowers: 'Today', favorites: 'Favorites', growth7d: '7-day growth', avgLikes: 'Average likes', trackedAccounts: 'Tracked accounts',
-    trackingSince: 'Tracking since', refresh: 'Refresh', history: 'History', posts: 'Posts', engagement: 'Engagement',
+    trackingSince: 'Tracking since', refresh: 'Refresh', history: 'History', posts: 'Posts', engagement: 'Engagement', followersGained: 'Gained', total: 'Total',
     performance: 'Performance overview', topAccounts: 'Top accounts', topTopics: 'Top topics', formats: 'Formats',
     last30: 'Last 30 days', last90: 'Last 90 days', allTime: 'All time', noData: 'No data available.',
     overview: 'Overview', accounts: 'Accounts', users: 'Users', usage: 'Usage', notifications: 'Notifications', system: 'System', reports: 'Reports',
@@ -86,7 +86,7 @@ const I18N = {
     blockTime: 'Bloquear tiempo', duration: 'Duración', reason: 'Motivo', submitRequest: 'Enviar request', requestSent: 'Request enviado.',
     ppRevision: 'Revisión de PP', cancellation: 'Cancelación', move: 'Mover', newPPs: 'PPs solicitados',
     followers: 'Seguidores', totalFollowers: 'Seguidores totales', todayGrowth: 'Crecimiento de hoy', todayFollowers: 'Hoy', favorites: 'Favoritos', growth7d: 'Crecimiento 7 días', avgLikes: 'Promedio de likes', trackedAccounts: 'Cuentas monitoreadas',
-    trackingSince: 'Monitoreando desde', refresh: 'Actualizar', history: 'Historial', posts: 'Posts', engagement: 'Engagement',
+    trackingSince: 'Monitoreando desde', refresh: 'Actualizar', history: 'Historial', posts: 'Posts', engagement: 'Engagement', followersGained: 'Ganados', total: 'Total',
     performance: 'Resumen de rendimiento', topAccounts: 'Mejores cuentas', topTopics: 'Temas principales', formats: 'Formatos',
     last30: 'Últimos 30 días', last90: 'Últimos 90 días', allTime: 'Todo el tiempo', noData: 'No hay datos disponibles.',
     overview: 'Resumen', accounts: 'Cuentas', users: 'Usuarios', usage: 'Uso', notifications: 'Notificaciones', system: 'Sistema', reports: 'Reportes',
@@ -496,7 +496,7 @@ function TrackerView() {
 
 function TrackerDetail({ data, busy, onRefresh, onClose }) {
   const { t } = usePrefs(); const history = data.followers_history || []; const points = history.slice(-30).map((item) => Number(item.followers || 0)); const min = Math.min(...points); const max = Math.max(...points); const path = points.length > 1 ? points.map((value, index) => `${index ? 'L' : 'M'} ${(index / (points.length - 1)) * 300} ${90 - ((value - min) / Math.max(1, max - min)) * 80}`).join(' ') : '';
-  return <Sheet title={`@${data.handle}`} onClose={onClose} wide><div className="m-stack"><div className="m-detail-account"><Cover src={`/api/dashboard/avatar/${data.handle}`} /><div><h3>{data.label || data.handle}</h3><span>{fmtExact(points.at(-1))} {t('followers')}</span></div><button onClick={onRefresh} disabled={busy}><RefreshCw className={busy ? 'spin' : ''} size={17} /></button></div><div className="m-sparkline"><svg viewBox="0 0 300 100" role="img"><path d={path} /></svg></div><div className="m-section-head"><div><span>{t('history')}</span><h2>{history.length} snapshots</h2></div></div><div className="m-history-list">{history.slice(-12).reverse().map((row) => <div key={row.date}><span>{dateLabel(row.date)}</span><b>{fmtExact(row.followers)}</b><small>{row.posts_that_day || 0} {t('posts')}</small></div>)}</div></div></Sheet>;
+  return <Sheet title={`@${data.handle}`} onClose={onClose} wide><div className="m-stack"><div className="m-detail-account"><Cover src={`/api/dashboard/avatar/${data.handle}`} /><div><h3>{data.label || data.handle}</h3><span>{fmtExact(points.at(-1))} {t('followers')}</span></div><button onClick={onRefresh} disabled={busy}><RefreshCw className={busy ? 'spin' : ''} size={17} /></button></div><div className="m-sparkline"><svg viewBox="0 0 300 100" role="img"><path d={path} /></svg></div><div className="m-section-head"><div><span>{t('history')}</span><h2>{history.length} snapshots</h2></div></div><div className="m-history-list"><div className="m-history-head"><span>{t('date')}</span><b>{t('followersGained')}</b><b>{t('total')}</b><small>{t('posts')}</small></div>{history.slice(-12).map((row) => <div key={row.date}><span>{dateLabel(row.date)}</span><b className={`m-history-growth${Number(row.followers_gained || 0) < 0 ? ' is-negative' : ''}`}>{row.followers_gained == null ? '—' : signedExact(row.followers_gained)}</b><b>{fmtExact(row.followers)}</b><small>{row.posts_that_day || 0}</small></div>)}</div></div></Sheet>;
 }
 
 const STOP_WORDS = new Set('the and for with this that from your you are was have has how what why who new best can use para por con que los las una un del como más este esta sus sin sobre hoy'.split(' '));
