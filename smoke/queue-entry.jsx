@@ -220,6 +220,10 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     await click(submit);
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 100)); });
     checks['Submit sends final planned position'] = submitted?.length === 1 && submitted[0].scheduledStartMinutes === 600 && submitted[0].scheduledDate === day;
+    await click(document.querySelector('.queue-create-button'));
+    checks['Create Post accepts an intelligent source link'] = Boolean(document.querySelector('.queue-source-link input[type="url"]'))
+      && Boolean(document.querySelector('.queue-source-link button'));
+    await click(document.querySelector('.queue-create-head > button'));
     checks['No render or console errors'] = errors.length === 0;
 
     console.log('\n=== QUEUE SMOKE ===');

@@ -162,6 +162,16 @@ img { display:block; max-width:100%; }
 .m-form textarea { resize:vertical; line-height:1.5; }
 .m-form input:focus, .m-form select:focus, .m-form textarea:focus { border-color:rgba(var(--m-accent-rgb),.55); box-shadow:0 0 0 3px rgba(var(--m-accent-rgb),.09); }
 .m-form-pair { display:grid; grid-template-columns:1fr 1fr; gap:9px; }
+.m-source-input { display:flex; gap:7px; }
+.m-source-input input { min-width:0; }
+.m-source-input .m-secondary { display:inline-flex; flex:0 0 auto; align-items:center; gap:5px; min-height:44px; padding:0 10px; white-space:nowrap; }
+.m-source-preview { display:flex; gap:9px; overflow:hidden; border:1px solid var(--m-line); border-radius:12px; background:var(--m-panel-2); }
+.m-source-preview>img { width:86px; min-height:70px; object-fit:cover; background:var(--m-panel); }
+.m-source-preview>div { display:grid; align-content:center; gap:2px; min-width:0; padding:8px 9px 8px 0; }
+.m-source-preview span { color:var(--m-accent); font-size:9px; font-weight:900; letter-spacing:.06em; text-transform:uppercase; }
+.m-source-preview b,.m-source-preview small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.m-source-preview b { color:var(--m-text); font-size:12px; }
+.m-source-preview small { color:var(--m-muted); font-size:10px; }
 .m-form fieldset { margin:0; padding:11px; border:1px solid var(--m-line); border-radius:13px; }
 .m-form legend { padding:0 5px; color:var(--m-muted); font-size:10px; font-weight:750; }
 .m-check-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px; }
@@ -284,5 +294,7 @@ img { display:block; max-width:100%; }
   .m-bottom-nav button span { font-size:8px; }
   .m-metric-grid { gap:5px; }.m-metric { padding:9px; }.m-metric strong { font-size:18px; }
   .m-form-pair { grid-template-columns:1fr; }
+  .m-source-input { flex-direction:column; }
+  .m-source-input .m-secondary { width:100%; justify-content:center; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior:auto!important; animation-duration:.01ms!important; transition-duration:.01ms!important; } }
