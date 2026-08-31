@@ -149,7 +149,15 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     await click(guideButton);
     checks['Guided tour starts from Settings'] = Boolean(document.querySelector('.queue-guide-welcome'));
     await click([...document.querySelectorAll('.queue-guide-language button')].find((node) => /English/.test(node.textContent)));
-    checks['Guided tour highlights Queue controls'] = Boolean(document.querySelector('.queue-guide-highlight'));
+    checks['Guided tour highlights Queue controls'] = Boolean(document.querySelector('.queue-guide-highlight')) && document.querySelectorAll('.queue-guide-veil').length === 4;
+    const guideSteps = ['Requests & approvals', 'Your production day', 'The production pool', 'Schedule blocks', 'Upcoming work', 'Return to Dashboard'];
+    const visitedGuideSteps = [];
+    for (const title of guideSteps) {
+      await click(document.querySelector('.queue-guide-card .scheduler-primary'));
+      visitedGuideSteps.push(document.querySelector('.queue-guide-card h2')?.textContent || '');
+    }
+    checks['Guided tour includes Upcoming and Dashboard navigation'] = guideSteps.every((title, index) => visitedGuideSteps[index] === title)
+      && Boolean(document.querySelector('.queue-dashboard-link'));
     await click(document.querySelector('.queue-guide-skip'));
     if (document.querySelector('.queue-overlay-backdrop')) await click(document.querySelector('.queue-overlay-backdrop'));
 
