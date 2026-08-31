@@ -171,7 +171,7 @@ function AuthGate({ notice, setNotice }) {
 
 /* Queue keeps one compact preferences entry point, now anchored on the
    signed-in person's profile image rather than an anonymous settings gear. */
-function QueueSettings({ isAdmin, isDev, userEmail, avatarUrl, displayLabel, onManageAccounts, onStartGuide, onSignOut }) {
+function QueueSettings({ isAdmin, isDev, userEmail, avatarUrl, displayLabel, onManageAccounts, onStartGuide, onResetQueue, onSignOut }) {
   const { t, language, setLanguage, theme, setTheme } = useQueuePreferences();
   const { accent, setAccent } = usePrefs();
   const [open, setOpen] = useState(false);
@@ -186,7 +186,7 @@ function QueueSettings({ isAdmin, isDev, userEmail, avatarUrl, displayLabel, onM
       <section className="queue-settings-section"><span>{t('language')}</span><div className="queue-language" aria-label="Language"><button type="button" className={language === 'en' ? 'is-on' : ''} onClick={() => setLanguage('en')}>EN</button><button type="button" className={language === 'es' ? 'is-on' : ''} onClick={() => setLanguage('es')}>ES</button></div></section>
       {onManageAccounts ? <section className="queue-settings-section queue-settings-managed"><span>{t('managedAccounts')}</span><button type="button" className="queue-settings-link" onClick={() => { setOpen(false); onManageAccounts(); }}><Settings size={13} />{t('manageAccounts')}</button></section> : null}
       {onStartGuide ? <section className="queue-settings-section queue-settings-managed"><span>{t('howQueueWorks')}</span><button type="button" className="queue-settings-link" onClick={() => { setOpen(false); onStartGuide(); }}><ClipboardList size={13} />{t('startGuide')}</button></section> : null}
-      {isAdmin || isDev ? <section className="queue-settings-section queue-settings-admin"><span>{t('adminOverview')}</span><a className="queue-settings-link" href={`${import.meta.env.BASE_URL}settings.html`}><Settings size={13} />{t('settings')}</a></section> : null}
+      {isAdmin || isDev ? <section className="queue-settings-section queue-settings-admin"><span>{t('adminOverview')}</span><a className="queue-settings-link" href={`${import.meta.env.BASE_URL}settings.html`}><Settings size={13} />{t('settings')}</a>{onResetQueue ? <button type="button" className="queue-settings-danger" onClick={() => { setOpen(false); onResetQueue(); }}><TimerReset size={13} />{t('resetQueue')}</button> : null}</section> : null}
       <footer><small>{t('signedInAs')} {userEmail}</small><button type="button" className="queue-settings-signout" onClick={onSignOut}><LogOut size={13} />{t('signOut')}</button></footer>
     </div></> : null}
   </div>;
@@ -334,6 +334,42 @@ function QueueGuide({ coordinator, step, setStep, onChooseLanguage, onComplete }
     { left: spotlight.right, top: spotlight.top, width: viewportWidth - spotlight.right, height: spotlight.bottom - spotlight.top },
   ] : [];
   return <div className="queue-guide-layer" role="presentation">{veils.map((style, index) => <span key={index} className="queue-guide-veil" style={style} />)}{rect ? <span className="queue-guide-highlight" style={{ left: rect.left - pad, top: rect.top - pad, width: rect.width + pad * 2, height: rect.height + pad * 2 }} /> : null}<section className="queue-guide-card" role="dialog" aria-modal="true" aria-live="polite" style={{ left: cardLeft, top: cardTop, width: cardWidth }}><p className="scheduler-eyebrow">{t('guideStep')} {step + 1} / {steps.length}</p><h2>{t(active?.title)}</h2><p>{t(active?.body)}</p>{active?.extraBody ? <p>{t(active.extraBody)}</p> : null}<footer><button type="button" className="queue-guide-skip" onClick={onComplete}>{t('guideSkip')}</button><div>{step > 0 ? <button type="button" className="scheduler-secondary" onClick={() => setStep(step - 1)}>{t('guideBack')}</button> : null}<button type="button" className="scheduler-primary" onClick={next}>{step >= steps.length - 1 ? t('guideFinish') : t('guideNext')}</button></div></footer></section></div>;
+}
+
+function ResetQueueModal({ onClose, onReset }) {
+  const { t } = useQueuePreferences();
+  const [confirmation, setConfirmation] = useState('');
+  const [resetting, setResetting] = useState(false);
+  const [error, setError] = useState('');
+  const canReset = confirmation.trim() === 'RESET_QUEUE';
+
+  useEffect(() => {
+    const onKey = (event) => { if (event.key === 'Escape' && !resetting) onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose, resetting]);
+
+  const submit = async (event) => {
+    event.preventDefault();
+    if (!canReset) return;
+    setResetting(true);
+    setError('');
+    try {
+      await onReset(confirmation.trim());
+    } catch (reason) {
+      setError(reason.message || 'Queue could not be reset.');
+      setResetting(false);
+    }
+  };
+
+  return <div className="queue-create-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !resetting) onClose(); }}>
+    <form className="queue-create-modal queue-reset-modal" onSubmit={submit} aria-labelledby="queue-reset-title">
+      <header className="queue-create-head"><div><p className="scheduler-eyebrow">Queue</p><h2 id="queue-reset-title">{t('resetQueueTitle')}</h2><small>{t('resetQueueHelp')}</small></div><button type="button" onClick={onClose} aria-label={t('close')} disabled={resetting}><X size={16} /></button></header>
+      <label className="queue-create-note"><span>{t('resetQueueConfirm')}</span><input value={confirmation} autoFocus autoComplete="off" spellCheck="false" onChange={(event) => setConfirmation(event.target.value)} placeholder="RESET_QUEUE" /></label>
+      {error ? <p className="queue-create-error" role="alert">{error}</p> : null}
+      <footer className="queue-create-actions"><button type="button" className="scheduler-secondary" onClick={onClose} disabled={resetting}>{t('cancel')}</button><button type="submit" className="scheduler-danger" disabled={!canReset || resetting}>{resetting ? <LoaderCircle className="queue-spin" size={14} /> : <TimerReset size={14} />}{t('resetQueueAction')}</button></footer>
+    </form>
+  </div>;
 }
 
 function CreatePostModal({ tags = [], onClose, onCreated }) {
@@ -804,6 +840,7 @@ function QueueApp({ user }) {
   const [pickOpen, setPickOpen] = useState(false);
   const [pickBusy, setPickBusy] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
   const [accountSetupOpen, setAccountSetupOpen] = useState(false);
   const [guideOpen, setGuideOpen] = useState(() => !window.localStorage.getItem('sentient.queueGuide.v1'));
   const [guideStep, setGuideStep] = useState(-1);
@@ -1011,6 +1048,18 @@ function QueueApp({ user }) {
   };
   const submit = async () => { try { await draftSavePromiseRef.current.catch(() => {}); const changes = draftRef.current.map((task) => ({ id: task.id, status: task.status, designerEmail: task.designerEmail, scheduledDate: task.scheduledDate, scheduledStartMinutes: task.scheduledStartMinutes, productionPoints: task.productionPoints, recommendedAccounts: task.recommendedAccounts || [] })); const result = await json('/api/dashboard/queue/v2/submit', { method: 'POST', body: new URLSearchParams({ changes: JSON.stringify(changes) }) }); applyDraft([]); await load({ silent: true }); const sent = result.notifications?.sent || 0; const failed = result.notifications?.failed || 0; notify(`${t('scheduleSubmitted')} ${sent} DM${sent === 1 ? '' : 's'} sent${failed ? ` · ${failed} failed` : ''}.`, failed ? 'warning' : 'success'); } catch (err) { notify(err.message, 'error'); } };
   const clearDrafts = async () => { try { await draftSavePromiseRef.current.catch(() => {}); await json('/api/dashboard/queue/v2/drafts/clear', { method: 'POST', body: new URLSearchParams() }); applyDraft([]); await load({ silent: true }); } catch (err) { notify(err.message, 'error'); } };
+  const resetQueue = async (confirmation) => {
+    await json('/api/admin/queue/reset', { method: 'POST', body: new URLSearchParams({ confirmation }) });
+    applyDraft([]);
+    closeDetail();
+    setTickets([]);
+    setTicketsOpen(false);
+    setOverview(null);
+    setOverviewOpen(false);
+    setResetOpen(false);
+    notify(t('queueResetDone'));
+    await load({ silent: true }).catch(() => {});
+  };
   const changeDraftAccounts = (requestId, accounts) => persistDrafts(draftRef.current.map((task) => task.id === requestId ? { ...task, recommendedAccounts: accounts } : task));
   const dragTask = (event) => {
     const id = Number(activeQueueDragId || event.dataTransfer?.getData('queue-task'));
@@ -1166,7 +1215,7 @@ function QueueApp({ user }) {
           <a href={`${import.meta.env.BASE_URL}tracker.html`}>Tracker</a><a href={`${import.meta.env.BASE_URL}insights.html`}>Insights</a><span className="queue-nav-current" aria-current="page">Queue</span><a className="queue-dashboard-link" href={import.meta.env.BASE_URL}><ArrowLeft size={14} />{t('dashboard')}</a>
         </nav>
         <div className="queue-actions-group queue-actions-account">
-          <QueueSettings isAdmin={Boolean(data?.viewer?.isAdmin)} isDev={Boolean(viewer?.is_dev || data?.viewer?.isDev)} userEmail={user.email} avatarUrl={user?.photoURL || data?.viewer?.avatarUrl} displayLabel={user?.displayName || data?.viewer?.displayName} onManageAccounts={() => { accountSetupDismissedRef.current = false; setAccountSetupOpen(true); }} onStartGuide={() => { setGuideStep(-1); setGuideOpen(true); }} onSignOut={() => { clearSsoCookie(); signOut(auth); }} />
+          <QueueSettings isAdmin={Boolean(data?.viewer?.isAdmin)} isDev={Boolean(viewer?.is_dev || data?.viewer?.isDev)} userEmail={user.email} avatarUrl={user?.photoURL || data?.viewer?.avatarUrl} displayLabel={user?.displayName || data?.viewer?.displayName} onManageAccounts={() => { accountSetupDismissedRef.current = false; setAccountSetupOpen(true); }} onStartGuide={() => { setGuideStep(-1); setGuideOpen(true); }} onResetQueue={(data?.viewer?.isAdmin || viewer?.is_dev || data?.viewer?.isDev) ? () => setResetOpen(true) : null} onSignOut={() => { clearSsoCookie(); signOut(auth); }} />
         </div>
       </div>
     </header>
@@ -1184,6 +1233,7 @@ function QueueApp({ user }) {
     {ticketsOpen && data?.viewer ? <TicketPanel tickets={tickets} loading={ticketsLoading} error={ticketsError} onClose={() => setTicketsOpen(false)} onReview={reviewTicket} canReview={Boolean(coordinator)} /> : null}
     {pickOpen ? <PickModal requests={pickPool} hotFallback={pickHotFallback} busy={pickBusy} onClose={() => setPickOpen(false)} onAssign={pickRequest} /> : null}
     {createOpen ? <CreatePostModal tags={data?.tags || []} onClose={() => setCreateOpen(false)} onCreated={async () => { await load({ silent: true }); setCreateOpen(false); notify(t('postCreated')); }} /> : null}
+    {resetOpen ? <ResetQueueModal onClose={() => setResetOpen(false)} onReset={resetQueue} /> : null}
     {accountSetupOpen && data ? <AccountSetupModal onboarding={data.accountOnboarding} accounts={data.accounts || []} onClose={() => { accountSetupDismissedRef.current = true; setAccountSetupOpen(false); }} onSave={saveManagedAccounts} onRequest={requestAccountAccess} /> : null}
     {guideOpen ? <QueueGuide coordinator={Boolean(coordinator)} step={guideStep} setStep={setGuideStep} onChooseLanguage={setLanguage} onComplete={finishGuide} /> : null}
     <Detail task={open} tags={data?.tags || []} canCoordinate={coordinator} isOwner={open?.designerEmail === data?.viewer.email || data?.viewer.isAdmin} isTrainee={Boolean(data?.viewer?.operatingRoles?.includes('trainee') && !data?.viewer?.isAdmin)} pendingTickets={openPendingTickets} onReviewTicket={reviewTicket} notice={detailNotice} history={history} historyLoading={historyLoading} onClose={closeDetail} onAction={action} onCancel={cancel} onEdit={edit} onNotify={resend} onUpload={upload} onDownload={download} onRequestPP={requestPP} onRequestCancellation={requestCancellation} onRequestMove={requestMove} onRequestTraineeReview={requestTraineeReview} />

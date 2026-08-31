@@ -217,6 +217,8 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
 .queue-settings-managed { margin-top:2px; padding-top:11px; border-top:1px solid var(--q-line); }
 .queue-settings-admin>span { font-size:9px; font-weight:850; letter-spacing:.06em; text-transform:uppercase; }
 .queue-settings-link { display:inline-flex; align-items:center; gap:6px; align-self:flex-start; min-height:28px; padding:0 8px; border:1px solid rgba(var(--accent-rgb),.32); border-radius:7px; background:rgba(var(--accent-rgb),.08); color:var(--q-accent); font-size:11px; font-weight:750; }
+.queue-settings-danger { display:inline-flex; align-items:center; gap:6px; align-self:flex-start; min-height:28px; padding:0 8px; border:1px solid rgba(255,107,107,.34); border-radius:7px; background:rgba(255,107,107,.08); color:#ffaaaa; font-size:11px; font-weight:750; }
+.queue-settings-danger:hover,.queue-settings-danger:focus-visible { border-color:rgba(255,107,107,.7); background:rgba(255,107,107,.14); color:#ffd0d0; }
 .queue-settings-admin .queue-user-management { padding:0; }
 .queue-settings-admin .queue-user-management>header { padding:8px 0 9px; }
 .queue-settings-panel>footer { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:2px; padding:10px; border-top:1px solid var(--q-line); }
@@ -781,6 +783,8 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
 .queue-overview-button:hover,.queue-overview-button:focus-visible,.queue-overview-button.is-active { border-color:rgba(var(--accent-rgb),.5); background:rgba(var(--accent-rgb),.1); color:var(--q-accent); }
 .queue-create-backdrop { position:fixed; inset:0; z-index:120; display:grid; place-items:center; padding:20px; background:rgba(0,0,0,.64); backdrop-filter:blur(6px); }
 .queue-create-modal { display:grid; gap:13px; width:min(640px,100%); max-height:calc(100dvh - 40px); overflow:auto; padding:18px; border:1px solid rgba(var(--accent-rgb),.32); border-radius:15px; background:var(--q-panel); box-shadow:0 30px 90px rgba(0,0,0,.7); }
+.queue-reset-modal { width:min(560px,100%); border-color:rgba(255,107,107,.38); }
+.queue-reset-modal .scheduler-danger { width:auto; min-height:34px; margin-top:0; }
 .queue-create-head { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; padding-bottom:12px; border-bottom:1px solid var(--q-line); }
 .queue-create-head h2 { margin:3px 0 4px; color:var(--q-text); font-size:20px; letter-spacing:-.02em; }
 .queue-create-head small { display:block; max-width:480px; color:var(--q-muted); font-size:10px; line-height:1.45; }
