@@ -88,7 +88,7 @@ COPY.es.poolDropHint = 'Suelta aquí un request programado para devolverlo al po
 COPY.es.returnedToPool = 'Request devuelto al pool.';
 Object.assign(COPY.en, {
   tickets: 'Requests', ticketInbox: 'Approval inbox', myRequests: 'My requests', ticketsPending: 'Pending', ticketsApproved: 'Approved', ticketsRejected: 'Rejected', approve: 'Approve', reject: 'Reject',
-  pick: 'Pick', pickTitle: 'Pick a request', pickHelp: 'Choose a request from the production pool.', hotPickHelp: 'There are no regular pool requests. Choose the highest-rate HOT post.', nextRequest: 'Next', assignRequest: 'Assign', noPickRequests: 'There are no requests available in the pool or HOT list.', pickedRequest: 'Request assigned to your schedule.', pickPriority: 'Priority', hotRate: 'HOT rate',
+  pick: 'Pick', pickTitle: 'Pick a request', pickHelp: 'Choose a request from the production pool.', hotPickHelp: 'HOT posts are available for temporary test assignments. You can also continue to regular pool work.', nextRequest: 'Next', assignRequest: 'Assign', noPickRequests: 'There are no requests available in the pool or HOT list.', pickedRequest: 'Request assigned to your schedule.', pickPriority: 'Priority', hotRate: 'HOT rate',
   meeting: 'Meeting', break: 'Break', promo: 'Promo', focus: 'Focus time', other: 'Other', addTime: 'Add personal time', blockTitle: 'Title',
   startTime: 'Start time', duration: 'Duration', noteOptional: 'Note (optional)', requestApproval: 'Request approval', pendingApproval: 'Pending approval',
   approved: 'Approved', rejected: 'Rejected', ppRevision: 'PP revision', cancellationRequest: 'Cancellation', requestPPChange: 'Request PP change',
@@ -101,7 +101,7 @@ Object.assign(COPY.en, {
 });
 Object.assign(COPY.es, {
   tickets: 'Solicitudes', ticketInbox: 'Bandeja de aprobación', myRequests: 'Mis solicitudes', ticketsPending: 'Pendientes', ticketsApproved: 'Aprobadas', ticketsRejected: 'Rechazadas', approve: 'Aprobar', reject: 'Rechazar',
-  pick: 'Pick', pickTitle: 'Elegir un request', pickHelp: 'Elige un request del pool de producción.', hotPickHelp: 'No hay requests regulares en el pool. Elige el post HOT con mayor rate.', nextRequest: 'Siguiente', assignRequest: 'Asignar', noPickRequests: 'No hay requests disponibles en el pool ni en HOT.', pickedRequest: 'Request asignado a tu agenda.', pickPriority: 'Prioridad', hotRate: 'Rate HOT',
+  pick: 'Pick', pickTitle: 'Elegir un request', pickHelp: 'Elige un request del pool de producción.', hotPickHelp: 'Los posts HOT están disponibles para asignaciones de prueba temporales. También puedes continuar con el trabajo regular del pool.', nextRequest: 'Siguiente', assignRequest: 'Asignar', noPickRequests: 'No hay requests disponibles en el pool ni en HOT.', pickedRequest: 'Request asignado a tu agenda.', pickPriority: 'Prioridad', hotRate: 'Rate HOT',
   meeting: 'Meeting', break: 'Break', promo: 'Promo', focus: 'Tiempo de enfoque', other: 'Otro', addTime: 'Agregar tiempo personal', blockTitle: 'Título',
   startTime: 'Hora de inicio', duration: 'Duración', noteOptional: 'Nota (opcional)', requestApproval: 'Solicitar aprobación', pendingApproval: 'Pendiente de aprobación',
   approved: 'Aprobado', rejected: 'Rechazado', ppRevision: 'Revisión de PPs', cancellationRequest: 'Cancelación', requestPPChange: 'Solicitar cambio de PPs',
@@ -1061,21 +1061,24 @@ function QueueApp({ user }) {
     const minutesPerPP = Number(data?.viewer?.minutesPerPP || 10);
     const forViewer = (task) => ({ ...task, minutesPerPP, durationMinutes: Number(task.productionPoints || 1) * minutesPerPP });
     const poolRequests = (data?.pickRequests || []).filter((task) => task.status === 'pool').map(forViewer);
-    const regularRequests = poolRequests.filter((task) => !(task.isHot || task.tags?.includes('hot')));
-    if (regularRequests.length) return poolRequests;
-    if (poolRequests.length) return [...poolRequests].sort((a, b) => (Number(b.hotMultiplier) || 0) - (Number(a.hotMultiplier) || 0));
-    return (data?.hotPickRequests || []).filter((task) => task.status === 'pool').map(forViewer).sort((a, b) => (Number(b.hotMultiplier) || 0) - (Number(a.hotMultiplier) || 0));
+    const hotRequests = (data?.hotPickRequests || []).filter((task) => task.status === 'pool').map(forViewer)
+      .sort((a, b) => (Number(b.hotMultiplier) || 0) - (Number(a.hotMultiplier) || 0));
+    const hotIds = new Set(hotRequests.map((task) => String(task.id)));
+    const regularRequests = poolRequests.filter((task) => !hotIds.has(String(task.id)) && !(task.isHot || task.tags?.includes('hot')));
+    return [...hotRequests, ...regularRequests];
   }, [data]);
   const pickHotFallback = useMemo(() => {
-    const poolRequests = (data?.pickRequests || []).filter((task) => task.status === 'pool');
-    return poolRequests.length > 0 && poolRequests.every((task) => task.isHot || task.tags?.includes('hot')) && pickPool.length > 0;
+    return (data?.hotPickRequests || []).some((task) => task.status === 'pool') && pickPool.length > 0;
   }, [data, pickPool]);
   const pickAvailable = !coordinator && !assigned.some((task) => ['scheduled', 'in_progress'].includes(task.status)) && pickPool.length > 0;
   const toggleTickets = async () => { const next = !ticketsOpen; setTicketsOpen(next); if (next) await loadTickets(); };
   const pickRequest = async (task) => {
     setPickBusy(true);
     try {
-      const result = await json('/api/dashboard/queue/v2/pick', { method: 'POST', body: new URLSearchParams({ request_id: String(task.id) }) });
+      const body = task.isHotCandidate
+        ? new URLSearchParams({ hot_account: task.post.account, hot_shortcode: task.post.shortcode })
+        : new URLSearchParams({ request_id: String(task.id) });
+      const result = await json('/api/dashboard/queue/v2/pick', { method: 'POST', body });
       setPickOpen(false);
       await load({ silent: true });
       notify(t('pickedRequest'));
