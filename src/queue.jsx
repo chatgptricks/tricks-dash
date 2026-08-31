@@ -95,6 +95,7 @@ Object.assign(COPY.en, {
   requestCancellation: 'Request cancellation', requestMove: 'Request move', moveRequest: 'Move request', moveTo: 'Move to', moveHelp: 'Choose an earlier or later time for this block.', requestedPP: 'Requested PP', requestReason: 'Reason (optional)', sendRequest: 'Send request',
   ticketCreated: 'Request sent for approval.', ticketReviewed: 'Request reviewed.', noPendingTickets: 'No pending requests.', noApprovedTickets: 'No approved requests.', noRejectedTickets: 'No rejected requests.',
   rightClickHint: 'Right-click your scheduler row to add meetings, breaks, promos, or focus time.', personalTime: 'Personal time',
+  managedAccounts: 'Managed Sentient accounts', manageAccounts: 'Manage accounts', accountSetupTitle: 'Set up your managed accounts', accountSetupHelp: 'Choose every Sentient account you can create for. Coordinators can then recommend the right account when they assign work.', saveManagedAccounts: 'Save my accounts', managedAccountsSaved: 'Managed accounts saved.', accountRequestTitle: 'Need another account?', accountRequestHelp: 'Request a missing account or one that has not been added to Sentient Dash yet. Admins and VCs will review it in Queue.', requestedAccounts: 'Account handles', accountRequestPlaceholder: 'e.g. @newaccount, @anotheraccount', accountAccessRequest: 'Account access request', accountRequestSent: 'Account request sent for approval.', accountRequestReason: 'Note for coordinators (optional)',
 });
 Object.assign(COPY.es, {
   tickets: 'Solicitudes', ticketInbox: 'Bandeja de aprobación', myRequests: 'Mis solicitudes', ticketsPending: 'Pendientes', ticketsApproved: 'Aprobadas', ticketsRejected: 'Rechazadas', approve: 'Aprobar', reject: 'Rechazar',
@@ -105,6 +106,7 @@ Object.assign(COPY.es, {
   requestCancellation: 'Solicitar cancelación', requestMove: 'Solicitar mover', moveRequest: 'Solicitud de movimiento', moveTo: 'Mover a', moveHelp: 'Elige una hora más temprana o más tarde para este bloque.', requestedPP: 'PPs solicitados', requestReason: 'Motivo (opcional)', sendRequest: 'Enviar solicitud',
   ticketCreated: 'Solicitud enviada para aprobación.', ticketReviewed: 'Solicitud revisada.', noPendingTickets: 'No hay solicitudes pendientes.', noApprovedTickets: 'No hay solicitudes aprobadas.', noRejectedTickets: 'No hay solicitudes rechazadas.',
   rightClickHint: 'Haz click derecho en tu fila para agregar meetings, breaks, promos o tiempo de enfoque.', personalTime: 'Tiempo personal',
+  managedAccounts: 'Cuentas Sentient que manejas', manageAccounts: 'Gestionar cuentas', accountSetupTitle: 'Configura las cuentas que manejas', accountSetupHelp: 'Elige todas las cuentas Sentient para las que puedes crear. Así los coordinadores podrán recomendar la cuenta correcta al asignarte trabajo.', saveManagedAccounts: 'Guardar mis cuentas', managedAccountsSaved: 'Cuentas administradas guardadas.', accountRequestTitle: '¿Necesitas otra cuenta?', accountRequestHelp: 'Solicita una cuenta que falte o que aún no se haya agregado a Sentient Dash. Los admins y VCs la revisarán en Queue.', requestedAccounts: 'Handles de cuentas', accountRequestPlaceholder: 'ej. @nuevacuenta, @otracuenta', accountAccessRequest: 'Solicitud de acceso a cuenta', accountRequestSent: 'Solicitud de cuenta enviada para aprobación.', accountRequestReason: 'Nota para coordinadores (opcional)',
 });
 
 Object.assign(COPY.en, {
@@ -156,7 +158,7 @@ function AuthGate({ notice, setNotice }) {
    account info, and (for admins) the same account-assignment tool that used
    to only be reachable inside Admin Tools -> User Management. Meant to be
    the same shape as the Settings button on Dashboard/Tracker/Insights. */
-function QueueSettings({ isAdmin, isDev, userEmail, onSignOut }) {
+function QueueSettings({ isAdmin, isDev, userEmail, onManageAccounts, onSignOut }) {
   const { t, language, setLanguage, theme, setTheme } = useQueuePreferences();
   const { accent, setAccent } = usePrefs();
   const [open, setOpen] = useState(false);
@@ -167,6 +169,7 @@ function QueueSettings({ isAdmin, isDev, userEmail, onSignOut }) {
       <section className="queue-settings-section"><span>{t('accentColor')}</span><div className="queue-accent-picker">{ACCENT_CHOICES.map((value) => <button type="button" key={value} className={`accent-${value}${accent === value ? ' is-on' : ''}`} onClick={() => setAccent(value)} aria-label={`${value} accent`} />)}<label className="queue-custom-color" title={t('customColor')}><input type="color" value={accentHex(accent)} onChange={(event) => setAccent(event.target.value)} aria-label={t('customColor')} /><span>{t('custom')}</span></label></div></section>
       <section className="queue-settings-section"><span>{t('theme')}</span><div className="queue-settings-segment"><button type="button" className={theme === 'dark' ? 'is-on' : ''} onClick={() => setTheme('dark')}><Moon size={13} />{t('darkTheme')}</button><button type="button" className={theme === 'light' ? 'is-on' : ''} onClick={() => setTheme('light')}><Sun size={13} />{t('lightTheme')}</button></div></section>
       <section className="queue-settings-section"><span>{t('language')}</span><div className="queue-language" aria-label="Language"><button type="button" className={language === 'en' ? 'is-on' : ''} onClick={() => setLanguage('en')}>EN</button><button type="button" className={language === 'es' ? 'is-on' : ''} onClick={() => setLanguage('es')}>ES</button></div></section>
+      {onManageAccounts ? <section className="queue-settings-section queue-settings-managed"><span>{t('managedAccounts')}</span><button type="button" className="queue-settings-link" onClick={() => { setOpen(false); onManageAccounts(); }}><Settings size={13} />{t('manageAccounts')}</button></section> : null}
       {isAdmin || isDev ? <section className="queue-settings-section queue-settings-admin"><span>{t('adminOverview')}</span><a className="queue-settings-link" href={`${import.meta.env.BASE_URL}settings.html`}><Settings size={13} />{t('settings')}</a></section> : null}
       <footer><small>{t('signedInAs')} {userEmail}</small><button type="button" className="queue-settings-signout" onClick={onSignOut}><LogOut size={13} />{t('signOut')}</button></footer>
     </div></> : null}
@@ -217,6 +220,46 @@ function TimeBlockForm({ form, setForm, busy, onClose, onSubmit }) {
   if (!form) return null;
   const valid = form.durationMinutes >= 10 && form.durationMinutes % 10 === 0 && form.startMinutes + form.durationMinutes <= QUEUE_DAY_END;
   return <><button type="button" className="scheduler-context-backdrop" aria-label={t('close')} onClick={onClose} /><form className="scheduler-time-form" style={{ left: form.x, top: form.y }} onSubmit={(event) => { event.preventDefault(); if (valid) onSubmit(); }}><header><div><p className="scheduler-eyebrow">{t('personalTime')}</p><h3>{t('addTime')}</h3><small>{displayDate(form.scheduledDate, language)}</small></div><button type="button" onClick={onClose} aria-label={t('close')}><X size={14} /></button></header><div className="scheduler-time-form-grid"><label>{t('meeting')} / {t('break')}<select value={form.category} onChange={(event) => setForm((current) => ({ ...current, category: event.target.value }))}><option value="meeting">{t('meeting')}</option><option value="break">{t('break')}</option><option value="promo">{t('promo')}</option><option value="focus">{t('focus')}</option><option value="other">{t('other')}</option></select></label><label>{t('startTime')}<input type="time" step="600" value={time(form.startMinutes)} onChange={(event) => setForm((current) => ({ ...current, startMinutes: Math.round(minutesFromTime(event.target.value) / 10) * 10 }))} /></label><label>{t('duration')}<input type="number" min="10" max={Math.max(10, QUEUE_DAY_END - form.startMinutes)} step="10" value={form.durationMinutes} onChange={(event) => setForm((current) => ({ ...current, durationMinutes: Number(event.target.value) }))} /></label><label>{t('blockTitle')}<input value={form.title} maxLength="80" placeholder={t(form.category)} onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} /></label><label className="is-wide">{t('noteOptional')}<textarea value={form.note} maxLength="500" onChange={(event) => setForm((current) => ({ ...current, note: event.target.value }))} /></label></div><button type="submit" className="scheduler-primary" disabled={busy || !valid}>{busy ? <LoaderCircle className="queue-spin" size={14} /> : <CalendarPlus size={14} />}{t('requestApproval')}</button></form></>;
+}
+
+function AccountSetupModal({ onboarding, accounts = [], onClose, onSave, onRequest }) {
+  const { t } = useQueuePreferences();
+  const selectedKey = (onboarding?.selectedAccounts || []).join('|');
+  const [selected, setSelected] = useState(() => new Set(onboarding?.selectedAccounts || []));
+  const [requested, setRequested] = useState('');
+  const [reason, setReason] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [requesting, setRequesting] = useState(false);
+  const [error, setError] = useState('');
+  useEffect(() => { setSelected(new Set(onboarding?.selectedAccounts || [])); }, [selectedKey]);
+  const toggle = (handle) => setSelected((current) => {
+    const next = new Set(current);
+    if (next.has(handle)) next.delete(handle); else next.add(handle);
+    return next;
+  });
+  const save = async () => {
+    setSaving(true); setError('');
+    try { await onSave([...selected]); onClose(); }
+    catch (err) { setError(err.message || 'Could not save managed accounts.'); }
+    finally { setSaving(false); }
+  };
+  const requestAccess = async () => {
+    const handles = requested.split(/[\n,]/).map((value) => value.trim()).filter(Boolean);
+    if (!handles.length) { setError(t('accountRequestPlaceholder')); return; }
+    setRequesting(true); setError('');
+    try { await onRequest(handles, reason); setRequested(''); setReason(''); }
+    catch (err) { setError(err.message || 'Could not send account request.'); }
+    finally { setRequesting(false); }
+  };
+  return <div className="queue-create-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !saving && !requesting) onClose(); }}>
+    <section className="queue-create-modal queue-account-setup-modal" role="dialog" aria-modal="true" aria-labelledby="queue-account-setup-title">
+      <header className="queue-create-head"><div><p className="scheduler-eyebrow">Queue</p><h2 id="queue-account-setup-title">{t('accountSetupTitle')}</h2><small>{t('accountSetupHelp')}</small></div><button type="button" onClick={onClose} aria-label={t('close')} disabled={saving || requesting}><X size={16} /></button></header>
+      <div className="queue-account-choice-grid">{accounts.map((account) => <label key={account.handle} className={`queue-account-choice${selected.has(account.handle) ? ' is-selected' : ''}`}><input type="checkbox" checked={selected.has(account.handle)} onChange={() => toggle(account.handle)} /><span><b>@{account.handle}</b><small>{account.label || account.handle}</small></span><Check size={14} /></label>)}{!accounts.length ? <p className="scheduler-empty">{t('noAccounts')}</p> : null}</div>
+      <section className="queue-account-request"><header><h3>{t('accountRequestTitle')}</h3><p>{t('accountRequestHelp')}</p></header><label className="queue-create-note"><span>{t('requestedAccounts')}</span><input value={requested} onChange={(event) => setRequested(event.target.value)} placeholder={t('accountRequestPlaceholder')} /></label><label className="queue-create-note"><span>{t('accountRequestReason')}</span><textarea value={reason} rows={2} onChange={(event) => setReason(event.target.value)} /></label><button type="button" className="scheduler-secondary" disabled={requesting || !requested.trim()} onClick={requestAccess}>{requesting ? <LoaderCircle className="queue-spin" size={14} /> : <Send size={14} />}{t('sendRequest')}</button></section>
+      {error ? <p className="queue-create-error" role="alert">{error}</p> : null}
+      <footer className="queue-create-actions"><button type="button" className="scheduler-secondary" onClick={onClose} disabled={saving || requesting}>{t('cancel')}</button><button type="button" className="scheduler-primary" onClick={save} disabled={saving || requesting}>{saving ? <LoaderCircle className="queue-spin" size={14} /> : <Check size={14} />}{t('saveManagedAccounts')}</button></footer>
+    </section>
+  </div>;
 }
 
 function CreatePostModal({ tags = [], onClose, onCreated }) {
@@ -356,8 +399,9 @@ function TicketPanel({ tickets, loading, error, onClose, onReview, canReview }) 
   ];
   const emptyMessage = tabs.find((item) => item.status === tab)?.empty || 'noPendingTickets';
   const review = async (ticket, action) => { setBusy(`${ticket.id}:${action}`); try { await onReview(ticket.id, action); } finally { setBusy(''); } };
-  const ticketTitle = (ticket) => ticket.type === 'move' ? t('moveRequest') : ticket.type === 'time_block' ? (ticket.title || t(ticket.category || 'other')) : ticket.type === 'pp_revision' ? t('ppRevision') : t('cancellationRequest');
+  const ticketTitle = (ticket) => ticket.type === 'account_access' ? t('accountAccessRequest') : ticket.type === 'move' ? t('moveRequest') : ticket.type === 'time_block' ? (ticket.title || t(ticket.category || 'other')) : ticket.type === 'pp_revision' ? t('ppRevision') : t('cancellationRequest');
   const ticketMeta = (ticket) => {
+    if (ticket.type === 'account_access') return (ticket.requestedAccounts || []).map((account) => `@${account}`).join(' · ') || t('noAccounts');
     if (ticket.type === 'move') {
       const account = ticket.request?.post?.account ? `@${ticket.request.post.account}` : t('post');
       return `${account} · ${ticket.scheduledDate || '—'} · ${time(ticket.scheduledStartMinutes ?? 0)}`;
@@ -374,7 +418,7 @@ function TicketPanel({ tickets, loading, error, onClose, onReview, canReview }) 
       {loading ? <div className="queue-ticket-state"><LoaderCircle className="queue-spin" />{t('loadingSchedule')}</div> : null}
       {error ? <p className="queue-ticket-error">{error}</p> : null}
       {!loading && !items.length ? <div className="queue-ticket-empty"><ClipboardList size={20} /><span>{t(emptyMessage)}</span></div> : null}
-      {items.map((ticket) => <article key={ticket.id} className={`ticket-${ticket.type} status-${ticket.status}`}><header><span>{ticket.type === 'time_block' ? <CalendarPlus size={14} /> : ticket.type === 'pp_revision' ? <TimerReset size={14} /> : ticket.type === 'move' ? <TimerReset size={14} /> : <Ban size={14} />}</span><div><b>{ticketTitle(ticket)}</b><small>{displayName(ticket.requesterEmail)} · {displayTimestamp(ticket.createdAt, language)}</small></div><i>{ticket.status === 'pending' ? t('ticketsPending') : t(ticket.status)}</i></header><p>{ticketMeta(ticket)}</p>{ticket.reason ? <blockquote>{ticket.reason}</blockquote> : null}{ticket.status === 'pending' && canReview ? <footer><button type="button" className="is-approve" disabled={Boolean(busy)} onClick={() => review(ticket, 'approve')}>{busy === `${ticket.id}:approve` ? <LoaderCircle className="queue-spin" size={13} /> : <Check size={13} />}{t('approve')}</button><button type="button" className="is-reject" disabled={Boolean(busy)} onClick={() => review(ticket, 'reject')}>{busy === `${ticket.id}:reject` ? <LoaderCircle className="queue-spin" size={13} /> : <X size={13} />}{t('reject')}</button></footer> : ticket.status === 'pending' ? <small className="ticket-reviewer">{t('pendingApproval')}</small> : <small className="ticket-reviewer">{ticket.reviewerEmail ? displayName(ticket.reviewerEmail) : '—'} · {ticket.reviewedAt ? displayTimestamp(ticket.reviewedAt, language) : ''}</small>}</article>)}
+      {items.map((ticket) => <article key={ticket.id} className={`ticket-${ticket.type} status-${ticket.status}`}><header><span>{ticket.type === 'account_access' ? <Settings size={14} /> : ticket.type === 'time_block' ? <CalendarPlus size={14} /> : ticket.type === 'pp_revision' ? <TimerReset size={14} /> : ticket.type === 'move' ? <TimerReset size={14} /> : <Ban size={14} />}</span><div><b>{ticketTitle(ticket)}</b><small>{displayName(ticket.requesterEmail)} · {displayTimestamp(ticket.createdAt, language)}</small></div><i>{ticket.status === 'pending' ? t('ticketsPending') : t(ticket.status)}</i></header><p>{ticketMeta(ticket)}</p>{ticket.reason ? <blockquote>{ticket.reason}</blockquote> : null}{ticket.status === 'pending' && canReview ? <footer><button type="button" className="is-approve" disabled={Boolean(busy)} onClick={() => review(ticket, 'approve')}>{busy === `${ticket.id}:approve` ? <LoaderCircle className="queue-spin" size={13} /> : <Check size={13} />}{t('approve')}</button><button type="button" className="is-reject" disabled={Boolean(busy)} onClick={() => review(ticket, 'reject')}>{busy === `${ticket.id}:reject` ? <LoaderCircle className="queue-spin" size={13} /> : <X size={13} />}{t('reject')}</button></footer> : ticket.status === 'pending' ? <small className="ticket-reviewer">{t('pendingApproval')}</small> : <small className="ticket-reviewer">{ticket.reviewerEmail ? displayName(ticket.reviewerEmail) : '—'} · {ticket.reviewedAt ? displayTimestamp(ticket.reviewedAt, language) : ''}</small>}</article>)}
     </div>
   </aside></>;
 }
@@ -672,6 +716,7 @@ function QueueApp({ user }) {
   const [pickOpen, setPickOpen] = useState(false);
   const [pickBusy, setPickBusy] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const [accountSetupOpen, setAccountSetupOpen] = useState(false);
   const [overviewOpen, setOverviewOpen] = useState(false);
   const [overview, setOverview] = useState(null);
   const [overviewLoading, setOverviewLoading] = useState(false);
@@ -688,6 +733,7 @@ function QueueApp({ user }) {
   const liveRefreshTimerRef = useRef(null);
   const ticketsOpenRef = useRef(ticketsOpen);
   const loadedOnceRef = useRef(false);
+  const accountSetupDismissedRef = useRef(false);
 
   const notify = useCallback((message, type = 'success') => { setToast({ message, type }); window.setTimeout(() => setToast(null), 6000); }, []);
   const applyDraft = useCallback((next) => { draftRef.current = next; setDraft(next); if (next.length) window.localStorage.setItem(DRAFT_KEY, JSON.stringify(next)); else window.localStorage.removeItem(DRAFT_KEY); }, []);
@@ -697,6 +743,7 @@ function QueueApp({ user }) {
     try {
       const next = await json(`/api/dashboard/queue/v2?date=${date}&archive=${archive ? 'true' : 'false'}`);
       setData(next);
+      if (!next.accountOnboarding?.completed && !accountSetupDismissedRef.current) setAccountSetupOpen(true);
       loadedOnceRef.current = true;
       liveRevisionRef.current = Math.max(liveRevisionRef.current, Number(next.liveRevision) || 0);
       const ownDrafts = (next.liveDrafts || []).filter((task) => task.draftCoordinatorEmail === next.viewer.email);
@@ -921,6 +968,18 @@ function QueueApp({ user }) {
       return false;
     }
   };
+  const saveManagedAccounts = async (accounts) => {
+    const result = await json('/api/dashboard/queue/v2/account-onboarding', { method: 'POST', body: new URLSearchParams({ accounts: JSON.stringify(accounts) }) });
+    accountSetupDismissedRef.current = true;
+    await load({ silent: true });
+    notify(t('managedAccountsSaved'));
+    return result;
+  };
+  const requestAccountAccess = async (accounts, reason) => {
+    const result = await json('/api/dashboard/queue/v2/tickets/account-access', { method: 'POST', body: new URLSearchParams({ accounts: JSON.stringify(accounts), reason }) });
+    notify(t('accountRequestSent'));
+    return result;
+  };
   const requestPP = async (productionPoints, reason) => {
     try {
       await json('/api/dashboard/queue/v2/tickets/pp-revision', { method: 'POST', body: new URLSearchParams({ request_id: String(open.id), production_points: String(productionPoints), reason }) });
@@ -989,7 +1048,7 @@ function QueueApp({ user }) {
           <a href={`${import.meta.env.BASE_URL}tracker.html`}>Tracker</a><a href={`${import.meta.env.BASE_URL}insights.html`}>Insights</a><span className="queue-nav-current" aria-current="page">Queue</span><a href={import.meta.env.BASE_URL}><ArrowLeft size={14} />{t('dashboard')}</a>
         </nav>
         <div className="queue-actions-group queue-actions-account">
-          <QueueSettings isAdmin={Boolean(data?.viewer?.isAdmin)} isDev={Boolean(viewer?.is_dev || data?.viewer?.isDev)} userEmail={user.email} onSignOut={() => { clearSsoCookie(); signOut(auth); }} />
+          <QueueSettings isAdmin={Boolean(data?.viewer?.isAdmin)} isDev={Boolean(viewer?.is_dev || data?.viewer?.isDev)} userEmail={user.email} onManageAccounts={() => { accountSetupDismissedRef.current = false; setAccountSetupOpen(true); }} onSignOut={() => { clearSsoCookie(); signOut(auth); }} />
         </div>
       </div>
     </header>
@@ -1007,6 +1066,7 @@ function QueueApp({ user }) {
     {ticketsOpen && data?.viewer ? <TicketPanel tickets={tickets} loading={ticketsLoading} error={ticketsError} onClose={() => setTicketsOpen(false)} onReview={reviewTicket} canReview={Boolean(coordinator)} /> : null}
     {pickOpen ? <PickModal requests={pickPool} hotFallback={pickHotFallback} busy={pickBusy} onClose={() => setPickOpen(false)} onAssign={pickRequest} /> : null}
     {createOpen ? <CreatePostModal tags={data?.tags || []} onClose={() => setCreateOpen(false)} onCreated={async () => { await load({ silent: true }); setCreateOpen(false); notify(t('postCreated')); }} /> : null}
+    {accountSetupOpen && data ? <AccountSetupModal onboarding={data.accountOnboarding} accounts={data.accounts || []} onClose={() => { accountSetupDismissedRef.current = true; setAccountSetupOpen(false); }} onSave={saveManagedAccounts} onRequest={requestAccountAccess} /> : null}
     <Detail task={open} tags={data?.tags || []} canCoordinate={coordinator} isOwner={open?.designerEmail === data?.viewer.email || data?.viewer.isAdmin} pendingTickets={openPendingTickets} onReviewTicket={reviewTicket} notice={detailNotice} history={history} historyLoading={historyLoading} onClose={closeDetail} onAction={action} onCancel={cancel} onEdit={edit} onNotify={resend} onUpload={upload} onDownload={download} onRequestPP={requestPP} onRequestCancellation={requestCancellation} onRequestMove={requestMove} />
     <DevRolePreview isDev={Boolean(viewer?.is_dev || data?.viewer?.isDev)} />
   </main>;

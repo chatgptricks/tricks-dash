@@ -29,6 +29,8 @@ const payload = {
     { email: 'louis@sentientagency.io', isAdmin: false, roles: ['sales', 'pd'], isQueueDesigner: true, accounts: [] },
     { email: 'trainee@sentientagency.io', isAdmin: false, roles: ['trainee', 'pd'], minutesPerPP: 16, isQueueDesigner: true, accounts: [] },
   ],
+  accounts: [{ handle: 'chatgptricks', label: 'ChatGPTricks' }],
+  accountOnboarding: { completed: false, selectedAccounts: [] },
   tags: ['copy'], priorities: ['low', 'medium', 'high', 'urgent'], hours: { start: 0, end: 1440 },
 };
 
@@ -48,6 +50,10 @@ const stubFetch = async (url, options = {}) => {
   if (value.includes('/api/admin/queue/designer-accounts')) return response({ designers: [{ email: 'esteban@sentientagency.io', accounts: ['chatgptricks'] }] });
   if (value.includes('/api/admin/accounts')) return response({ accounts: [{ handle: 'chatgptricks', group: 'sentient', is_active: true }] });
   if (value.includes('/api/dashboard/queue/v2/admin-report')) return response({ totals: {}, priorities: {}, designers: [], assignedPosts: [active, scheduled] });
+  if (value.includes('/api/dashboard/queue/v2/account-onboarding')) {
+    payload.accountOnboarding = { completed: true, selectedAccounts: JSON.parse(options.body.get('accounts') || '[]') };
+    return response({ ok: true, accountOnboarding: payload.accountOnboarding });
+  }
   if (value.includes('/api/dashboard/queue/v2/tickets/time-block')) {
     const block = { id: 71, type: 'time_block', status: 'pending', requesterEmail: 'esteban@sentientagency.io', category: options.body.get('category'), title: options.body.get('title') || 'Meeting', scheduledDate: options.body.get('scheduled_date'), scheduledStartMinutes: Number(options.body.get('scheduled_start_minutes')), durationMinutes: Number(options.body.get('duration_minutes')), reason: options.body.get('note') || '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
     createdTimeBlock = true;
@@ -121,6 +127,11 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
       await new Promise((resolve) => setTimeout(resolve, 250));
     });
     checks['Queue renders'] = Boolean(document.querySelector('.scheduler-canvas'));
+    checks['First-use account setup renders'] = Boolean(document.querySelector('.queue-account-setup-modal'));
+    await click(document.querySelector('.queue-account-choice'));
+    await click(document.querySelector('.queue-account-setup-modal .scheduler-primary'));
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 50)); });
+    checks['Account setup persists selection'] = payload.accountOnboarding.completed && payload.accountOnboarding.selectedAccounts.includes('chatgptricks') && !document.querySelector('.queue-account-setup-modal');
     checks['24 hourly labels render'] = document.querySelectorAll('.scheduler-time-head b').length === 24;
     checks['Now renders once'] = document.querySelectorAll('.scheduler-now-global').length === 1 && document.querySelectorAll('.scheduler-now').length === 0;
     checks['Center Now control renders'] = Boolean(document.querySelector('.scheduler-center-now'));

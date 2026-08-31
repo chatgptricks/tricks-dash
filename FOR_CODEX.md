@@ -324,3 +324,21 @@ today:
 - Once merged, this handover only needs to exist once — fold the two copies
   into a single top-level `FOR_CODEX.md` instead of leaving them to drift
   apart.
+
+## Queue operational reset and account onboarding
+
+- `POST /api/admin/queue/reset` is the deliberate clean-start control for
+  admins/devs. It requires the exact form confirmation `RESET_QUEUE` and
+  deletes only Queue operational state: legacy assignments/events, Queue
+  requests/events, drafts, tickets, Queue attachments, managed-account
+  selections, and first-use onboarding markers. It preserves users, roles,
+  Sentient accounts, source posts, Dashboard, Tracker, and settings.
+- The reset also writes `scheduler_state.queue_hot_routing_start` at the
+  reset timestamp. That prevents historic HOT posts from immediately
+  repopulating the fresh pool; only HOT detections occurring afterwards are
+  eligible.
+- Every user sees a one-time Queue modal to select the Sentient accounts they
+  manage. They can save an empty selection, edit it later from Queue Settings,
+  or submit a missing-account request. Those requests appear in the existing
+  Queue approval inbox; approving one attaches active Sentient accounts to
+  that user immediately.
