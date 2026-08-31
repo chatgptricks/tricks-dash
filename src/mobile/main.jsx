@@ -397,7 +397,12 @@ function QueueView({ viewer }) {
   const assigned = useMemo(() => { const map = new Map((data?.assignedRequests || []).map((task) => [task.id, task])); (data?.liveDrafts || []).filter((task) => task.designerEmail === data?.viewer?.email).forEach((task) => map.set(task.id, task)); return [...map.values()].sort((a, b) => `${a.scheduledDate}${String(a.scheduledStartMinutes || 0).padStart(4, '0')}`.localeCompare(`${b.scheduledDate}${String(b.scheduledStartMinutes || 0).padStart(4, '0')}`)); }, [data]);
   const pool = useMemo(() => { const map = new Map((data?.requests || []).filter((task) => task.status === 'pool').map((task) => [task.id, task])); (data?.liveDrafts || []).forEach((task) => task.status === 'pool' ? map.set(task.id, task) : map.delete(task.id)); return [...map.values()].sort((a, b) => (priorityOrder[a.priority] ?? 2) - (priorityOrder[b.priority] ?? 2)); }, [data]);
   const team = useMemo(() => [...(data?.planningRequests || []), ...(data?.liveDrafts || [])].filter((task, index, rows) => task.designerEmail && ['scheduled', 'in_progress', 'completed'].includes(task.status) && rows.findLastIndex((item) => item.id === task.id) === index).sort((a, b) => `${a.scheduledDate}${String(a.scheduledStartMinutes || 0).padStart(4, '0')}`.localeCompare(`${b.scheduledDate}${String(b.scheduledStartMinutes || 0).padStart(4, '0')}`)), [data]);
-  const pickItems = data?.pickRequests || data?.hotPickRequests || [];
+  const pickItems = useMemo(() => {
+    const hot = (data?.hotPickRequests || []).filter((task) => task.status === 'pool');
+    const hotIds = new Set(hot.map((task) => String(task.id)));
+    const regular = (data?.pickRequests || []).filter((task) => task.status === 'pool' && !hotIds.has(String(task.id)) && !(task.isHot || task.tags?.includes('hot')));
+    return [...hot, ...regular];
+  }, [data]);
   const modes = coordinator ? ['agenda', 'pool', 'team', 'requests'] : ['agenda', 'requests'];
   if (!data && !error) return <Spinner label={t('loading')} />;
   return <div className="m-stack">
@@ -461,7 +466,7 @@ function AssignmentSheet({ task, data, onClose, onChanged }) {
 
 function PickSheet({ items, onClose, onPicked }) {
   const { t } = usePrefs(); const sorted = [...items].sort((a, b) => (priorityOrder[a.priority] ?? 2) - (priorityOrder[b.priority] ?? 2) || Number(b.hotMultiplier || 0) - Number(a.hotMultiplier || 0)); const [index, setIndex] = useState(0); const [busy, setBusy] = useState(false); const [notice, setNotice] = useState(''); const task = sorted[index];
-  const pick = async () => { setBusy(true); try { await apiJson('/api/dashboard/queue/v2/pick', { method: 'POST', body: new URLSearchParams({ request_id: String(task.id) }) }); onPicked(); onClose(); } catch (error) { setNotice(error.message); setBusy(false); } };
+  const pick = async () => { setBusy(true); try { const body = task.isHotCandidate ? new URLSearchParams({ hot_account: task.post.account, hot_shortcode: task.post.shortcode }) : new URLSearchParams({ request_id: String(task.id) }); await apiJson('/api/dashboard/queue/v2/pick', { method: 'POST', body }); onPicked(); onClose(); } catch (error) { setNotice(error.message); setBusy(false); } };
   return <Sheet title={t('pick')} onClose={onClose}>{task ? <div className="m-stack"><QueueTaskCard task={task} /><Notice type="error">{notice}</Notice><div className="m-action-grid"><button className="m-secondary" onClick={() => setIndex((index + 1) % sorted.length)}>{t('next')}<ChevronRight size={16} /></button><button className="m-primary" disabled={busy} onClick={pick}><Check size={16} />{t('choose')}</button></div></div> : <Empty title={t('noPick')} />}</Sheet>;
 }
 
