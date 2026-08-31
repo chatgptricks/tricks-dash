@@ -141,9 +141,11 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     checks['Account badge and resize handles render'] = Boolean(document.querySelector('.scheduler-account-badges')) && document.querySelectorAll('.scheduler-resize-handle').length >= 2;
     checks['All dashboard users render as PD-capable'] = document.querySelectorAll('.scheduler-row').length === 4 && document.querySelectorAll('.scheduler-row.is-non-queue-user').length === 0;
     checks['Queue has no duplicate Admin tool'] = !document.querySelector('.queue-admin-button');
-    await click(document.querySelector('.queue-settings-trigger'));
+    const profileTrigger = document.querySelector('.queue-settings-trigger');
+    checks['Signed-in profile opens Queue settings'] = profileTrigger?.querySelector('img')?.getAttribute('src') === 'https://example.test/esteban-avatar.png';
+    await click(profileTrigger);
     const settingsLink = document.querySelector('.queue-settings-admin .queue-settings-link');
-    checks['Admin gear links to standalone Settings'] = settingsLink?.tagName === 'A'
+    checks['Admin profile menu links to standalone Settings'] = settingsLink?.tagName === 'A'
       && /\/settings\.html$/.test(settingsLink.getAttribute('href') || '');
     const guideButton = [...document.querySelectorAll('.queue-settings-panel button')].find((node) => /Start guided tour|Iniciar guía/.test(node.textContent));
     await click(guideButton);

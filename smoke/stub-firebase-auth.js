@@ -5,7 +5,7 @@ export const browserLocalPersistence = {};
 export function setPersistence() { return Promise.resolve(); }
 export function getRedirectResult() { return Promise.resolve(null); }
 export function onAuthStateChanged(auth, cb) {
-  cb({ email: 'esteban@sentientagency.io', getIdToken: () => Promise.resolve('tok') });
+  cb({ email: 'esteban@sentientagency.io', displayName: 'Esteban', photoURL: 'https://example.test/esteban-avatar.png', getIdToken: () => Promise.resolve('tok') });
   return () => {};
 }
 export function signInWithPopup() { return Promise.resolve(); }
