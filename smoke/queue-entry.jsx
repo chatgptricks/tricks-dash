@@ -147,6 +147,8 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     const settingsLink = document.querySelector('.queue-settings-admin .queue-settings-link');
     checks['Admin profile menu links to standalone Settings'] = settingsLink?.tagName === 'A'
       && /\/settings\.html$/.test(settingsLink.getAttribute('href') || '');
+    const resetQueueButton = document.querySelector('.queue-settings-admin .queue-settings-danger');
+    checks['Admin profile menu exposes protected Queue reset'] = /Reset Queue|Resetear Queue/.test(resetQueueButton?.textContent || '');
     const guideButton = [...document.querySelectorAll('.queue-settings-panel button')].find((node) => /Start guided tour|Iniciar guía/.test(node.textContent));
     await click(guideButton);
     checks['Guided tour starts from Settings'] = Boolean(document.querySelector('.queue-guide-welcome'));
