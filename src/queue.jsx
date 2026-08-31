@@ -96,6 +96,8 @@ Object.assign(COPY.en, {
   ticketCreated: 'Request sent for approval.', ticketReviewed: 'Request reviewed.', noPendingTickets: 'No pending requests.', noApprovedTickets: 'No approved requests.', noRejectedTickets: 'No rejected requests.',
   rightClickHint: 'Right-click your scheduler row to add meetings, breaks, promos, or focus time.', personalTime: 'Personal time',
   managedAccounts: 'Managed Sentient accounts', manageAccounts: 'Manage accounts', accountSetupTitle: 'Set up your managed accounts', accountSetupHelp: 'Choose every Sentient account you can create for. Coordinators can then recommend the right account when they assign work.', saveManagedAccounts: 'Save my accounts', managedAccountsSaved: 'Managed accounts saved.', accountRequestTitle: 'Need another account?', accountRequestHelp: 'Request a missing account or one that has not been added to Sentient Dash yet. Admins and VCs will review it in Queue.', requestedAccounts: 'Account handles', accountRequestPlaceholder: 'e.g. @newaccount, @anotheraccount', accountAccessRequest: 'Account access request', accountRequestSent: 'Account request sent for approval.', accountRequestReason: 'Note for coordinators (optional)',
+  howQueueWorks: 'How Queue works', startGuide: 'Start guided tour', guideWelcome: 'Welcome to Queue', guideLanguage: 'Choose your language first. The tour and Queue will use this language.', guideEnglish: 'English', guideSpanish: 'Español', guideContinue: 'Continue', guideSkip: 'Skip tour', guideBack: 'Back', guideNext: 'Next', guideFinish: 'Finish', guideStep: 'Step', guideSettingsTitle: 'Personalize Queue', guideSettingsBody: 'Change language, theme, accent color, or reopen your managed-account setup here.', guideRequestsTitle: 'Requests & approvals', guideRequestsBody: 'Open this inbox to review your requests. VCs and admins approve account access, time blocks, PP changes, moves, and cancellations here.', guideScheduleTitle: 'Your production day', guideScheduleBody: 'Use the date controls to review any day. The scheduler shows every planned block and the current time.', guidePoolTitle: 'The production pool', guidePoolBody: 'VCs and admins drag work from this pool onto a designer’s row. A draft is shared live before it is submitted.', guidePlannerTitle: 'Schedule blocks', guidePlannerBody: 'Open a block for its full brief, files, references, activity history, and the actions available to your role.', guideSubmitTitle: 'Submit planned work', guideSubmitBody: 'For coordinators, Submit confirms drafts and sends the assignment notifications. Designers see temporary placements live before then.', guideRoleTitle: 'Your work flow', guideRoleBody: 'Open an assigned block to start it, mark it complete, then close it with the published Instagram link.',
+  resetQueue: 'Reset Queue', resetQueueTitle: 'Reset all Queue data', resetQueueHelp: 'This permanently deletes every Queue assignment, pool request, draft, ticket, attachment, managed-account selection, and Queue event. Users, roles, accounts, Dashboard posts, Tracker, and Settings are preserved.', resetQueueConfirm: 'Type RESET_QUEUE to continue', resetQueueAction: 'Delete Queue data', queueResetDone: 'Queue was reset. All operational Queue data was removed.',
 });
 Object.assign(COPY.es, {
   tickets: 'Solicitudes', ticketInbox: 'Bandeja de aprobación', myRequests: 'Mis solicitudes', ticketsPending: 'Pendientes', ticketsApproved: 'Aprobadas', ticketsRejected: 'Rechazadas', approve: 'Aprobar', reject: 'Rechazar',
@@ -107,6 +109,8 @@ Object.assign(COPY.es, {
   ticketCreated: 'Solicitud enviada para aprobación.', ticketReviewed: 'Solicitud revisada.', noPendingTickets: 'No hay solicitudes pendientes.', noApprovedTickets: 'No hay solicitudes aprobadas.', noRejectedTickets: 'No hay solicitudes rechazadas.',
   rightClickHint: 'Haz click derecho en tu fila para agregar meetings, breaks, promos o tiempo de enfoque.', personalTime: 'Tiempo personal',
   managedAccounts: 'Cuentas Sentient que manejas', manageAccounts: 'Gestionar cuentas', accountSetupTitle: 'Configura las cuentas que manejas', accountSetupHelp: 'Elige todas las cuentas Sentient para las que puedes crear. Así los coordinadores podrán recomendar la cuenta correcta al asignarte trabajo.', saveManagedAccounts: 'Guardar mis cuentas', managedAccountsSaved: 'Cuentas administradas guardadas.', accountRequestTitle: '¿Necesitas otra cuenta?', accountRequestHelp: 'Solicita una cuenta que falte o que aún no se haya agregado a Sentient Dash. Los admins y VCs la revisarán en Queue.', requestedAccounts: 'Handles de cuentas', accountRequestPlaceholder: 'ej. @nuevacuenta, @otracuenta', accountAccessRequest: 'Solicitud de acceso a cuenta', accountRequestSent: 'Solicitud de cuenta enviada para aprobación.', accountRequestReason: 'Nota para coordinadores (opcional)',
+  howQueueWorks: 'Cómo funciona Queue', startGuide: 'Iniciar guía', guideWelcome: 'Bienvenido a Queue', guideLanguage: 'Primero elige tu idioma. La guía y Queue usarán este idioma.', guideEnglish: 'English', guideSpanish: 'Español', guideContinue: 'Continuar', guideSkip: 'Omitir guía', guideBack: 'Atrás', guideNext: 'Siguiente', guideFinish: 'Finalizar', guideStep: 'Paso', guideSettingsTitle: 'Personaliza Queue', guideSettingsBody: 'Cambia el idioma, tema, color de acento o vuelve a abrir la configuración de tus cuentas aquí.', guideRequestsTitle: 'Solicitudes y aprobaciones', guideRequestsBody: 'Abre esta bandeja para revisar tus solicitudes. VCs y admins aprueban aquí accesos a cuentas, bloques de tiempo, cambios de PP, movimientos y cancelaciones.', guideScheduleTitle: 'Tu día de producción', guideScheduleBody: 'Usa los controles de fecha para revisar cualquier día. El scheduler muestra cada bloque planeado y la hora actual.', guidePoolTitle: 'El pool de producción', guidePoolBody: 'Los VCs y admins arrastran trabajo desde este pool a la fila de un designer. Un borrador se comparte en vivo antes de enviarse.', guidePlannerTitle: 'Bloques del scheduler', guidePlannerBody: 'Abre un bloque para ver su brief, archivos, referencias, historial y las acciones disponibles para tu rol.', guideSubmitTitle: 'Enviar trabajo planeado', guideSubmitBody: 'Para coordinadores, Enviar confirma borradores y manda las notificaciones. Los designers ven las ubicaciones temporales en vivo antes de eso.', guideRoleTitle: 'Tu flujo de trabajo', guideRoleBody: 'Abre un bloque asignado para empezarlo, marcarlo como completado y cerrarlo con el link publicado de Instagram.',
+  resetQueue: 'Reiniciar Queue', resetQueueTitle: 'Reiniciar toda la data de Queue', resetQueueHelp: 'Esto elimina permanentemente todas las asignaciones, requests del pool, borradores, tickets, archivos adjuntos, selecciones de cuentas y eventos de Queue. Conserva usuarios, roles, cuentas, posts del Dashboard, Tracker y Settings.', resetQueueConfirm: 'Escribe RESET_QUEUE para continuar', resetQueueAction: 'Eliminar data de Queue', queueResetDone: 'Queue fue reiniciado. Toda la data operativa fue eliminada.',
 });
 
 Object.assign(COPY.en, {
@@ -158,7 +162,7 @@ function AuthGate({ notice, setNotice }) {
    account info, and (for admins) the same account-assignment tool that used
    to only be reachable inside Admin Tools -> User Management. Meant to be
    the same shape as the Settings button on Dashboard/Tracker/Insights. */
-function QueueSettings({ isAdmin, isDev, userEmail, onManageAccounts, onSignOut }) {
+function QueueSettings({ isAdmin, isDev, userEmail, onManageAccounts, onStartGuide, onResetQueue, onSignOut }) {
   const { t, language, setLanguage, theme, setTheme } = useQueuePreferences();
   const { accent, setAccent } = usePrefs();
   const [open, setOpen] = useState(false);
@@ -170,7 +174,8 @@ function QueueSettings({ isAdmin, isDev, userEmail, onManageAccounts, onSignOut 
       <section className="queue-settings-section"><span>{t('theme')}</span><div className="queue-settings-segment"><button type="button" className={theme === 'dark' ? 'is-on' : ''} onClick={() => setTheme('dark')}><Moon size={13} />{t('darkTheme')}</button><button type="button" className={theme === 'light' ? 'is-on' : ''} onClick={() => setTheme('light')}><Sun size={13} />{t('lightTheme')}</button></div></section>
       <section className="queue-settings-section"><span>{t('language')}</span><div className="queue-language" aria-label="Language"><button type="button" className={language === 'en' ? 'is-on' : ''} onClick={() => setLanguage('en')}>EN</button><button type="button" className={language === 'es' ? 'is-on' : ''} onClick={() => setLanguage('es')}>ES</button></div></section>
       {onManageAccounts ? <section className="queue-settings-section queue-settings-managed"><span>{t('managedAccounts')}</span><button type="button" className="queue-settings-link" onClick={() => { setOpen(false); onManageAccounts(); }}><Settings size={13} />{t('manageAccounts')}</button></section> : null}
-      {isAdmin || isDev ? <section className="queue-settings-section queue-settings-admin"><span>{t('adminOverview')}</span><a className="queue-settings-link" href={`${import.meta.env.BASE_URL}settings.html`}><Settings size={13} />{t('settings')}</a></section> : null}
+      {onStartGuide ? <section className="queue-settings-section queue-settings-managed"><span>{t('howQueueWorks')}</span><button type="button" className="queue-settings-link" onClick={() => { setOpen(false); onStartGuide(); }}><ClipboardList size={13} />{t('startGuide')}</button></section> : null}
+      {isAdmin || isDev ? <section className="queue-settings-section queue-settings-admin"><span>{t('adminOverview')}</span><a className="queue-settings-link" href={`${import.meta.env.BASE_URL}settings.html`}><Settings size={13} />{t('settings')}</a>{onResetQueue ? <button type="button" className="queue-settings-danger" onClick={() => { setOpen(false); onResetQueue(); }}><TimerReset size={13} />{t('resetQueue')}</button> : null}</section> : null}
       <footer><small>{t('signedInAs')} {userEmail}</small><button type="button" className="queue-settings-signout" onClick={onSignOut}><LogOut size={13} />{t('signOut')}</button></footer>
     </div></> : null}
   </div>;
@@ -260,6 +265,67 @@ function AccountSetupModal({ onboarding, accounts = [], onClose, onSave, onReque
       <footer className="queue-create-actions"><button type="button" className="scheduler-secondary" onClick={onClose} disabled={saving || requesting}>{t('cancel')}</button><button type="button" className="scheduler-primary" onClick={save} disabled={saving || requesting}>{saving ? <LoaderCircle className="queue-spin" size={14} /> : <Check size={14} />}{t('saveManagedAccounts')}</button></footer>
     </section>
   </div>;
+}
+
+function QueueGuide({ coordinator, step, setStep, onChooseLanguage, onComplete }) {
+  const { t } = useQueuePreferences();
+  const [rect, setRect] = useState(null);
+  const steps = useMemo(() => [
+    { selector: '.queue-settings-trigger', title: 'guideSettingsTitle', body: 'guideSettingsBody' },
+    { selector: '.queue-ticket-button', title: 'guideRequestsTitle', body: 'guideRequestsBody' },
+    { selector: '.scheduler-toolbar', title: 'guideScheduleTitle', body: 'guideScheduleBody' },
+    ...(coordinator ? [{ selector: '.scheduler-pool', title: 'guidePoolTitle', body: 'guidePoolBody' }] : []),
+    { selector: '.scheduler-canvas', title: 'guidePlannerTitle', body: 'guidePlannerBody', extraBody: coordinator ? 'guideSubmitBody' : 'guideRoleBody' },
+  ], [coordinator]);
+  const active = step >= 0 ? steps[step] : null;
+  useEffect(() => {
+    if (!active) { setRect(null); return undefined; }
+    const update = () => {
+      const target = document.querySelector(active.selector);
+      if (!target) { setRect(null); return; }
+      const bounds = target.getBoundingClientRect();
+      setRect({ left: bounds.left, top: bounds.top, width: bounds.width, height: bounds.height });
+    };
+    update();
+    window.addEventListener('resize', update);
+    window.addEventListener('scroll', update, true);
+    return () => { window.removeEventListener('resize', update); window.removeEventListener('scroll', update, true); };
+  }, [active]);
+  useEffect(() => {
+    if (active && !rect) {
+      const timer = window.setTimeout(() => {
+        const target = document.querySelector(active.selector);
+        if (!target) setStep((current) => Math.min(current + 1, steps.length - 1));
+      }, 120);
+      return () => window.clearTimeout(timer);
+    }
+    return undefined;
+  }, [active, rect, setStep, steps.length]);
+  if (step < 0) return <div className="queue-guide-layer" role="presentation"><div className="queue-guide-dim" /><section className="queue-guide-card queue-guide-welcome" role="dialog" aria-modal="true" aria-labelledby="queue-guide-title"><p className="scheduler-eyebrow">Queue</p><h2 id="queue-guide-title">{t('guideWelcome')}</h2><p>{t('guideLanguage')}</p><div className="queue-guide-language"><button type="button" onClick={() => { onChooseLanguage('en'); setStep(0); }}>{t('guideEnglish')}</button><button type="button" onClick={() => { onChooseLanguage('es'); setStep(0); }}>{t('guideSpanish')}</button></div><button type="button" className="queue-guide-skip" onClick={onComplete}>{t('guideSkip')}</button></section></div>;
+  const pad = 7;
+  const viewportWidth = typeof window === 'undefined' ? 1280 : window.innerWidth;
+  const viewportHeight = typeof window === 'undefined' ? 800 : window.innerHeight;
+  const cardWidth = Math.min(350, viewportWidth - 32);
+  const cardLeft = rect ? Math.max(16, Math.min(rect.left, viewportWidth - cardWidth - 16)) : 16;
+  const wantsBelow = !rect || rect.top + rect.height + 18 + 210 < viewportHeight;
+  const cardTop = rect ? Math.max(16, Math.min(wantsBelow ? rect.top + rect.height + 16 : rect.top - 220, viewportHeight - 200)) : 16;
+  const next = () => { if (step >= steps.length - 1) onComplete(); else setStep(step + 1); };
+  return <div className="queue-guide-layer" role="presentation"><div className="queue-guide-dim" />{rect ? <span className="queue-guide-highlight" style={{ left: rect.left - pad, top: rect.top - pad, width: rect.width + pad * 2, height: rect.height + pad * 2 }} /> : null}<section className="queue-guide-card" role="dialog" aria-modal="true" aria-live="polite" style={{ left: cardLeft, top: cardTop, width: cardWidth }}><p className="scheduler-eyebrow">{t('guideStep')} {step + 1} / {steps.length}</p><h2>{t(active?.title)}</h2><p>{t(active?.body)}</p>{active?.extraBody ? <p>{t(active.extraBody)}</p> : null}<footer><button type="button" className="queue-guide-skip" onClick={onComplete}>{t('guideSkip')}</button><div>{step > 0 ? <button type="button" className="scheduler-secondary" onClick={() => setStep(step - 1)}>{t('guideBack')}</button> : null}<button type="button" className="scheduler-primary" onClick={next}>{step >= steps.length - 1 ? t('guideFinish') : t('guideNext')}</button></div></footer></section></div>;
+}
+
+function QueueResetModal({ onClose, onReset }) {
+  const { t } = useQueuePreferences();
+  const [confirmation, setConfirmation] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const submit = async (event) => {
+    event.preventDefault();
+    setBusy(true); setError('');
+    try { await onReset(confirmation); onClose(); }
+    catch (err) { setError(err.message || 'Queue reset failed.'); }
+    finally { setBusy(false); }
+  };
+  return <div className="queue-create-backdrop" role="presentation"><form className="queue-create-modal queue-reset-modal" onSubmit={submit} aria-labelledby="queue-reset-title"><header className="queue-create-head"><div><p className="scheduler-eyebrow">Admin</p><h2 id="queue-reset-title">{t('resetQueueTitle')}</h2><small>{t('resetQueueHelp')}</small></div><button type="button" onClick={onClose} aria-label={t('close')} disabled={busy}><X size={16} /></button></header><label className="queue-create-note"><span>{t('resetQueueConfirm')}</span><input value={confirmation} autoFocus onChange={(event) => setConfirmation(event.target.value)} placeholder="RESET_QUEUE" /></label>{error ? <p className="queue-create-error" role="alert">{error}</p> : null}<footer className="queue-create-actions"><button type="button" className="scheduler-secondary" onClick={onClose} disabled={busy}>{t('cancel')}</button><button type="submit" className="scheduler-danger" disabled={busy || confirmation !== 'RESET_QUEUE'}>{busy ? <LoaderCircle className="queue-spin" size={14} /> : <TimerReset size={14} />}{t('resetQueueAction')}</button></footer></form></div>;
 }
 
 function CreatePostModal({ tags = [], onClose, onCreated }) {
@@ -693,7 +759,7 @@ function PickModal({ requests, hotFallback = false, busy, onClose, onAssign }) {
 }
 
 function QueueApp({ user }) {
-  const { t, language } = useQueuePreferences();
+  const { t, language, setLanguage } = useQueuePreferences();
   const [data, setData] = useState(null);
   const [viewer, setViewer] = useState(null);
   const [date, setDate] = useState(DAY());
@@ -717,6 +783,9 @@ function QueueApp({ user }) {
   const [pickBusy, setPickBusy] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [accountSetupOpen, setAccountSetupOpen] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(() => !window.localStorage.getItem('sentient.queueGuide.v1'));
+  const [guideStep, setGuideStep] = useState(-1);
+  const [resetOpen, setResetOpen] = useState(false);
   const [overviewOpen, setOverviewOpen] = useState(false);
   const [overview, setOverview] = useState(null);
   const [overviewLoading, setOverviewLoading] = useState(false);
@@ -734,6 +803,7 @@ function QueueApp({ user }) {
   const ticketsOpenRef = useRef(ticketsOpen);
   const loadedOnceRef = useRef(false);
   const accountSetupDismissedRef = useRef(false);
+  const guideCompletedRef = useRef(Boolean(window.localStorage.getItem('sentient.queueGuide.v1')));
 
   const notify = useCallback((message, type = 'success') => { setToast({ message, type }); window.setTimeout(() => setToast(null), 6000); }, []);
   const applyDraft = useCallback((next) => { draftRef.current = next; setDraft(next); if (next.length) window.localStorage.setItem(DRAFT_KEY, JSON.stringify(next)); else window.localStorage.removeItem(DRAFT_KEY); }, []);
@@ -743,7 +813,7 @@ function QueueApp({ user }) {
     try {
       const next = await json(`/api/dashboard/queue/v2?date=${date}&archive=${archive ? 'true' : 'false'}`);
       setData(next);
-      if (!next.accountOnboarding?.completed && !accountSetupDismissedRef.current) setAccountSetupOpen(true);
+      if (!next.accountOnboarding?.completed && guideCompletedRef.current && !accountSetupDismissedRef.current) setAccountSetupOpen(true);
       loadedOnceRef.current = true;
       liveRevisionRef.current = Math.max(liveRevisionRef.current, Number(next.liveRevision) || 0);
       const ownDrafts = (next.liveDrafts || []).filter((task) => task.draftCoordinatorEmail === next.viewer.email);
@@ -980,6 +1050,20 @@ function QueueApp({ user }) {
     notify(t('accountRequestSent'));
     return result;
   };
+  const finishGuide = () => {
+    window.localStorage.setItem('sentient.queueGuide.v1', 'completed');
+    guideCompletedRef.current = true;
+    setGuideOpen(false);
+    if (!data?.accountOnboarding?.completed && !accountSetupDismissedRef.current) setAccountSetupOpen(true);
+  };
+  const resetQueue = async (confirmation) => {
+    const result = await json('/api/admin/queue/reset', { method: 'POST', body: new URLSearchParams({ confirmation }) });
+    applyDraft([]);
+    accountSetupDismissedRef.current = false;
+    await load({ silent: true });
+    notify(t('queueResetDone'), 'warning');
+    return result;
+  };
   const requestPP = async (productionPoints, reason) => {
     try {
       await json('/api/dashboard/queue/v2/tickets/pp-revision', { method: 'POST', body: new URLSearchParams({ request_id: String(open.id), production_points: String(productionPoints), reason }) });
@@ -1048,7 +1132,7 @@ function QueueApp({ user }) {
           <a href={`${import.meta.env.BASE_URL}tracker.html`}>Tracker</a><a href={`${import.meta.env.BASE_URL}insights.html`}>Insights</a><span className="queue-nav-current" aria-current="page">Queue</span><a href={import.meta.env.BASE_URL}><ArrowLeft size={14} />{t('dashboard')}</a>
         </nav>
         <div className="queue-actions-group queue-actions-account">
-          <QueueSettings isAdmin={Boolean(data?.viewer?.isAdmin)} isDev={Boolean(viewer?.is_dev || data?.viewer?.isDev)} userEmail={user.email} onManageAccounts={() => { accountSetupDismissedRef.current = false; setAccountSetupOpen(true); }} onSignOut={() => { clearSsoCookie(); signOut(auth); }} />
+          <QueueSettings isAdmin={Boolean(data?.viewer?.isAdmin)} isDev={Boolean(viewer?.is_dev || data?.viewer?.isDev)} userEmail={user.email} onManageAccounts={() => { accountSetupDismissedRef.current = false; setAccountSetupOpen(true); }} onStartGuide={() => { setGuideStep(-1); setGuideOpen(true); }} onResetQueue={(data?.viewer?.isAdmin || data?.viewer?.isDev || viewer?.is_dev) ? () => setResetOpen(true) : null} onSignOut={() => { clearSsoCookie(); signOut(auth); }} />
         </div>
       </div>
     </header>
@@ -1067,6 +1151,8 @@ function QueueApp({ user }) {
     {pickOpen ? <PickModal requests={pickPool} hotFallback={pickHotFallback} busy={pickBusy} onClose={() => setPickOpen(false)} onAssign={pickRequest} /> : null}
     {createOpen ? <CreatePostModal tags={data?.tags || []} onClose={() => setCreateOpen(false)} onCreated={async () => { await load({ silent: true }); setCreateOpen(false); notify(t('postCreated')); }} /> : null}
     {accountSetupOpen && data ? <AccountSetupModal onboarding={data.accountOnboarding} accounts={data.accounts || []} onClose={() => { accountSetupDismissedRef.current = true; setAccountSetupOpen(false); }} onSave={saveManagedAccounts} onRequest={requestAccountAccess} /> : null}
+    {resetOpen ? <QueueResetModal onClose={() => setResetOpen(false)} onReset={resetQueue} /> : null}
+    {guideOpen ? <QueueGuide coordinator={Boolean(coordinator)} step={guideStep} setStep={setGuideStep} onChooseLanguage={setLanguage} onComplete={finishGuide} /> : null}
     <Detail task={open} tags={data?.tags || []} canCoordinate={coordinator} isOwner={open?.designerEmail === data?.viewer.email || data?.viewer.isAdmin} pendingTickets={openPendingTickets} onReviewTicket={reviewTicket} notice={detailNotice} history={history} historyLoading={historyLoading} onClose={closeDetail} onAction={action} onCancel={cancel} onEdit={edit} onNotify={resend} onUpload={upload} onDownload={download} onRequestPP={requestPP} onRequestCancellation={requestCancellation} onRequestMove={requestMove} />
     <DevRolePreview isDev={Boolean(viewer?.is_dev || data?.viewer?.isDev)} />
   </main>;
