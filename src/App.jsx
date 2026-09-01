@@ -781,21 +781,31 @@ function buildDatePresets(ranges) {
   return presets;
 }
 
-function DevRolePreview({ isDev }) {
+const DEV_EMAIL = 'esteban@sentientagency.io';
+const ROLE_SWITCHER_DEFAULTS = Object.freeze({
+  [DEV_EMAIL]: ['sales', 'pd', 'vc', 'trainee', 'admin'],
+  'ivan@sentientagency.io': ['pd', 'vc', 'admin'],
+});
+
+function DevRolePreview({ isDev, canSwitchRoles = false, availableRoles = [] }) {
   const [open, setOpen] = useState(false);
-  const active = window.sessionStorage.getItem('sentient.queueRolePreview') || '';
-  if (!isDev) return null;
-  const label = { sales: 'Sales', pd: 'Post Designer', vc: 'Viral Coordinator', admin: 'Admin' }[active] || 'Dev';
+  const requestedRole = window.sessionStorage.getItem('sentient.queueRolePreview') || '';
+  const options = [...new Set((isDev ? ROLE_SWITCHER_DEFAULTS[DEV_EMAIL] : availableRoles).filter((role) => ['sales', 'pd', 'vc', 'trainee', 'admin'].includes(role)))];
+  const active = options.includes(requestedRole) ? requestedRole : '';
+  if (!isDev && !canSwitchRoles) return null;
+  const label = { sales: 'Sales', pd: 'Post Designer', vc: 'Viral Coordinator', trainee: 'Trainee', admin: 'Admin' }[active] || (isDev ? 'Dev' : 'Role');
   const choose = (event) => {
     const role = event.target.value;
     if (role) window.sessionStorage.setItem('sentient.queueRolePreview', role);
     else window.sessionStorage.removeItem('sentient.queueRolePreview');
     window.location.reload();
   };
-  return <div className="dev-role-preview"><button type="button" onClick={() => setOpen((value) => !value)} aria-expanded={open}><span>DEV</span>{label}</button>{open ? <div className="dev-role-preview-panel"><strong>Role preview</strong><p>Only visible to Esteban.</p><label>Active role<select value={active} onChange={choose}><option value="">Dev · full access</option><option value="sales">Sales</option><option value="pd">Post Designer</option><option value="vc">Viral Coordinator</option><option value="admin">Admin</option></select></label></div> : null}</div>;
+  return <div className="dev-role-preview"><button type="button" onClick={() => setOpen((value) => !value)} aria-expanded={open}><span>{isDev ? 'DEV' : 'ROLE'}</span>{label}</button>{open ? <div className="dev-role-preview-panel"><strong>{isDev ? 'Role preview' : 'Active role'}</strong><p>{isDev ? 'Only visible to Esteban.' : 'Switch among your assigned roles.'}</p><label>Active role<select value={active} onChange={choose}><option value="">{isDev ? 'Dev · full access' : 'Use my default role'}</option>{options.map((role) => <option key={role} value={role}>{({ sales: 'Sales', pd: 'Post Designer', vc: 'Viral Coordinator', trainee: 'Trainee', admin: 'Admin' })[role]}</option>)}</select></label></div> : null}</div>;
 }
 
 function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
+  const knownRoleSwitcher = Object.prototype.hasOwnProperty.call(ROLE_SWITCHER_DEFAULTS, String(userEmail || '').trim().toLowerCase());
+  const knownDev = String(userEmail || '').trim().toLowerCase() === DEV_EMAIL;
   const [dashboard, setDashboard] = useState({ posts: [], summary: {} });
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -809,7 +819,9 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
   const [isAdmin, setIsAdmin] = useState(false);
   const [operatingRole, setOperatingRole] = useState('sales');
   const [operatingRoles, setOperatingRoles] = useState(['sales']);
-  const [isDev, setIsDev] = useState(false);
+  const [isDev, setIsDev] = useState(knownDev);
+  const [canSwitchRoles, setCanSwitchRoles] = useState(knownRoleSwitcher);
+  const [availableRoles, setAvailableRoles] = useState(() => ROLE_SWITCHER_DEFAULTS[String(userEmail || '').trim().toLowerCase()] || []);
   const [queuePendingCount, setQueuePendingCount] = useState(0);
   const [assignmentPost, setAssignmentPost] = useState(null);
   const reconnectTimer = useRef(null);
@@ -894,7 +906,9 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
           setIsAdmin(Boolean(body.is_admin));
           setOperatingRole(body.operating_role || 'sales');
           setOperatingRoles(body.operating_roles || [body.operating_role || 'sales']);
-          setIsDev(Boolean(body.is_dev));
+          setIsDev(Boolean(body.is_dev) || knownDev);
+          setCanSwitchRoles(Boolean(body.can_role_switch) || knownRoleSwitcher);
+          setAvailableRoles(Array.isArray(body.available_operating_roles) ? body.available_operating_roles : (ROLE_SWITCHER_DEFAULTS[String(userEmail || '').trim().toLowerCase()] || body.operating_roles || []));
         }
         })
         .catch(() => {});
@@ -919,7 +933,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
       // alarming database-error page.
       if (!signal?.aborted && loaded) setLoading(false);
     }
-  }, [onUnauthorized]);
+  }, [knownDev, knownRoleSwitcher, onUnauthorized, userEmail]);
 
   dashboardLoader.current = loadDashboard;
 
@@ -1766,7 +1780,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
                   <span>{t('Tracker')}</span>
                   <ExternalLink size={12} className="tool-link-out" aria-hidden="true" />
                 </a>
-                {(isAdmin || operatingRoles.some((role) => role === 'pd' || role === 'vc')) ? <a
+                <a
                   className="tool-link tool-link-queue"
                   href={`${import.meta.env.BASE_URL}queue.html`}
                   target="_blank"
@@ -1777,7 +1791,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
                   <span>Queue</span>
                   {queuePendingCount ? <b className="queue-pending-badge">{queuePendingCount > 99 ? '99+' : queuePendingCount}</b> : null}
                   <ExternalLink size={12} className="tool-link-out" aria-hidden="true" />
-                </a> : null}
+                </a>
                 <a
                   className="tool-link"
                   href={`${import.meta.env.BASE_URL}insights.html`}
@@ -2259,7 +2273,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
       ) : null}
 
       <BackgroundTaskStack tasks={backgroundTasks} onDismiss={dismissBackgroundTask} />
-      <DevRolePreview isDev={isDev} />
+      <DevRolePreview isDev={isDev} canSwitchRoles={canSwitchRoles} availableRoles={availableRoles} />
     </div>
   );
 }

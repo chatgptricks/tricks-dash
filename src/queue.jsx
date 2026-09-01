@@ -33,6 +33,11 @@ const displayDate = (value, language) => new Date(`${value}T12:00:00`).toLocaleD
 const displayTimestamp = (value, language) => new Date(value).toLocaleString(locale(language), { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 const DRAFT_KEY = 'sentient.queueDrafts.v2';
 const PRIORITIES = ['low', 'medium', 'high', 'urgent'];
+const DEV_EMAIL = 'esteban@sentientagency.io';
+const ROLE_SWITCHER_DEFAULTS = Object.freeze({
+  [DEV_EMAIL]: ['sales', 'pd', 'vc', 'trainee', 'admin'],
+  'ivan@sentientagency.io': ['pd', 'vc', 'admin'],
+});
 let activeQueueDragId = null;
 const ACCOUNT_PROFILE_FALLBACKS = { chatgptricks: chatgptricksProfileImage, traselveloreal: traselvelorealProfileImage };
 const USER_DISPLAY_NAMES = Object.freeze({
@@ -195,14 +200,16 @@ function QueueSettings({ isAdmin, isDev, userEmail, avatarUrl, displayLabel, onM
   </div>;
 }
 
-function DevRolePreview({ isDev }) {
+function DevRolePreview({ isDev, canSwitchRoles = false, availableRoles = [] }) {
   const { t } = useQueuePreferences();
   const [open, setOpen] = useState(false);
-  const active = window.sessionStorage.getItem('sentient.queueRolePreview') || '';
-  if (!isDev) return null;
-  const label = { sales: 'Sales', pd: t('postDesigner'), vc: t('viralCoordinator'), trainee: t('traineeRole'), admin: t('admin') }[active] || 'Dev';
+  const requestedRole = window.sessionStorage.getItem('sentient.queueRolePreview') || '';
+  const options = [...new Set((isDev ? ROLE_SWITCHER_DEFAULTS[DEV_EMAIL] : availableRoles).filter((role) => ['sales', 'pd', 'vc', 'trainee', 'admin'].includes(role)))];
+  const active = options.includes(requestedRole) ? requestedRole : '';
+  if (!isDev && !canSwitchRoles) return null;
+  const label = { sales: 'Sales', pd: t('postDesigner'), vc: t('viralCoordinator'), trainee: t('traineeRole'), admin: t('admin') }[active] || (isDev ? 'Dev' : t('activeRole'));
   const choose = (event) => { const role = event.target.value; if (role) window.sessionStorage.setItem('sentient.queueRolePreview', role); else window.sessionStorage.removeItem('sentient.queueRolePreview'); window.location.reload(); };
-  return <div className="dev-role-preview"><button type="button" onClick={() => setOpen((value) => !value)} aria-expanded={open}><span>DEV</span>{label}</button>{open ? <div className="dev-role-preview-panel"><strong>{t('rolePreview')}</strong><p>{t('onlyEsteban')}</p><label>{t('activeRole')}<select value={active} onChange={choose}><option value="">{t('devFullAccess')}</option><option value="sales">Sales</option><option value="pd">{t('postDesigner')}</option><option value="vc">{t('viralCoordinator')}</option><option value="trainee">{t('traineeRole')}</option><option value="admin">{t('admin')}</option></select></label></div> : null}</div>;
+  return <div className="dev-role-preview"><button type="button" onClick={() => setOpen((value) => !value)} aria-expanded={open}><span>{isDev ? 'DEV' : 'ROLE'}</span>{label}</button>{open ? <div className="dev-role-preview-panel"><strong>{isDev ? t('rolePreview') : t('activeRole')}</strong><p>{isDev ? t('onlyEsteban') : 'Switch among your assigned roles.'}</p><label>{t('activeRole')}<select value={active} onChange={choose}><option value="">{isDev ? t('devFullAccess') : 'Use my default role'}</option>{options.map((role) => <option key={role} value={role}>{({ sales: 'Sales', pd: t('postDesigner'), vc: t('viralCoordinator'), trainee: t('traineeRole'), admin: t('admin') })[role]}</option>)}</select></label></div> : null}</div>;
 }
 
 function PriorityBadge({ priority = 'medium' }) {
@@ -1288,7 +1295,7 @@ function QueueApp({ user }) {
     {accountSetupOpen && data ? <AccountSetupModal onboarding={data.accountOnboarding} accounts={data.accounts || []} onClose={() => { accountSetupDismissedRef.current = true; setAccountSetupOpen(false); }} onSave={saveManagedAccounts} onRequest={requestAccountAccess} /> : null}
     {guideOpen ? <QueueGuide coordinator={Boolean(coordinator)} step={guideStep} setStep={setGuideStep} onChooseLanguage={setLanguage} onComplete={finishGuide} /> : null}
     <Detail task={open} tags={data?.tags || []} canCoordinate={coordinator} isOwner={open?.designerEmail === data?.viewer.email || data?.viewer.isAdmin} isTrainee={Boolean(data?.viewer?.operatingRoles?.includes('trainee') && !data?.viewer?.isAdmin)} pendingTickets={openPendingTickets} onReviewTicket={reviewTicket} notice={detailNotice} history={history} historyLoading={historyLoading} onClose={closeDetail} onAction={action} onCancel={cancel} onEdit={edit} onNotify={resend} onUpload={upload} onDownload={download} onRequestPP={requestPP} onRequestCancellation={requestCancellation} onRequestMove={requestMove} onRequestTraineeReview={requestTraineeReview} />
-    <DevRolePreview isDev={Boolean(viewer?.is_dev || data?.viewer?.isDev)} />
+    <DevRolePreview isDev={Boolean(viewer?.is_dev || data?.viewer?.isDev || String(user?.email || '').trim().toLowerCase() === DEV_EMAIL)} canSwitchRoles={Boolean(viewer?.can_role_switch || data?.viewer?.canRoleSwitch || ROLE_SWITCHER_DEFAULTS[String(user?.email || '').trim().toLowerCase()])} availableRoles={data?.viewer?.availableOperatingRoles || viewer?.available_operating_roles || ROLE_SWITCHER_DEFAULTS[String(user?.email || '').trim().toLowerCase()] || []} />
   </main>;
 }
 
