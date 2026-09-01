@@ -1011,6 +1011,7 @@ function QueueApp({ user }) {
   const liveRevisionRef = useRef(0);
   const liveRefreshTimerRef = useRef(null);
   const deferredLiveRefreshRef = useRef(false);
+  const quietMutationUntilRef = useRef(0);
   const schedulerPreferencesRef = useRef(null);
   const ticketsOpenRef = useRef(ticketsOpen);
   const loadedOnceRef = useRef(Boolean(initialSnapshotRef.current?.data));
@@ -1018,6 +1019,7 @@ function QueueApp({ user }) {
   const guideCompletedRef = useRef(Boolean(window.localStorage.getItem('sentient.queueGuide.v1')));
 
   const notify = useCallback((message, type = 'success') => { setToast({ message, type }); window.setTimeout(() => setToast(null), 6000); }, []);
+  const saveQuietly = useCallback(() => { quietMutationUntilRef.current = Date.now() + 8000; }, []);
   const applyDraft = useCallback((next) => { draftRef.current = next; setDraft(next); if (next.length) window.localStorage.setItem(DRAFT_KEY, JSON.stringify(next)); else window.localStorage.removeItem(DRAFT_KEY); }, []);
   const load = useCallback(async ({ silent = false } = {}) => {
     const showLoader = !silent && !loadedOnceRef.current;
@@ -1073,6 +1075,7 @@ function QueueApp({ user }) {
   useEffect(() => { if (!open?.id) { setHistory([]); return; } setDetailNotice(null); setHistoryLoading(true); json(`/api/dashboard/queue/v2/requests/${open.id}/history`).then((result) => setHistory(result.events || [])).catch(() => setHistory([])).finally(() => setHistoryLoading(false)); }, [open?.id]);
 
   const persistDrafts = useCallback((nextDraft) => {
+    saveQuietly();
     const optimistic = nextDraft.map((task) => ({ ...task, isDraft: true }));
     applyDraft(optimistic);
     const version = ++draftSaveVersionRef.current;
@@ -1106,7 +1109,7 @@ function QueueApp({ user }) {
       }
     });
     return request;
-  }, [applyDraft, notify, t]);
+  }, [applyDraft, notify, saveQuietly, t]);
   persistDraftsRef.current = persistDrafts;
 
   const loadTickets = useCallback(async ({ silent = false } = {}) => {
@@ -1157,7 +1160,7 @@ function QueueApp({ user }) {
         // view on its own SSE event made each drag look like a full refresh.
         // Other tabs/users have no active draft sync, so they still receive the
         // event and refresh from the shared live state.
-        if (draftSyncingRef.current) {
+        if (draftSyncingRef.current || (event.actorEmail === data.viewer.email && Date.now() < quietMutationUntilRef.current)) {
           if (event.actorEmail !== data.viewer.email) deferredLiveRefreshRef.current = true;
           return;
         }
@@ -1252,6 +1255,7 @@ function QueueApp({ user }) {
     return scheduled;
   }, []);
   const pickRequest = async (task) => {
+    saveQuietly();
     setPickBusy(true);
     try {
       const now = new Date();
@@ -1268,11 +1272,11 @@ function QueueApp({ user }) {
       return result;
     } catch (err) {
       notify(err.message || t('draftSyncFailed'), 'error');
-      await load({ silent: true }).catch(() => {});
       return null;
     } finally { setPickBusy(false); }
   };
   const submit = () => {
+    saveQuietly();
     const pendingDrafts = [...draftRef.current];
     const changes = pendingDrafts.map((task) => ({ id: task.id, status: task.status, designerEmail: task.designerEmail, scheduledDate: task.scheduledDate, scheduledStartMinutes: task.scheduledStartMinutes, productionPoints: task.productionPoints, recommendedAccounts: task.recommendedAccounts || [] }));
     pendingDrafts.forEach((task) => {
@@ -1286,7 +1290,7 @@ function QueueApp({ user }) {
       notify(`${t('scheduleSubmitted')} ${sent} DM${sent === 1 ? '' : 's'} sent${failed ? ` · ${failed} failed` : ''}.`, failed ? 'warning' : 'success');
     }).catch((err) => { notify(err.message || t('draftSyncFailed'), 'error'); loadRef.current?.({ silent: true }).catch(() => {}); });
   };
-  const clearDrafts = () => { applyDraft([]); json('/api/dashboard/queue/v2/drafts/clear', { method: 'POST', body: new URLSearchParams() }).catch((err) => { notify(err.message, 'error'); loadRef.current?.({ silent: true }).catch(() => {}); }); };
+  const clearDrafts = () => { saveQuietly(); applyDraft([]); json('/api/dashboard/queue/v2/drafts/clear', { method: 'POST', body: new URLSearchParams() }).catch((err) => { notify(err.message, 'error'); }); };
   const resetQueue = async (confirmation) => {
     await json('/api/admin/queue/reset', { method: 'POST', body: new URLSearchParams({ confirmation }) });
     applyDraft([]);
@@ -1323,6 +1327,7 @@ function QueueApp({ user }) {
     return returned;
   }, [applyDraft]);
   const persistPoolReturn = useCallback((task) => {
+    saveQuietly();
     const returned = showReturnedInPool(task);
     // A prior draft write may already be in flight. Sequence the durable
     // mutation after it, but never make the person wait to see the result.
@@ -1336,9 +1341,8 @@ function QueueApp({ user }) {
       notify(t('returnedToPool'));
     }).catch((err) => {
       notify(err.message || t('draftSyncFailed'), 'error');
-      loadRef.current?.({ silent: true }).catch(() => {});
     });
-  }, [notify, showReturnedInPool, t]);
+  }, [notify, saveQuietly, showReturnedInPool, t]);
   const dragTask = (event) => {
     const id = Number(activeQueueDragId || event.dataTransfer?.getData('queue-task'));
     return [...draftRef.current, ...(data?.liveDrafts || []), ...(data?.planningRequests || []), ...(data?.requests || [])].find((task) => task.id === id);
@@ -1362,6 +1366,7 @@ function QueueApp({ user }) {
   const action = (actionName, value) => {
     const target = open;
     if (!target) return;
+    saveQuietly();
     const now = new Date().toISOString();
     const optimistic = actionName === 'start'
       ? { status: 'in_progress', actualStartedAt: now, completedAt: null, scheduledDate: DAY(new Date(), QUEUE_TIME_ZONE), scheduledStartMinutes: Math.floor(currentMinutes(new Date(), QUEUE_TIME_ZONE) / 10) * 10 }
@@ -1374,24 +1379,26 @@ function QueueApp({ user }) {
     json(`/api/dashboard/queue/v2/requests/${target.id}/${actionName}`, { method: 'POST', body }).then((result) => {
       if (result.deferred) patchQueueTask(target.id, { status: 'scheduled', actualStartedAt: null, completedAt: null, scheduledDate: result.scheduledDate, scheduledStartMinutes: result.scheduledStartMinutes });
       notify(result.deferred ? `${t('movedAfterActive')} ${result.scheduledDate} · ${time(result.scheduledStartMinutes)}.` : t('requestUpdated'), result.deferred ? 'warning' : 'success');
-    }).catch((err) => { patchQueueTask(target.id, target); notify(err.message, 'error'); loadRef.current?.({ silent: true }).catch(() => {}); });
+    }).catch((err) => { patchQueueTask(target.id, target); notify(err.message, 'error'); });
   };
   const cancel = (reason) => {
     const target = open;
     if (!target) return;
+    saveQuietly();
     patchQueueTask(target.id, { status: 'cancelled', cancellationReason: reason || '' });
     closeDetail();
-    json(`/api/dashboard/queue/v2/requests/${target.id}/cancel`, { method: 'POST', body: new URLSearchParams({ reason }) }).then(() => notify(t('requestUpdated'))).catch((err) => { patchQueueTask(target.id, target); notify(err.message, 'error'); loadRef.current?.({ silent: true }).catch(() => {}); });
+    json(`/api/dashboard/queue/v2/requests/${target.id}/cancel`, { method: 'POST', body: new URLSearchParams({ reason }) }).then(() => notify(t('requestUpdated'))).catch((err) => { patchQueueTask(target.id, target); notify(err.message, 'error'); });
   };
   const edit = (values) => {
     const target = open;
     if (!target) return false;
+    saveQuietly();
     const optimistic = { productionPoints: Number(values.productionPoints), durationMinutes: Number(values.productionPoints) * Number(target.minutesPerPP || 10), priority: values.priority, tags: values.tags, brief: values.brief, notes: values.notes, references: values.references };
     patchQueueTask(target.id, optimistic);
     setDetailNotice({ message: t('requestUpdated'), type: 'success' });
     json(`/api/dashboard/queue/v2/requests/${target.id}/edit`, { method: 'POST', body: new URLSearchParams({ production_points: String(values.productionPoints), priority: values.priority, tags: values.tags.join(','), brief: values.brief, notes: values.notes, references: JSON.stringify(values.references) }) }).then((result) => {
       patchQueueTask(target.id, result.request);
-    }).catch((err) => { patchQueueTask(target.id, target); setDetailNotice({ message: err.message, type: 'error' }); loadRef.current?.({ silent: true }).catch(() => {}); });
+    }).catch((err) => { patchQueueTask(target.id, target); setDetailNotice({ message: err.message, type: 'error' }); });
     return true;
   };
   const resend = async () => { try { const result = await json(`/api/dashboard/queue/v2/requests/${open.id}/notify`, { method: 'POST' }); setDetailNotice({ message: result.sent ? t('slackSent') : t('slackFailed'), type: result.sent ? 'success' : 'error' }); const events = await json(`/api/dashboard/queue/v2/requests/${open.id}/history`); setHistory(events.events || []); } catch (err) { setDetailNotice({ message: err.message, type: 'error' }); } };
@@ -1399,6 +1406,7 @@ function QueueApp({ user }) {
   const download = async (file) => { const response = await apiFetch(`${API_BASE}/api/dashboard/queue/v2/requests/${open.id}/attachments/${file.id}`); if (!response.ok) throw new Error((await response.json().catch(() => ({}))).detail || 'Download failed.'); const blob = await response.blob(); const href = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = href; link.download = file.name; document.body.appendChild(link); link.click(); link.remove(); window.setTimeout(() => URL.revokeObjectURL(href), 30000); };
   const createTimeBlock = async (form) => {
     try {
+      saveQuietly();
       const result = await json('/api/dashboard/queue/v2/tickets/time-block', { method: 'POST', body: new URLSearchParams({ designer_email: form.designerEmail || data.viewer.email, category: form.category, scheduled_date: form.scheduledDate, scheduled_start_minutes: String(form.startMinutes), duration_minutes: String(form.durationMinutes), title: form.title, note: form.note }) });
       setData((current) => current ? { ...current, timeBlocks: [result.ticket, ...(current.timeBlocks || [])], pendingTicketCount: (current.pendingTicketCount || 0) + (result.ticket.status === 'pending' ? 1 : 0) } : current);
       if (ticketsOpen) setTickets((current) => [result.ticket, ...current]);
@@ -1411,6 +1419,7 @@ function QueueApp({ user }) {
   };
   const editTimeBlock = async (form) => {
     try {
+      saveQuietly();
       const result = await json(`/api/dashboard/queue/v2/tickets/time-block/${form.ticketId}`, { method: 'POST', body: new URLSearchParams({ designer_email: form.designerEmail || data.viewer.email, category: form.category, scheduled_date: form.scheduledDate, scheduled_start_minutes: String(form.startMinutes), duration_minutes: String(form.durationMinutes), title: form.title, note: form.note }) });
       setData((current) => current ? { ...current, timeBlocks: (current.timeBlocks || []).map((block) => block.id === result.ticket.id ? result.ticket : block) } : current);
       setTickets((current) => current.map((ticket) => ticket.id === result.ticket.id ? result.ticket : ticket));
@@ -1418,11 +1427,13 @@ function QueueApp({ user }) {
     } catch (err) { notify(err.message, 'error'); return false; }
   };
   const deleteTimeBlock = (block) => {
+    saveQuietly();
     setData((current) => current ? { ...current, timeBlocks: (current.timeBlocks || []).filter((item) => item.id !== block.id), pendingTicketCount: Math.max(0, (current.pendingTicketCount || 0) - (block.status === 'pending' ? 1 : 0)) } : current);
     setTickets((current) => current.filter((ticket) => ticket.id !== block.id));
-    json(`/api/dashboard/queue/v2/tickets/time-block/${block.id}`, { method: 'POST', body: new URLSearchParams({ delete: 'true' }) }).then(() => notify(t('requestUpdated'))).catch((err) => { notify(err.message, 'error'); loadRef.current?.({ silent: true }).catch(() => {}); });
+    json(`/api/dashboard/queue/v2/tickets/time-block/${block.id}`, { method: 'POST', body: new URLSearchParams({ delete: 'true' }) }).then(() => notify(t('requestUpdated'))).catch((err) => { notify(err.message, 'error'); });
   };
   const saveSchedulerPreferences = (preferences) => {
+    saveQuietly();
     const optimistic = { hiddenUsers: preferences.hiddenUsers || [], rowOrder: preferences.rowOrder || [] };
     // Preserve the chosen layout even if a live Queue request that started
     // earlier completes after this click. The server response then replaces
@@ -1443,10 +1454,12 @@ function QueueApp({ user }) {
   };
   const returnTaskToPool = (task) => persistPoolReturn(task);
   const cancelTask = (task) => {
+    saveQuietly();
     patchQueueTask(task.id, { status: 'cancelled', cancellationReason: 'Cancelled by coordinator' });
-    json(`/api/dashboard/queue/v2/requests/${task.id}/cancel`, { method: 'POST', body: new URLSearchParams({ reason: 'Cancelled by coordinator' }) }).then(() => notify(t('requestUpdated'))).catch((err) => { patchQueueTask(task.id, task); notify(err.message, 'error'); loadRef.current?.({ silent: true }).catch(() => {}); });
+    json(`/api/dashboard/queue/v2/requests/${task.id}/cancel`, { method: 'POST', body: new URLSearchParams({ reason: 'Cancelled by coordinator' }) }).then(() => notify(t('requestUpdated'))).catch((err) => { patchQueueTask(task.id, task); notify(err.message, 'error'); });
   };
   const saveManagedAccounts = async (accounts) => {
+    saveQuietly();
     const result = await json('/api/dashboard/queue/v2/account-onboarding', { method: 'POST', body: new URLSearchParams({ accounts: JSON.stringify(accounts) }) });
     accountSetupDismissedRef.current = true;
     setData((current) => current ? { ...current, accountOnboarding: result.accountOnboarding, schedulerUsers: (current.schedulerUsers || []).map((item) => item.email === current.viewer?.email ? { ...item, accounts: result.accountOnboarding.selectedAccounts } : item) } : current);
@@ -1573,7 +1586,7 @@ function QueueApp({ user }) {
     </> : null}
     {ticketsOpen && data?.viewer ? <TicketPanel tickets={tickets} loading={ticketsLoading} error={ticketsError} onClose={() => setTicketsOpen(false)} onReview={reviewTicket} canReview={Boolean(coordinator)} /> : null}
     {pickOpen ? <PickModal requests={pickPool} hotFallback={pickHotFallback} busy={pickBusy} onClose={() => setPickOpen(false)} onAssign={pickRequest} /> : null}
-    {createOpen ? <CreatePostModal tags={data?.tags || []} onClose={() => setCreateOpen(false)} onCreated={(request) => { setData((current) => current ? { ...current, requests: [request, ...(current.requests || []).filter((task) => task.id !== request.id)], pickRequests: [request, ...(current.pickRequests || []).filter((task) => task.id !== request.id)] } : current); setCreateOpen(false); notify(t('postCreated')); }} /> : null}
+    {createOpen ? <CreatePostModal tags={data?.tags || []} onClose={() => setCreateOpen(false)} onCreated={(request) => { saveQuietly(); setData((current) => current ? { ...current, requests: [request, ...(current.requests || []).filter((task) => task.id !== request.id)], pickRequests: [request, ...(current.pickRequests || []).filter((task) => task.id !== request.id)] } : current); setCreateOpen(false); notify(t('postCreated')); }} /> : null}
     {resetOpen ? <ResetQueueModal onClose={() => setResetOpen(false)} onReset={resetQueue} /> : null}
     {accountSetupOpen && data ? <AccountSetupModal onboarding={data.accountOnboarding} accounts={data.accounts || []} onClose={() => { accountSetupDismissedRef.current = true; setAccountSetupOpen(false); }} onSave={saveManagedAccounts} onRequest={requestAccountAccess} /> : null}
     {guideOpen ? <QueueGuide coordinator={Boolean(coordinator)} step={guideStep} setStep={setGuideStep} onChooseLanguage={setLanguage} onComplete={finishGuide} /> : null}
