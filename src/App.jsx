@@ -46,6 +46,7 @@ import { clearSsoCookie, startSsoRefresh, trySsoSignIn } from './sso';
 import { PrefsProvider, usePrefs } from './prefsContext';
 import { ACCENT_CHOICES, accentHex } from './prefs';
 import { API_BASE, IG_HANDLE, apiFetch } from './api';
+import { readDashboardSnapshot, writeDashboardSnapshot } from './dashboardCache';
 import { followQueueLive } from './queueLive';
 import {
   CoverImage,
@@ -867,6 +868,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
       }
       setDashboard({ posts: postsData.posts, summary: postsData.summary || {} });
       setAccounts(accountsData.accounts);
+      writeDashboardSnapshot({ posts: postsData.posts, summary: postsData.summary || {}, accounts: accountsData.accounts }).catch(() => {});
       loaded = true;
       reconnectAttempt.current = 0;
       setConnectionNotice('');
@@ -920,9 +922,19 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
   dashboardLoader.current = loadDashboard;
 
   useEffect(() => {
+    let active = true;
+    // Render the last successful catalogue immediately. This is intentionally
+    // separate from the live request below: a Render restart must never turn
+    // a previously usable dashboard into an empty/error state.
+    readDashboardSnapshot().then((snapshot) => {
+      if (!active || !snapshot || !Array.isArray(snapshot.posts) || !Array.isArray(snapshot.accounts)) return;
+      setDashboard({ posts: snapshot.posts, summary: snapshot.summary || {} });
+      setAccounts(snapshot.accounts);
+      setLoading(false);
+    }).catch(() => {});
     const controller = new AbortController();
     loadDashboard(controller.signal);
-    return () => controller.abort();
+    return () => { active = false; controller.abort(); };
   }, [loadDashboard]);
 
   useEffect(() => () => {
