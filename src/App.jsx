@@ -920,6 +920,24 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
     }
   }, [refreshQueueSummary]);
 
+  // The shared contextual menu is mounted once per page and emits actions
+  // instead of reaching into React internals. Resolve the post from the live
+  // catalogue here so Quick add always uses the same permission checks and
+  // optimistic queue badge as the visible card action.
+  useEffect(() => {
+    const onContextAction = (event) => {
+      if (event.detail?.action !== 'quick-add' || !coordinatorAccess) return;
+      const detail = event.detail || {};
+      const post = posts.find((item) => (
+        (detail.postKey && item.postKey === detail.postKey)
+        || (detail.shortcode && item.shortcode === detail.shortcode && (!detail.account || item.account === detail.account))
+      ));
+      if (post) quickAddToPool(post);
+    };
+    window.addEventListener('sentient:context-action', onContextAction);
+    return () => window.removeEventListener('sentient:context-action', onContextAction);
+  }, [coordinatorAccess, posts, quickAddToPool]);
+
   useEffect(() => {
     refreshQueueSummary();
   }, [refreshQueueSummary, userEmail]);
@@ -4103,6 +4121,10 @@ export function SettingsPanel({
                             <Fragment key={account.handle}>
                               <tr
                                 className={`accounts-row${isOpen ? ' open' : ''}${isInactive ? ' inactive' : ''}`}
+                                data-context-type="account"
+                                data-context-title={`@${account.handle}`}
+                                data-context-handle={account.handle}
+                                data-context-account={account.handle}
                                 onClick={() => setExpandedHandle(isOpen ? '' : account.handle)}
                               >
                                 <td className="accounts-cell-handle">
@@ -4560,7 +4582,13 @@ export function SettingsPanel({
                       const designer = designerAccounts.find((item) => item.email === user.email) || { email: user.email, accounts: [] };
                       const available = roster.filter((account) => account.group === 'sentient' && account.is_active !== false && !designer.accounts.includes(account.handle));
                       return (
-                        <div className="settings-row settings-row-wide" key={user.email}>
+                        <div
+                          className="settings-row settings-row-wide"
+                          key={user.email}
+                          data-context-type="user"
+                          data-context-title={user.display_name || user.email.split('@')[0]}
+                          data-context-email={user.email}
+                        >
                           <div className="settings-row-account">
                             <span className="settings-user-avatar" aria-hidden="true">
                               <span>{(user.display_name || user.email.split('@')[0]).split(/\s+/).map((word) => word.slice(0, 1)).join('').slice(0, 2).toUpperCase()}</span>
@@ -5707,11 +5735,6 @@ const FreshnessRing = memo(function FreshnessRing({ timestamp }) {
 const PostCard = memo(function PostCard({ post, priority, selected, onSelect, onFlags, onReload, onAssign, onQuickAdd, canPool }) {
   const [avatarFailed, setAvatarFailed] = useState(false);
   const handleClick = () => onSelect(post.postKey);
-  const handleContextMenu = (event) => {
-    if (!canPool) return;
-    event.preventDefault();
-    onQuickAdd?.(post);
-  };
   const handleKeyDown = (event) => {
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
@@ -5729,7 +5752,21 @@ const PostCard = memo(function PostCard({ post, priority, selected, onSelect, on
   const isPromo = Boolean(post.isPromo) || PROMO_HASHTAG_RE.test(post.caption || '');
 
   return (
-    <article className={cardClassName} onClick={handleClick} onContextMenu={handleContextMenu} onKeyDown={handleKeyDown} role="button" tabIndex={0} aria-pressed={selected}>
+    <article
+      className={cardClassName}
+      onClick={handleClick}
+      onKeyDown={handleKeyDown}
+      data-context-type="post"
+      data-context-title={post.headline || post.caption || post.account || 'Post'}
+      data-context-post-key={post.postKey}
+      data-context-account={post.account || ''}
+      data-context-shortcode={post.shortcode || ''}
+      data-context-permalink={post.permalink || ''}
+      data-context-quick-add={canPool ? 'true' : 'false'}
+      role="button"
+      tabIndex={0}
+      aria-pressed={selected}
+    >
       {effects.showBorder ? <span className="hot-border" aria-hidden="true" /> : null}
       <div className="post-header">
         <div className="post-user">
