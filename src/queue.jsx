@@ -1073,7 +1073,10 @@ function QueueApp({ user }) {
   const pickHotFallback = useMemo(() => {
     return (data?.hotPickRequests || []).some((task) => task.status === 'pool') && pickPool.length > 0;
   }, [data, pickPool]);
-  const pickAvailable = !coordinator && !assigned.some((task) => ['scheduled', 'in_progress'].includes(task.status)) && pickPool.length > 0;
+  // Pick is a permanent PD tool, not an empty-state escape hatch. A designer
+  // can always open it to review what is available, even with scheduled work
+  // already on their calendar or when the Pool is currently empty.
+  const pickAvailable = Boolean(data?.viewer) && !coordinator;
   const toggleTickets = async () => { const next = !ticketsOpen; setTicketsOpen(next); if (next) await loadTickets(); };
   const pickRequest = async (task) => {
     setPickBusy(true);
