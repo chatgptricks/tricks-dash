@@ -6,6 +6,15 @@ when backend work is released. Esteban is planning to merge the two repos into
 one — read the "Planned repo merge" section near the bottom before you start
 that.
 
+## Production hotfix: PostgreSQL runtime schema (2026-09-01)
+
+- Root cause of the production-wide authenticated failures was confirmed in Render logs: `get_dashboard_user_access()` selected `dashboard_users.time_zone`, but the managed Postgres database had been imported before that column was introduced. Every authenticated request failed in middleware with `psycopg.errors.UndefinedColumn`, while `/api/health` remained misleadingly green.
+- Backend `main` is live at `f15aae7` (migration feature commit `ca576ca`, cursor compatibility fix `f15aae7`). `init_db()` now applies the small post-cutover schema extension set idempotently on Postgres: `dashboard_users.time_zone`, `dashboard_users.can_self_assign`, and `queue_scheduler_preferences`.
+- The missing preferences table was also the root cause of Queue Hide/Reorder returning `NOT FOUND` and reverting. Do not remove the Postgres runtime-extension path or restore the old unconditional early return in `init_db()`.
+- Frontend static release `5bf1cd4` publishes the pending standalone `tracker.html`, `insights.html`, and shared `role-preview.js`; source remains on `main` at `4514058` before this handover note.
+- Live authenticated verification passed after deployment: Tracker rendered 45 accounts with follower data, Settings opened as `DEV` with every command-center tab, and Queue rendered the coordinator schedule, pool, Overview, Requests, Tracker, Insights, and Dashboard controls.
+- Backend verification: all 23 pytest tests pass, including the new idempotent runtime-schema regression test. Production `/api/health` reports commit `f15aae781aaddf11374ffedad46e70b7ac5291da`.
+
 ## Latest release: role permissions and resilient Dashboard (2026-09-01)
 
 - Frontend source is on `main` at `c0ccf88`; the matching static release is on `gh-pages` at `3969edb`. The production entry bundles are `dashboard-DmhXHg_n.js`, `queue-Doy98C9R.js`, `settings-Cw_SpMqQ.js`, and shared `styles-DykX9bxV.js`.
