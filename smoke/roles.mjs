@@ -16,6 +16,9 @@ const checks = {
   'Dashboard role preview removes Dev-only coordinator access': files.app.includes("(isDev && !rolePreviewActive) || isAdmin || operatingRoles.includes('vc')"),
   'Queue role preview removes Dev-only coordinator access': files.queue.includes("const effectiveDevAccess = isDev && !rolePreviewActive"),
   'Settings role preview removes Dev-only command-center access': files.settings.includes("const effectiveDevAccess = Boolean(viewer?.is_dev) && !rolePreviewActive"),
+  'Legacy dev preview value keeps full Dev access': files.app.includes("ACTIVE_ROLE_PREVIEWS.has(window.sessionStorage.getItem('sentient.queueRolePreview') || '')")
+    && files.queue.includes("ACTIVE_ROLE_PREVIEWS.has(window.sessionStorage.getItem('sentient.queueRolePreview') || '')")
+    && files.settings.includes("ACTIVE_ROLE_PREVIEWS.has(window.sessionStorage.getItem('sentient.queueRolePreview') || '')"),
   'Queue Settings stays Admin or Dev only': files.queue.includes('{isAdmin || isDev ? <section className="queue-settings-section queue-settings-admin">'),
   'Pick remains available to every PD-capable user': files.queue.includes('const pickAvailable = Boolean(data?.viewer);'),
   'Settings restricted page retains role switcher': files.settings.includes('<DevRolePreview'),

@@ -98,6 +98,8 @@ const ROLE_SWITCHER_DEFAULTS = Object.freeze({
   [DEV_EMAIL]: ['sales', 'pd', 'vc', 'trainee', 'admin'],
   'ivan@sentientagency.io': ['sales', 'pd', 'vc', 'trainee', 'admin'],
 });
+const ACTIVE_ROLE_PREVIEWS = new Set(['sales', 'pd', 'vc', 'trainee', 'admin']);
+const hasActiveRolePreview = () => ACTIVE_ROLE_PREVIEWS.has(window.sessionStorage.getItem('sentient.queueRolePreview') || '');
 let activeQueueDragId = null;
 const ACCOUNT_PROFILE_FALLBACKS = { chatgptricks: chatgptricksProfileImage, traselveloreal: traselvelorealProfileImage };
 const USER_DISPLAY_NAMES = Object.freeze({
@@ -1178,7 +1180,7 @@ function QueueApp({ user }) {
   }, [data?.viewer?.email, loadTickets]);
 
   const isDev = Boolean(viewer?.is_dev || data?.viewer?.isDev || String(user?.email || '').trim().toLowerCase() === DEV_EMAIL);
-  const rolePreviewActive = Boolean(window.sessionStorage.getItem('sentient.queueRolePreview'));
+  const rolePreviewActive = hasActiveRolePreview();
   const effectiveDevAccess = isDev && !rolePreviewActive;
   const coordinator = data?.viewer && (effectiveDevAccess || data.viewer.isAdmin || data.viewer.operatingRoles?.includes('vc'));
   const simulatedTimeZone = isDev ? timeZonePreview : (data?.viewer?.timeZone || 'America/Costa_Rica');

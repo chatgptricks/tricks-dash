@@ -787,6 +787,8 @@ const ROLE_SWITCHER_DEFAULTS = Object.freeze({
   [DEV_EMAIL]: ['sales', 'pd', 'vc', 'trainee', 'admin'],
   'ivan@sentientagency.io': ['sales', 'pd', 'vc', 'trainee', 'admin'],
 });
+const ACTIVE_ROLE_PREVIEWS = new Set(['sales', 'pd', 'vc', 'trainee', 'admin']);
+const hasActiveRolePreview = () => ACTIVE_ROLE_PREVIEWS.has(window.sessionStorage.getItem('sentient.queueRolePreview') || '');
 
 export function DevRolePreview({ isDev, canSwitchRoles = false, availableRoles = [] }) {
   const [open, setOpen] = useState(false);
@@ -828,7 +830,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
   const reconnectTimer = useRef(null);
   const reconnectAttempt = useRef(0);
   const dashboardLoader = useRef(null);
-  const rolePreviewActive = Boolean(window.sessionStorage.getItem('sentient.queueRolePreview'));
+  const rolePreviewActive = hasActiveRolePreview();
   // The role switcher is a real UI preview. Dev gets full access only when no
   // simulated role is active; otherwise this tab must behave exactly like the
   // selected role so permission audits are trustworthy.
