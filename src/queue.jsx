@@ -658,12 +658,11 @@ function Detail({ task, tags, canCoordinate, isOwner, isTrainee, pendingTickets 
 
 function schedulerUserRole(user, t) {
   const roles = user?.roles || user?.operatingRoles || [];
-  const labels = [];
-  if (roles.includes('vc')) labels.push(t('viralCoordinator'));
-  if (roles.includes('sales')) labels.push(t('salesRole'));
-  if (roles.includes('trainee')) labels.push(t('traineeRole'));
-  if (user?.isAdmin) labels.push(t('admin'));
-  return labels.join(' · ');
+  if (user?.isAdmin || roles.includes('admin')) return t('admin');
+  if (roles.includes('vc')) return t('viralCoordinator');
+  if (roles.includes('trainee')) return t('traineeRole');
+  if (roles.includes('sales')) return t('salesRole');
+  return '';
 }
 
 function Scheduler({ data, draft, setDraft, onDraftChange, selectedDate, designerScope, timeZone = '', onOpen, onError, onCreateTimeBlock, onEditTimeBlock, onDeleteTimeBlock, onReturnToPool, onCancelTask, onSavePreferences, addTimeNonce = 0 }) {
@@ -866,7 +865,7 @@ function Scheduler({ data, draft, setDraft, onDraftChange, selectedDate, designe
     <section className="scheduler" ref={scrollRef}>
       <div className="scheduler-canvas">
         <div className="scheduler-time-head"><span>{t('designer')}</span><div>{Array.from({ length: 24 }, (_, hour) => <b key={hour} style={{ left: `${hour * (100 / 24)}%` }}>{time(hour * 60)}</b>)}</div></div>
-        {visibleDesigners.map((designer) => {
+        {visibleDesigners.map((designer, rowIndex) => {
           const queueEligible = designer.isQueueDesigner !== false;
           const initials = displayName(designer.email, designer.displayName).split(/\s+/).map((word) => word.slice(0, 1)).join('').slice(0, 2).toUpperCase();
           const role = schedulerUserRole(designer, t);
@@ -880,7 +879,7 @@ function Scheduler({ data, draft, setDraft, onDraftChange, selectedDate, designe
             <header onContextMenu={(event) => { if (!coordinator) return; event.preventDefault(); setContextMenu({ x: event.clientX, y: event.clientY, type: 'user', designer }); }}><div className="scheduler-user-identity"><span className="scheduler-user-avatar"><span aria-hidden="true">{initials}</span>{userAvatar(designer.avatarUrl) ? <img src={userAvatar(designer.avatarUrl)} alt="" referrerPolicy="no-referrer" onError={(event) => { event.currentTarget.hidden = true; }} /> : null}</span><span className="scheduler-user-copy"><b>{displayName(designer.email, designer.displayName)}</b><small>{[role, ppUnit].filter(Boolean).join(' · ')}</small><span className="scheduler-user-accounts" title={accounts}>{designer.accounts?.map((account) => <i key={account}>{accountAvatars[account] ? <img src={accountAvatars[account].startsWith('/api/') ? `${API_BASE}${accountAvatars[account]}` : accountAvatars[account]} alt={`@${account}`} /> : account.slice(0, 1).toUpperCase()}</i>)}</span></span></div></header>
             <div className="scheduler-track" onContextMenu={(event) => openTimeBlockForm(event, designer)} onDragOver={(event) => previewDrop(event, designer.email)} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setDropPreview(null); }} onDrop={(event) => drop(event, designer.email)}>
               {Array.from({ length: 25 }, (_, hour) => <i key={hour} style={{ left: `${hour * (100 / 24)}%` }} />)}
-              {rowNow !== null ? <span className="scheduler-now-row" style={{ left: `${rowNow}%` }} title={`${t('now')} · ${time(currentMinutes(now, designer.timeZone || timeZone))}`}><b>{designer.email === data.viewer.email ? t('now') : ''}</b></span> : null}
+              {rowNow !== null ? <span className="scheduler-now-row" style={{ left: `${rowNow}%` }} title={time(currentMinutes(now, designer.timeZone || timeZone))}><b>{rowIndex === 0 ? t('now') : ''}</b></span> : null}
               {timeBlocks.map((block) => <TimeBlock key={block.id} block={block} onContextMenu={(event, item) => { if (!coordinator && item.requesterEmail !== data.viewer.email) return; event.preventDefault(); setContextMenu({ x: event.clientX, y: event.clientY, type: 'time', designer, block: item }); }} />)}
               {dropPreview?.designer === designer.email ? <span className={`scheduler-drop-preview${previewNextDay ? ' is-next-day' : ''}`} style={{ left: `${previewLeft}%`, width: `${previewWidth}%` }}><b>@{dropPreview.target.post.account}</b><small>{previewNextDay ? `${displayDate(dropPreview.target.scheduledDate, language)} · ` : ''}{time(dropPreview.target.scheduledStartMinutes)} · {dropPreview.target.durationMinutes} min</small></span> : null}
               {tasks.map((task) => { const renderTask = resizeState?.preview?.id === task.id ? resizeState.preview : task; return <TaskBlock key={task.id} task={renderTask} editable={selfPlanner && (coordinator || renderTask.coordinatorEmail === data.viewer.email) && (!renderTask.isDraft || renderTask.draftCoordinatorEmail === data.viewer.email)} accountAvatars={accountAvatars} onResizeStart={startResize} onContextMenu={(event, item) => { if (!coordinator) return; event.preventDefault(); setContextMenu({ x: event.clientX, y: event.clientY, type: 'task', task: item }); }} onOpen={onOpen} />; })}
