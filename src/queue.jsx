@@ -14,11 +14,32 @@ import { QUEUE_DAY_END, QUEUE_DAY_START, minutesPerPPOf, planQueueDrop } from '.
 import { followQueueLive } from './queueLive';
 import './queue.css';
 
-const DAY = (value = new Date()) => `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
+const TIME_ZONE_PREVIEW_KEY = 'sentient.queueTimeZonePreview';
+const TIME_ZONE_PREVIEW_EVENT = 'sentient:queue-time-zone-preview';
+const DEV_TIME_ZONES = Object.freeze([
+  { value: 'America/Costa_Rica', label: 'Costa Rica · UTC−6' },
+  { value: 'America/Bogota', label: 'Colombia · UTC−5' },
+]);
+const readDevTimeZone = () => {
+  const value = window.sessionStorage.getItem(TIME_ZONE_PREVIEW_KEY);
+  return DEV_TIME_ZONES.some((zone) => zone.value === value) ? value : 'America/Costa_Rica';
+};
+const zonedParts = (value, timeZone) => {
+  if (!timeZone) return null;
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(value);
+  return Object.fromEntries(parts.filter((part) => part.type !== 'literal').map((part) => [part.type, part.value]));
+};
+const DAY = (value = new Date(), timeZone = '') => {
+  const parts = zonedParts(value, timeZone);
+  return parts ? `${parts.year}-${parts.month}-${parts.day}` : `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
+};
 const shiftDay = (date, amount) => { const value = new Date(`${date}T12:00:00`); value.setDate(value.getDate() + amount); return DAY(value); };
 const time = (minutes) => { const normalized = ((minutes % 1440) + 1440) % 1440; return `${String(Math.floor(normalized / 60)).padStart(2, '0')}:${String(normalized % 60).padStart(2, '0')}`; };
 const minutesFromTime = (value) => { const [hour, minute] = String(value || '00:00').split(':').map(Number); return Math.max(0, Math.min(1430, hour * 60 + minute)); };
-const currentMinutes = (value = new Date()) => value.getHours() * 60 + value.getMinutes();
+const currentMinutes = (value = new Date(), timeZone = '') => {
+  const parts = zonedParts(value, timeZone);
+  return parts ? Number(parts.hour) * 60 + Number(parts.minute) : value.getHours() * 60 + value.getMinutes();
+};
 // Keep queue thumbnails in lockstep with Dashboard's cover resolution. In
 // particular, never prefix an already-absolute Instagram CDN URL with the
 // API origin (that produced an invalid URL), and use Cortex's cached cover
@@ -27,9 +48,8 @@ const cover = (task) => coverUrlForPost(task?.post);
 const accountMention = (value) => { const clean = String(value || '').trim().replace(/^@/, ''); return clean ? `@${clean}` : ''; };
 const locale = (language) => language === 'es' ? 'es-CR' : 'en-US';
 const displayDate = (value, language) => new Date(`${value}T12:00:00`).toLocaleDateString(locale(language), { weekday: 'long', month: 'short', day: 'numeric' });
-// Activity timestamps and the scheduler's Now marker must follow the
-// viewer's device timezone. Queue work remains scheduled at explicit local
-// dates/times, so an automatic Pick always sends the viewer's current slot.
+// Queue work remains scheduled at explicit local dates/times. The dev-only
+// simulator can override the reference clock without changing that data.
 const displayTimestamp = (value, language) => new Date(value).toLocaleString(locale(language), { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 const DRAFT_KEY = 'sentient.queueDrafts.v2';
 const PRIORITIES = ['low', 'medium', 'high', 'urgent'];
@@ -203,13 +223,15 @@ function QueueSettings({ isAdmin, isDev, userEmail, avatarUrl, displayLabel, onM
 function DevRolePreview({ isDev, canSwitchRoles = false, availableRoles = [] }) {
   const { t } = useQueuePreferences();
   const [open, setOpen] = useState(false);
+  const [timeZone, setTimeZone] = useState(readDevTimeZone);
   const requestedRole = window.sessionStorage.getItem('sentient.queueRolePreview') || '';
   const options = [...new Set((isDev ? ROLE_SWITCHER_DEFAULTS[DEV_EMAIL] : availableRoles).filter((role) => ['sales', 'pd', 'vc', 'trainee', 'admin'].includes(role)))];
   const active = options.includes(requestedRole) ? requestedRole : '';
   if (!isDev && !canSwitchRoles) return null;
   const label = { sales: 'Sales', pd: t('postDesigner'), vc: t('viralCoordinator'), trainee: t('traineeRole'), admin: t('admin') }[active] || (isDev ? 'Dev' : t('activeRole'));
   const choose = (event) => { const role = event.target.value; if (role) window.sessionStorage.setItem('sentient.queueRolePreview', role); else window.sessionStorage.removeItem('sentient.queueRolePreview'); window.location.reload(); };
-  return <div className="dev-role-preview"><button type="button" onClick={() => setOpen((value) => !value)} aria-expanded={open}><span>{isDev ? 'DEV' : 'ROLE'}</span>{label}</button>{open ? <div className="dev-role-preview-panel"><strong>{isDev ? t('rolePreview') : t('activeRole')}</strong><p>{isDev ? t('onlyEsteban') : 'Switch among your assigned roles.'}</p><label>{t('activeRole')}<select value={active} onChange={choose}><option value="">{isDev ? t('devFullAccess') : 'Use my default role'}</option>{options.map((role) => <option key={role} value={role}>{({ sales: 'Sales', pd: t('postDesigner'), vc: t('viralCoordinator'), trainee: t('traineeRole'), admin: t('admin') })[role]}</option>)}</select></label></div> : null}</div>;
+  const chooseTimeZone = (event) => { const next = event.target.value; window.sessionStorage.setItem(TIME_ZONE_PREVIEW_KEY, next); setTimeZone(next); window.dispatchEvent(new window.Event(TIME_ZONE_PREVIEW_EVENT)); };
+  return <div className="dev-role-preview"><button type="button" onClick={() => setOpen((value) => !value)} aria-expanded={open}><span>{isDev ? 'DEV' : 'ROLE'}</span>{label}</button>{open ? <div className="dev-role-preview-panel"><strong>{isDev ? t('rolePreview') : t('activeRole')}</strong><p>{isDev ? t('onlyEsteban') : 'Switch among your assigned roles.'}</p><label>{t('activeRole')}<select value={active} onChange={choose}><option value="">{isDev ? t('devFullAccess') : 'Use my default role'}</option>{options.map((role) => <option key={role} value={role}>{({ sales: 'Sales', pd: t('postDesigner'), vc: t('viralCoordinator'), trainee: t('traineeRole'), admin: t('admin') })[role]}</option>)}</select></label>{isDev ? <label>Simulated time<select className="dev-timezone-preview" value={timeZone} onChange={chooseTimeZone}>{DEV_TIME_ZONES.map((zone) => <option key={zone.value} value={zone.value}>{zone.label}</option>)}</select></label> : null}</div> : null}</div>;
 }
 
 function PriorityBadge({ priority = 'medium' }) {
@@ -643,7 +665,7 @@ function schedulerUserRole(user, t) {
   return labels.join(' · ');
 }
 
-function Scheduler({ data, draft, setDraft, onDraftChange, selectedDate, designerScope, onOpen, onError, onCreateTimeBlock }) {
+function Scheduler({ data, draft, setDraft, onDraftChange, selectedDate, designerScope, timeZone = '', onOpen, onError, onCreateTimeBlock }) {
   const { t, language } = useQueuePreferences();
   const coordinator = data.viewer.isAdmin || data.viewer.operatingRoles?.includes('vc');
   const [now, setNow] = useState(() => new Date());
@@ -654,7 +676,7 @@ function Scheduler({ data, draft, setDraft, onDraftChange, selectedDate, designe
   const scrollRef = useRef(null);
   const resizeRef = useRef(null);
   useEffect(() => { const timer = window.setInterval(() => setNow(new Date()), 15000); return () => window.clearInterval(timer); }, []);
-  const today = selectedDate === DAY(now);
+  const today = selectedDate === DAY(now, timeZone);
   const allTasks = useMemo(() => {
     const byId = new Map();
     [...(data.planningRequests || []), ...data.requests, ...(data.liveDrafts || []), ...draft].forEach((task) => byId.set(task.id, task));
@@ -678,17 +700,17 @@ function Scheduler({ data, draft, setDraft, onDraftChange, selectedDate, designe
       const scroller = scrollRef.current;
       const track = scroller?.querySelector('.scheduler-track');
       if (!scroller || !track) return;
-      const preferred = selectedDate === DAY() ? currentMinutes() - 180 : 8 * 60;
+      const preferred = selectedDate === DAY(now, timeZone) ? currentMinutes(now, timeZone) - 180 : 8 * 60;
       const firstMinute = Math.min(16 * 60, Math.max(0, preferred));
       scroller.scrollLeft = (firstMinute / QUEUE_DAY_END) * track.offsetWidth;
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [selectedDate, schedulerUsers.length]);
+  }, [selectedDate, schedulerUsers.length, timeZone]);
   const centerNow = () => {
     const scroller = scrollRef.current;
     const track = scroller?.querySelector('.scheduler-track');
     if (!scroller || !track) return;
-    const minute = selectedDate === DAY() ? currentMinutes() : 12 * 60;
+    const minute = selectedDate === DAY(now, timeZone) ? currentMinutes(now, timeZone) : 12 * 60;
     const trackStart = track.offsetLeft;
     const target = trackStart + (minute / QUEUE_DAY_END) * track.offsetWidth - scroller.clientWidth / 2;
     const maxScroll = Math.max(0, scroller.scrollWidth - scroller.clientWidth);
@@ -815,7 +837,7 @@ function Scheduler({ data, draft, setDraft, onDraftChange, selectedDate, designe
     if (task.designerEmail !== designer || task.scheduledDate !== selectedDate || ['pool', 'cancelled'].includes(task.status)) return false;
     return true;
   });
-  const nowPosition = (currentMinutes(now) / QUEUE_DAY_END) * 100;
+  const nowPosition = (currentMinutes(now, timeZone) / QUEUE_DAY_END) * 100;
   const previewNextDay = dropPreview && dropPreview.target.scheduledDate !== selectedDate;
   const previewWidth = dropPreview ? Math.max(0.8, (dropPreview.target.durationMinutes / QUEUE_DAY_END) * 100) : 0;
   const previewLeft = dropPreview ? (previewNextDay ? Math.max(0, 100 - previewWidth) : (dropPreview.target.scheduledStartMinutes / QUEUE_DAY_END) * 100) : 0;
@@ -870,6 +892,7 @@ function QueueApp({ user }) {
   const { t, language, setLanguage } = useQueuePreferences();
   const [data, setData] = useState(null);
   const [viewer, setViewer] = useState(null);
+  const [timeZonePreview, setTimeZonePreview] = useState(readDevTimeZone);
   const [date, setDate] = useState(DAY());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -951,6 +974,11 @@ function QueueApp({ user }) {
   loadRef.current = load;
   useEffect(() => { load().catch(() => {}); }, [load]);
   useEffect(() => { json('/api/dashboard/me').then(setViewer).catch(() => {}); }, []);
+  useEffect(() => {
+    const sync = () => setTimeZonePreview(readDevTimeZone());
+    window.addEventListener(TIME_ZONE_PREVIEW_EVENT, sync);
+    return () => window.removeEventListener(TIME_ZONE_PREVIEW_EVENT, sync);
+  }, []);
   useEffect(() => { draftRef.current = draft; }, [draft]);
   useEffect(() => { openRef.current = open; }, [open]);
   useEffect(() => { ticketsOpenRef.current = ticketsOpen; }, [ticketsOpen]);
@@ -1045,6 +1073,8 @@ function QueueApp({ user }) {
   }, [data?.viewer?.email, loadTickets]);
 
   const coordinator = data?.viewer && (data.viewer.isAdmin || data.viewer.operatingRoles?.includes('vc'));
+  const isDev = Boolean(viewer?.is_dev || data?.viewer?.isDev || String(user?.email || '').trim().toLowerCase() === DEV_EMAIL);
+  const simulatedTimeZone = isDev ? timeZonePreview : '';
   const pool = useMemo(() => {
     const byId = new Map();
     (data?.requests || []).filter((task) => task.status === 'pool').forEach((task) => byId.set(task.id, task));
@@ -1089,7 +1119,7 @@ function QueueApp({ user }) {
     setPickBusy(true);
     try {
       const now = new Date();
-      const placement = { scheduled_date: DAY(now), scheduled_start_minutes: String(Math.min(1430, Math.ceil(currentMinutes(now) / 10) * 10)) };
+      const placement = { scheduled_date: DAY(now, simulatedTimeZone), scheduled_start_minutes: String(Math.min(1430, Math.ceil(currentMinutes(now, simulatedTimeZone) / 10) * 10)) };
       const body = task.isHotCandidate
         ? new URLSearchParams({ hot_account: task.post.account, hot_shortcode: task.post.shortcode, ...placement })
         : new URLSearchParams({ request_id: String(task.id), ...placement });
@@ -1285,7 +1315,7 @@ function QueueApp({ user }) {
       {!overviewOpen ? <>
       <section className="scheduler-toolbar"><div><p className="scheduler-eyebrow">{coordinator ? t('coordinatorSchedule') : t('mySchedule')}</p><h2>{displayDate(date, language)}</h2></div>{coordinator ? <label className="scheduler-designer-filter">{t('assignedView')}<select value={designerScope} onChange={(event) => setDesignerScope(event.target.value)}><option value="">{t('allUsers')}</option>{(data.schedulerUsers || data.designers).map((person) => <option key={person.email} value={person.email}>{displayName(person.email, person.displayName)}</option>)}</select></label> : null}<div className="scheduler-nav"><button type="button" aria-label="Previous day" onClick={() => setDate(shiftDay(date, -1))}><ChevronLeft size={17} /></button><button type="button" onClick={() => setDate(DAY())}>{t('today')}</button><button type="button" aria-label="Next day" onClick={() => setDate(shiftDay(date, 1))}><ChevronRight size={17} /></button></div><button type="button" className={`scheduler-archive-toggle${archive ? ' is-on' : ''}`} onClick={() => setArchive((value) => !value)}><Archive size={14} />{archive ? t('liveQueue') : t('archive')}</button>{coordinator && draft.length ? <button type="button" className="scheduler-submit" onClick={submit}><Send size={14} />{t('submit')} {draft.length} {draft.length > 1 ? t('changes') : t('change')}</button> : null}</section>
       {coordinator && !archive ? <section className={`scheduler-pool${poolDropActive ? ' is-drop-target' : ''}`} onDragOver={poolDragOver} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setPoolDropActive(false); }} onDrop={poolDrop} aria-label={t('poolDropHint')}><header><div><p className="scheduler-eyebrow">{t('productionPool')}</p><h2>{pool.length} {t('readyToSchedule')}</h2></div><small>{poolDropActive ? t('poolDropHint') : t('visibleSchedule')}</small></header><div className="scheduler-pool-list">{pool.map((task) => <PoolCard key={task.id} task={task} onOpen={setOpen} />)}{!pool.length ? <p className="scheduler-empty">{t('emptyPool')}</p> : null}</div></section> : null}
-      {archive ? <section className="queue-archive-list"><header><p className="scheduler-eyebrow">{t('archive')}</p><h2>{archived.length} {t('cancelled')}</h2></header>{archived.length ? archived.map((task) => <button type="button" key={task.id} className={`priority-${task.priority || 'medium'}${hotClass(task)}`} onClick={() => setOpen(task)}><span>{cover(task) ? <img src={cover(task)} alt="" /> : '@'}</span><div><b>@{task.post.account}</b><small>{task.cancellationReason || t('cancelled')}</small>{isHotTask(task) ? <i className="queue-hot-badge">🔥 {hotText(task)}</i> : null}</div><em>{displayTimestamp(task.updatedAt, language)}</em></button>) : <p className="scheduler-empty">{t('noArchived')}</p>}</section> : <>{coordinator && draft.length ? <><DraftAccounts draft={draft} designers={data.designers} onAccountsChange={changeDraftAccounts} /><div className="scheduler-draft-actions"><span><Clock3 size={13} />{t('sharedDrafts')}</span><button type="button" onClick={clearDrafts}>{t('clearDrafts')}</button></div></> : null}<Scheduler data={data} draft={draft} setDraft={setDraft} onDraftChange={persistDrafts} selectedDate={date} designerScope={designerScope} onOpen={setOpen} onError={(message) => notify(message, 'error')} onCreateTimeBlock={createTimeBlock} />{coordinator ? <AdminAssignmentTable tasks={upcoming} onOpen={setOpen} headingKey="upcomingProduction" countKey="activeRequests" /> : <DesignerAssignments tasks={assigned} onOpen={setOpen} />}</>}
+      {archive ? <section className="queue-archive-list"><header><p className="scheduler-eyebrow">{t('archive')}</p><h2>{archived.length} {t('cancelled')}</h2></header>{archived.length ? archived.map((task) => <button type="button" key={task.id} className={`priority-${task.priority || 'medium'}${hotClass(task)}`} onClick={() => setOpen(task)}><span>{cover(task) ? <img src={cover(task)} alt="" /> : '@'}</span><div><b>@{task.post.account}</b><small>{task.cancellationReason || t('cancelled')}</small>{isHotTask(task) ? <i className="queue-hot-badge">🔥 {hotText(task)}</i> : null}</div><em>{displayTimestamp(task.updatedAt, language)}</em></button>) : <p className="scheduler-empty">{t('noArchived')}</p>}</section> : <>{coordinator && draft.length ? <><DraftAccounts draft={draft} designers={data.designers} onAccountsChange={changeDraftAccounts} /><div className="scheduler-draft-actions"><span><Clock3 size={13} />{t('sharedDrafts')}</span><button type="button" onClick={clearDrafts}>{t('clearDrafts')}</button></div></> : null}<Scheduler data={data} draft={draft} setDraft={setDraft} onDraftChange={persistDrafts} selectedDate={date} designerScope={designerScope} timeZone={simulatedTimeZone} onOpen={setOpen} onError={(message) => notify(message, 'error')} onCreateTimeBlock={createTimeBlock} />{coordinator ? <AdminAssignmentTable tasks={upcoming} onOpen={setOpen} headingKey="upcomingProduction" countKey="activeRequests" /> : <DesignerAssignments tasks={assigned} onOpen={setOpen} />}</>}
       </> : null}
     </> : null}
     {ticketsOpen && data?.viewer ? <TicketPanel tickets={tickets} loading={ticketsLoading} error={ticketsError} onClose={() => setTicketsOpen(false)} onReview={reviewTicket} canReview={Boolean(coordinator)} /> : null}
@@ -1295,7 +1325,7 @@ function QueueApp({ user }) {
     {accountSetupOpen && data ? <AccountSetupModal onboarding={data.accountOnboarding} accounts={data.accounts || []} onClose={() => { accountSetupDismissedRef.current = true; setAccountSetupOpen(false); }} onSave={saveManagedAccounts} onRequest={requestAccountAccess} /> : null}
     {guideOpen ? <QueueGuide coordinator={Boolean(coordinator)} step={guideStep} setStep={setGuideStep} onChooseLanguage={setLanguage} onComplete={finishGuide} /> : null}
     <Detail task={open} tags={data?.tags || []} canCoordinate={coordinator} isOwner={open?.designerEmail === data?.viewer.email || data?.viewer.isAdmin} isTrainee={Boolean(data?.viewer?.operatingRoles?.includes('trainee') && !data?.viewer?.isAdmin)} pendingTickets={openPendingTickets} onReviewTicket={reviewTicket} notice={detailNotice} history={history} historyLoading={historyLoading} onClose={closeDetail} onAction={action} onCancel={cancel} onEdit={edit} onNotify={resend} onUpload={upload} onDownload={download} onRequestPP={requestPP} onRequestCancellation={requestCancellation} onRequestMove={requestMove} onRequestTraineeReview={requestTraineeReview} />
-    <DevRolePreview isDev={Boolean(viewer?.is_dev || data?.viewer?.isDev || String(user?.email || '').trim().toLowerCase() === DEV_EMAIL)} canSwitchRoles={Boolean(viewer?.can_role_switch || data?.viewer?.canRoleSwitch || ROLE_SWITCHER_DEFAULTS[String(user?.email || '').trim().toLowerCase()])} availableRoles={data?.viewer?.availableOperatingRoles || viewer?.available_operating_roles || ROLE_SWITCHER_DEFAULTS[String(user?.email || '').trim().toLowerCase()] || []} />
+    <DevRolePreview isDev={isDev} canSwitchRoles={Boolean(viewer?.can_role_switch || data?.viewer?.canRoleSwitch || ROLE_SWITCHER_DEFAULTS[String(user?.email || '').trim().toLowerCase()])} availableRoles={data?.viewer?.availableOperatingRoles || viewer?.available_operating_roles || ROLE_SWITCHER_DEFAULTS[String(user?.email || '').trim().toLowerCase()] || []} />
   </main>;
 }
 

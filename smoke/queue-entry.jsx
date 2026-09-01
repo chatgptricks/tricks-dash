@@ -137,6 +137,11 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     checks['24 hourly labels render'] = document.querySelectorAll('.scheduler-time-head b').length === 24;
     checks['Now renders once'] = document.querySelectorAll('.scheduler-now-global').length === 1 && document.querySelectorAll('.scheduler-now').length === 0;
     checks['Center Now control renders'] = Boolean(document.querySelector('.scheduler-center-now'));
+    await click(document.querySelector('.dev-role-preview > button'));
+    const timeZonePreview = document.querySelector('.dev-timezone-preview');
+    checks['Dev time-zone simulator renders'] = Boolean(timeZonePreview) && timeZonePreview.options.length === 2;
+    await act(async () => { timeZonePreview.value = 'America/Bogota'; timeZonePreview.dispatchEvent(new window.Event('change', { bubbles: true })); });
+    checks['Dev time-zone simulator switches to Colombia'] = window.sessionStorage.getItem('sentient.queueTimeZonePreview') === 'America/Bogota';
     checks['Pool and scheduled blocks render'] = document.querySelectorAll('.queue-pool-card').length === 1 && document.querySelectorAll('.scheduler-block').length === 2;
     checks['Account badge and resize handles render'] = Boolean(document.querySelector('.scheduler-account-badges')) && document.querySelectorAll('.scheduler-resize-handle').length >= 2;
     checks['All dashboard users render as PD-capable'] = document.querySelectorAll('.scheduler-row').length === 4 && document.querySelectorAll('.scheduler-row.is-non-queue-user').length === 0;
