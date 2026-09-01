@@ -795,6 +795,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
+  const [connectionNotice, setConnectionNotice] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [refreshNotice, setRefreshNotice] = useState(null);
   // Two-tier roles: everyone allowlisted sees the dashboard, only admins see
@@ -806,6 +807,9 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
   const [isDev, setIsDev] = useState(false);
   const [queuePendingCount, setQueuePendingCount] = useState(0);
   const [assignmentPost, setAssignmentPost] = useState(null);
+  const reconnectTimer = useRef(null);
+  const reconnectAttempt = useRef(0);
+  const dashboardLoader = useRef(null);
   const posts = useMemo(() => dashboard.posts.map(normalizePost), [dashboard.posts]);
   const summary = dashboard.summary;
   const ranges = useMemo(() => calculateRanges(posts), [posts]);
@@ -840,6 +844,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
   }, [isAdmin, operatingRoles, refreshQueueSummary]);
 
   const loadDashboard = useCallback(async (signal, { silent = false } = {}) => {
+    let loaded = false;
     try {
       if (!silent) {
         setLoading(true);
@@ -862,6 +867,13 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
       }
       setDashboard({ posts: postsData.posts, summary: postsData.summary || {} });
       setAccounts(accountsData.accounts);
+      loaded = true;
+      reconnectAttempt.current = 0;
+      setConnectionNotice('');
+      if (reconnectTimer.current) {
+        window.clearTimeout(reconnectTimer.current);
+        reconnectTimer.current = null;
+      }
       // Best-effort: role info only controls whether the Settings button
       // shows, so a hiccup here shouldn't block the rest of the dashboard.
       // Only ever *upgrade* based on a successful response -- a transient
@@ -881,19 +893,41 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
         })
         .catch(() => {});
     } catch (error) {
-      if (error.name !== 'AbortError' && !silent) {
-        setLoadError('Could not load the shared Post DB. Try again in a moment.');
+      if (error.name !== 'AbortError') {
+        // Render can briefly replace the API instance during deploys. Do not
+        // discard a loaded dashboard or turn a temporary 502 into a blocking
+        // red error screen; keep the current UI and reconnect automatically.
+        setLoadError('');
+        setConnectionNotice('Reconnecting to the shared Post DB…');
+        const attempt = reconnectAttempt.current;
+        reconnectAttempt.current += 1;
+        const delay = Math.min(30_000, 1_000 * (2 ** Math.min(attempt, 5)));
+        if (!reconnectTimer.current) {
+          reconnectTimer.current = window.setTimeout(() => {
+            reconnectTimer.current = null;
+            dashboardLoader.current?.(undefined, { silent: true });
+          }, delay);
+        }
       }
     } finally {
-      if (!signal?.aborted && !silent) setLoading(false);
+      // If the first request fails, keep the structural skeleton in place
+      // until the automatic retry succeeds rather than replacing it with an
+      // alarming database-error page.
+      if (!signal?.aborted && loaded) setLoading(false);
     }
   }, [onUnauthorized]);
+
+  dashboardLoader.current = loadDashboard;
 
   useEffect(() => {
     const controller = new AbortController();
     loadDashboard(controller.signal);
     return () => controller.abort();
   }, [loadDashboard]);
+
+  useEffect(() => () => {
+    if (reconnectTimer.current) window.clearTimeout(reconnectTimer.current);
+  }, []);
 
   // Both accounts now refresh themselves automatically on the backend
   // (every 30 min during the active window). Poll quietly in the background
@@ -1736,6 +1770,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
                 {refreshNotice.text}
               </p>
             ) : null}
+            {connectionNotice ? <p className="connection-notice" role="status"><RefreshCw size={13} />{connectionNotice}</p> : null}
           </header>
 
 

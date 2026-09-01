@@ -192,6 +192,22 @@ img {
   color: #ffb6aa;
 }
 
+.connection-notice {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  margin: 8px 0 0;
+  color: var(--muted-strong);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.connection-notice svg {
+  color: var(--accent-text);
+  animation: refresh-spin 1.1s linear infinite;
+}
+
 /* Visually hidden but still announced by screen readers. */
 .sr-only {
   position: absolute;
