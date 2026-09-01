@@ -845,6 +845,30 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
       // refresh or when an assignment is saved.
     }
   }, []);
+  // Access is independent from the post catalogue. During an ingestion or DB
+  // reconnect the catalogue may be temporarily unavailable, but `/me` is a
+  // lightweight auth request and must still establish the header tools.
+  // Previously it was nested inside loadDashboard *after* posts/accounts had
+  // loaded, so Admins and VCs lost Tracker/Insights exactly when the dashboard
+  // showed its reconnect notice.
+  const applyAccess = useCallback((body) => {
+    if (!body) return;
+    setIsAdmin(Boolean(body.is_admin));
+    setOperatingRole(body.operating_role || 'sales');
+    setOperatingRoles(body.operating_roles || [body.operating_role || 'sales']);
+    setIsDev(Boolean(body.is_dev) || knownDev);
+    setCanSwitchRoles(Boolean(body.can_role_switch) || knownRoleSwitcher);
+    setAvailableRoles(Array.isArray(body.available_operating_roles) ? body.available_operating_roles : (ROLE_SWITCHER_DEFAULTS[String(userEmail || '').trim().toLowerCase()] || body.operating_roles || []));
+  }, [knownDev, knownRoleSwitcher, userEmail]);
+  const loadAccess = useCallback(async (signal) => {
+    try {
+      const response = await apiFetch(`${API_BASE}/api/dashboard/me`, { signal });
+      if (response.ok) applyAccess(await response.json());
+    } catch {
+      // The dashboard retains any last successful role state. A transient
+      // access check must never hide an already-authorized workspace.
+    }
+  }, [applyAccess]);
   const quickAddToPool = useCallback(async (post) => {
     try {
       const body = new FormData();
@@ -866,6 +890,12 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
   useEffect(() => {
     refreshQueueSummary();
   }, [refreshQueueSummary, userEmail]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    loadAccess(controller.signal);
+    return () => controller.abort();
+  }, [loadAccess]);
 
   // Queue publishes a durable revision for every pool, draft, assignment and
   // delivery change. Keep the dashboard's Queue badge in sync with that same
@@ -910,26 +940,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
         window.clearTimeout(reconnectTimer.current);
         reconnectTimer.current = null;
       }
-      // Best-effort: role info only controls whether the Settings button
-      // shows, so a hiccup here shouldn't block the rest of the dashboard.
-      // Only ever *upgrade* based on a successful response -- a transient
-      // failure (or an aborted request from the next silent poll starting
-      // before this one lands) must never downgrade an admin back to false,
-      // or the admin page would unmount/remount and lose its state (tab
-      // reset, users list cleared) every time that race happens.
-      apiFetch(`${API_BASE}/api/dashboard/me`, { signal })
-        .then((response) => (response.ok ? response.json() : null))
-        .then((body) => {
-        if (body) {
-          setIsAdmin(Boolean(body.is_admin));
-          setOperatingRole(body.operating_role || 'sales');
-          setOperatingRoles(body.operating_roles || [body.operating_role || 'sales']);
-          setIsDev(Boolean(body.is_dev) || knownDev);
-          setCanSwitchRoles(Boolean(body.can_role_switch) || knownRoleSwitcher);
-          setAvailableRoles(Array.isArray(body.available_operating_roles) ? body.available_operating_roles : (ROLE_SWITCHER_DEFAULTS[String(userEmail || '').trim().toLowerCase()] || body.operating_roles || []));
-        }
-        })
-        .catch(() => {});
+      loadAccess(signal);
     } catch (error) {
       if (error.name !== 'AbortError') {
         // Render can briefly replace the API instance during deploys. Do not
@@ -951,7 +962,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
       // alarming database-error page.
       if (!signal?.aborted && loaded) setLoading(false);
     }
-  }, [knownDev, knownRoleSwitcher, onUnauthorized, userEmail]);
+  }, [loadAccess, onUnauthorized]);
 
   dashboardLoader.current = loadDashboard;
 
@@ -1840,7 +1851,11 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
                 {refreshNotice.text}
               </p>
             ) : null}
-            {connectionNotice ? <p className="connection-notice" role="status"><RefreshCw size={13} />{connectionNotice}</p> : null}
+            {/* Refreshes are deliberately silent once a real catalogue is on
+                screen. A transient background failure used to leave the
+                reconnect banner visible forever even though the cached
+                catalogue remained perfectly usable. The retry continues in
+                the background and atomically swaps in fresh data on success. */}
           </header>
 
 
