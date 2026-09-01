@@ -113,6 +113,15 @@ const hexRgb = (value) => {
   const full = hex.length === 3 ? hex.split('').map((digit) => `${digit}${digit}`).join('') : hex;
   return [0, 2, 4].map((offset) => Number.parseInt(full.slice(offset, offset + 2), 16) || 0).join(', ');
 };
+const accentInk = (value) => {
+  const hex = String(value || '').replace('#', '');
+  const full = hex.length === 3 ? hex.split('').map((digit) => `${digit}${digit}`).join('') : hex;
+  if (!/^[0-9a-f]{6}$/i.test(full)) return '#151515';
+  const channels = [0, 2, 4].map((offset) => Number.parseInt(full.slice(offset, offset + 2), 16));
+  const linear = (channel) => { const value = channel / 255; return value <= .03928 ? value / 12.92 : ((value + .055) / 1.055) ** 2.4; };
+  const luminance = .2126 * linear(channels[0]) + .7152 * linear(channels[1]) + .0722 * linear(channels[2]);
+  return luminance > .179 ? '#151515' : '#f5f8ff';
+};
 const assetUrl = (value) => {
   const raw = String(value || '').trim();
   if (!raw) return '';
@@ -160,7 +169,7 @@ function PrefsProvider({ children }) {
   const setTheme = (value) => { localStorage.setItem('sentient.theme', value); document.documentElement.dataset.theme = value; setThemeState(value); };
   const setAccent = (value) => { localStorage.setItem('sentient.accent', value); document.documentElement.dataset.accent = value; setAccentState(value); };
   const setCustomAccent = (value) => { localStorage.setItem('sentient.accent', value); localStorage.setItem('sentient.accentCustom', value); document.documentElement.style.setProperty('--custom-accent', value); document.documentElement.style.setProperty('--custom-accent-rgb', hexRgb(value)); document.documentElement.dataset.accent = 'custom'; setCustomAccentState(value); setAccentState(value); };
-  useEffect(() => { const custom = String(accent).startsWith('#'); document.documentElement.dataset.theme = theme; document.documentElement.dataset.accent = custom ? 'custom' : accent; document.documentElement.style.setProperty('--custom-accent', custom ? accent : customAccent); document.documentElement.style.setProperty('--custom-accent-rgb', hexRgb(custom ? accent : customAccent)); }, [theme, accent, customAccent]);
+  useEffect(() => { const custom = String(accent).startsWith('#'); const activeAccent = custom ? accent : customAccent; document.documentElement.dataset.theme = theme; document.documentElement.dataset.accent = custom ? 'custom' : accent; document.documentElement.style.setProperty('--custom-accent', activeAccent); document.documentElement.style.setProperty('--custom-accent-rgb', hexRgb(activeAccent)); document.documentElement.style.setProperty('--custom-accent-ink', accentInk(activeAccent)); }, [theme, accent, customAccent]);
   const t = useCallback((key) => I18N[language]?.[key] || I18N.en[key] || key, [language]);
   return <Prefs.Provider value={{ language, setLanguage, theme, setTheme, accent, setAccent, customAccent, setCustomAccent, t }}>{children}</Prefs.Provider>;
 }

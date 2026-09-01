@@ -87,7 +87,9 @@ export function applyAccent(value, { persist = true } = {}) {
   const root = document.documentElement;
   const lightTheme = root.getAttribute('data-theme') === 'light';
   const textColor = lightTheme && luminance(rgb) > 0.35 ? darken(hex, 0.28) : hex;
-  const inkColor = luminance(rgb) > 0.52 ? '#252600' : '#f5f8ff';
+  // The foreground on a solid accent must switch much sooner than the
+  // foreground used on a dark surface. This is the WCAG contrast crossover.
+  const inkColor = luminance(rgb) > 0.179 ? '#151515' : '#f5f8ff';
   root.setAttribute('data-accent', normalized);
   root.style.setProperty('--accent-rgb', rgb.join(', '));
   root.style.setProperty('--accent', hex);
