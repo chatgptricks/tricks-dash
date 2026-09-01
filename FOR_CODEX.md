@@ -6,9 +6,12 @@ when backend work is released. Esteban is planning to merge the two repos into
 one — read the "Planned repo merge" section near the bottom before you start
 that.
 
-## Current release: duplicate Queue requests and sideview actions (2026-09-01)
+## Current release: compact Queue assignment notifications (2026-09-01)
 
-- Source commit: `9527679`; static GitHub Pages release: `c6a959a`; backend release: `2c28dda` (Render deployment queued).
+- Source commit: `b08bb00`; static GitHub Pages release: `7ab7138`; backend release: `9c1e56e` (Render deployment live).
+- Queue assignment DMs are intentionally minimal: one line in the form `<assigner> assigned you this post for <account>`, the post thumbnail, and one `Open in Queue` button. Briefs, notes, references, priority, PP scope, and schedule stay in the Queue side view instead of being duplicated in Slack.
+- Stored relative Queue cover paths are normalized to public HTTPS API URLs before they are sent to Slack, and custom source thumbnails are passed through unchanged. This keeps Slack's image block fetchable instead of rendering a broken-image placeholder.
+- Dashboard `Send to Pool` and Queue `Create Post` no longer show or submit a Priority field. Backend defaults remain compatible with existing records and continue to use normal priority unless a coordinator marks a request urgent elsewhere.
 - Queue requests can now be duplicated from the sideview, pool cards, scheduler blocks, and coordinator's assigned table. Each copy is an independent Pool request with a fresh id, no assignee or schedule, the original brief/tags/PP/account recommendation, and copied attachments when present. This allows the same source request to be assigned to multiple designers without changing the original.
 - The global Queue context menu exposes the same duplicate action wherever a request carries a request id, and mobile Queue exposes it in the coordinator sideview. The sideview header actions now wrap instead of collapsing into the unreadable vertical button shown in the previous release.
 - Dashboard role previews now apply their effective Admin/VC/PD/Sales/Trainee permissions synchronously, so the header and Queue controls do not briefly render with the wrong role while the large catalogue loads.
