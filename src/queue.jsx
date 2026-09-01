@@ -1178,11 +1178,9 @@ function QueueApp({ user }) {
   }, [data?.viewer?.email, loadTickets]);
 
   const isDev = Boolean(viewer?.is_dev || data?.viewer?.isDev || String(user?.email || '').trim().toLowerCase() === DEV_EMAIL);
-  // Dev is the top-level support role: it must retain the complete coordinator
-  // workspace even while Esteban is previewing Sales/PD in this browser tab.
-  // Do not infer this from the active operating role, which is deliberately
-  // mutable for role previews.
-  const coordinator = data?.viewer && (isDev || data.viewer.isAdmin || data.viewer.operatingRoles?.includes('vc'));
+  const rolePreviewActive = Boolean(window.sessionStorage.getItem('sentient.queueRolePreview'));
+  const effectiveDevAccess = isDev && !rolePreviewActive;
+  const coordinator = data?.viewer && (effectiveDevAccess || data.viewer.isAdmin || data.viewer.operatingRoles?.includes('vc'));
   const simulatedTimeZone = isDev ? timeZonePreview : (data?.viewer?.timeZone || 'America/Costa_Rica');
   const canSelfAssign = Boolean(data?.viewer?.canSelfAssign);
   const pool = useMemo(() => {
@@ -1570,7 +1568,7 @@ function QueueApp({ user }) {
           <span className="queue-nav-current" aria-current="page">Queue</span>{coordinator ? <><a href={`${import.meta.env.BASE_URL}tracker.html`}>Tracker</a><a href={`${import.meta.env.BASE_URL}insights.html`}>Insights</a></> : null}<a className="queue-dashboard-link" href={import.meta.env.BASE_URL}><ArrowLeft size={14} />{t('dashboard')}</a>
         </nav>
         <div className="queue-actions-group queue-actions-account">
-          <QueueSettings isAdmin={Boolean(data?.viewer?.isAdmin)} isDev={Boolean(viewer?.is_dev || data?.viewer?.isDev)} userEmail={user.email} avatarUrl={user?.photoURL || data?.viewer?.avatarUrl} displayLabel={user?.displayName || data?.viewer?.displayName} onManageAccounts={() => { accountSetupDismissedRef.current = false; setAccountSetupOpen(true); }} onStartGuide={() => { setGuideStep(-1); setGuideOpen(true); }} onResetQueue={(data?.viewer?.isAdmin || viewer?.is_dev || data?.viewer?.isDev) ? () => setResetOpen(true) : null} onSignOut={() => { clearSsoCookie(); signOut(auth); }} />
+          <QueueSettings isAdmin={Boolean(data?.viewer?.isAdmin)} isDev={effectiveDevAccess} userEmail={user.email} avatarUrl={user?.photoURL || data?.viewer?.avatarUrl} displayLabel={user?.displayName || data?.viewer?.displayName} onManageAccounts={() => { accountSetupDismissedRef.current = false; setAccountSetupOpen(true); }} onStartGuide={() => { setGuideStep(-1); setGuideOpen(true); }} onResetQueue={(data?.viewer?.isAdmin || effectiveDevAccess) ? () => setResetOpen(true) : null} onSignOut={() => { clearSsoCookie(); signOut(auth); }} />
         </div>
       </div>
     </header>

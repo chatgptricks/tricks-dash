@@ -828,6 +828,11 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
   const reconnectTimer = useRef(null);
   const reconnectAttempt = useRef(0);
   const dashboardLoader = useRef(null);
+  const rolePreviewActive = Boolean(window.sessionStorage.getItem('sentient.queueRolePreview'));
+  // The role switcher is a real UI preview. Dev gets full access only when no
+  // simulated role is active; otherwise this tab must behave exactly like the
+  // selected role so permission audits are trustworthy.
+  const coordinatorAccess = (isDev && !rolePreviewActive) || isAdmin || operatingRoles.includes('vc');
   const posts = useMemo(() => dashboard.posts.map(normalizePost), [dashboard.posts]);
   const summary = dashboard.summary;
   const ranges = useMemo(() => calculateRanges(posts), [posts]);
@@ -1810,7 +1815,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
                   {queuePendingCount ? <b className="queue-pending-badge">{queuePendingCount > 99 ? '99+' : queuePendingCount}</b> : null}
                   <ExternalLink size={12} className="tool-link-out" aria-hidden="true" />
                 </a>
-                {(isDev || isAdmin || operatingRoles.includes('vc')) ? <a
+                {coordinatorAccess ? <a
                   className="tool-link"
                   href={`${import.meta.env.BASE_URL}tracker.html`}
                   target="_blank"
@@ -1821,7 +1826,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
                   <span>{t('Tracker')}</span>
                   <ExternalLink size={12} className="tool-link-out" aria-hidden="true" />
                 </a> : null}
-                {(isDev || isAdmin || operatingRoles.includes('vc')) ? <a
+                {coordinatorAccess ? <a
                   className="tool-link"
                   href={`${import.meta.env.BASE_URL}insights.html`}
                   target="_blank"
@@ -1839,7 +1844,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
                   email={userEmail}
                   avatarUrl={userPhoto}
                   isAdmin={isAdmin}
-                  isDev={isDev}
+                  isDev={isDev && !rolePreviewActive}
                   onSignOut={onSignOut}
                 />
               </div>

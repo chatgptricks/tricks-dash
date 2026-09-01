@@ -128,7 +128,9 @@ function SettingsApp() {
       availableRoles={viewer?.available_operating_roles || viewer?.operating_roles || []}
     />
   );
-  if (!viewer?.is_admin && !viewer?.is_dev) return <><SettingsRestricted email={user.email} onSignOut={handleSignOut} />{rolePreview}</>;
+  const rolePreviewActive = Boolean(window.sessionStorage.getItem('sentient.queueRolePreview'));
+  const effectiveDevAccess = Boolean(viewer?.is_dev) && !rolePreviewActive;
+  if (!viewer?.is_admin && !effectiveDevAccess) return <><SettingsRestricted email={user.email} onSignOut={handleSignOut} />{rolePreview}</>;
 
   const initialTab = new URLSearchParams(window.location.search).get('tab') || 'overview';
   return <>
@@ -138,7 +140,7 @@ function SettingsApp() {
       userEmail={user.email}
       userPhoto={user.photoURL || ''}
       isAdmin={Boolean(viewer.is_admin)}
-      isDev={Boolean(viewer.is_dev)}
+      isDev={effectiveDevAccess}
       onSignOut={handleSignOut}
       onRefresh={refreshAll}
       refreshing={refreshing}

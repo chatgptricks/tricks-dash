@@ -13,8 +13,9 @@ const files = {
 const checks = {
   'Dashboard Settings stays Admin or Dev only': files.app.includes('(isAdmin || isDev) && showSettingsLink'),
   'Dashboard Send to Pool stays VC or Admin only': files.app.includes("isAdmin || operatingRoles.includes('vc')"),
-  'Dashboard Tracker and Insights include Dev access': files.app.includes("isDev || isAdmin || operatingRoles.includes('vc')"),
-  'Queue coordinator workspace includes Dev, VC, or Admin': files.queue.includes("isDev || data.viewer.isAdmin || data.viewer.operatingRoles?.includes('vc')"),
+  'Dashboard role preview removes Dev-only coordinator access': files.app.includes("(isDev && !rolePreviewActive) || isAdmin || operatingRoles.includes('vc')"),
+  'Queue role preview removes Dev-only coordinator access': files.queue.includes("const effectiveDevAccess = isDev && !rolePreviewActive"),
+  'Settings role preview removes Dev-only command-center access': files.settings.includes("const effectiveDevAccess = Boolean(viewer?.is_dev) && !rolePreviewActive"),
   'Queue Settings stays Admin or Dev only': files.queue.includes('{isAdmin || isDev ? <section className="queue-settings-section queue-settings-admin">'),
   'Pick remains available to every PD-capable user': files.queue.includes('const pickAvailable = Boolean(data?.viewer);'),
   'Settings restricted page retains role switcher': files.settings.includes('<DevRolePreview'),
