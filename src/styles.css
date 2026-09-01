@@ -7925,7 +7925,9 @@ body {
 
   --accent: #f5ff00;
   --accent-text: #f5ff00;
-  --accent-ink: #fffce0;
+  /* Primary controls use this against an accent wash. Pure white is clearer
+     than the previous yellow-tinted white and no longer reads as disabled. */
+  --accent-ink: #ffffff;
 }
 
 :root[data-theme='light'] {
