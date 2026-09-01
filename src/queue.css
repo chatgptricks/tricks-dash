@@ -960,6 +960,20 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
 .queue-account-choice small { overflow:hidden; font-size:9px; text-overflow:ellipsis; white-space:nowrap; }
 .queue-account-choice>svg { margin-left:auto; color:var(--q-accent); opacity:0; }
 .queue-account-choice.is-selected>svg { opacity:1; }
+.queue-multi-account-modal { width:min(450px,100%); gap:12px; }
+.queue-multi-account-source { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:9px 10px; border:1px solid var(--q-line); border-radius:8px; background:var(--q-panel-2); color:var(--q-text); }
+.queue-multi-account-source span { overflow:hidden; font-size:11px; font-weight:800; text-overflow:ellipsis; white-space:nowrap; }
+.queue-multi-account-source small { flex:0 0 auto; color:var(--q-muted); font-size:9px; font-weight:750; }
+.queue-multi-account-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px; max-height:300px; overflow:auto; }
+.queue-multi-account-option { display:flex; align-items:center; gap:8px; min-width:0; padding:9px; border:1px solid var(--q-line); border-radius:8px; background:var(--q-panel-2); color:var(--q-muted); cursor:pointer; }
+.queue-multi-account-option:hover,.queue-multi-account-option.is-selected { border-color:rgba(var(--accent-rgb),.58); background:rgba(var(--accent-rgb),.1); color:var(--q-text); }
+.queue-multi-account-option input { position:absolute; inline-size:1px; block-size:1px; opacity:0; pointer-events:none; }
+.queue-multi-account-option>span { display:grid; min-width:0; gap:3px; }
+.queue-multi-account-option b,.queue-multi-account-option small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.queue-multi-account-option b { color:var(--q-text); font-size:10px; }
+.queue-multi-account-option small { color:var(--q-muted); font-size:8px; }
+.queue-multi-account-option>svg { margin-left:auto; flex:0 0 auto; color:var(--q-accent); opacity:0; }
+.queue-multi-account-option.is-selected>svg { opacity:1; }
 .queue-account-request { display:grid; gap:9px; padding:12px; border:1px solid var(--q-line); border-radius:10px; background:rgba(var(--edge),.025); }
 .queue-account-request>header h3 { margin:0 0 3px; color:var(--q-text); font-size:12px; }
 .queue-account-request>header p { margin:0; color:var(--q-muted); font-size:10px; line-height:1.45; }
@@ -982,6 +996,7 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
 .queue-guide-language button:hover { border-color:var(--q-accent); color:var(--q-accent); }
 .queue-guide-welcome .queue-guide-skip { justify-self:center; margin-top:3px; }
 @media (max-width:620px) { .queue-account-choice-grid { grid-template-columns:1fr; } }
+@media (max-width:620px) { .queue-multi-account-list { grid-template-columns:1fr; } }
 @media (max-width:620px) { .queue-create-backdrop { padding:10px; } .queue-create-modal { padding:14px; } .queue-create-grid { grid-template-columns:1fr; } .queue-create-grid label.is-wide { grid-column:auto; } .queue-source-link>div { flex-direction:column; } .queue-source-link .scheduler-secondary { width:100%; } }
 
 /* -------------------------------------------------------------------------
