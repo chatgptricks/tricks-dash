@@ -463,7 +463,7 @@ function ResetQueueModal({ onClose, onReset }) {
 
 function CreatePostModal({ tags = [], onClose, onCreated }) {
   const { t } = useQueuePreferences();
-  const [form, setForm] = useState({ title: '', postType: 'Image', productionPoints: 3, priority: 'normal', brief: '', notes: '', references: '' });
+  const [form, setForm] = useState({ title: '', postType: 'Image', productionPoints: 3, brief: '', notes: '', references: '' });
   const [sourceUrl, setSourceUrl] = useState('');
   const [sourcePreview, setSourcePreview] = useState(null);
   const [sourceLoading, setSourceLoading] = useState(false);
@@ -531,7 +531,6 @@ function CreatePostModal({ tags = [], onClose, onCreated }) {
         body.append('title', form.title.trim());
         body.append('post_type', form.postType);
         body.append('production_points', String(form.productionPoints));
-        body.append('priority', form.priority);
         body.append('brief', form.brief);
         body.append('notes', form.notes);
         body.append('references', JSON.stringify(form.references.split(/\n|,/).map((item) => item.trim()).filter(Boolean)));
@@ -582,7 +581,6 @@ function CreatePostModal({ tags = [], onClose, onCreated }) {
         <label className="is-wide"><span>{t('postTitle')} <i>required</i></span><input value={form.title} maxLength="160" autoFocus onChange={(event) => { setTitleEdited(true); setForm((current) => ({ ...current, title: event.target.value })); }} placeholder={t('postTitlePlaceholder')} /></label>
         <label><span>{t('postType')}</span><select value={form.postType} onChange={(event) => setForm((current) => ({ ...current, postType: event.target.value }))}>{typeOptions.map(([value, key]) => <option key={value} value={value}>{t(key)}</option>)}</select></label>
         <label><span>{t('productionPoints')} <i>required</i></span><input type="number" min="1" step="1" value={form.productionPoints} onChange={(event) => setForm((current) => ({ ...current, productionPoints: event.target.value }))} /></label>
-        <label className="queue-urgent-toggle"><input type="checkbox" checked={isUrgent(form.priority)} onChange={(event) => setForm((current) => ({ ...current, priority: event.target.checked ? 'urgent' : 'normal' }))} /><span>{t('markUrgent')}</span></label>
       </div>
       <label className="queue-create-note"><span>{t('brief')} <i>optional</i></span><textarea value={form.brief} onChange={(event) => { setBriefEdited(true); setForm((current) => ({ ...current, brief: event.target.value })); }} rows={3} /></label>
       <label className="queue-create-note"><span>{t('notes')} <i>optional</i></span><textarea value={form.notes} onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))} rows={2} /></label>
