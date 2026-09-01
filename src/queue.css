@@ -856,6 +856,33 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
 .scheduler-user-accounts i:first-child { margin-left:0; }
 .scheduler-user-accounts img { display:block; width:100%; height:100%; object-fit:cover; }
 .scheduler-block.priority-low,.scheduler-block.priority-medium,.scheduler-block.priority-high { border-color:rgba(var(--accent-rgb),.48); background:color-mix(in srgb,var(--q-accent) 22%,var(--q-panel)); color:var(--q-text); box-shadow:none; }
+
+/* Queue urgency is binary. Pool cards deliberately stay neutral; only an
+   explicitly urgent request gets an orange outline. This override also
+   neutralizes colors still present on requests created before the migration. */
+.queue-pool-card,.queue-pool-card.priority-normal,.queue-pool-card.priority-low,.queue-pool-card.priority-medium,.queue-pool-card.priority-high {
+  color:var(--q-text);
+  border-color:var(--q-line);
+  background:var(--q-panel-2);
+  box-shadow:0 8px 18px rgba(var(--shade,0,0,0),.18);
+}
+.queue-pool-card.priority-urgent {
+  color:var(--q-text);
+  border-color:#ff8a4c;
+  background:linear-gradient(105deg,rgba(255,138,76,.08),transparent 65%),var(--q-panel-2);
+  box-shadow:inset 4px 0 #ff8a4c,0 8px 18px rgba(var(--shade,0,0,0),.18);
+}
+.queue-priority-badge.priority-urgent,.scheduler-priority-mark.priority-urgent {
+  color:#ffbf98;
+  border-color:#ff8a4c;
+  background:rgba(255,138,76,.14);
+}
+.scheduler-block.priority-urgent { border-color:#ff8a4c; box-shadow:inset 0 0 0 1px #ff8a4c; }
+.scheduler-block.priority-normal,.designer-assignment-row.priority-normal,.queue-admin-assignment-row.priority-normal,.queue-archive-list>button.priority-normal { box-shadow:none; }
+.queue-pick-card.priority-normal { border-color:var(--q-line); }
+.queue-pick-card.priority-urgent { border-color:#ff8a4c; }
+.queue-urgent-toggle { display:flex!important; align-items:center; justify-content:flex-start; gap:8px; min-height:38px; padding:0 10px; border:1px solid var(--q-line); border-radius:8px; background:var(--q-panel-2); color:var(--q-text); font-size:11px; font-weight:800; text-transform:none!important; letter-spacing:0!important; }
+.queue-urgent-toggle input { width:15px!important; height:15px!important; accent-color:#ff8a4c; }
 .scheduler-block.state-scheduled { border-color:rgba(var(--accent-rgb),.46); background:color-mix(in srgb,var(--q-accent) 23%,var(--q-panel)); color:var(--q-text); }
 .scheduler-block.state-in_progress { border-color:var(--q-accent); background:var(--q-accent); color:var(--accent-ink); box-shadow:0 0 0 1px rgba(var(--accent-rgb),.26),0 8px 20px rgba(var(--accent-rgb),.18); }
 .scheduler-block.state-completed,.scheduler-block.state-closed { border-color:rgba(var(--accent-rgb),.42); background:color-mix(in srgb,var(--q-accent) 17%,#101010); color:color-mix(in srgb,var(--q-text) 80%,var(--q-muted)); }

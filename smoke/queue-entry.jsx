@@ -148,6 +148,9 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     checks['Colombia shifts the clock without moving Now'] = noonHeader?.textContent === '13:00' && nowLineAfter?.style.left === nowLineBefore?.style.left;
     checks['Colombia reads a Costa Rica 09:00 assignment as 10:00'] = [...document.querySelectorAll('.scheduler-block-copy small')].some((node) => /10:00/.test(node.textContent || ''));
     checks['Pool and scheduled blocks render'] = document.querySelectorAll('.queue-pool-card').length === 1 && document.querySelectorAll('.scheduler-block').length === 2;
+    checks['Legacy priority renders as regular work'] = document.querySelector('.queue-pool-card')?.classList.contains('priority-normal')
+      && !document.querySelector('.queue-pool-card .queue-priority-badge')
+      && !/Low|Medium|High/.test(document.querySelector('.queue-pool-card')?.textContent || '');
     checks['Account badge and resize handles render'] = Boolean(document.querySelector('.scheduler-account-badges')) && document.querySelectorAll('.scheduler-resize-handle').length >= 2;
     checks['All dashboard users render as PD-capable'] = document.querySelectorAll('.scheduler-row').length === 4 && document.querySelectorAll('.scheduler-row.is-non-queue-user').length === 0;
     checks['Roster shows only the highest role'] = [...document.querySelectorAll('.scheduler-user-copy small')].map((node) => node.textContent.trim()).join('|') === 'Admin|Admin|Sales|Trainee';

@@ -851,7 +851,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
       body.append('account', post.account);
       body.append('shortcode', post.shortcode);
       body.append('production_points', '3');
-      body.append('priority', 'medium');
+      body.append('priority', 'normal');
       body.append('tags', '');
       const response = await apiFetch(`${API_BASE}/api/dashboard/queue/v2/pool`, { method: 'POST', body });
       const result = await response.json().catch(() => ({}));
@@ -4767,19 +4767,16 @@ export function SettingsPanel({
                     </section>
 
                     <section className="settings-section">
-                      <h3>Priority</h3>
+                      <h3>Urgency</h3>
                       <div className="system-tab-grid">
-                        {['low', 'medium', 'high', 'urgent'].map((priority) => (
-                          <div className="system-card" key={priority}>
-                            <div className="settings-section-head">
-                              <h3 style={{ textTransform: 'capitalize' }}>{priority}</h3>
-                            </div>
-                            <p className="wizard-hint">
-                              <strong>{report.priorities?.[priority]?.count || 0}</strong> requests ·{' '}
-                              {report.priorities?.[priority]?.points || 0} PP
-                            </p>
-                          </div>
-                        ))}
+                        <div className="system-card">
+                          <div className="settings-section-head"><h3>Urgent</h3></div>
+                          <p className="wizard-hint"><strong>{report.priorities?.urgent?.count || 0}</strong> requests · {report.priorities?.urgent?.points || 0} PP</p>
+                        </div>
+                        <div className="system-card">
+                          <div className="settings-section-head"><h3>Regular</h3></div>
+                          <p className="wizard-hint"><strong>{report.priorities?.normal?.count || 0}</strong> requests · {report.priorities?.normal?.points || 0} PP</p>
+                        </div>
                       </div>
                     </section>
 
@@ -4797,7 +4794,7 @@ export function SettingsPanel({
                             </div>
                             <div className="settings-row-controls">
                               <span className="settings-unit">
-                                {designer.highPriorityRequests} high · {designer.closedRequests} closed ·{' '}
+                                {designer.closedRequests} closed ·{' '}
                                 {designer.averageActualMinutes == null ? '—' : `${designer.averageActualMinutes} min`} avg
                               </span>
                             </div>
@@ -4820,7 +4817,7 @@ export function SettingsPanel({
                               </span>
                             </div>
                             <div className="settings-row-controls">
-                              <span className="settings-unit" style={{ textTransform: 'capitalize' }}>{post.priority || 'medium'}</span>
+                              {post.priority === 'urgent' ? <span className="settings-unit">Urgent</span> : null}
                               <span className="settings-unit">{post.productionPoints} PP</span>
                               <span className="settings-unit" style={{ textTransform: 'capitalize' }}>{(post.status || '').replace('_', ' ')}</span>
                             </div>
@@ -5358,7 +5355,7 @@ function BackgroundTaskStack({ tasks, onDismiss }) {
 // independent Queue task on the backend.
 function AssignPostModal({ post, userEmail, isAdmin, accounts, onClose, onAssigned }) {
   const [productionPoints, setProductionPoints] = useState(3);
-  const [priority, setPriority] = useState('medium');
+  const [priority, setPriority] = useState('normal');
   const [note, setNote] = useState('');
   const [notes, setNotes] = useState('');
   const [references, setReferences] = useState('');
@@ -5463,14 +5460,9 @@ function AssignPostModal({ post, userEmail, isAdmin, accounts, onClose, onAssign
             <span>Production points <i>required</i></span>
             <input type="number" min="1" step="1" value={productionPoints} onChange={(event) => setProductionPoints(event.target.value)} />
           </label>
-          <label>
-            <span>Priority <i>required</i></span>
-            <select value={priority} onChange={(event) => setPriority(event.target.value)}>
-              <option value="low">Low</option>
-              <option value="medium">Medium</option>
-              <option value="high">High</option>
-              <option value="urgent">Urgent</option>
-            </select>
+          <label className="queue-assign-urgent-toggle">
+            <input type="checkbox" checked={priority === 'urgent'} onChange={(event) => setPriority(event.target.checked ? 'urgent' : 'normal')} />
+            <span>Mark as urgent</span>
           </label>
         </div>
 
