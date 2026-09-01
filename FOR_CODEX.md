@@ -8,10 +8,11 @@ that.
 
 ## Current release: SPOC approval-request notifications (2026-09-01)
 
-- Backend source commit: `818d188`; Render is live on that commit. `#spoc-dashboard` is now an approval inbox only: it accepts user-created approval requests for PP revisions, moves, cancellations, trainee reviews, personal-time blocks, and account access.
+- Backend source commit: `09db1bd`; Render is live on that commit. `#spoc-dashboard` is now an approval inbox only: it accepts user-created approval requests for PP revisions, moves, cancellations, trainee reviews, personal-time blocks, and account access.
 - Routine Queue activity is intentionally excluded from SPOC: assignments, edits, scheduling/resubmissions, returns to the pool, coordinator cancellations/deletions, Slack delivery events, and ticket approvals/rejections stay in Queue history and do not create channel messages.
 - Pending personal-time and account-access requests now also post to SPOC with an `Approve` action and an `Open Requests` link. Coordinator-created personal time is already firm and does not notify the channel.
 - The allowlist lives in backend `app/slack_alerts.py` (`QUEUE_SPOC_APPROVAL_REQUEST_EVENTS`) and is enforced before any Slack API call, so future Queue mutations must explicitly opt in.
+- The one-time backend migration `queue_roles_v9_fix_santiago_florez_names` corrects the crossed display names: `santiagoflhi@gmail.com` → Santiago and `dsflorezl@gmail.com` → Florez, preserving each user's Slack ID and access.
 
 ## Previous release: compact Queue assignment notifications (2026-09-01)
 
