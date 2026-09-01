@@ -199,12 +199,14 @@ Object.assign(COPY.en, {
   traineeReviewHelp: 'A VC or Admin must approve your Canva design before you can post and close this request.',
   traineeReviewPending: 'Waiting for VC/Admin review', traineeReviewApproved: 'Canva design approved', traineeReviewRejected: 'Changes requested — send an updated design for review.',
   traineeReviewSent: 'Canva design sent for review.', openCanva: 'Open Canva design',
+  assignMultipleAccounts: 'Assign to multiple accounts', assignMultipleAccountsTitle: 'Assign to multiple accounts', assignMultipleAccountsHelp: 'Choose the Sentient accounts. Queue will create one scheduled copy for each user who manages a selected account.', assignMultipleAccountsSubmit: 'Assign copies', assignMultipleAccountsSuccess: 'Independent copies assigned.', assignMultipleAccountsNoManagers: 'No Queue users manage this account yet.', assignMultipleAccountsNoneSelected: 'Choose at least one account.',
 });
 Object.assign(COPY.es, {
   traineeReview: 'Revisión de trainee', sendForReview: 'Enviar a revisión', canvaLink: 'Link del diseño en Canva',
   traineeReviewHelp: 'Un VC o Admin debe aprobar tu diseño de Canva antes de que puedas postear y cerrar este request.',
   traineeReviewPending: 'Esperando revisión de VC/Admin', traineeReviewApproved: 'Diseño de Canva aprobado', traineeReviewRejected: 'Cambios solicitados — envía el diseño actualizado a revisión.',
   traineeReviewSent: 'Diseño de Canva enviado a revisión.', openCanva: 'Abrir diseño de Canva',
+  assignMultipleAccounts: 'Asignar a varias cuentas', assignMultipleAccountsTitle: 'Asignar a varias cuentas', assignMultipleAccountsHelp: 'Elige las cuentas Sentient. Queue creará una copia programada para cada usuario que administre una cuenta seleccionada.', assignMultipleAccountsSubmit: 'Asignar copias', assignMultipleAccountsSuccess: 'Copias independientes asignadas.', assignMultipleAccountsNoManagers: 'Todavía no hay usuarios de Queue asignados a esta cuenta.', assignMultipleAccountsNoneSelected: 'Elige al menos una cuenta.',
 });
 
 const QueuePreferencesContext = createContext({ language: 'en', t: (key) => key });
@@ -593,9 +595,39 @@ function CreatePostModal({ tags = [], onClose, onCreated }) {
   </div>;
 }
 
-function PoolCard({ task, onOpen }) {
+function AssignMultipleAccountsModal({ task, accounts = [], designers = [], busy = false, onClose, onSubmit }) {
   const { t } = useQueuePreferences();
-  return <article className={`queue-pool-card ${priorityClass(task.priority)}${hotClass(task)}${task.isDraft ? ' is-draft' : ''}`} draggable data-context-type="pool" data-context-title={task.post.title || accountMention(task.post.account) || t('post')} data-context-post-key={task.postKey || task.id} data-context-request-id={task.id} data-context-duplicate="true" data-context-account={task.post.account || ''} data-context-shortcode={task.post.shortcode || ''} data-context-permalink={task.post.permalink || ''} onDragStart={(event) => { activeQueueDragId = task.id; event.dataTransfer.setData('queue-task', String(task.id)); }} onDragEnd={() => { activeQueueDragId = null; }}><button type="button" onClick={() => onOpen(task)}>{cover(task) ? <img src={cover(task)} alt="" /> : <span className="queue-pool-empty">@</span>}<span><b>{task.post.title || accountMention(task.post.account) || t('post')}</b><small>{task.post.title && task.post.account ? `${accountMention(task.post.account)} · ` : task.post.account ? `${accountMention(task.post.account)} · ` : `${t('accountToSelect')} · `}{task.productionPoints} PP · {task.durationMinutes} min</small>{task.isDraft ? <em>{t('returnToPool')}</em> : null}</span><span className="queue-pool-card-badges"><PriorityBadge priority={task.priority} />{isHotTask(task) ? <i className="queue-hot-badge">🔥 {hotText(task)}</i> : null}</span></button><div>{task.tags?.filter((tag) => tag !== 'hot').map((tag) => <i key={tag}>{tag}</i>)}</div></article>;
+  const [selected, setSelected] = useState(() => new Set());
+  const sentientAccounts = useMemo(() => accounts
+    .filter((account) => account?.handle)
+    .map((account) => ({ ...account, handle: String(account.handle).replace(/^@/, '').toLowerCase() }))
+    .filter((account, index, list) => list.findIndex((item) => item.handle === account.handle) === index)
+    .sort((a, b) => a.handle.localeCompare(b.handle)), [accounts]);
+  const toggle = (handle) => setSelected((current) => {
+    const next = new Set(current);
+    if (next.has(handle)) next.delete(handle); else next.add(handle);
+    return next;
+  });
+  const submit = async () => {
+    if (!selected.size || busy) return;
+    await onSubmit([...selected]);
+  };
+  return <div className="queue-create-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) onClose(); }}>
+    <section className="queue-create-modal queue-multi-account-modal" role="dialog" aria-modal="true" aria-labelledby="queue-multi-account-title">
+      <header className="queue-create-head"><div><p className="scheduler-eyebrow">Queue</p><h2 id="queue-multi-account-title">{t('assignMultipleAccountsTitle')}</h2><small>{t('assignMultipleAccountsHelp')}</small></div><button type="button" onClick={onClose} aria-label={t('close')} disabled={busy}><X size={16} /></button></header>
+      <div className="queue-multi-account-source"><span>{task?.post?.title || accountMention(task?.post?.account) || t('post')}</span><small>{task?.productionPoints || 1} PP · {task?.durationMinutes || 10} {t('minutes')}</small></div>
+      <div className="queue-multi-account-list">{sentientAccounts.map((account) => {
+        const managerCount = designers.filter((designer) => (designer.accounts || []).some((value) => String(value).replace(/^@/, '').toLowerCase() === account.handle)).length;
+        return <label key={account.handle} className={`queue-multi-account-option${selected.has(account.handle) ? ' is-selected' : ''}`}><input type="checkbox" checked={selected.has(account.handle)} onChange={() => toggle(account.handle)} /><span><b>@{account.handle}</b><small>{managerCount ? `${managerCount} ${t('usersCount')}` : t('assignMultipleAccountsNoManagers')}</small></span><Check size={14} /></label>;
+      })}{!sentientAccounts.length ? <p className="scheduler-empty">{t('noAccounts')}</p> : null}</div>
+      <footer className="queue-create-actions"><button type="button" className="scheduler-secondary" onClick={onClose} disabled={busy}>{t('cancel')}</button><button type="button" className="scheduler-primary" onClick={submit} disabled={busy || !selected.size}>{busy ? <LoaderCircle className="queue-spin" size={14} /> : <Check size={14} />}{t('assignMultipleAccountsSubmit')}</button></footer>
+    </section>
+  </div>;
+}
+
+function PoolCard({ task, onOpen, canMultiAssign = false }) {
+  const { t } = useQueuePreferences();
+  return <article className={`queue-pool-card ${priorityClass(task.priority)}${hotClass(task)}${task.isDraft ? ' is-draft' : ''}`} draggable data-context-type="pool" data-context-title={task.post.title || accountMention(task.post.account) || t('post')} data-context-post-key={task.postKey || task.id} data-context-request-id={task.id} data-context-duplicate="true" data-context-multi-assign={canMultiAssign ? 'true' : 'false'} data-context-account={task.post.account || ''} data-context-shortcode={task.post.shortcode || ''} data-context-permalink={task.post.permalink || ''} onDragStart={(event) => { activeQueueDragId = task.id; event.dataTransfer.setData('queue-task', String(task.id)); }} onDragEnd={() => { activeQueueDragId = null; }}><button type="button" onClick={() => onOpen(task)}>{cover(task) ? <img src={cover(task)} alt="" /> : <span className="queue-pool-empty">@</span>}<span><b>{task.post.title || accountMention(task.post.account) || t('post')}</b><small>{task.post.title && task.post.account ? `${accountMention(task.post.account)} · ` : task.post.account ? `${accountMention(task.post.account)} · ` : `${t('accountToSelect')} · `}{task.productionPoints} PP · {task.durationMinutes} min</small>{task.isDraft ? <em>{t('returnToPool')}</em> : null}</span><span className="queue-pool-card-badges"><PriorityBadge priority={task.priority} />{isHotTask(task) ? <i className="queue-hot-badge">🔥 {hotText(task)}</i> : null}</span></button><div>{task.tags?.filter((tag) => tag !== 'hot').map((tag) => <i key={tag}>{tag}</i>)}</div></article>;
 }
 
 function DesignerAssignments({ tasks, onOpen, timeZone = QUEUE_TIME_ZONE }) {
@@ -996,6 +1028,8 @@ function QueueApp({ user }) {
   const [pickOpen, setPickOpen] = useState(false);
   const [pickBusy, setPickBusy] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const [multiAssignRequest, setMultiAssignRequest] = useState(null);
+  const [multiAssignBusy, setMultiAssignBusy] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
   const [accountSetupOpen, setAccountSetupOpen] = useState(false);
   const [guideOpen, setGuideOpen] = useState(() => !window.localStorage.getItem('sentient.queueGuide.v1'));
@@ -1266,15 +1300,62 @@ function QueueApp({ user }) {
       return null;
     }
   }, [notify, t]);
+  const assignToMultipleAccounts = useCallback(async (requestId, selectedAccounts) => {
+    const id = Number(requestId);
+    if (!Number.isInteger(id) || id < 1 || !selectedAccounts?.length || multiAssignBusy) return null;
+    setMultiAssignBusy(true);
+    try {
+      const result = await json(`/api/dashboard/queue/v2/requests/${id}/assign-accounts`, {
+        method: 'POST',
+        body: new URLSearchParams({ accounts: JSON.stringify(selectedAccounts) }),
+      });
+      const copies = result.requests || [];
+      setData((current) => {
+        if (!current || !copies.length) return current;
+        const merge = (items = [], additions = copies) => {
+          const byId = new Map(items.map((item) => [item.id, item]));
+          additions.forEach((item) => byId.set(item.id, item));
+          return [...byId.values()];
+        };
+        const ownCopies = copies.filter((item) => item.designerEmail === current.viewer?.email);
+        const assignedIds = new Set(copies.map((item) => item.id));
+        const removeAssigned = (items = []) => items.filter((item) => !assignedIds.has(item.id));
+        return {
+          ...current,
+          requests: merge(current.requests),
+          planningRequests: merge(current.planningRequests),
+          assignedRequests: merge(current.assignedRequests, ownCopies),
+          pickRequests: removeAssigned(current.pickRequests),
+          selfPoolRequests: removeAssigned(current.selfPoolRequests),
+          liveDrafts: removeAssigned(current.liveDrafts),
+        };
+      });
+      setMultiAssignRequest(null);
+      const skipped = result.unassignedAccounts?.length ? ` · ${result.unassignedAccounts.length} account${result.unassignedAccounts.length === 1 ? '' : 's'} without a manager` : '';
+      notify(`${t('assignMultipleAccountsSuccess')} ${copies.length}${skipped}.`, skipped ? 'warning' : 'success');
+      return result;
+    } catch (err) {
+      notify(err.message || t('draftSyncFailed'), 'error');
+      return null;
+    } finally {
+      setMultiAssignBusy(false);
+    }
+  }, [multiAssignBusy, notify, t]);
   useEffect(() => {
     const handleContextAction = (event) => {
-      if (event.detail?.action !== 'duplicate') return;
+      const action = event.detail?.action;
       const requestId = event.detail?.requestId || event.detail?.target?.dataset?.contextRequestId;
-      if (requestId) duplicateRequest(requestId);
+      if (!requestId) return;
+      if (action === 'duplicate') duplicateRequest(requestId);
+      if (action === 'assign-multiple' && coordinator) {
+        const id = Number(requestId);
+        const target = [...(data?.requests || []), ...(data?.liveDrafts || [])].find((item) => Number(item.id) === id && item.status === 'pool');
+        if (target) setMultiAssignRequest(target);
+      }
     };
     window.addEventListener('sentient:context-action', handleContextAction);
     return () => window.removeEventListener('sentient:context-action', handleContextAction);
-  }, [duplicateRequest]);
+  }, [coordinator, data, duplicateRequest]);
   const showScheduledLocally = useCallback((task, placement) => {
     const scheduled = { ...task, ...placement, status: 'scheduled', isDraft: false, draftCoordinatorEmail: null };
     setData((current) => {
@@ -1618,7 +1699,7 @@ function QueueApp({ user }) {
       {overviewOpen ? <QueueOverview report={overview} loading={overviewLoading} error={overviewError} onRetry={loadOverview} onOpen={setOpen} /> : null}
       {!overviewOpen ? <>
       <section className="scheduler-toolbar"><div><p className="scheduler-eyebrow">{coordinator ? t('coordinatorSchedule') : t('mySchedule')}</p><h2>{displayDate(date, language)}</h2></div>{coordinator ? <label className="scheduler-designer-filter">{t('assignedView')}<select value={designerScope} onChange={(event) => setDesignerScope(event.target.value)}><option value="">{t('allUsers')}</option>{(data.schedulerUsers || data.designers).map((person) => <option key={person.email} value={person.email}>{displayName(person.email, person.displayName)}</option>)}</select></label> : null}<div className="scheduler-nav"><button type="button" aria-label="Previous day" onClick={() => setDate(shiftDay(date, -1))}><ChevronLeft size={17} /></button><button type="button" onClick={() => setDate(DAY(new Date(), QUEUE_TIME_ZONE))}>{t('today')}</button><button type="button" aria-label="Next day" onClick={() => setDate(shiftDay(date, 1))}><ChevronRight size={17} /></button></div><button type="button" className={`scheduler-archive-toggle${archive ? ' is-on' : ''}`} onClick={() => setArchive((value) => !value)}><Archive size={14} />{archive ? t('liveQueue') : t('archive')}</button></section>
-      {coordinator && !archive ? <section className={`scheduler-pool${poolDropActive ? ' is-drop-target' : ''}`} onDragOver={poolDragOver} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setPoolDropActive(false); }} onDrop={poolDrop} aria-label={t('poolDropHint')}><header><div><p className="scheduler-eyebrow">{t('productionPool')}</p><h2>{pool.length} {t('readyToSchedule')}</h2></div><small>{poolDropActive ? t('poolDropHint') : t('visibleSchedule')}</small></header><div className="scheduler-pool-list">{pool.map((task) => <PoolCard key={task.id} task={task} onOpen={setOpen} />)}{!pool.length ? <p className="scheduler-empty">{t('emptyPool')}</p> : null}</div></section> : null}
+      {coordinator && !archive ? <section className={`scheduler-pool${poolDropActive ? ' is-drop-target' : ''}`} onDragOver={poolDragOver} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setPoolDropActive(false); }} onDrop={poolDrop} aria-label={t('poolDropHint')}><header><div><p className="scheduler-eyebrow">{t('productionPool')}</p><h2>{pool.length} {t('readyToSchedule')}</h2></div><small>{poolDropActive ? t('poolDropHint') : t('visibleSchedule')}</small></header><div className="scheduler-pool-list">{pool.map((task) => <PoolCard key={task.id} task={task} onOpen={setOpen} canMultiAssign={Boolean(coordinator)} />)}{!pool.length ? <p className="scheduler-empty">{t('emptyPool')}</p> : null}</div></section> : null}
       {!coordinator && canSelfAssign && !archive ? <section className="scheduler-pool"><header><div><p className="scheduler-eyebrow">My Pool</p><h2>{selfPool.length} {t('readyToSchedule')}</h2></div><small>Drag your request onto your own schedule.</small></header><div className="scheduler-pool-list">{selfPool.map((task) => <PoolCard key={task.id} task={task} onOpen={setOpen} />)}{!selfPool.length ? <p className="scheduler-empty">Create a post to start your own Pool.</p> : null}</div></section> : null}
       {(coordinator || canSelfAssign) && draft.length ? <div className="scheduler-draft-float"><button type="button" className="scheduler-secondary" onClick={clearDrafts}>{t('clearDrafts')}</button><button type="button" className="scheduler-submit" onClick={submit}><Send size={14} />{t('submit')} {draft.length}</button></div> : null}
       {archive ? <section className="queue-archive-list"><header><p className="scheduler-eyebrow">{t('archive')}</p><h2>{archived.length} {t('cancelled')}</h2></header>{archived.length ? archived.map((task) => <button type="button" key={task.id} className={`${priorityClass(task.priority)}${hotClass(task)}`} onClick={() => setOpen(task)}><span>{cover(task) ? <img src={cover(task)} alt="" /> : '@'}</span><div><b>@{task.post.account}</b><small>{task.cancellationReason || t('cancelled')}</small>{isHotTask(task) ? <i className="queue-hot-badge">🔥 {hotText(task)}</i> : null}</div><em>{displayTimestamp(task.updatedAt, language)}</em></button>) : <p className="scheduler-empty">{t('noArchived')}</p>}</section> : <>{coordinator && draft.length ? <DraftAccounts draft={draft} designers={data.designers} onAccountsChange={changeDraftAccounts} /> : null}<Scheduler data={data} draft={draft} setDraft={setDraft} onDraftChange={persistDrafts} selectedDate={date} designerScope={designerScope} timeZone={simulatedTimeZone} onOpen={setOpen} onError={(message) => notify(message, 'error')} onCreateTimeBlock={createTimeBlock} onEditTimeBlock={editTimeBlock} onDeleteTimeBlock={deleteTimeBlock} onReturnToPool={returnTaskToPool} onCancelTask={cancelTask} onDuplicateTask={(task) => duplicateRequest(task.id)} onSavePreferences={saveSchedulerPreferences} addTimeNonce={addTimeNonce} />{coordinator ? <AdminAssignmentTable tasks={upcoming} onOpen={setOpen} headingKey="upcomingProduction" countKey="activeRequests" /> : <DesignerAssignments tasks={assigned} timeZone={simulatedTimeZone} onOpen={setOpen} />}</>}
@@ -1627,6 +1708,7 @@ function QueueApp({ user }) {
     {ticketsOpen && data?.viewer ? <TicketPanel tickets={tickets} loading={ticketsLoading} error={ticketsError} onClose={() => setTicketsOpen(false)} onReview={reviewTicket} canReview={Boolean(coordinator)} /> : null}
     {pickOpen ? <PickModal requests={pickPool} hotFallback={pickHotFallback} busy={pickBusy} onClose={() => setPickOpen(false)} onAssign={pickRequest} /> : null}
     {createOpen ? <CreatePostModal tags={data?.tags || []} onClose={() => setCreateOpen(false)} onCreated={(request) => { saveQuietly(); setData((current) => current ? { ...current, requests: [request, ...(current.requests || []).filter((task) => task.id !== request.id)], pickRequests: [request, ...(current.pickRequests || []).filter((task) => task.id !== request.id)] } : current); setCreateOpen(false); notify(t('postCreated')); }} /> : null}
+    {multiAssignRequest ? <AssignMultipleAccountsModal key={multiAssignRequest.id} task={multiAssignRequest} accounts={data?.accounts || []} designers={data?.schedulerUsers || data?.designers || []} busy={multiAssignBusy} onClose={() => { if (!multiAssignBusy) setMultiAssignRequest(null); }} onSubmit={(selectedAccounts) => assignToMultipleAccounts(multiAssignRequest.id, selectedAccounts)} /> : null}
     {resetOpen ? <ResetQueueModal onClose={() => setResetOpen(false)} onReset={resetQueue} /> : null}
     {accountSetupOpen && data ? <AccountSetupModal onboarding={data.accountOnboarding} accounts={data.accounts || []} onClose={() => { accountSetupDismissedRef.current = true; setAccountSetupOpen(false); }} onSave={saveManagedAccounts} onRequest={requestAccountAccess} /> : null}
     {guideOpen ? <QueueGuide coordinator={Boolean(coordinator)} step={guideStep} setStep={setGuideStep} onChooseLanguage={setLanguage} onComplete={finishGuide} /> : null}

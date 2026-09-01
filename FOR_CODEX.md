@@ -6,7 +6,14 @@ when backend work is released. Esteban is planning to merge the two repos into
 one — read the "Planned repo merge" section near the bottom before you start
 that.
 
-## Current release: SPOC approval-request notifications (2026-09-01)
+## Current release: multi-account Queue assignment (2026-09-01)
+
+- Coordinators can right-click any request in the Queue Pool and choose `Assign to multiple accounts`. The compact account picker accepts one or more active Sentient accounts and resolves the existing `queue_designer_accounts` mapping to every eligible Queue user.
+- The source Pool row is consumed for the first matching user; each additional user receives an independent scheduled duplicate. A user who manages multiple selected accounts receives one copy with all matching recommended accounts, and attachment metadata/files are preserved.
+- Assignments are collision-safe and scheduled at the next available 10-minute slot. Each assignment gets the normal Queue Slack DM (thumbnail plus `Open in Queue` link); this automatic workflow does not emit routine SPOC log messages.
+- Endpoint: `POST /api/dashboard/queue/v2/requests/{request_id}/assign-accounts` with a JSON-encoded `accounts` form field. The frontend action is wired through the global contextual menu (`assign-multiple`) and updates Pool, scheduler, and Pick state optimistically after success.
+
+## Previous release: SPOC approval-request notifications (2026-09-01)
 
 - Backend source commit: `09db1bd`; Render is live on that commit. `#spoc-dashboard` is now an approval inbox only: it accepts user-created approval requests for PP revisions, moves, cancellations, trainee reviews, personal-time blocks, and account access.
 - Routine Queue activity is intentionally excluded from SPOC: assignments, edits, scheduling/resubmissions, returns to the pool, coordinator cancellations/deletions, Slack delivery events, and ticket approvals/rejections stay in Queue history and do not create channel messages.
