@@ -1199,6 +1199,45 @@ function QueueApp({ user }) {
     await load({ silent: true }).catch(() => {});
   };
   const changeDraftAccounts = (requestId, accounts) => persistDrafts(draftRef.current.map((task) => task.id === requestId ? { ...task, recommendedAccounts: accounts } : task));
+  // Returning work to the Pool is intentionally instant. Keep the local
+  // schedule authoritative while the durable submit finishes in background;
+  // otherwise a slow Queue refresh makes a simple drop feel broken.
+  const showReturnedInPool = useCallback((task) => {
+    const returned = { ...task, status: 'pool', designerEmail: null, scheduledDate: null, scheduledStartMinutes: null, isDraft: false, draftCoordinatorEmail: null };
+    applyDraft(draftRef.current.filter((draftTask) => draftTask.id !== task.id));
+    setData((current) => {
+      if (!current) return current;
+      const without = (items = []) => items.filter((item) => item.id !== task.id);
+      const withReturned = (items = []) => [returned, ...without(items)];
+      return {
+        ...current,
+        requests: withReturned(current.requests),
+        planningRequests: without(current.planningRequests),
+        assignedRequests: without(current.assignedRequests),
+        liveDrafts: without(current.liveDrafts),
+        pickRequests: withReturned(current.pickRequests),
+        selfPoolRequests: withReturned(current.selfPoolRequests),
+      };
+    });
+    return returned;
+  }, [applyDraft]);
+  const persistPoolReturn = useCallback((task) => {
+    const returned = showReturnedInPool(task);
+    // A prior draft write may already be in flight. Sequence the durable
+    // mutation after it, but never make the person wait to see the result.
+    draftSavePromiseRef.current.catch(() => {}).then(() => json('/api/dashboard/queue/v2/submit', {
+      method: 'POST', body: new URLSearchParams({ changes: JSON.stringify([{
+        id: returned.id, status: 'pool', designerEmail: null, scheduledDate: null,
+        scheduledStartMinutes: null, productionPoints: returned.productionPoints,
+        recommendedAccounts: returned.recommendedAccounts || [],
+      }]) }),
+    })).then(() => {
+      notify(t('returnedToPool'));
+    }).catch((err) => {
+      notify(err.message || t('draftSyncFailed'), 'error');
+      loadRef.current?.({ silent: true }).catch(() => {});
+    });
+  }, [notify, showReturnedInPool, t]);
   const dragTask = (event) => {
     const id = Number(activeQueueDragId || event.dataTransfer?.getData('queue-task'));
     return [...draftRef.current, ...(data?.liveDrafts || []), ...(data?.planningRequests || []), ...(data?.requests || [])].find((task) => task.id === id);
@@ -1209,25 +1248,14 @@ function QueueApp({ user }) {
     event.dataTransfer.dropEffect = 'move';
     setPoolDropActive(true);
   };
-  const poolDrop = async (event) => {
+  const poolDrop = (event) => {
     event.preventDefault();
     if (!coordinator) return;
     const source = dragTask(event);
     setPoolDropActive(false);
     activeQueueDragId = null;
     if (!source || source.status !== 'scheduled') return;
-    const remainingDrafts = draftRef.current.filter((task) => task.id !== source.id);
-    const returned = { id: source.id, status: 'pool', designerEmail: null, scheduledDate: null, scheduledStartMinutes: null, productionPoints: source.productionPoints, recommendedAccounts: source.recommendedAccounts || [] };
-    try {
-      await draftSavePromiseRef.current.catch(() => {});
-      await json('/api/dashboard/queue/v2/submit', { method: 'POST', body: new URLSearchParams({ changes: JSON.stringify([returned]) }) });
-      applyDraft(remainingDrafts);
-      await load({ silent: true });
-      notify(t('returnedToPool'));
-    } catch (err) {
-      await load({ silent: true }).catch(() => {});
-      notify(err.message, 'error');
-    }
+    persistPoolReturn(source);
   };
   const closeDetail = () => { openRef.current = null; setOpen(null); };
   const action = async (actionName, value) => { try { const body = value ? new URLSearchParams(actionName === 'close' ? { final_permalink: value } : {}) : undefined; const result = await json(`/api/dashboard/queue/v2/requests/${open.id}/${actionName}`, { method: 'POST', body }); closeDetail(); await load({ silent: true }); notify(result.deferred ? `${t('movedAfterActive')} ${result.scheduledDate} · ${time(result.scheduledStartMinutes)}.` : t('requestUpdated'), result.deferred ? 'warning' : 'success'); } catch (err) { setDetailNotice({ message: err.message, type: 'error' }); } };
@@ -1255,7 +1283,7 @@ function QueueApp({ user }) {
   };
   const deleteTimeBlock = async (block) => { try { await json(`/api/dashboard/queue/v2/tickets/time-block/${block.id}`, { method: 'POST', body: new URLSearchParams({ delete: 'true' }) }); await load({ silent: true }); notify(t('requestUpdated')); } catch (err) { notify(err.message, 'error'); } };
   const saveSchedulerPreferences = async (preferences) => { const optimistic = { hiddenUsers: preferences.hiddenUsers || [], rowOrder: preferences.rowOrder || [] }; setData((current) => current ? { ...current, schedulerPreferences: optimistic } : current); try { const result = await json('/api/dashboard/queue/v2/scheduler-preferences', { method: 'POST', body: new URLSearchParams({ hidden_users: JSON.stringify(optimistic.hiddenUsers), row_order: JSON.stringify(optimistic.rowOrder) }) }); setData((current) => current ? { ...current, schedulerPreferences: result.schedulerPreferences || optimistic } : current); } catch (err) { notify(err.message, 'error'); load({ silent: true }).catch(() => {}); } };
-  const returnTaskToPool = async (task) => { try { await json('/api/dashboard/queue/v2/submit', { method: 'POST', body: new URLSearchParams({ changes: JSON.stringify([{ id: task.id, status: 'pool', designerEmail: null, scheduledDate: null, scheduledStartMinutes: null, productionPoints: task.productionPoints, recommendedAccounts: task.recommendedAccounts || [] }]) }) }); await load({ silent: true }); notify(t('returnedToPool')); } catch (err) { notify(err.message, 'error'); } };
+  const returnTaskToPool = (task) => persistPoolReturn(task);
   const cancelTask = async (task) => { try { await json(`/api/dashboard/queue/v2/requests/${task.id}/cancel`, { method: 'POST', body: new URLSearchParams({ reason: 'Cancelled by coordinator' }) }); await load({ silent: true }); notify(t('requestUpdated')); } catch (err) { notify(err.message, 'error'); } };
   const saveManagedAccounts = async (accounts) => {
     const result = await json('/api/dashboard/queue/v2/account-onboarding', { method: 'POST', body: new URLSearchParams({ accounts: JSON.stringify(accounts) }) });
