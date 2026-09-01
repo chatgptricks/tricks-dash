@@ -75,14 +75,16 @@ export async function publishSsoCookie() {
 // they've done everything they can before falling back to the login screen.
 export async function trySsoSignIn() {
   await authPersistenceReady;
+  if (firebaseAuth.currentUser) return true;
   const token = readCookie(COOKIE_NAME);
   if (!token) return false;
   try {
     await signInWithCustomToken(firebaseAuth, token);
+    return true;
   } catch {
     clearCookie(COOKIE_NAME);
+    return false;
   }
-  return true;
 }
 
 export function clearSsoCookie() {
