@@ -1799,7 +1799,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
                   {queuePendingCount ? <b className="queue-pending-badge">{queuePendingCount > 99 ? '99+' : queuePendingCount}</b> : null}
                   <ExternalLink size={12} className="tool-link-out" aria-hidden="true" />
                 </a>
-                {(isAdmin || operatingRoles.includes('vc')) ? <a
+                {(isDev || isAdmin || operatingRoles.includes('vc')) ? <a
                   className="tool-link"
                   href={`${import.meta.env.BASE_URL}tracker.html`}
                   target="_blank"
@@ -1810,7 +1810,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
                   <span>{t('Tracker')}</span>
                   <ExternalLink size={12} className="tool-link-out" aria-hidden="true" />
                 </a> : null}
-                {(isAdmin || operatingRoles.includes('vc')) ? <a
+                {(isDev || isAdmin || operatingRoles.includes('vc')) ? <a
                   className="tool-link"
                   href={`${import.meta.env.BASE_URL}insights.html`}
                   target="_blank"
