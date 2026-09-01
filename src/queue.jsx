@@ -94,7 +94,7 @@ const userAvatar = (value) => {
 
 const COPY = {
   en: {
-    productionQueue: 'Production Queue', dashboard: 'Dashboard', admin: 'Admin', coordinatorSchedule: 'Coordinator schedule', mySchedule: 'My production schedule', today: 'Today', submit: 'Submit', change: 'change', changes: 'changes', productionPool: 'Production pool', readyToSchedule: 'ready to schedule', visibleSchedule: 'The window shows 8 hours. Scroll to explore the full 24-hour day.', emptyPool: 'No requests are waiting in the pool.', myAssignedWork: 'My assigned work', upcomingProduction: 'Upcoming production', activeRequest: 'active request', activeRequests: 'active requests', noActiveAssignments: 'No active assignments', emptyAssignments: 'When a coordinator schedules work for you, it will appear here.', post: 'Post', scheduled: 'Scheduled', deadline: 'Deadline', scope: 'Scope', status: 'Status', noTags: 'No tags', designer: 'Designer', now: 'Now', centerNow: 'Center Now', loadingSchedule: 'Loading schedule…', tryAgain: 'Try again', queueAccess: 'Queue is available to every dashboard user.', rolePreview: 'Role preview', onlyEsteban: 'Only visible to Esteban.', activeRole: 'Active role', devFullAccess: 'Dev · full access', postDesigner: 'Post Designer', viralCoordinator: 'Viral Coordinator', salesRole: 'Sales', productionReports: 'Production reports', adminWorkspace: 'Admin workspace', loadingReport: 'Loading report…', inPool: 'In pool', inProgress: 'In progress', readyToClose: 'Ready to close', closed: 'Closed', cancelled: 'Cancelled', designerWorkload: 'Designer workload', workloadHelp: 'Active work, delivery health and actual production time.', allAssignedPosts: 'All assigned posts', assignedPostsCount: 'assigned posts', noAssignedPosts: 'No assigned posts yet.', openSettings: 'Open dashboard settings', startWork: 'Start work', markComplete: 'Mark complete', publishedLink: 'Published Instagram link', closeRequest: 'Close request', returnInProgress: 'Return to in progress', openPublished: 'Open published post', cancellationReason: 'Cancellation reason (optional)', cancelRequest: 'Cancel request', brief: 'Brief', notes: 'Notes', references: 'References', minutes: 'minutes', sourcePost: 'Source post', assignment: 'Assignment', recommendedAccounts: 'Recommended accounts', editRequest: 'Edit request', saveChanges: 'Save changes', cancel: 'Cancel', productionPoints: 'Production points', tags: 'Tags', referenceLinks: 'Reference links', oneLinkPerLine: 'One link per line', signIn: 'Sign in with Google', signingIn: 'Signing in…', signInHelp: 'Sign in with Google to open your production schedule.', allDesigners: 'All designers', allUsers: 'All users', noAccounts: 'No accounts yet', noRecommendedAccount: 'No recommended account', unsavedDrafts: 'Draft schedule changes are saved in this browser.', clearDrafts: 'Discard drafts', archive: 'Archive', liveQueue: 'Live Queue', noArchived: 'No cancelled requests.', extra: 'NEXT DAY', overdue: 'OVERDUE', atRisk: 'AT RISK', attachments: 'Files & references', uploadFiles: 'Upload files', noFiles: 'No files attached.', history: 'Activity history', noHistory: 'No activity yet.', resendSlack: 'Resend Slack DM', slackSent: 'Slack DM sent.', slackFailed: 'Slack DM failed. Check the user Slack ID and try again.', requestUpdated: 'Request updated.', scheduleSubmitted: 'Schedule submitted.', deliveryHealth: 'Delivery health', onTime: 'On-time rate', averageTime: 'Average actual time', completedJobs: 'Closed jobs', draftsSaved: 'Drafts saved', movedJobs: 'reflowed jobs', close: 'Close', filesUploaded: 'Files uploaded.', deadlineError: 'This request cannot fit before its deadline.', invalidDay: 'Requests can be scheduled on any day.', assignedView: 'Scheduler view', uploadFailed: 'Some files could not be uploaded.', sourceCaption: 'Source caption', cancelledReason: 'Cancellation reason', draftWarning: 'You have unsubmitted Queue changes.', movedAfterActive: 'Another post is already in progress. This request was moved after it and remains scheduled.', notQueueParticipant: 'Not a Queue participant',
+    productionQueue: 'Production Queue', dashboard: 'Dashboard', admin: 'Admin', coordinatorSchedule: 'Coordinator schedule', mySchedule: 'My production schedule', today: 'Today', submit: 'Submit', change: 'change', changes: 'changes', productionPool: 'Production pool', readyToSchedule: 'ready to schedule', visibleSchedule: 'The window shows 10 hours. Scroll to explore the full 24-hour day.', emptyPool: 'No requests are waiting in the pool.', myAssignedWork: 'My assigned work', upcomingProduction: 'Upcoming production', activeRequest: 'active request', activeRequests: 'active requests', noActiveAssignments: 'No active assignments', emptyAssignments: 'When a coordinator schedules work for you, it will appear here.', post: 'Post', postType: 'Post type', scheduled: 'Scheduled', deadline: 'Deadline', scope: 'Scope', status: 'Status', noTags: 'No tags', designer: 'Designer', now: 'Now', centerNow: 'Center Now', loadingSchedule: 'Loading schedule…', tryAgain: 'Try again', queueAccess: 'Queue is available to every dashboard user.', rolePreview: 'Role preview', onlyEsteban: 'Only visible to Esteban.', activeRole: 'Active role', devFullAccess: 'Dev · full access', postDesigner: 'Post Designer', viralCoordinator: 'Viral Coordinator', salesRole: 'Sales', productionReports: 'Production reports', adminWorkspace: 'Admin workspace', loadingReport: 'Loading report…', inPool: 'In pool', inProgress: 'In progress', readyToClose: 'Ready to close', closed: 'Closed', cancelled: 'Cancelled', designerWorkload: 'Designer workload', workloadHelp: 'Active work, delivery health and actual production time.', allAssignedPosts: 'All assigned posts', assignedPostsCount: 'assigned posts', noAssignedPosts: 'No assigned posts yet.', openSettings: 'Open dashboard settings', startWork: 'Start work', markComplete: 'Mark complete', publishedLink: 'Published Instagram link', closeRequest: 'Close request', returnInProgress: 'Return to in progress', openPublished: 'Open published post', cancellationReason: 'Cancellation reason (optional)', cancelRequest: 'Cancel request', brief: 'Brief', notes: 'Notes', references: 'References', minutes: 'minutes', sourcePost: 'Source post', assignment: 'Assignment', recommendedAccounts: 'Recommended accounts', editRequest: 'Edit request', saveChanges: 'Save changes', cancel: 'Cancel', productionPoints: 'Production points', tags: 'Tags', referenceLinks: 'Reference links', oneLinkPerLine: 'One link per line', signIn: 'Sign in with Google', signingIn: 'Signing in…', signInHelp: 'Sign in with Google to open your production schedule.', allDesigners: 'All designers', allUsers: 'All users', noAccounts: 'No accounts yet', noRecommendedAccount: 'No recommended account', unsavedDrafts: 'Draft schedule changes are saved in this browser.', clearDrafts: 'Discard drafts', archive: 'Archive', liveQueue: 'Live Queue', noArchived: 'No cancelled requests.', extra: 'NEXT DAY', overdue: 'OVERDUE', atRisk: 'AT RISK', attachments: 'Files & references', uploadFiles: 'Upload files', noFiles: 'No files attached.', history: 'Activity history', noHistory: 'No activity yet.', resendSlack: 'Resend Slack DM', slackSent: 'Slack DM sent.', slackFailed: 'Slack DM failed. Check the user Slack ID and try again.', requestUpdated: 'Request updated.', scheduleSubmitted: 'Schedule submitted.', deliveryHealth: 'Delivery health', onTime: 'On-time rate', averageTime: 'Average actual time', completedJobs: 'Closed jobs', draftsSaved: 'Drafts saved', movedJobs: 'reflowed jobs', close: 'Close', filesUploaded: 'Files uploaded.', deadlineError: 'This request cannot fit before its deadline.', invalidDay: 'Requests can be scheduled on any day.', assignedView: 'Scheduler view', uploadFailed: 'Some files could not be uploaded.', sourceCaption: 'Source caption', cancelledReason: 'Cancellation reason', draftWarning: 'You have unsubmitted Queue changes.', movedAfterActive: 'Another post is already in progress. This request was moved after it and remains scheduled.', notQueueParticipant: 'Not a Queue participant',
     priority: 'Priority', priorityLow: 'Low', priorityMedium: 'Medium', priorityHigh: 'High', priorityUrgent: 'Urgent', priorityMix: 'Priority mix', highPriority: 'High priority', tentative: 'Pending submit', tentativeBy: 'Temporary placement by', liveConnected: 'Live', liveConnecting: 'Connecting', liveOffline: 'Reconnecting', sharedDrafts: 'Temporary changes are shared live with assigned designers.', draftSyncFailed: 'The temporary placement could not be shared. Queue was refreshed.', resizeBar: 'Resize production block', resizeLeft: 'from the left', resizeRight: 'from the right', adminOverview: 'Overview', userManagement: 'User Management', managedAccounts: 'Managed Sentient accounts', chooseSentientAccount: 'Choose Sentient account', assignAccount: 'Assign', removeAccount: 'Remove account', usersCount: 'users', loadingUsers: 'Loading users…', noUsers: 'No users available.', accountUpdateFailed: 'Could not update account ownership.',
     settings: 'Settings', accentColor: 'Accent color', customColor: 'Custom color', custom: 'Custom', theme: 'Theme', language: 'Language', signOut: 'Sign out', darkTheme: 'Dark', lightTheme: 'Light', signedInAs: 'Signed in as', adminSettings: 'Admin',
   },
@@ -239,7 +239,7 @@ function PriorityBadge({ priority = 'medium' }) {
   return <span className={`queue-priority-badge priority-${priority}`}>{priorityCopy(priority, t)}</span>;
 }
 
-function TaskBlock({ task, editable, onOpen, onResizeStart, accountAvatars = {} }) {
+function TaskBlock({ task, editable, onOpen, onResizeStart, onContextMenu, accountAvatars = {} }) {
   const { t } = useQueuePreferences();
   const pendingTickets = Array.isArray(task.pendingTickets) ? task.pendingTickets : [];
   const pendingTicketLabel = pendingTickets.map((ticket) => ticket.type === 'pp_revision' ? t('ppRevision') : ticket.type === 'move' ? t('moveRequest') : t('cancellationRequest')).join(' · ');
@@ -250,24 +250,25 @@ function TaskBlock({ task, editable, onOpen, onResizeStart, accountAvatars = {} 
   const extra = (task.scheduledStartMinutes ?? 0) + width > QUEUE_DAY_END;
   const canResize = editable && task.status === 'scheduled';
   const accountImage = (account) => { const value = accountAvatars?.[account] || ACCOUNT_PROFILE_FALLBACKS[String(account).toLowerCase()]; return value ? (String(value).startsWith('http') || String(value).startsWith('/') && !String(value).startsWith('/api/') ? String(value) : `${API_BASE}${value}`) : ''; };
-  return <button type="button" draggable={editable && task.status === 'scheduled'} className={`scheduler-block state-${task.status} priority-${task.priority || 'medium'}${hotClass(task)}${task.isDraft ? ' is-draft' : ''}${extra ? ' is-extra' : ''}${pendingTickets.length ? ' has-pending-ticket' : ''}`} style={{ left: `${(left / QUEUE_DAY_END) * 100}%`, width: `${(width / QUEUE_DAY_END) * 100}%` }} onDragStart={(event) => { activeQueueDragId = task.id; event.dataTransfer.setData('queue-task', String(task.id)); }} onDragEnd={() => { activeQueueDragId = null; }} onClick={(event) => { if (event.target.closest('.scheduler-resize-handle')) return; onOpen(task); }} title={`${accountMention(task.post.account) || task.post.title || t('post')} · ${priorityCopy(task.priority, t)} · ${task.productionPoints} PP · ${statusCopy(task.status, t, task.isDraft)}${pendingTicketLabel ? ` · ${pendingTicketLabel}` : ''}`}>
-    {cover(task) ? <img src={cover(task)} alt="" /> : null}<span className="scheduler-block-copy"><b>{task.post.title || accountMention(task.post.account) || t('post')}</b><small>{task.post.title && task.post.account ? `${accountMention(task.post.account)} · ` : ''}{task.isDraft ? `${t('tentative')} · ` : ''}{priorityCopy(task.priority, t)} · {task.productionPoints} PP · {time(task.scheduledStartMinutes ?? QUEUE_DAY_START)}</small></span><span className={`scheduler-priority-mark priority-${task.priority || 'medium'}`}>{priorityCopy(task.priority, t)}</span>{pendingTickets.length ? <span className="scheduler-ticket-marker" title={pendingTicketLabel}><ClipboardList size={11} /><b>{pendingTickets.length}</b></span> : null}{isHotTask(task) ? <span className="queue-hot-badge">🔥 {hotText(task)}</span> : null}{task.isDraft ? <span className="scheduler-draft-badge">{t('tentative')}</span> : null}{extra ? <span className="scheduler-extra">{t('extra')}</span> : null}{task.recommendedAccounts?.length ? <span className="scheduler-account-badges">{task.recommendedAccounts.map((account) => <i key={account} title={`@${account}`}><span className="scheduler-account-avatar">{accountImage(account) ? <img src={accountImage(account)} alt="" loading="lazy" onError={(event) => { event.currentTarget.hidden = true; }} /> : `@${account.slice(0, 1)}`}</span><b>@{account}</b></i>)}</span> : null}{canResize ? <><span className="scheduler-resize-handle scheduler-resize-handle-left" role="separator" aria-label={`${t('resizeBar')} ${t('resizeLeft')}`} onPointerDown={(event) => onResizeStart(event, task, 'left')} /><span className="scheduler-resize-handle scheduler-resize-handle-right" role="separator" aria-label={`${t('resizeBar')} ${t('resizeRight')}`} onPointerDown={(event) => onResizeStart(event, task, 'right')} /></> : null}
+  const isPromo = task.tags?.some((tag) => String(tag).toLowerCase() === 'promo') || task.post?.isPromo;
+  return <button type="button" draggable={editable && task.status === 'scheduled'} className={`scheduler-block state-${task.status} priority-${task.priority || 'medium'}${hotClass(task)}${task.isDraft ? ' is-draft' : ''}${isPromo ? ' is-promo' : ''}${extra ? ' is-extra' : ''}${pendingTickets.length ? ' has-pending-ticket' : ''}`} style={{ left: `${(left / QUEUE_DAY_END) * 100}%`, width: `${(width / QUEUE_DAY_END) * 100}%` }} onDragStart={(event) => { activeQueueDragId = task.id; event.dataTransfer.setData('queue-task', String(task.id)); }} onDragEnd={() => { activeQueueDragId = null; }} onContextMenu={(event) => onContextMenu?.(event, task)} onClick={(event) => { if (event.target.closest('.scheduler-resize-handle')) return; onOpen(task); }} title={`${accountMention(task.post.account) || task.post.title || t('post')} · ${priorityCopy(task.priority, t)} · ${task.productionPoints} PP · ${statusCopy(task.status, t, task.isDraft)}${pendingTicketLabel ? ` · ${pendingTicketLabel}` : ''}`}>
+    {cover(task) ? <img src={cover(task)} alt="" /> : null}<span className="scheduler-block-copy"><b>{task.post.title || accountMention(task.post.account) || t('post')}</b><small>{task.post.type || t('post')} · {task.isDraft ? `${t('tentative')} · ` : ''}{task.productionPoints} PP · {time(task.scheduledStartMinutes ?? QUEUE_DAY_START)}</small></span>{task.priority === 'urgent' ? <span className="scheduler-priority-mark priority-urgent">{priorityCopy(task.priority, t)}</span> : null}{pendingTickets.length ? <span className="scheduler-ticket-marker" title={pendingTicketLabel}><ClipboardList size={11} /><b>{pendingTickets.length}</b></span> : null}{isHotTask(task) ? <span className="queue-hot-badge">🔥 {hotText(task)}</span> : null}{task.isDraft ? <span className="scheduler-draft-badge">{t('tentative')}</span> : null}{extra ? <span className="scheduler-extra">{t('extra')}</span> : null}{task.recommendedAccounts?.length ? <span className="scheduler-account-badges">{task.recommendedAccounts.map((account) => <i key={account} title={`@${account}`}><span className="scheduler-account-avatar">{accountImage(account) ? <img src={accountImage(account)} alt="" loading="lazy" onError={(event) => { event.currentTarget.hidden = true; }} /> : `@${account.slice(0, 1)}`}</span><b>@{account}</b></i>)}</span> : null}{canResize ? <><span className="scheduler-resize-handle scheduler-resize-handle-left" role="separator" aria-label={`${t('resizeBar')} ${t('resizeLeft')}`} onPointerDown={(event) => onResizeStart(event, task, 'left')} /><span className="scheduler-resize-handle scheduler-resize-handle-right" role="separator" aria-label={`${t('resizeBar')} ${t('resizeRight')}`} onPointerDown={(event) => onResizeStart(event, task, 'right')} /></> : null}
   </button>;
 }
 
-function TimeBlock({ block }) {
+function TimeBlock({ block, onContextMenu }) {
   const { t } = useQueuePreferences();
   const Icon = ({ meeting: CalendarDays, break: Coffee, promo: TimerReset, focus: Clock3, other: CalendarPlus }[block.category] || CalendarPlus);
   const start = Number(block.scheduledStartMinutes || 0);
   const duration = Math.max(10, Number(block.durationMinutes || 10));
-  return <div className={`scheduler-time-block category-${block.category || 'other'} status-${block.status}`} style={{ left: `${(start / QUEUE_DAY_END) * 100}%`, width: `${(duration / QUEUE_DAY_END) * 100}%` }} title={`${block.title} · ${time(start)} · ${duration} min · ${block.status === 'pending' ? t('pendingApproval') : t('approved')}`}><Icon size={13} /><span><b>{block.title || t(block.category || 'other')}</b><small>{time(start)} · {duration} min</small></span>{block.status === 'pending' ? <i>{t('pendingApproval')}</i> : null}</div>;
+  return <div className={`scheduler-time-block category-${block.category || 'other'} status-${block.status}`} onContextMenu={(event) => onContextMenu?.(event, block)} style={{ left: `${(start / QUEUE_DAY_END) * 100}%`, width: `${(duration / QUEUE_DAY_END) * 100}%` }} title={`${block.title} · ${time(start)} · ${duration} min · ${block.status === 'pending' ? t('pendingApproval') : t('approved')}`}><Icon size={13} /><span><b>{block.title || t(block.category || 'other')}</b><small>{time(start)} · {duration} min</small></span>{block.status === 'pending' ? <i>{t('pendingApproval')}</i> : null}</div>;
 }
 
-function TimeBlockForm({ form, setForm, busy, onClose, onSubmit }) {
+function TimeBlockForm({ form, setForm, busy, onClose, onSubmit, users = [], canChooseUser = false }) {
   const { t, language } = useQueuePreferences();
   if (!form) return null;
   const valid = form.durationMinutes >= 10 && form.durationMinutes % 10 === 0 && form.startMinutes + form.durationMinutes <= QUEUE_DAY_END;
-  return <><button type="button" className="scheduler-context-backdrop" aria-label={t('close')} onClick={onClose} /><form className="scheduler-time-form" style={{ left: form.x, top: form.y }} onSubmit={(event) => { event.preventDefault(); if (valid) onSubmit(); }}><header><div><p className="scheduler-eyebrow">{t('personalTime')}</p><h3>{t('addTime')}</h3><small>{displayDate(form.scheduledDate, language)}</small></div><button type="button" onClick={onClose} aria-label={t('close')}><X size={14} /></button></header><div className="scheduler-time-form-grid"><label>{t('meeting')} / {t('break')}<select value={form.category} onChange={(event) => setForm((current) => ({ ...current, category: event.target.value }))}><option value="meeting">{t('meeting')}</option><option value="break">{t('break')}</option><option value="promo">{t('promo')}</option><option value="focus">{t('focus')}</option><option value="other">{t('other')}</option></select></label><label>{t('startTime')}<input type="time" step="600" value={time(form.startMinutes)} onChange={(event) => setForm((current) => ({ ...current, startMinutes: Math.round(minutesFromTime(event.target.value) / 10) * 10 }))} /></label><label>{t('duration')}<input type="number" min="10" max={Math.max(10, QUEUE_DAY_END - form.startMinutes)} step="10" value={form.durationMinutes} onChange={(event) => setForm((current) => ({ ...current, durationMinutes: Number(event.target.value) }))} /></label><label>{t('blockTitle')}<input value={form.title} maxLength="80" placeholder={t(form.category)} onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} /></label><label className="is-wide">{t('noteOptional')}<textarea value={form.note} maxLength="500" onChange={(event) => setForm((current) => ({ ...current, note: event.target.value }))} /></label></div><button type="submit" className="scheduler-primary" disabled={busy || !valid}>{busy ? <LoaderCircle className="queue-spin" size={14} /> : <CalendarPlus size={14} />}{t('requestApproval')}</button></form></>;
+  return <><button type="button" className="scheduler-context-backdrop" aria-label={t('close')} onClick={onClose} /><form className="scheduler-time-form" style={{ left: form.x, top: form.y }} onSubmit={(event) => { event.preventDefault(); if (valid) onSubmit(); }}><header><div><p className="scheduler-eyebrow">{t('personalTime')}</p><h3>{form.ticketId ? t('editRequest') : t('addTime')}</h3><small>{displayDate(form.scheduledDate, language)}</small></div><button type="button" onClick={onClose} aria-label={t('close')}><X size={14} /></button></header><div className="scheduler-time-form-grid">{canChooseUser ? <label className="is-wide">{t('designer')}<select value={form.designerEmail || ''} onChange={(event) => setForm((current) => ({ ...current, designerEmail: event.target.value }))}>{users.map((user) => <option key={user.email} value={user.email}>{displayName(user.email, user.displayName)}</option>)}</select></label> : null}<label>{t('meeting')} / {t('break')}<select value={form.category} onChange={(event) => setForm((current) => ({ ...current, category: event.target.value }))}><option value="meeting">{t('meeting')}</option><option value="break">{t('break')}</option><option value="promo">{t('promo')}</option><option value="focus">{t('focus')}</option><option value="other">{t('other')}</option></select></label><label>{t('startTime')}<input type="time" step="600" value={time(form.startMinutes)} onChange={(event) => setForm((current) => ({ ...current, startMinutes: Math.round(minutesFromTime(event.target.value) / 10) * 10 }))} /></label><label>{t('duration')}<input type="number" min="10" max={Math.max(10, QUEUE_DAY_END - form.startMinutes)} step="10" value={form.durationMinutes} onChange={(event) => setForm((current) => ({ ...current, durationMinutes: Number(event.target.value) }))} /></label><label>{t('blockTitle')}<input value={form.title} maxLength="80" placeholder={t(form.category)} onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} /></label><label className="is-wide">{t('noteOptional')}<textarea value={form.note} maxLength="500" onChange={(event) => setForm((current) => ({ ...current, note: event.target.value }))} /></label></div><button type="submit" className="scheduler-primary" disabled={busy || !valid}>{busy ? <LoaderCircle className="queue-spin" size={14} /> : <CalendarPlus size={14} />}{form.ticketId ? t('saveChanges') : (canChooseUser ? t('addTime') : t('requestApproval'))}</button></form></>;
 }
 
 function AccountSetupModal({ onboarding, accounts = [], onClose, onSave, onRequest }) {
@@ -665,14 +666,16 @@ function schedulerUserRole(user, t) {
   return labels.join(' · ');
 }
 
-function Scheduler({ data, draft, setDraft, onDraftChange, selectedDate, designerScope, timeZone = '', onOpen, onError, onCreateTimeBlock }) {
+function Scheduler({ data, draft, setDraft, onDraftChange, selectedDate, designerScope, timeZone = '', onOpen, onError, onCreateTimeBlock, onEditTimeBlock, onDeleteTimeBlock, onReturnToPool, onCancelTask, onSavePreferences, addTimeNonce = 0 }) {
   const { t, language } = useQueuePreferences();
   const coordinator = data.viewer.isAdmin || data.viewer.operatingRoles?.includes('vc');
+  const selfPlanner = coordinator || Boolean(data.viewer.canSelfAssign);
   const [now, setNow] = useState(() => new Date());
   const [dropPreview, setDropPreview] = useState(null);
   const [resizeState, setResizeState] = useState(null);
   const [timeBlockForm, setTimeBlockForm] = useState(null);
   const [timeBlockBusy, setTimeBlockBusy] = useState(false);
+  const [contextMenu, setContextMenu] = useState(null);
   const scrollRef = useRef(null);
   const resizeRef = useRef(null);
   useEffect(() => { const timer = window.setInterval(() => setNow(new Date()), 15000); return () => window.clearInterval(timer); }, []);
@@ -694,7 +697,13 @@ function Scheduler({ data, draft, setDraft, onDraftChange, selectedDate, designe
     })),
   ], [allTasks, data.timeBlocks]);
   const schedulerUsers = data.schedulerUsers || data.designers;
-  const visibleDesigners = designerScope ? schedulerUsers.filter((designer) => designer.email === designerScope) : schedulerUsers;
+  const preferences = data.schedulerPreferences || {};
+  const hiddenUsers = new Set(preferences.hiddenUsers || []);
+  const orderedUsers = useMemo(() => {
+    const positions = new Map((preferences.rowOrder || []).map((email, index) => [email, index]));
+    return [...schedulerUsers].sort((a, b) => (positions.get(a.email) ?? 9999) - (positions.get(b.email) ?? 9999) || displayName(a.email, a.displayName).localeCompare(displayName(b.email, b.displayName)));
+  }, [schedulerUsers, preferences.hiddenUsers, preferences.rowOrder]);
+  const visibleDesigners = (designerScope ? orderedUsers.filter((designer) => designer.email === designerScope) : orderedUsers.filter((designer) => !hiddenUsers.has(designer.email)));
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
       const scroller = scrollRef.current;
@@ -718,34 +727,47 @@ function Scheduler({ data, draft, setDraft, onDraftChange, selectedDate, designe
     if (typeof scroller.scrollTo === 'function') scroller.scrollTo({ left, behavior: 'smooth' });
     else scroller.scrollLeft = left;
   };
-  const openTimeBlockForm = (event, designer) => {
-    if (designer.email !== data.viewer.email || event.target.closest('.scheduler-block,.scheduler-time-block')) return;
+  const openTimeBlockForm = (event, designer, block = null) => {
+    if ((!coordinator && designer.email !== data.viewer.email) || event.target.closest('.scheduler-block,.scheduler-time-block')) return;
     event.preventDefault();
     const rect = event.currentTarget.getBoundingClientRect();
     const startMinutes = Math.min(1430, Math.max(0, Math.round((((event.clientX - rect.left) / rect.width) * QUEUE_DAY_END) / 10) * 10));
     const panelWidth = 326;
     const panelHeight = 390;
-    setTimeBlockForm({ category: 'meeting', title: '', note: '', scheduledDate: selectedDate, startMinutes, durationMinutes: 30, x: Math.max(12, Math.min(window.innerWidth - panelWidth - 12, event.clientX)), y: Math.max(12, Math.min(window.innerHeight - panelHeight - 12, event.clientY)) });
+    setTimeBlockForm({ ticketId: block?.id, designerEmail: block?.requesterEmail || designer.email, category: block?.category || 'meeting', title: block?.title || '', note: block?.note || '', scheduledDate: block?.scheduledDate || selectedDate, startMinutes: block?.scheduledStartMinutes ?? startMinutes, durationMinutes: block?.durationMinutes || 30, x: Math.max(12, Math.min(window.innerWidth - panelWidth - 12, event.clientX)), y: Math.max(12, Math.min(window.innerHeight - panelHeight - 12, event.clientY)) });
   };
   const submitTimeBlock = async () => {
     if (!timeBlockForm) return;
     setTimeBlockBusy(true);
     try {
-      const saved = await onCreateTimeBlock(timeBlockForm);
+      const saved = await (timeBlockForm.ticketId ? onEditTimeBlock?.(timeBlockForm) : onCreateTimeBlock(timeBlockForm));
       if (saved) setTimeBlockForm(null);
     } finally {
       setTimeBlockBusy(false);
     }
   };
   useEffect(() => { setTimeBlockForm(null); }, [selectedDate]);
+  useEffect(() => {
+    if (!addTimeNonce || !coordinator) return;
+    const designer = schedulerUsers.find((user) => user.email === data.viewer.email) || schedulerUsers[0];
+    if (!designer) return;
+    const zone = designer.timeZone || timeZone || 'America/Costa_Rica';
+    const initialStart = selectedDate === DAY(now, zone) ? Math.min(1430, Math.ceil(currentMinutes(now, zone) / 10) * 10) : 9 * 60;
+    setTimeBlockForm({ designerEmail: designer.email, category: 'meeting', title: '', note: '', scheduledDate: selectedDate, startMinutes: initialStart, durationMinutes: 30, x: Math.max(12, window.innerWidth - 350), y: 112 });
+  }, [addTimeNonce]);
   const planForEvent = (event, designer) => {
     const id = Number(activeQueueDragId || event.dataTransfer.getData('queue-task'));
     const source = allTasks.find((task) => task.id === id);
     if (!source || source.status === 'in_progress') return { ok: false, error: 'This request cannot be moved.' };
+    if (!coordinator && (source.coordinatorEmail !== data.viewer.email || designer !== data.viewer.email)) return { ok: false, error: 'You can only schedule work from your own Pool.' };
     const targetUser = schedulerUsers.find((user) => user.email === designer);
     if (!targetUser?.isQueueDesigner) return { ok: false, error: 'Only Post Designers can receive Queue work.' };
     const rect = event.currentTarget.getBoundingClientRect();
     const pointer = Math.min(1430, Math.max(0, Math.round((((event.clientX - rect.left) / rect.width) * QUEUE_DAY_END) / 10) * 10));
+    const targetZone = targetUser.timeZone || timeZone || 'America/Costa_Rica';
+    const targetToday = DAY(now, targetZone);
+    const targetNow = Math.min(1430, Math.ceil(currentMinutes(now, targetZone) / 10) * 10);
+    if (selectedDate < targetToday || (selectedDate === targetToday && pointer < targetNow)) return { ok: false, error: 'Queue work cannot be scheduled before that designer’s current time.' };
     const result = planQueueDrop({
       tasks: planningTasks,
       target: source,
@@ -759,9 +781,9 @@ function Scheduler({ data, draft, setDraft, onDraftChange, selectedDate, designe
     const target = { ...result.target, recommendedAccounts: (result.target.recommendedAccounts || []).filter((account) => allowedAccounts.has(String(account).replace(/^@/, '').toLowerCase())) };
     return { ...result, target, tasks: result.tasks.map((task) => task.id === target.id ? target : task) };
   };
-  const previewDrop = (event, designer) => { event.preventDefault(); if (!coordinator) return; event.dataTransfer.dropEffect = 'move'; const result = planForEvent(event, designer); setDropPreview(result.ok ? { designer, ...result } : null); };
+  const previewDrop = (event, designer) => { event.preventDefault(); if (!selfPlanner) return; event.dataTransfer.dropEffect = 'move'; const result = planForEvent(event, designer); setDropPreview(result.ok ? { designer, ...result } : null); };
   const drop = (event, designer) => {
-    event.preventDefault(); if (!coordinator) return;
+    event.preventDefault(); if (!selfPlanner) return;
     const result = planForEvent(event, designer); setDropPreview(null);
     activeQueueDragId = null;
     if (!result.ok) { onError(result.error || 'This request cannot be moved.'); return; }
@@ -837,7 +859,6 @@ function Scheduler({ data, draft, setDraft, onDraftChange, selectedDate, designe
     if (task.designerEmail !== designer || task.scheduledDate !== selectedDate || ['pool', 'cancelled'].includes(task.status)) return false;
     return true;
   });
-  const nowPosition = (currentMinutes(now, timeZone) / QUEUE_DAY_END) * 100;
   const previewNextDay = dropPreview && dropPreview.target.scheduledDate !== selectedDate;
   const previewWidth = dropPreview ? Math.max(0.8, (dropPreview.target.durationMinutes / QUEUE_DAY_END) * 100) : 0;
   const previewLeft = dropPreview ? (previewNextDay ? Math.max(0, 100 - previewWidth) : (dropPreview.target.scheduledStartMinutes / QUEUE_DAY_END) * 100) : 0;
@@ -854,21 +875,23 @@ function Scheduler({ data, draft, setDraft, onDraftChange, selectedDate, designe
           const accountAvatars = designer.accountAvatars || {};
           const tasks = merged(designer.email);
           const timeBlocks = (data.timeBlocks || []).filter((block) => block.requesterEmail === designer.email && block.scheduledDate === selectedDate);
-          return <div className={`scheduler-row${queueEligible ? '' : ' is-non-queue-user'}`} key={designer.email}>
-            <header><div className="scheduler-user-identity"><span className="scheduler-user-avatar"><span aria-hidden="true">{initials}</span>{userAvatar(designer.avatarUrl) ? <img src={userAvatar(designer.avatarUrl)} alt="" referrerPolicy="no-referrer" onError={(event) => { event.currentTarget.hidden = true; }} /> : null}</span><span className="scheduler-user-copy"><b>{displayName(designer.email, designer.displayName)}</b><small>{[role, ppUnit, accounts].filter(Boolean).join(' · ')}</small></span></div></header>
+          const rowNow = selectedDate === DAY(now, designer.timeZone || timeZone) ? (currentMinutes(now, designer.timeZone || timeZone) / QUEUE_DAY_END) * 100 : null;
+          return <div className={`scheduler-row${queueEligible ? '' : ' is-non-queue-user'}`} key={designer.email} draggable={coordinator} onDragStart={(event) => event.dataTransfer.setData('scheduler-user', designer.email)} onDragOver={(event) => { if (coordinator && event.dataTransfer.types.includes('scheduler-user')) event.preventDefault(); }} onDrop={(event) => { const dragged = event.dataTransfer.getData('scheduler-user'); if (!coordinator || !dragged || dragged === designer.email) return; const rowOrder = orderedUsers.map((person) => person.email).filter((email) => email !== dragged); rowOrder.splice(rowOrder.indexOf(designer.email), 0, dragged); onSavePreferences?.({ hiddenUsers: [...hiddenUsers], rowOrder }); }}>
+            <header onContextMenu={(event) => { if (!coordinator) return; event.preventDefault(); setContextMenu({ x: event.clientX, y: event.clientY, type: 'user', designer }); }}><div className="scheduler-user-identity"><span className="scheduler-user-avatar"><span aria-hidden="true">{initials}</span>{userAvatar(designer.avatarUrl) ? <img src={userAvatar(designer.avatarUrl)} alt="" referrerPolicy="no-referrer" onError={(event) => { event.currentTarget.hidden = true; }} /> : null}</span><span className="scheduler-user-copy"><b>{displayName(designer.email, designer.displayName)}</b><small>{[role, ppUnit].filter(Boolean).join(' · ')}</small><span className="scheduler-user-accounts" title={accounts}>{designer.accounts?.map((account) => <i key={account}>{accountAvatars[account] ? <img src={accountAvatars[account].startsWith('/api/') ? `${API_BASE}${accountAvatars[account]}` : accountAvatars[account]} alt={`@${account}`} /> : account.slice(0, 1).toUpperCase()}</i>)}</span></span></div></header>
             <div className="scheduler-track" onContextMenu={(event) => openTimeBlockForm(event, designer)} onDragOver={(event) => previewDrop(event, designer.email)} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setDropPreview(null); }} onDrop={(event) => drop(event, designer.email)}>
               {Array.from({ length: 25 }, (_, hour) => <i key={hour} style={{ left: `${hour * (100 / 24)}%` }} />)}
-              {timeBlocks.map((block) => <TimeBlock key={block.id} block={block} />)}
+              {rowNow !== null ? <span className="scheduler-now-row" style={{ left: `${rowNow}%` }} title={`${t('now')} · ${time(currentMinutes(now, designer.timeZone || timeZone))}`}><b>{designer.email === data.viewer.email ? t('now') : ''}</b></span> : null}
+              {timeBlocks.map((block) => <TimeBlock key={block.id} block={block} onContextMenu={(event, item) => { if (!coordinator && item.requesterEmail !== data.viewer.email) return; event.preventDefault(); setContextMenu({ x: event.clientX, y: event.clientY, type: 'time', designer, block: item }); }} />)}
               {dropPreview?.designer === designer.email ? <span className={`scheduler-drop-preview${previewNextDay ? ' is-next-day' : ''}`} style={{ left: `${previewLeft}%`, width: `${previewWidth}%` }}><b>@{dropPreview.target.post.account}</b><small>{previewNextDay ? `${displayDate(dropPreview.target.scheduledDate, language)} · ` : ''}{time(dropPreview.target.scheduledStartMinutes)} · {dropPreview.target.durationMinutes} min</small></span> : null}
-              {tasks.map((task) => { const renderTask = resizeState?.preview?.id === task.id ? resizeState.preview : task; return <TaskBlock key={task.id} task={renderTask} editable={coordinator && (!renderTask.isDraft || renderTask.draftCoordinatorEmail === data.viewer.email)} accountAvatars={accountAvatars} onResizeStart={startResize} onOpen={onOpen} />; })}
+              {tasks.map((task) => { const renderTask = resizeState?.preview?.id === task.id ? resizeState.preview : task; return <TaskBlock key={task.id} task={renderTask} editable={selfPlanner && (coordinator || renderTask.coordinatorEmail === data.viewer.email) && (!renderTask.isDraft || renderTask.draftCoordinatorEmail === data.viewer.email)} accountAvatars={accountAvatars} onResizeStart={startResize} onContextMenu={(event, item) => { if (!coordinator) return; event.preventDefault(); setContextMenu({ x: event.clientX, y: event.clientY, type: 'task', task: item }); }} onOpen={onOpen} />; })}
             </div>
           </div>;
         })}
-        {today ? <div className="scheduler-day-overlay"><span className="scheduler-now-global" style={{ left: `${nowPosition}%` }}><b>{t('now')}</b></span></div> : null}
       </div>
     </section>
     <button type="button" className="scheduler-center-now" onClick={centerNow} title={t('centerNow')} aria-label={t('centerNow')}><LocateFixed size={15} /><span>{t('centerNow')}</span></button>
-    <TimeBlockForm form={timeBlockForm} setForm={setTimeBlockForm} busy={timeBlockBusy} onClose={() => setTimeBlockForm(null)} onSubmit={submitTimeBlock} />
+    {contextMenu ? <><button type="button" className="scheduler-context-backdrop" onClick={() => setContextMenu(null)} aria-label={t('close')} /><div className="scheduler-context-menu" style={{ left: Math.min(window.innerWidth - 210, contextMenu.x), top: Math.min(window.innerHeight - 180, contextMenu.y) }}>{contextMenu.type === 'user' ? <button type="button" onClick={() => { onSavePreferences?.({ hiddenUsers: [...hiddenUsers, contextMenu.designer.email], rowOrder: preferences.rowOrder || [] }); setContextMenu(null); }}>Hide {displayName(contextMenu.designer.email, contextMenu.designer.displayName)}</button> : null}{contextMenu.type === 'task' ? <><button type="button" onClick={() => { onOpen(contextMenu.task); setContextMenu(null); }}>Open post</button><button type="button" onClick={() => { onReturnToPool?.(contextMenu.task); setContextMenu(null); }}>Return to Pool</button><button type="button" className="is-danger" onClick={() => { onCancelTask?.(contextMenu.task); setContextMenu(null); }}>Cancel post</button></> : null}{contextMenu.type === 'time' ? <><button type="button" onClick={(event) => { setContextMenu(null); openTimeBlockForm(event, contextMenu.designer, contextMenu.block); }}>Edit personal time</button><button type="button" className="is-danger" onClick={() => { onDeleteTimeBlock?.(contextMenu.block); setContextMenu(null); }}>Delete personal time</button></> : null}</div></> : null}
+    <TimeBlockForm form={timeBlockForm} setForm={setTimeBlockForm} busy={timeBlockBusy} onClose={() => setTimeBlockForm(null)} onSubmit={submitTimeBlock} users={schedulerUsers} canChooseUser={coordinator} />
   </div>;
 }
 
@@ -895,6 +918,7 @@ function QueueApp({ user }) {
   const [timeZonePreview, setTimeZonePreview] = useState(readDevTimeZone);
   const [date, setDate] = useState(DAY());
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [toast, setToast] = useState(null);
   const [open, setOpen] = useState(null);
@@ -921,6 +945,7 @@ function QueueApp({ user }) {
   const [overview, setOverview] = useState(null);
   const [overviewLoading, setOverviewLoading] = useState(false);
   const [overviewError, setOverviewError] = useState('');
+  const [addTimeNonce, setAddTimeNonce] = useState(0);
   const draftRef = useRef(draft);
   const draftSyncingRef = useRef(false);
   const draftHydratedRef = useRef(false);
@@ -941,6 +966,7 @@ function QueueApp({ user }) {
   const load = useCallback(async ({ silent = false } = {}) => {
     const showLoader = !silent && !loadedOnceRef.current;
     if (showLoader) setLoading(true);
+    else if (loadedOnceRef.current) setRefreshing(true);
     try {
       const next = await json(`/api/dashboard/queue/v2?date=${date}&archive=${archive ? 'true' : 'false'}`);
       setData(next);
@@ -969,6 +995,7 @@ function QueueApp({ user }) {
       throw err;
     } finally {
       if (showLoader) setLoading(false);
+      setRefreshing(false);
     }
   }, [date, archive, applyDraft]);
   loadRef.current = load;
@@ -1074,7 +1101,8 @@ function QueueApp({ user }) {
 
   const coordinator = data?.viewer && (data.viewer.isAdmin || data.viewer.operatingRoles?.includes('vc'));
   const isDev = Boolean(viewer?.is_dev || data?.viewer?.isDev || String(user?.email || '').trim().toLowerCase() === DEV_EMAIL);
-  const simulatedTimeZone = isDev ? timeZonePreview : '';
+  const simulatedTimeZone = isDev ? timeZonePreview : (data?.viewer?.timeZone || 'America/Costa_Rica');
+  const canSelfAssign = Boolean(data?.viewer?.canSelfAssign);
   const pool = useMemo(() => {
     const byId = new Map();
     (data?.requests || []).filter((task) => task.status === 'pool').forEach((task) => byId.set(task.id, task));
@@ -1087,6 +1115,7 @@ function QueueApp({ user }) {
     });
     return [...byId.values()];
   }, [data]);
+  const selfPool = useMemo(() => (data?.selfPoolRequests || []).filter((task) => task.status === 'pool'), [data]);
   const archived = useMemo(() => data?.requests.filter((task) => task.status === 'cancelled') || [], [data]);
   const upcoming = useMemo(() => {
     if (!coordinator) return [];
@@ -1188,7 +1217,7 @@ function QueueApp({ user }) {
   const download = async (file) => { const response = await apiFetch(`${API_BASE}/api/dashboard/queue/v2/requests/${open.id}/attachments/${file.id}`); if (!response.ok) throw new Error((await response.json().catch(() => ({}))).detail || 'Download failed.'); const blob = await response.blob(); const href = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = href; link.download = file.name; document.body.appendChild(link); link.click(); link.remove(); window.setTimeout(() => URL.revokeObjectURL(href), 30000); };
   const createTimeBlock = async (form) => {
     try {
-      await json('/api/dashboard/queue/v2/tickets/time-block', { method: 'POST', body: new URLSearchParams({ category: form.category, scheduled_date: form.scheduledDate, scheduled_start_minutes: String(form.startMinutes), duration_minutes: String(form.durationMinutes), title: form.title, note: form.note }) });
+      await json('/api/dashboard/queue/v2/tickets/time-block', { method: 'POST', body: new URLSearchParams({ designer_email: form.designerEmail || data.viewer.email, category: form.category, scheduled_date: form.scheduledDate, scheduled_start_minutes: String(form.startMinutes), duration_minutes: String(form.durationMinutes), title: form.title, note: form.note }) });
       await load({ silent: true });
       notify(t('ticketCreated'));
       return true;
@@ -1197,6 +1226,16 @@ function QueueApp({ user }) {
       return false;
     }
   };
+  const editTimeBlock = async (form) => {
+    try {
+      await json(`/api/dashboard/queue/v2/tickets/time-block/${form.ticketId}`, { method: 'POST', body: new URLSearchParams({ designer_email: form.designerEmail || data.viewer.email, category: form.category, scheduled_date: form.scheduledDate, scheduled_start_minutes: String(form.startMinutes), duration_minutes: String(form.durationMinutes), title: form.title, note: form.note }) });
+      await load({ silent: true }); notify(t('requestUpdated')); return true;
+    } catch (err) { notify(err.message, 'error'); return false; }
+  };
+  const deleteTimeBlock = async (block) => { try { await json(`/api/dashboard/queue/v2/tickets/time-block/${block.id}`, { method: 'POST', body: new URLSearchParams({ delete: 'true' }) }); await load({ silent: true }); notify(t('requestUpdated')); } catch (err) { notify(err.message, 'error'); } };
+  const saveSchedulerPreferences = async (preferences) => { try { const result = await json('/api/dashboard/queue/v2/scheduler-preferences', { method: 'POST', body: new URLSearchParams({ hidden_users: JSON.stringify(preferences.hiddenUsers || []), row_order: JSON.stringify(preferences.rowOrder || []) }) }); setData((current) => current ? { ...current, schedulerPreferences: result.preferences } : current); } catch (err) { notify(err.message, 'error'); } };
+  const returnTaskToPool = async (task) => { try { await json('/api/dashboard/queue/v2/submit', { method: 'POST', body: new URLSearchParams({ changes: JSON.stringify([{ id: task.id, status: 'pool', designerEmail: null, scheduledDate: null, scheduledStartMinutes: null, productionPoints: task.productionPoints, recommendedAccounts: task.recommendedAccounts || [] }]) }) }); await load({ silent: true }); notify(t('returnedToPool')); } catch (err) { notify(err.message, 'error'); } };
+  const cancelTask = async (task) => { try { await json(`/api/dashboard/queue/v2/requests/${task.id}/cancel`, { method: 'POST', body: new URLSearchParams({ reason: 'Cancelled by coordinator' }) }); await load({ silent: true }); notify(t('requestUpdated')); } catch (err) { notify(err.message, 'error'); } };
   const saveManagedAccounts = async (accounts) => {
     const result = await json('/api/dashboard/queue/v2/account-onboarding', { method: 'POST', body: new URLSearchParams({ accounts: JSON.stringify(accounts) }) });
     accountSetupDismissedRef.current = true;
@@ -1294,28 +1333,31 @@ function QueueApp({ user }) {
       <div className="queue-actions">
         <div className="queue-actions-group queue-actions-primary">
           <span className={`queue-live-status is-${liveStatus}`} title={liveStatus === 'live' ? t('liveConnected') : liveStatus === 'offline' ? t('liveOffline') : t('liveConnecting')}>{liveStatus === 'offline' ? <WifiOff size={12} /> : <Radio size={12} />}<b>{liveStatus === 'live' ? t('liveConnected') : liveStatus === 'offline' ? t('liveOffline') : t('liveConnecting')}</b></span>
-          {coordinator ? <button type="button" className="queue-create-button" onClick={() => setCreateOpen(true)}><Plus size={14} />{t('createPost')}</button> : null}
+          {(coordinator || canSelfAssign) ? <button type="button" className="queue-create-button" onClick={() => setCreateOpen(true)}><Plus size={14} />{t('createPost')}</button> : null}
           {coordinator ? <button type="button" className={`queue-overview-button${overviewOpen ? ' is-active' : ''}`} onClick={toggleOverview}><BarChart3 size={14} />{t('adminOverview')}</button> : null}
           {data?.viewer ? <button type="button" className={`queue-ticket-button${ticketsOpen ? ' is-active' : ''}`} onClick={toggleTickets}><ClipboardList size={14} />{t('tickets')}{data.pendingTicketCount ? <b>{data.pendingTicketCount}</b> : null}</button> : null}
           {pickAvailable ? <button type="button" className={`queue-pick-button${pickOpen ? ' is-active' : ''}`} onClick={() => setPickOpen(true)}><Check size={14} />{t('pick')}</button> : null}
         </div>
         <nav className="queue-actions-nav" aria-label={t('dashboard')}>
-          <a href={`${import.meta.env.BASE_URL}tracker.html`}>Tracker</a><a href={`${import.meta.env.BASE_URL}insights.html`}>Insights</a><span className="queue-nav-current" aria-current="page">Queue</span><a className="queue-dashboard-link" href={import.meta.env.BASE_URL}><ArrowLeft size={14} />{t('dashboard')}</a>
+          <span className="queue-nav-current" aria-current="page">Queue</span>{coordinator ? <><a href={`${import.meta.env.BASE_URL}tracker.html`}>Tracker</a><a href={`${import.meta.env.BASE_URL}insights.html`}>Insights</a></> : null}<a className="queue-dashboard-link" href={import.meta.env.BASE_URL}><ArrowLeft size={14} />{t('dashboard')}</a>
         </nav>
         <div className="queue-actions-group queue-actions-account">
           <QueueSettings isAdmin={Boolean(data?.viewer?.isAdmin)} isDev={Boolean(viewer?.is_dev || data?.viewer?.isDev)} userEmail={user.email} avatarUrl={user?.photoURL || data?.viewer?.avatarUrl} displayLabel={user?.displayName || data?.viewer?.displayName} onManageAccounts={() => { accountSetupDismissedRef.current = false; setAccountSetupOpen(true); }} onStartGuide={() => { setGuideStep(-1); setGuideOpen(true); }} onResetQueue={(data?.viewer?.isAdmin || viewer?.is_dev || data?.viewer?.isDev) ? () => setResetOpen(true) : null} onSignOut={() => { clearSsoCookie(); signOut(auth); }} />
         </div>
       </div>
     </header>
+    {refreshing ? <div className="queue-refresh-progress" aria-label="Refreshing Queue" /> : null}
     {toast ? <div className={`queue-toast is-${toast.type}`} role="status">{toast.type === 'success' ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}<span>{toast.message}</span><button type="button" onClick={() => setToast(null)}><X size={14} /></button></div> : null}
     {loading ? <section className="queue-state"><LoaderCircle className="queue-spin" /><p>{t('loadingSchedule')}</p></section> : null}
     {error ? <section className="queue-state queue-error"><p>{error}</p><button type="button" onClick={load}>{t('tryAgain')}</button></section> : null}
     {data ? <>
       {overviewOpen ? <QueueOverview report={overview} loading={overviewLoading} error={overviewError} onRetry={loadOverview} onOpen={setOpen} /> : null}
       {!overviewOpen ? <>
-      <section className="scheduler-toolbar"><div><p className="scheduler-eyebrow">{coordinator ? t('coordinatorSchedule') : t('mySchedule')}</p><h2>{displayDate(date, language)}</h2></div>{coordinator ? <label className="scheduler-designer-filter">{t('assignedView')}<select value={designerScope} onChange={(event) => setDesignerScope(event.target.value)}><option value="">{t('allUsers')}</option>{(data.schedulerUsers || data.designers).map((person) => <option key={person.email} value={person.email}>{displayName(person.email, person.displayName)}</option>)}</select></label> : null}<div className="scheduler-nav"><button type="button" aria-label="Previous day" onClick={() => setDate(shiftDay(date, -1))}><ChevronLeft size={17} /></button><button type="button" onClick={() => setDate(DAY())}>{t('today')}</button><button type="button" aria-label="Next day" onClick={() => setDate(shiftDay(date, 1))}><ChevronRight size={17} /></button></div><button type="button" className={`scheduler-archive-toggle${archive ? ' is-on' : ''}`} onClick={() => setArchive((value) => !value)}><Archive size={14} />{archive ? t('liveQueue') : t('archive')}</button>{coordinator && draft.length ? <button type="button" className="scheduler-submit" onClick={submit}><Send size={14} />{t('submit')} {draft.length} {draft.length > 1 ? t('changes') : t('change')}</button> : null}</section>
+      <section className="scheduler-toolbar"><div><p className="scheduler-eyebrow">{coordinator ? t('coordinatorSchedule') : t('mySchedule')}</p><h2>{displayDate(date, language)}</h2></div>{coordinator ? <label className="scheduler-designer-filter">{t('assignedView')}<select value={designerScope} onChange={(event) => setDesignerScope(event.target.value)}><option value="">{t('allUsers')}</option>{(data.schedulerUsers || data.designers).map((person) => <option key={person.email} value={person.email}>{displayName(person.email, person.displayName)}</option>)}</select></label> : null}<div className="scheduler-nav"><button type="button" aria-label="Previous day" onClick={() => setDate(shiftDay(date, -1))}><ChevronLeft size={17} /></button><button type="button" onClick={() => setDate(DAY(new Date(), simulatedTimeZone))}>{t('today')}</button><button type="button" aria-label="Next day" onClick={() => setDate(shiftDay(date, 1))}><ChevronRight size={17} /></button></div>{coordinator ? <button type="button" className="scheduler-primary" onClick={() => setAddTimeNonce((value) => value + 1)}><CalendarPlus size={14} />{t('addTime')}</button> : null}<button type="button" className={`scheduler-archive-toggle${archive ? ' is-on' : ''}`} onClick={() => setArchive((value) => !value)}><Archive size={14} />{archive ? t('liveQueue') : t('archive')}</button></section>
       {coordinator && !archive ? <section className={`scheduler-pool${poolDropActive ? ' is-drop-target' : ''}`} onDragOver={poolDragOver} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setPoolDropActive(false); }} onDrop={poolDrop} aria-label={t('poolDropHint')}><header><div><p className="scheduler-eyebrow">{t('productionPool')}</p><h2>{pool.length} {t('readyToSchedule')}</h2></div><small>{poolDropActive ? t('poolDropHint') : t('visibleSchedule')}</small></header><div className="scheduler-pool-list">{pool.map((task) => <PoolCard key={task.id} task={task} onOpen={setOpen} />)}{!pool.length ? <p className="scheduler-empty">{t('emptyPool')}</p> : null}</div></section> : null}
-      {archive ? <section className="queue-archive-list"><header><p className="scheduler-eyebrow">{t('archive')}</p><h2>{archived.length} {t('cancelled')}</h2></header>{archived.length ? archived.map((task) => <button type="button" key={task.id} className={`priority-${task.priority || 'medium'}${hotClass(task)}`} onClick={() => setOpen(task)}><span>{cover(task) ? <img src={cover(task)} alt="" /> : '@'}</span><div><b>@{task.post.account}</b><small>{task.cancellationReason || t('cancelled')}</small>{isHotTask(task) ? <i className="queue-hot-badge">🔥 {hotText(task)}</i> : null}</div><em>{displayTimestamp(task.updatedAt, language)}</em></button>) : <p className="scheduler-empty">{t('noArchived')}</p>}</section> : <>{coordinator && draft.length ? <><DraftAccounts draft={draft} designers={data.designers} onAccountsChange={changeDraftAccounts} /><div className="scheduler-draft-actions"><span><Clock3 size={13} />{t('sharedDrafts')}</span><button type="button" onClick={clearDrafts}>{t('clearDrafts')}</button></div></> : null}<Scheduler data={data} draft={draft} setDraft={setDraft} onDraftChange={persistDrafts} selectedDate={date} designerScope={designerScope} timeZone={simulatedTimeZone} onOpen={setOpen} onError={(message) => notify(message, 'error')} onCreateTimeBlock={createTimeBlock} />{coordinator ? <AdminAssignmentTable tasks={upcoming} onOpen={setOpen} headingKey="upcomingProduction" countKey="activeRequests" /> : <DesignerAssignments tasks={assigned} onOpen={setOpen} />}</>}
+      {!coordinator && canSelfAssign && !archive ? <section className="scheduler-pool"><header><div><p className="scheduler-eyebrow">My Pool</p><h2>{selfPool.length} {t('readyToSchedule')}</h2></div><small>Drag your request onto your own schedule.</small></header><div className="scheduler-pool-list">{selfPool.map((task) => <PoolCard key={task.id} task={task} onOpen={setOpen} />)}{!selfPool.length ? <p className="scheduler-empty">Create a post to start your own Pool.</p> : null}</div></section> : null}
+      {(coordinator || canSelfAssign) && draft.length ? <div className="scheduler-draft-float"><button type="button" className="scheduler-secondary" onClick={clearDrafts}>{t('clearDrafts')}</button><button type="button" className="scheduler-submit" onClick={submit}><Send size={14} />{t('submit')} {draft.length}</button></div> : null}
+      {archive ? <section className="queue-archive-list"><header><p className="scheduler-eyebrow">{t('archive')}</p><h2>{archived.length} {t('cancelled')}</h2></header>{archived.length ? archived.map((task) => <button type="button" key={task.id} className={`priority-${task.priority || 'medium'}${hotClass(task)}`} onClick={() => setOpen(task)}><span>{cover(task) ? <img src={cover(task)} alt="" /> : '@'}</span><div><b>@{task.post.account}</b><small>{task.cancellationReason || t('cancelled')}</small>{isHotTask(task) ? <i className="queue-hot-badge">🔥 {hotText(task)}</i> : null}</div><em>{displayTimestamp(task.updatedAt, language)}</em></button>) : <p className="scheduler-empty">{t('noArchived')}</p>}</section> : <>{coordinator && draft.length ? <DraftAccounts draft={draft} designers={data.designers} onAccountsChange={changeDraftAccounts} /> : null}<Scheduler data={data} draft={draft} setDraft={setDraft} onDraftChange={persistDrafts} selectedDate={date} designerScope={designerScope} timeZone={simulatedTimeZone} onOpen={setOpen} onError={(message) => notify(message, 'error')} onCreateTimeBlock={createTimeBlock} onEditTimeBlock={editTimeBlock} onDeleteTimeBlock={deleteTimeBlock} onReturnToPool={returnTaskToPool} onCancelTask={cancelTask} onSavePreferences={saveSchedulerPreferences} addTimeNonce={addTimeNonce} />{coordinator ? <AdminAssignmentTable tasks={upcoming} onOpen={setOpen} headingKey="upcomingProduction" countKey="activeRequests" /> : <DesignerAssignments tasks={assigned} onOpen={setOpen} />}</>}
       </> : null}
     </> : null}
     {ticketsOpen && data?.viewer ? <TicketPanel tickets={tickets} loading={ticketsLoading} error={ticketsError} onClose={() => setTicketsOpen(false)} onReview={reviewTicket} canReview={Boolean(coordinator)} /> : null}

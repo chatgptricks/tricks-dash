@@ -28,6 +28,15 @@ export async function apiFetch(url, options = {}) {
   // the selected role between dashboard.html and queue.html in one window.
   const previewRole = window.sessionStorage.getItem('sentient.queueRolePreview');
   if (previewRole) headers.set('X-Queue-Role-Preview', previewRole);
+  // Queue uses each person's local production clock. Send the browser's
+  // canonical IANA zone with authenticated requests so a Colombian teammate
+  // is recognized automatically (America/Bogota) without a manual toggle.
+  try {
+    const browserTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (browserTimeZone === 'America/Costa_Rica' || browserTimeZone === 'America/Bogota') {
+      headers.set('X-Sentient-Time-Zone', browserTimeZone);
+    }
+  } catch { /* unavailable in a non-browser test environment */ }
   if (firebaseAuth.currentUser) {
     try {
       const token = await firebaseAuth.currentUser.getIdToken();

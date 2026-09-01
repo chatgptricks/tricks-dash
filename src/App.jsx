@@ -39,6 +39,7 @@ import {
   Users,
   X,
   Video,
+  Zap,
 } from 'lucide-react';
 import { browserPopupRedirectResolver, getRedirectResult, onAuthStateChanged, signOut } from 'firebase/auth';
 import { describeSignInError, firebaseAuth, startGoogleSignIn } from './firebase';
@@ -844,6 +845,23 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
       // refresh or when an assignment is saved.
     }
   }, []);
+  const quickAddToPool = useCallback(async (post) => {
+    try {
+      const body = new FormData();
+      body.append('account', post.account);
+      body.append('shortcode', post.shortcode);
+      body.append('production_points', '3');
+      body.append('priority', 'medium');
+      body.append('tags', '');
+      const response = await apiFetch(`${API_BASE}/api/dashboard/queue/v2/pool`, { method: 'POST', body });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.detail || 'Could not add this post to Queue.');
+      await refreshQueueSummary();
+      setRefreshNotice({ type: 'success', message: 'Added to Queue with the default 3 PP setup.' });
+    } catch (error) {
+      setRefreshNotice({ type: 'error', message: error.message || 'Could not add this post to Queue.' });
+    }
+  }, [refreshQueueSummary]);
 
   useEffect(() => {
     refreshQueueSummary();
@@ -1770,17 +1788,6 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
                     labelled now -- five identical green icons gave you no way
                     to know where you were about to go. */}
                 <a
-                  className="tool-link"
-                  href={`${import.meta.env.BASE_URL}tracker.html`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  title={t('Follower growth per account')}
-                >
-                  <TrendingUp size={15} />
-                  <span>{t('Tracker')}</span>
-                  <ExternalLink size={12} className="tool-link-out" aria-hidden="true" />
-                </a>
-                <a
                   className="tool-link tool-link-queue"
                   href={`${import.meta.env.BASE_URL}queue.html`}
                   target="_blank"
@@ -1792,7 +1799,18 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
                   {queuePendingCount ? <b className="queue-pending-badge">{queuePendingCount > 99 ? '99+' : queuePendingCount}</b> : null}
                   <ExternalLink size={12} className="tool-link-out" aria-hidden="true" />
                 </a>
-                <a
+                {(isAdmin || operatingRoles.includes('vc')) ? <a
+                  className="tool-link"
+                  href={`${import.meta.env.BASE_URL}tracker.html`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={t('Follower growth per account')}
+                >
+                  <TrendingUp size={15} />
+                  <span>{t('Tracker')}</span>
+                  <ExternalLink size={12} className="tool-link-out" aria-hidden="true" />
+                </a> : null}
+                {(isAdmin || operatingRoles.includes('vc')) ? <a
                   className="tool-link"
                   href={`${import.meta.env.BASE_URL}insights.html`}
                   target="_blank"
@@ -1802,7 +1820,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
                   <BarChart3 size={15} />
                   <span>{t('Insights')}</span>
                   <ExternalLink size={12} className="tool-link-out" aria-hidden="true" />
-                </a>
+                </a> : null}
 
                 <span className="tool-divider" aria-hidden="true" />
 
@@ -2156,6 +2174,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
                     onFlags={setPostFlags}
                     onReload={reloadPost}
                     onAssign={setAssignmentPost}
+                    onQuickAdd={quickAddToPool}
                     canPool={isAdmin || operatingRoles.includes('vc')}
                   />
                 ))}
@@ -2241,7 +2260,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
           {selected ? (
             <PostDetailPanel
               post={selected}
-              captionExtra={<>{selected.account === 'chatgptricks' ? <CanvaLine url={canvaLinkForPost(selected.postDate)} /> : null}{(isAdmin || operatingRoles.includes('vc')) ? <button type="button" className="ghost-button" onClick={() => setAssignmentPost(selected)}><ListTodo size={13} />Send to Pool</button> : null}</>}
+              captionExtra={<>{selected.account === 'chatgptricks' ? <CanvaLine url={canvaLinkForPost(selected.postDate)} /> : null}{(isAdmin || operatingRoles.includes('vc')) ? <><button type="button" className="ghost-button" onClick={() => setAssignmentPost(selected)}><ListTodo size={13} />Send to Pool</button><button type="button" className="ghost-button" title="Quick add to Pool with defaults" onClick={() => quickAddToPool(selected)}><Zap size={13} />Quick add</button></> : null}</>}
             />
           ) : null}
 
@@ -3619,6 +3638,8 @@ export function SettingsPanel({
     const nextOperatingRole = changes.operating_role ?? user.operating_role ?? 'sales';
     const nextSlackId = changes.slack_user_id ?? user.slack_user_id ?? '';
     const nextDisplayName = changes.display_name ?? user.display_name ?? user.email.split('@')[0];
+    const nextTimeZone = changes.time_zone ?? user.time_zone ?? '';
+    const nextCanSelfAssign = changes.can_self_assign ?? Boolean(user.can_self_assign);
     const previousUser = user;
     // Reflect edits immediately. The API response remains authoritative, but
     // a slow round trip should never make the Users table feel unresponsive.
@@ -3628,6 +3649,8 @@ export function SettingsPanel({
       role: nextRole,
       operating_role: nextOperatingRole,
       slack_user_id: nextSlackId,
+      time_zone: nextTimeZone,
+      can_self_assign: nextCanSelfAssign ? 1 : 0,
       is_admin: nextRole === 'admin' ? 1 : 0,
     } : person));
     setUserDisplayDrafts((current) => ({ ...current, [user.email]: nextDisplayName }));
@@ -3642,6 +3665,8 @@ export function SettingsPanel({
           operating_role: nextOperatingRole,
           is_admin: String(nextRole === 'admin'),
           slack_user_id: nextSlackId,
+          time_zone: nextTimeZone,
+          can_self_assign: String(Boolean(nextCanSelfAssign)),
         }),
       });
       const body = await response.json().catch(() => ({}));
@@ -4527,7 +4552,14 @@ export function SettingsPanel({
                             <select value={user.operating_role || 'pd'} aria-label={`Queue role for ${user.email}`} onChange={(event) => updateUser(user, { operating_role: event.target.value })} disabled={userActionEmail === user.email}>
                               <option value="pd">Post Designer only</option><option value="sales">Sales</option><option value="vc">VC</option><option value="trainee">Trainee</option>
                             </select>
+                            <select value={user.time_zone || ''} aria-label={`Time zone for ${user.email}`} onChange={(event) => updateUser(user, { time_zone: event.target.value })} disabled={userActionEmail === user.email}>
+                              <option value="">Automatic browser zone</option><option value="America/Costa_Rica">Costa Rica (UTC−6)</option><option value="America/Bogota">Colombia (UTC−5)</option>
+                            </select>
                             <input defaultValue={user.slack_user_id || ''} aria-label={`Slack user ID for ${user.email}`} placeholder="Slack ID" onBlur={(event) => { if (event.target.value.trim() !== (user.slack_user_id || '')) updateUser(user, { slack_user_id: event.target.value.trim().toUpperCase() }); }} />
+                            <label className="settings-user-admin-toggle">
+                              <input type="checkbox" checked={Boolean(user.can_self_assign)} onChange={(event) => updateUser(user, { can_self_assign: event.target.checked })} disabled={userActionEmail === user.email} />
+                              <span>Self-assign</span>
+                            </label>
                             <label className="settings-user-admin-toggle">
                               <input
                                 type="checkbox"
@@ -5484,7 +5516,7 @@ function AssignPostModal({ post, userEmail, isAdmin, accounts, onClose, onAssign
 // than portaled: the header isn't inside an overflow-hidden container, so a
 // plain absolute panel is enough and avoids the fixed-position bookkeeping
 // the account dropdown needs.
-function PostMenu({ post, isPromo, onFlags, onReload, onAssign, canPool }) {
+function PostMenu({ post, isPromo, onFlags, onReload, onAssign, onQuickAdd, canPool }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState('');
   const [note, setNote] = useState('');
@@ -5559,6 +5591,7 @@ function PostMenu({ post, isPromo, onFlags, onReload, onAssign, canPool }) {
             <ListTodo size={13} />
             Send to Pool
           </button> : null}
+          {canPool ? <button type="button" role="menuitem" onClick={(event) => { event.stopPropagation(); setOpen(false); onQuickAdd?.(post); }}><Zap size={13} />Quick add to Pool</button> : null}
           <button
             type="button"
             role="menuitem"
@@ -5632,9 +5665,14 @@ const FreshnessRing = memo(function FreshnessRing({ timestamp }) {
   );
 });
 
-const PostCard = memo(function PostCard({ post, priority, selected, onSelect, onFlags, onReload, onAssign, canPool }) {
+const PostCard = memo(function PostCard({ post, priority, selected, onSelect, onFlags, onReload, onAssign, onQuickAdd, canPool }) {
   const [avatarFailed, setAvatarFailed] = useState(false);
   const handleClick = () => onSelect(post.postKey);
+  const handleContextMenu = (event) => {
+    if (!canPool) return;
+    event.preventDefault();
+    onQuickAdd?.(post);
+  };
   const handleKeyDown = (event) => {
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
@@ -5652,7 +5690,7 @@ const PostCard = memo(function PostCard({ post, priority, selected, onSelect, on
   const isPromo = Boolean(post.isPromo) || PROMO_HASHTAG_RE.test(post.caption || '');
 
   return (
-    <article className={cardClassName} onClick={handleClick} onKeyDown={handleKeyDown} role="button" tabIndex={0} aria-pressed={selected}>
+    <article className={cardClassName} onClick={handleClick} onContextMenu={handleContextMenu} onKeyDown={handleKeyDown} role="button" tabIndex={0} aria-pressed={selected}>
       {effects.showBorder ? <span className="hot-border" aria-hidden="true" /> : null}
       <div className="post-header">
         <div className="post-user">
@@ -5678,7 +5716,7 @@ const PostCard = memo(function PostCard({ post, priority, selected, onSelect, on
         </div>
         <div className="post-header-actions">
           <FreshnessRing timestamp={post.timestamp} />
-          <PostMenu post={post} isPromo={isPromo} onFlags={onFlags} onReload={onReload} onAssign={onAssign} canPool={canPool} />
+          <PostMenu post={post} isPromo={isPromo} onFlags={onFlags} onReload={onReload} onAssign={onAssign} onQuickAdd={onQuickAdd} canPool={canPool} />
         </div>
       </div>
 
