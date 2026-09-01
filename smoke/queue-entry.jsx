@@ -135,7 +135,7 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 50)); });
     checks['Account setup persists selection'] = payload.accountOnboarding.completed && payload.accountOnboarding.selectedAccounts.includes('chatgptricks') && !document.querySelector('.queue-account-setup-modal');
     checks['24 hourly labels render'] = document.querySelectorAll('.scheduler-time-head b').length === 24;
-    checks['Now renders once'] = document.querySelectorAll('.scheduler-now-global').length === 1 && document.querySelectorAll('.scheduler-now').length === 0;
+    checks['Now renders once'] = document.querySelectorAll('.scheduler-now-row > b').length > 0 && [...document.querySelectorAll('.scheduler-now-row > b')].filter((node) => /Now|Ahora/.test(node.textContent || '')).length === 1;
     checks['Center Now control renders'] = Boolean(document.querySelector('.scheduler-center-now'));
     await click(document.querySelector('.dev-role-preview > button'));
     const timeZonePreview = document.querySelector('.dev-timezone-preview');
@@ -145,6 +145,10 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     checks['Pool and scheduled blocks render'] = document.querySelectorAll('.queue-pool-card').length === 1 && document.querySelectorAll('.scheduler-block').length === 2;
     checks['Account badge and resize handles render'] = Boolean(document.querySelector('.scheduler-account-badges')) && document.querySelectorAll('.scheduler-resize-handle').length >= 2;
     checks['All dashboard users render as PD-capable'] = document.querySelectorAll('.scheduler-row').length === 4 && document.querySelectorAll('.scheduler-row.is-non-queue-user').length === 0;
+    checks['Roster shows only the highest role'] = [...document.querySelectorAll('.scheduler-user-copy small')].map((node) => node.textContent.trim()).join('|') === 'Admin|Admin|Sales|Trainee';
+    const createPostButton = document.querySelector('.queue-create-button');
+    const addTimeButton = document.querySelector('.scheduler-add-time');
+    checks['Add Time is grouped with Create Post'] = Boolean(addTimeButton) && createPostButton?.parentElement === addTimeButton.parentElement;
     checks['Queue has no duplicate Admin tool'] = !document.querySelector('.queue-admin-button');
     const profileTrigger = document.querySelector('.queue-settings-trigger');
     checks['Signed-in profile opens Queue settings'] = profileTrigger?.querySelector('img')?.getAttribute('src') === 'https://example.test/esteban-avatar.png';
