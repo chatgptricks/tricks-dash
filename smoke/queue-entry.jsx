@@ -174,6 +174,10 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     checks['Account badge and resize handles render'] = Boolean(document.querySelector('.scheduler-account-badges')) && document.querySelectorAll('.scheduler-resize-handle').length >= 2;
     checks['All dashboard users render as PD-capable'] = document.querySelectorAll('.scheduler-row').length === 4 && document.querySelectorAll('.scheduler-row.is-non-queue-user').length === 0;
     checks['Roster shows only the highest role'] = [...document.querySelectorAll('.scheduler-user-copy small')].map((node) => node.textContent.trim()).join('|') === 'Admin|Admin|Sales|Trainee';
+    const louisHeader = [...document.querySelectorAll('.scheduler-row > header')].find((node) => /Louis/.test(node.textContent || ''));
+    await act(async () => { louisHeader.dispatchEvent(new window.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 240, clientY: 170 })); });
+    await click([...document.querySelectorAll('.scheduler-context-menu button')].find((node) => /^Hide Louis/.test(node.textContent || '')));
+    checks['Hide user removes that VC row immediately'] = ![...document.querySelectorAll('.scheduler-row')].some((node) => /Louis/.test(node.textContent || ''));
     const createPostButton = document.querySelector('.queue-create-button');
     const addTimeButton = document.querySelector('.scheduler-add-time');
     checks['Add Time is grouped with Create Post'] = Boolean(addTimeButton) && createPostButton?.parentElement === addTimeButton.parentElement;

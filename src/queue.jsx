@@ -752,7 +752,11 @@ function Scheduler({ data, draft, setDraft, onDraftChange, selectedDate, designe
     const positions = new Map((preferences.rowOrder || []).map((email, index) => [email, index]));
     return [...schedulerUsers].sort((a, b) => (positions.get(a.email) ?? 9999) - (positions.get(b.email) ?? 9999) || displayName(a.email, a.displayName).localeCompare(displayName(b.email, b.displayName)));
   }, [schedulerUsers, preferences.hiddenUsers, preferences.rowOrder]);
-  const visibleDesigners = (designerScope ? orderedUsers.filter((designer) => designer.email === designerScope) : orderedUsers.filter((designer) => !hiddenUsers.has(designer.email)));
+  // A scoped row is still a row in the VC's layout. Hiding it must win over
+  // the selector as well; previously the selected-user scope bypassed this
+  // filter and made Hide appear to do nothing.
+  const visibleDesigners = (designerScope ? orderedUsers.filter((designer) => designer.email === designerScope) : orderedUsers)
+    .filter((designer) => !hiddenUsers.has(designer.email));
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
       const scroller = scrollRef.current;
@@ -1002,6 +1006,7 @@ function QueueApp({ user }) {
   const liveRevisionRef = useRef(0);
   const liveRefreshTimerRef = useRef(null);
   const deferredLiveRefreshRef = useRef(false);
+  const schedulerPreferencesRef = useRef(null);
   const ticketsOpenRef = useRef(ticketsOpen);
   const loadedOnceRef = useRef(Boolean(initialSnapshotRef.current?.data));
   const accountSetupDismissedRef = useRef(false);
@@ -1015,7 +1020,7 @@ function QueueApp({ user }) {
     else if (loadedOnceRef.current) setRefreshing(true);
     try {
       const next = await json(`/api/dashboard/queue/v2?date=${date}&archive=${archive ? 'true' : 'false'}`);
-      setData(next);
+      setData(schedulerPreferencesRef.current ? { ...next, schedulerPreferences: schedulerPreferencesRef.current } : next);
       if (!next.accountOnboarding?.completed && guideCompletedRef.current && !accountSetupDismissedRef.current) setAccountSetupOpen(true);
       loadedOnceRef.current = true;
       liveRevisionRef.current = Math.max(liveRevisionRef.current, Number(next.liveRevision) || 0);
@@ -1412,7 +1417,25 @@ function QueueApp({ user }) {
     setTickets((current) => current.filter((ticket) => ticket.id !== block.id));
     json(`/api/dashboard/queue/v2/tickets/time-block/${block.id}`, { method: 'POST', body: new URLSearchParams({ delete: 'true' }) }).then(() => notify(t('requestUpdated'))).catch((err) => { notify(err.message, 'error'); loadRef.current?.({ silent: true }).catch(() => {}); });
   };
-  const saveSchedulerPreferences = async (preferences) => { const optimistic = { hiddenUsers: preferences.hiddenUsers || [], rowOrder: preferences.rowOrder || [] }; setData((current) => current ? { ...current, schedulerPreferences: optimistic } : current); try { const result = await json('/api/dashboard/queue/v2/scheduler-preferences', { method: 'POST', body: new URLSearchParams({ hidden_users: JSON.stringify(optimistic.hiddenUsers), row_order: JSON.stringify(optimistic.rowOrder) }) }); setData((current) => current ? { ...current, schedulerPreferences: result.schedulerPreferences || optimistic } : current); } catch (err) { notify(err.message, 'error'); load({ silent: true }).catch(() => {}); } };
+  const saveSchedulerPreferences = (preferences) => {
+    const optimistic = { hiddenUsers: preferences.hiddenUsers || [], rowOrder: preferences.rowOrder || [] };
+    // Preserve the chosen layout even if a live Queue request that started
+    // earlier completes after this click. The server response then replaces
+    // this local overlay once it is authoritative.
+    schedulerPreferencesRef.current = optimistic;
+    setData((current) => current ? { ...current, schedulerPreferences: optimistic } : current);
+    json('/api/dashboard/queue/v2/scheduler-preferences', {
+      method: 'POST', body: new URLSearchParams({ hidden_users: JSON.stringify(optimistic.hiddenUsers), row_order: JSON.stringify(optimistic.rowOrder) }),
+    }).then((result) => {
+      const saved = result.schedulerPreferences || optimistic;
+      schedulerPreferencesRef.current = saved;
+      setData((current) => current ? { ...current, schedulerPreferences: saved } : current);
+    }).catch((err) => {
+      notify(err.message, 'error');
+      // Keep the local layout in place. A transient save failure must not make
+      // a just-hidden row jump back into view.
+    });
+  };
   const returnTaskToPool = (task) => persistPoolReturn(task);
   const cancelTask = (task) => {
     patchQueueTask(task.id, { status: 'cancelled', cancellationReason: 'Cancelled by coordinator' });
