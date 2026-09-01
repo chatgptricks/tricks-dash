@@ -894,6 +894,7 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebas
 import {
   getAuth, GoogleAuthProvider, getRedirectResult, onAuthStateChanged,
   signInWithPopup, signInWithRedirect, signInWithCustomToken, signOut,
+  setPersistence, browserLocalPersistence,
 } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js';
 
 const firebaseConfig = {
@@ -905,6 +906,9 @@ const firebaseConfig = {
   appId: '1:74046012975:web:02013849972baca1f950da',
 };
 const auth = getAuth(initializeApp(firebaseConfig));
+// Match the Dashboard's persistent Firebase session before checking the SSO
+// cookie so a restored session never races the standalone page's login gate.
+const authPersistenceReady = setPersistence(auth, browserLocalPersistence).catch(() => null);
 const provider = new GoogleAuthProvider();
 provider.setCustomParameters({ prompt: 'select_account' });
 
@@ -942,10 +946,17 @@ async function ssoPublishCookie() {
   } catch (err) { /* best-effort */ }
 }
 async function ssoTrySignIn() {
+  await authPersistenceReady;
+  if (auth.currentUser) return true;
   const token = ssoReadCookie();
   if (!token) return false;
-  try { await signInWithCustomToken(auth, token); } catch (err) { ssoClearCookie(); }
-  return true;
+  try {
+    await signInWithCustomToken(auth, token);
+    return true;
+  } catch (err) {
+    ssoClearCookie();
+    return false;
+  }
 }
 let ssoRefreshTimer = null;
 function ssoStartRefresh() {
@@ -1023,10 +1034,6 @@ function showSignInGate() {
 // gate ourselves -- onAuthStateChanged won't fire again on its own if the
 // state never actually changed.
 let ssoChecked = false;
-ssoTrySignIn().finally(() => {
-  ssoChecked = true;
-  if (!auth.currentUser) showSignInGate();
-});
 
 async function runSignIn() {
   gateBtn.disabled = true;
@@ -1051,6 +1058,13 @@ onAuthStateChanged(auth, async (user) => {
     booted = true;
     window.__startInsightsBoot();
   }
+});
+
+// The observer must exist before a shared-token sign-in begins; otherwise a
+// fast state transition can be missed and leave this static page on its gate.
+ssoTrySignIn().finally(() => {
+  ssoChecked = true;
+  if (!auth.currentUser) showSignInGate();
 });
 </script>
 <script>
