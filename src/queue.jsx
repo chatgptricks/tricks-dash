@@ -1177,8 +1177,12 @@ function QueueApp({ user }) {
     return () => { controller.abort(); window.clearTimeout(liveRefreshTimerRef.current); };
   }, [data?.viewer?.email, loadTickets]);
 
-  const coordinator = data?.viewer && (data.viewer.isAdmin || data.viewer.operatingRoles?.includes('vc'));
   const isDev = Boolean(viewer?.is_dev || data?.viewer?.isDev || String(user?.email || '').trim().toLowerCase() === DEV_EMAIL);
+  // Dev is the top-level support role: it must retain the complete coordinator
+  // workspace even while Esteban is previewing Sales/PD in this browser tab.
+  // Do not infer this from the active operating role, which is deliberately
+  // mutable for role previews.
+  const coordinator = data?.viewer && (isDev || data.viewer.isAdmin || data.viewer.operatingRoles?.includes('vc'));
   const simulatedTimeZone = isDev ? timeZonePreview : (data?.viewer?.timeZone || 'America/Costa_Rica');
   const canSelfAssign = Boolean(data?.viewer?.canSelfAssign);
   const pool = useMemo(() => {
