@@ -1,6 +1,7 @@
 import { act } from 'react';
 
-const day = new Date().toISOString().slice(0, 10);
+const localNow = new Date();
+const day = `${localNow.getFullYear()}-${String(localNow.getMonth() + 1).padStart(2, '0')}-${String(localNow.getDate()).padStart(2, '0')}`;
 const task = {
   id: 1, status: 'scheduled', designerEmail: 'esteban@sentientagency.io', scheduledDate: day,
   scheduledStartMinutes: 600, productionPoints: 3, durationMinutes: 30, priority: 'high', tags: [],

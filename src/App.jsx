@@ -784,10 +784,10 @@ function buildDatePresets(ranges) {
 const DEV_EMAIL = 'esteban@sentientagency.io';
 const ROLE_SWITCHER_DEFAULTS = Object.freeze({
   [DEV_EMAIL]: ['sales', 'pd', 'vc', 'trainee', 'admin'],
-  'ivan@sentientagency.io': ['pd', 'vc', 'admin'],
+  'ivan@sentientagency.io': ['sales', 'pd', 'vc', 'trainee', 'admin'],
 });
 
-function DevRolePreview({ isDev, canSwitchRoles = false, availableRoles = [] }) {
+export function DevRolePreview({ isDev, canSwitchRoles = false, availableRoles = [] }) {
   const [open, setOpen] = useState(false);
   const requestedRole = window.sessionStorage.getItem('sentient.queueRolePreview') || '';
   const options = [...new Set((isDev ? ROLE_SWITCHER_DEFAULTS[DEV_EMAIL] : availableRoles).filter((role) => ['sales', 'pd', 'vc', 'trainee', 'admin'].includes(role)))];
@@ -2906,7 +2906,7 @@ export function SettingsPanel({
   // Viewer/Admin" tier that used to sit next to an unrelated "Queue role"
   // dropdown for what the backend treats as the same one is_admin boolean.
   const [newUserIsAdmin, setNewUserIsAdmin] = useState(false);
-  const [newUserOperatingRole, setNewUserOperatingRole] = useState('sales');
+  const [newUserOperatingRole, setNewUserOperatingRole] = useState('pd');
   const [newUserSlackId, setNewUserSlackId] = useState('');
   const [addingUser, setAddingUser] = useState(false);
   const [userActionEmail, setUserActionEmail] = useState('');
@@ -3602,7 +3602,7 @@ export function SettingsPanel({
       setNewUserEmail('');
       setNewUserDisplayName('');
       setNewUserIsAdmin(false);
-      setNewUserOperatingRole('sales');
+      setNewUserOperatingRole('pd');
       setNewUserSlackId('');
       setUsersNotice(`Added @${email}.`);
     } catch (error) {
@@ -4430,8 +4430,8 @@ export function SettingsPanel({
                 <section className="settings-section">
                   <h3>{t('Who can sign in')}</h3>
                   <p className="wizard-hint">
-                    Admins see this Settings page and can manage accounts, users, and diagnostics. Everyone else gets
-                    the read-only dashboard.
+                    Admins and Devs manage shared access here. Every listed person has Dashboard and Post Designer
+                    access; the Queue role below grants an additional operating perspective when needed.
                   </p>
                   <form className="add-user-form" onSubmit={addUser}>
                     <label className="modal-field">
@@ -4456,7 +4456,7 @@ export function SettingsPanel({
                     <label className="modal-field">
                       <span>{t('Queue role')}</span>
                       <select value={newUserOperatingRole} onChange={(event) => setNewUserOperatingRole(event.target.value)}>
-                        <option value="sales">Sales</option><option value="vc">Viral Coordinator</option><option value="pd">Post Designer</option><option value="trainee">Trainee</option>
+                        <option value="pd">Post Designer only</option><option value="sales">Sales</option><option value="vc">Viral Coordinator</option><option value="trainee">Trainee</option>
                       </select>
                     </label>
                     <label className="modal-field">
@@ -4497,7 +4497,20 @@ export function SettingsPanel({
                             <div className="settings-user-copy">
                               <strong>{user.display_name || user.email.split('@')[0]}</strong>
                             <small>{user.email}</small>
-                            <span>{user.role === 'admin' ? 'Admin' : 'Viewer'} · {(user.operating_role || 'sales').toUpperCase()}</span>
+                            <span>{(() => {
+                              let roles = user.operating_roles;
+                              if (typeof roles === 'string') {
+                                try { roles = JSON.parse(roles); } catch { roles = []; }
+                              }
+                              if (!Array.isArray(roles)) roles = [];
+                              const labels = [];
+                              if (roles.includes('vc') || user.operating_role === 'vc') labels.push('VC');
+                              if (roles.includes('sales') || user.operating_role === 'sales') labels.push('Sales');
+                              if (roles.includes('trainee') || user.operating_role === 'trainee') labels.push('Trainee');
+                              if (user.role === 'admin' || user.is_admin) labels.push('Admin');
+                              if (roles.includes('dev')) labels.push('Dev');
+                              return labels.join(' · ') || 'Standard access';
+                            })()}</span>
                             </div>
                           </div>
                           <div className="settings-row-controls queue-user-controls">
@@ -4511,8 +4524,8 @@ export function SettingsPanel({
                                 if (value && value !== (user.display_name || '')) updateUser(user, { display_name: value });
                               }}
                             />
-                            <select value={user.operating_role || 'sales'} aria-label={`Queue role for ${user.email}`} onChange={(event) => updateUser(user, { operating_role: event.target.value })} disabled={userActionEmail === user.email}>
-                              <option value="sales">Sales</option><option value="vc">VC</option><option value="pd">PD</option><option value="trainee">Trainee</option>
+                            <select value={user.operating_role || 'pd'} aria-label={`Queue role for ${user.email}`} onChange={(event) => updateUser(user, { operating_role: event.target.value })} disabled={userActionEmail === user.email}>
+                              <option value="pd">Post Designer only</option><option value="sales">Sales</option><option value="vc">VC</option><option value="trainee">Trainee</option>
                             </select>
                             <input defaultValue={user.slack_user_id || ''} aria-label={`Slack user ID for ${user.email}`} placeholder="Slack ID" onBlur={(event) => { if (event.target.value.trim() !== (user.slack_user_id || '')) updateUser(user, { slack_user_id: event.target.value.trim().toUpperCase() }); }} />
                             <label className="settings-user-admin-toggle">

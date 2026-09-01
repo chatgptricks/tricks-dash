@@ -56,7 +56,7 @@ const PRIORITIES = ['low', 'medium', 'high', 'urgent'];
 const DEV_EMAIL = 'esteban@sentientagency.io';
 const ROLE_SWITCHER_DEFAULTS = Object.freeze({
   [DEV_EMAIL]: ['sales', 'pd', 'vc', 'trainee', 'admin'],
-  'ivan@sentientagency.io': ['pd', 'vc', 'admin'],
+  'ivan@sentientagency.io': ['sales', 'pd', 'vc', 'trainee', 'admin'],
 });
 let activeQueueDragId = null;
 const ACCOUNT_PROFILE_FALLBACKS = { chatgptricks: chatgptricksProfileImage, traselveloreal: traselvelorealProfileImage };
@@ -1113,7 +1113,7 @@ function QueueApp({ user }) {
   // Pick is a permanent PD tool, not an empty-state escape hatch. A designer
   // can always open it to review what is available, even with scheduled work
   // already on their calendar or when the Pool is currently empty.
-  const pickAvailable = Boolean(data?.viewer) && !coordinator;
+  const pickAvailable = Boolean(data?.viewer);
   const toggleTickets = async () => { const next = !ticketsOpen; setTicketsOpen(next); if (next) await loadTickets(); };
   const pickRequest = async (task) => {
     setPickBusy(true);

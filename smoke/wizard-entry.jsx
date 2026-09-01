@@ -1,6 +1,4 @@
-import { createRoot } from 'react-dom/client';
 import { act } from 'react';
-import App from '../src/App.jsx';
 
 let previewCalls = 0;
 const stub = async (u) => {
@@ -12,25 +10,27 @@ const stub = async (u) => {
   if (s.includes('/api/dashboard/posts')) return { ok: true, status: 200, json: async () => ({ posts: [], summary: {}, ranges: {} }) };
   if (s.includes('/api/dashboard/accounts')) return { ok: true, status: 200, json: async () => ({ accounts: [] }) };
   if (s.includes('/api/dashboard/lists')) return { ok: true, status: 200, json: async () => ({ lists: [] }) };
-  if (s.includes('/api/dashboard/me')) return { ok: true, status: 200, json: async () => ({ is_admin: true }) };
+  if (s.includes('/api/dashboard/me')) return { ok: true, status: 200, json: async () => ({ email: 'esteban@sentientagency.io', is_admin: true, is_dev: true }) };
+  if (s.includes('/api/admin/accounts')) return { ok: true, status: 200, json: async () => ({ accounts: [] }) };
+  if (s.includes('/api/admin/users')) return { ok: true, status: 200, json: async () => ({ users: [] }) };
+  if (s.includes('/api/admin/queue/designer-accounts')) return { ok: true, status: 200, json: async () => ({ designers: [] }) };
+  if (s.includes('/api/admin/disk-status')) return { ok: true, status: 200, json: async () => ({ pct_used: 10, free_mb: 900 }) };
+  if (s.includes('/api/admin/slack-status')) return { ok: true, status: 200, json: async () => ({ configured: true }) };
+  if (s.includes('/api/admin/ocr/status')) return { ok: true, status: 200, json: async () => ({ remaining: 0, with_text_total: 0 }) };
+  if (s.includes('/api/dashboard/queue/v2/admin-report')) return { ok: true, status: 200, json: async () => ({ totals: {}, priorities: {}, designers: [], assignedPosts: [] }) };
   return { ok: true, status: 200, json: async () => ({}) };
 };
 globalThis.fetch = stub; window.fetch = stub;
 
-const el = document.getElementById('root');
 (async () => {
  try {
-  const root = createRoot(el);
-  await act(async () => { root.render(<App />); });
-  await act(async () => { await new Promise(r => setTimeout(r, 400)); });
+  await act(async () => { await import('../src/settings.jsx'); await new Promise(r => setTimeout(r, 450)); });
 
-  const openBtn = [...document.querySelectorAll('button')].find(b => /Add account/i.test(b.getAttribute('title') || b.textContent));
   const ok = {};
-  // The wizard lives behind the account popover; drive it directly instead.
-  const acct = [...document.querySelectorAll('.filter-trigger')].find(b => /Account/.test(b.textContent));
-  if (acct) await act(async () => { acct.dispatchEvent(new window.MouseEvent('click', { bubbles: true })); });
+  const accountsTab = [...document.querySelectorAll('.settings-tab')].find(b => b.textContent.trim() === 'Accounts');
+  if (accountsTab) await act(async () => { accountsTab.dispatchEvent(new window.MouseEvent('click', { bubbles: true })); });
   await act(async () => { await new Promise(r => setTimeout(r, 200)); });
-  const addBtn = [...document.querySelectorAll('.account-multiselect-add')][0];
+  const addBtn = [...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Add account');
   if (addBtn) await act(async () => { addBtn.dispatchEvent(new window.MouseEvent('click', { bubbles: true })); });
   await act(async () => { await new Promise(r => setTimeout(r, 300)); });
 

@@ -271,8 +271,13 @@ function ProfileSheet({ user, viewer, installPrompt, onInstall, onSettings, onSi
   const prefs = usePrefs(); const { t } = prefs;
   const ios = /iPhone|iPad|iPod/i.test(navigator.userAgent || '') && !navigator.standalone;
   const desktop = `${location.origin}/?desktop=1`;
+  const secondaryRoles = (viewer.operating_roles || [viewer.operating_role])
+    .filter((role) => role && role !== 'pd' && role !== 'dev')
+    .map((role) => ({ vc: 'VC', sales: 'Sales', trainee: 'Trainee', admin: 'Admin' }[role] || role));
+  if (viewer.is_admin && !secondaryRoles.includes('Admin')) secondaryRoles.push('Admin');
+  if (viewer.is_dev) secondaryRoles.push('Dev');
   return <Sheet title={displayName(user.email)} onClose={onClose}>
-    <div className="m-profile-card"><UserRound size={24} /><div><strong>{user.email}</strong><span>{viewer.operating_roles?.join(' · ') || viewer.operating_role}</span></div></div>
+    <div className="m-profile-card"><UserRound size={24} /><div><strong>{user.email}</strong>{secondaryRoles.length ? <span>{secondaryRoles.join(' · ')}</span> : null}</div></div>
     {(viewer.is_admin || viewer.is_dev) ? <button className="m-menu-row" onClick={onSettings}><Settings size={18} /><span>{t('settings')}</span><ChevronRight size={17} /></button> : null}
     {installPrompt ? <button className="m-menu-row" onClick={onInstall}><Download size={18} /><span>{t('install')}</span><ChevronRight size={17} /></button> : null}
     {ios ? <div className="m-install-tip"><Download size={18} /><div><strong>{t('install')}</strong><p>{t('iosInstall')}</p></div></div> : null}
