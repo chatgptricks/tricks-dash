@@ -409,6 +409,10 @@ const HOT_BADGE_WINDOW_HOURS = HOT_TAB_WINDOW_HOURS;
 // itself automatically every 30 min during its active window; this just
 // keeps an open dashboard in sync with that without a manual reload).
 const AUTO_POLL_MS = 3 * 60 * 1000;
+// A Render replacement normally takes less than a minute. Keep recovery
+// frequent and predictable instead of exponentially backing off into a long
+// blank wait; all normal reads are already guarded by apiFetch's short retry.
+const RECONNECT_POLL_MS = 3_000;
 
 const currencyFormatter = new Intl.NumberFormat('en-US');
 const compactFormatter = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 });
@@ -901,14 +905,12 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
         // red error screen; keep the current UI and reconnect automatically.
         setLoadError('');
         setConnectionNotice('Reconnecting to the shared Post DB…');
-        const attempt = reconnectAttempt.current;
         reconnectAttempt.current += 1;
-        const delay = Math.min(30_000, 1_000 * (2 ** Math.min(attempt, 5)));
         if (!reconnectTimer.current) {
           reconnectTimer.current = window.setTimeout(() => {
             reconnectTimer.current = null;
             dashboardLoader.current?.(undefined, { silent: true });
-          }, delay);
+          }, RECONNECT_POLL_MS);
         }
       }
     } finally {
@@ -940,6 +942,30 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
   useEffect(() => () => {
     if (reconnectTimer.current) window.clearTimeout(reconnectTimer.current);
   }, []);
+
+  useEffect(() => {
+    if (!connectionNotice) return undefined;
+    // Browsers throttle timers in a background tab. As soon as the user
+    // returns to the Dash (or connectivity comes back), do not wait for a
+    // throttled timer: make a fresh request immediately.
+    const reconnectNow = () => {
+      if (document.visibilityState === 'hidden') return;
+      if (reconnectTimer.current) {
+        window.clearTimeout(reconnectTimer.current);
+        reconnectTimer.current = null;
+      }
+      dashboardLoader.current?.(undefined, { silent: true });
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') reconnectNow();
+    };
+    window.addEventListener('online', reconnectNow);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      window.removeEventListener('online', reconnectNow);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [connectionNotice]);
 
   // Both accounts now refresh themselves automatically on the backend
   // (every 30 min during the active window). Poll quietly in the background
