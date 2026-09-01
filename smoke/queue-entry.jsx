@@ -227,6 +227,7 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     const poolDrop = document.querySelector('.scheduler-pool');
     const draftBlock = document.querySelector('.scheduler-block.is-draft');
     await act(async () => { draftBlock.dispatchEvent(dragEvent('dragstart')); poolDrop.dispatchEvent(dragEvent('dragover')); poolDrop.dispatchEvent(dragEvent('drop')); });
+    checks['Pool return updates before network confirmation'] = !document.querySelector('.scheduler-drafts article') && Boolean(document.querySelector('.queue-pool-card'));
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 100)); });
     checks['Scheduled block returns immediately without Submit'] = submitted?.[0]?.status === 'pool' && !document.querySelector('.scheduler-drafts article') && Boolean(document.querySelector('.queue-pool-card'));
     const returnedPool = document.querySelector('.queue-pool-card');
