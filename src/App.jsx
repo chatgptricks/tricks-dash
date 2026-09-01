@@ -5430,7 +5430,6 @@ function BackgroundTaskStack({ tasks, onDismiss }) {
 // independent Queue task on the backend.
 function AssignPostModal({ post, userEmail, isAdmin, accounts, onClose, onAssigned }) {
   const [productionPoints, setProductionPoints] = useState(3);
-  const [priority, setPriority] = useState('normal');
   const [note, setNote] = useState('');
   const [notes, setNotes] = useState('');
   const [references, setReferences] = useState('');
@@ -5472,7 +5471,6 @@ function AssignPostModal({ post, userEmail, isAdmin, accounts, onClose, onAssign
         body.append('account', post.account);
         body.append('shortcode', post.shortcode);
         body.append('production_points', String(productionPoints));
-        body.append('priority', priority);
         body.append('brief', note);
         body.append('notes', notes);
         body.append('references', JSON.stringify(references.split(/\n|,/).map((item) => item.trim()).filter(Boolean)));
@@ -5534,10 +5532,6 @@ function AssignPostModal({ post, userEmail, isAdmin, accounts, onClose, onAssign
           <label>
             <span>Production points <i>required</i></span>
             <input type="number" min="1" step="1" value={productionPoints} onChange={(event) => setProductionPoints(event.target.value)} />
-          </label>
-          <label className="queue-assign-urgent-toggle">
-            <input type="checkbox" checked={priority === 'urgent'} onChange={(event) => setPriority(event.target.checked ? 'urgent' : 'normal')} />
-            <span>Mark as urgent</span>
           </label>
         </div>
 
