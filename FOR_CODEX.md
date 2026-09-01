@@ -1,10 +1,21 @@
 # Handover for Codex — Sentient Dash
 
-Originally written by Claude on 2026-08-27; last updated by Codex on 2026-08-30. This frontend copy is the canonical handover
+Originally written by Claude on 2026-08-27; last updated by Codex on 2026-09-01. This frontend copy is the canonical handover
 for frontend work; the backend repo also carries a mirror that is synchronized
 when backend work is released. Esteban is planning to merge the two repos into
 one — read the "Planned repo merge" section near the bottom before you start
 that.
+
+## Latest release: role permissions and resilient Dashboard (2026-09-01)
+
+- Frontend source is on `main` at `c0ccf88`; the matching static release is on `gh-pages` at `3969edb`. The production entry bundles are `dashboard-DmhXHg_n.js`, `queue-Doy98C9R.js`, `settings-Cw_SpMqQ.js`, and shared `styles-DykX9bxV.js`.
+- Queue is visible to every signed-in dashboard user. Tracker and Insights are visible only to VC, Admin, or Dev when Dev is in full-access mode.
+- Esteban's Dev role switcher is a true per-tab UI simulator. Selecting PD/Sales/Trainee removes coordinator-only Tracker, Insights, Overview, and Settings controls in that tab. Selecting `Dev · full access` restores all of them. Legacy session values containing the literal `dev` are normalized as full Dev access instead of being mistaken for an active restricted preview.
+- Dashboard permission loading is independent from the post catalogue. A posts/accounts refresh failure can no longer prevent `/api/dashboard/me` from establishing Admin/VC/Dev header controls.
+- Once the Dashboard has a valid cached catalogue, background refresh failures stay silent and retry without replacing the current UI or leaving a permanent `Reconnecting to the shared Post DB…` banner.
+- Verification passed: `VITE_SKIP_PUBLIC=1 npm run build`, Queue smoke, Settings smoke, roles smoke, and live authenticated checks for Dashboard tools and Settings access.
+- Backend had no source changes in this release. Production remains healthy on Render at commit `cbcd4d2`.
+- During this release a concurrent Claude filesystem operation deleted canonical tracked files (including `FOR_CODEX.md`, `src/prefsContext.jsx`, smoke runners, favicon/manifest, and static covers). The operation was stopped and every tracked deletion was restored from the current `main` commit. Do not reapply or commit those deletions.
 
 ## Latest change: independent mobile PWA (2026-08-30)
 
