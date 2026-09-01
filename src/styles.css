@@ -7787,6 +7787,27 @@ body {
   padding: 0 9px;
 }
 
+.queue-assign-grid .queue-assign-urgent-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 35px;
+  padding: 0 10px;
+  border: 1px solid rgba(var(--edge), 0.14);
+  border-radius: 8px;
+  background: rgba(var(--edge), 0.045);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.queue-assign-grid .queue-assign-urgent-toggle input {
+  width: 15px;
+  height: 15px;
+  padding: 0;
+  accent-color: #ff8a4c;
+}
+
 .queue-assign-note {
   display: block;
   margin-bottom: 14px;
