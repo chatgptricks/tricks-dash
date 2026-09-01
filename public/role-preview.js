@@ -56,11 +56,11 @@
       });
     };
     applyCoordinatorNavigation();
-    if (document.body) {
-      const navObserver = new MutationObserver(applyCoordinatorNavigation);
-      navObserver.observe(document.body, { childList: true, subtree: true });
-      window.addEventListener('beforeunload', () => navObserver.disconnect(), { once: true });
-    }
+    // The standalone page creates its header after the data bootstrap. Poll
+    // briefly instead of relying on MutationObserver, which is unavailable in
+    // a few embedded browser contexts used by the static pages.
+    const navTimer = window.setInterval(applyCoordinatorNavigation, 250);
+    window.setTimeout(() => window.clearInterval(navTimer), 30000);
 
     const style = document.createElement('style');
     style.textContent = `
