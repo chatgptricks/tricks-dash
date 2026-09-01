@@ -39,19 +39,27 @@
 
     // Standalone Tracker/Insights pages do not share React's header. Keep the
     // same coordinator-only navigation contract here so a PD never sees links
-    // to tools they cannot use, including when role preview is active.
-    const effectiveCoordinator = selected
-      ? ['vc', 'admin'].includes(selected)
-      : Boolean(viewer.is_dev || viewer.is_admin || (viewer.operating_roles || []).includes('vc'));
-    if (!effectiveCoordinator) {
+    // to tools they cannot use, including when the page builds its header
+    // asynchronously after this script has mounted.
+    const applyCoordinatorNavigation = () => {
+      const activeRole = window.sessionStorage.getItem(ROLE_KEY) || '';
+      const effectiveCoordinator = activeRole
+        ? ['vc', 'admin'].includes(activeRole)
+        : Boolean(viewer.is_dev || viewer.is_admin || (viewer.operating_roles || []).includes('vc'));
       document.querySelectorAll('a[href]').forEach((link) => {
         try {
           const path = new URL(link.href, window.location.href).pathname;
-          if (/\/(?:tracker|insights)\.html$/i.test(path)) link.hidden = true;
+          if (/\/(?:tracker|insights)\.html$/i.test(path)) link.hidden = !effectiveCoordinator;
         } catch {
           // An unrelated malformed link should never block the role switcher.
         }
       });
+    };
+    applyCoordinatorNavigation();
+    if (document.body) {
+      const navObserver = new MutationObserver(applyCoordinatorNavigation);
+      navObserver.observe(document.body, { childList: true, subtree: true });
+      window.addEventListener('beforeunload', () => navObserver.disconnect(), { once: true });
     }
 
     const style = document.createElement('style');
