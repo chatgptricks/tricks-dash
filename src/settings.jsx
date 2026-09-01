@@ -9,6 +9,7 @@ import { clearSsoCookie, startSsoRefresh, trySsoSignIn } from './sso';
 import './styles.css';
 
 const LEGACY_REFRESH_PASSWORD = 'sentient2026';
+const ACTIVE_ROLE_PREVIEWS = new Set(['sales', 'pd', 'vc', 'trainee', 'admin']);
 
 function SettingsSignIn({ notice }) {
   const [busy, setBusy] = useState(false);
@@ -128,7 +129,7 @@ function SettingsApp() {
       availableRoles={viewer?.available_operating_roles || viewer?.operating_roles || []}
     />
   );
-  const rolePreviewActive = Boolean(window.sessionStorage.getItem('sentient.queueRolePreview'));
+  const rolePreviewActive = ACTIVE_ROLE_PREVIEWS.has(window.sessionStorage.getItem('sentient.queueRolePreview') || '');
   const effectiveDevAccess = Boolean(viewer?.is_dev) && !rolePreviewActive;
   if (!viewer?.is_admin && !effectiveDevAccess) return <><SettingsRestricted email={user.email} onSignOut={handleSignOut} />{rolePreview}</>;
 
