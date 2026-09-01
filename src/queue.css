@@ -874,6 +874,8 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
 .scheduler-context-menu .is-danger { color:#ff9f9f; }
 .scheduler-draft-float { position:sticky; top:10px; z-index:40; display:flex; justify-content:flex-end; gap:7px; width:fit-content; margin:0 12px 8px auto; padding:6px; border:1px solid rgba(var(--accent-rgb),.35); border-radius:10px; background:color-mix(in srgb,var(--q-panel) 92%,transparent); box-shadow:0 8px 26px rgba(0,0,0,.26); backdrop-filter:blur(8px); }
 .scheduler-draft-float .scheduler-secondary { width:auto; margin:0; }
+.scheduler-add-time { display:inline-flex; align-items:center; justify-content:center; gap:5px; width:auto; min-height:29px; padding:0 9px; margin:0; border:1px solid rgba(var(--accent-rgb),.42); border-radius:7px; background:rgba(var(--accent-rgb),.10); color:var(--q-text); font-size:10px; font-weight:850; line-height:1; white-space:nowrap; }
+.scheduler-add-time:hover,.scheduler-add-time:focus-visible { border-color:rgba(var(--accent-rgb),.72); background:rgba(var(--accent-rgb),.18); }
 .queue-refresh-progress { position:fixed; top:0; right:0; left:0; z-index:300; height:3px; overflow:hidden; background:rgba(var(--accent-rgb),.12); }
 .queue-refresh-progress::after { content:""; display:block; width:38%; height:100%; background:var(--q-accent); animation:queue-refresh-progress 1s ease-in-out infinite; }
 @keyframes queue-refresh-progress { from { transform:translateX(-110%); } to { transform:translateX(300%); } }
