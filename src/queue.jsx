@@ -27,7 +27,10 @@ const cover = (task) => coverUrlForPost(task?.post);
 const accountMention = (value) => { const clean = String(value || '').trim().replace(/^@/, ''); return clean ? `@${clean}` : ''; };
 const locale = (language) => language === 'es' ? 'es-CR' : 'en-US';
 const displayDate = (value, language) => new Date(`${value}T12:00:00`).toLocaleDateString(locale(language), { weekday: 'long', month: 'short', day: 'numeric' });
-const displayTimestamp = (value, language) => new Date(value).toLocaleString(locale(language), { timeZone: 'America/Costa_Rica', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+// Activity timestamps and the scheduler's Now marker must follow the
+// viewer's device timezone. Queue work remains scheduled at explicit local
+// dates/times, so an automatic Pick always sends the viewer's current slot.
+const displayTimestamp = (value, language) => new Date(value).toLocaleString(locale(language), { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 const DRAFT_KEY = 'sentient.queueDrafts.v2';
 const PRIORITIES = ['low', 'medium', 'high', 'urgent'];
 let activeQueueDragId = null;
@@ -1075,9 +1078,11 @@ function QueueApp({ user }) {
   const pickRequest = async (task) => {
     setPickBusy(true);
     try {
+      const now = new Date();
+      const placement = { scheduled_date: DAY(now), scheduled_start_minutes: String(Math.min(1430, Math.ceil(currentMinutes(now) / 10) * 10)) };
       const body = task.isHotCandidate
-        ? new URLSearchParams({ hot_account: task.post.account, hot_shortcode: task.post.shortcode })
-        : new URLSearchParams({ request_id: String(task.id) });
+        ? new URLSearchParams({ hot_account: task.post.account, hot_shortcode: task.post.shortcode, ...placement })
+        : new URLSearchParams({ request_id: String(task.id), ...placement });
       const result = await json('/api/dashboard/queue/v2/pick', { method: 'POST', body });
       setPickOpen(false);
       await load({ silent: true });
