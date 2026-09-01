@@ -135,13 +135,18 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 50)); });
     checks['Account setup persists selection'] = payload.accountOnboarding.completed && payload.accountOnboarding.selectedAccounts.includes('chatgptricks') && !document.querySelector('.queue-account-setup-modal');
     checks['24 hourly labels render'] = document.querySelectorAll('.scheduler-time-head b').length === 24;
-    checks['Now renders once'] = document.querySelectorAll('.scheduler-now-row > b').length > 0 && [...document.querySelectorAll('.scheduler-now-row > b')].filter((node) => /Now|Ahora/.test(node.textContent || '')).length === 1;
+    const nowLineBefore = document.querySelector('.scheduler-now-global');
+    checks['Now renders once above the calendar'] = document.querySelectorAll('.scheduler-now-global > b').length === 1 && /Now|Ahora/.test(nowLineBefore?.textContent || '');
     checks['Center Now control renders'] = Boolean(document.querySelector('.scheduler-center-now'));
     await click(document.querySelector('.dev-role-preview > button'));
     const timeZonePreview = document.querySelector('.dev-timezone-preview');
     checks['Dev time-zone simulator renders'] = Boolean(timeZonePreview) && timeZonePreview.options.length === 2;
     await act(async () => { timeZonePreview.value = 'America/Bogota'; timeZonePreview.dispatchEvent(new window.Event('change', { bubbles: true })); });
     checks['Dev time-zone simulator switches to Colombia'] = window.sessionStorage.getItem('sentient.queueTimeZonePreview') === 'America/Bogota';
+    const noonHeader = [...document.querySelectorAll('.scheduler-time-head b')].find((node) => node.style.left === '50%');
+    const nowLineAfter = document.querySelector('.scheduler-now-global');
+    checks['Colombia shifts the clock without moving Now'] = noonHeader?.textContent === '13:00' && nowLineAfter?.style.left === nowLineBefore?.style.left;
+    checks['Colombia reads a Costa Rica 09:00 assignment as 10:00'] = [...document.querySelectorAll('.scheduler-block-copy small')].some((node) => /10:00/.test(node.textContent || ''));
     checks['Pool and scheduled blocks render'] = document.querySelectorAll('.queue-pool-card').length === 1 && document.querySelectorAll('.scheduler-block').length === 2;
     checks['Account badge and resize handles render'] = Boolean(document.querySelector('.scheduler-account-badges')) && document.querySelectorAll('.scheduler-resize-handle').length >= 2;
     checks['All dashboard users render as PD-capable'] = document.querySelectorAll('.scheduler-row').length === 4 && document.querySelectorAll('.scheduler-row.is-non-queue-user').length === 0;
@@ -210,7 +215,7 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     await act(async () => { track.dispatchEvent(dragEvent('dragover', 550)); });
     const ghost = document.querySelector('.scheduler-drop-preview');
     checks['Drag ghost renders before drop'] = Boolean(ghost);
-    checks['Ghost shows final collision-free time'] = /10:00/.test(ghost?.textContent || '');
+    checks['Ghost shows final collision-free time'] = /11:00/.test(ghost?.textContent || '');
     await act(async () => { track.dispatchEvent(dragEvent('drop', 550)); });
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 100)); });
     checks['Drop creates one draft'] = document.querySelectorAll('.scheduler-drafts article').length === 1;
