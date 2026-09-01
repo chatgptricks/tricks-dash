@@ -1974,7 +1974,10 @@ body {
   border: 1px solid rgba(var(--accent-rgb), 0.42);
   border-radius: 10px;
   background: rgba(var(--accent-rgb), 0.12);
-  color: var(--accent-ink);
+  /* This is a translucent accent treatment, not a solid accent fill. Use the
+     normal foreground so bright accents cannot turn the label into near-black
+     text on a dark card. */
+  color: var(--text);
   font-size: 12px;
   font-weight: 800;
   text-decoration: none;
