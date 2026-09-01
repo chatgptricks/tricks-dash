@@ -8,6 +8,7 @@ that.
 
 ## Current release: role-aware navigation and opaque share links (2026-09-01)
 
+- Source commit: `29080c4`; static GitHub Pages release: `0944939`; backend release: `6394614` (Render health confirmed live).
 - Dashboard role previews now apply their effective Admin/VC/PD/Sales/Trainee permissions synchronously, so the header and Queue controls do not briefly render with the wrong role while the large catalogue loads.
 - Standalone Tracker and Insights pages apply the same coordinator-only navigation rule; PD/Sales/Trainee previews do not expose those links. Queue remains available to every signed-in dashboard user, with Pick/Create gated by the existing self-assignment permission.
 - Mobile Queue/Create Post uses the same binary priority model as desktop (`normal` or `urgent`); legacy priority values remain readable as normal for old records.
