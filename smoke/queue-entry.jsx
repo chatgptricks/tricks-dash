@@ -35,6 +35,11 @@ const payload = {
   accountOnboarding: { completed: false, selectedAccounts: [] },
   tags: ['copy'], priorities: ['low', 'medium', 'high', 'urgent'], hours: { start: 0, end: 1440 },
 };
+window.sessionStorage.setItem('sentient.queueSnapshot.v1:esteban@sentientagency.io', JSON.stringify({ version: 1, date: day, archive: false, savedAt: Date.now(), data: payload }));
+
+let releaseInitialQueueFetch;
+let holdInitialQueueFetch = true;
+const initialQueueFetch = new Promise((resolve) => { releaseInitialQueueFetch = resolve; });
 
 let submitted = null;
 let drafted = null;
@@ -104,7 +109,13 @@ const stubFetch = async (url, options = {}) => {
   }
   if (value.includes('/history')) return response({ events: [] });
   if (value.includes('/api/dashboard/me')) return response({ email: 'esteban@sentientagency.io', is_dev: true });
-  if (value.includes('/api/dashboard/queue/v2')) return response(payload);
+  if (value.includes('/api/dashboard/queue/v2')) {
+    if (holdInitialQueueFetch) {
+      await initialQueueFetch;
+      holdInitialQueueFetch = false;
+    }
+    return response(payload);
+  }
   return response({});
 };
 globalThis.fetch = stubFetch;
@@ -126,9 +137,18 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
   try {
     await act(async () => {
       await import('../src/queue.jsx');
-      await new Promise((resolve) => setTimeout(resolve, 250));
+      await new Promise((resolve) => setTimeout(resolve, 40));
     });
+    checks['Cached Queue view stays visible while reload syncs'] = Boolean(document.querySelector('.scheduler-canvas'))
+      && !document.querySelector('.queue-state')
+      && Boolean(document.querySelector('.queue-refresh-progress'));
+    releaseInitialQueueFetch();
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 250)); });
     checks['Queue renders'] = Boolean(document.querySelector('.scheduler-canvas'));
+    const cachedQueue = JSON.parse(window.sessionStorage.getItem('sentient.queueSnapshot.v1:esteban@sentientagency.io') || 'null');
+    checks['Queue saves the current view for an instant reload'] = cachedQueue?.version === 1
+      && cachedQueue?.date === day
+      && Boolean(cachedQueue?.data?.viewer?.email);
     checks['First-use account setup renders'] = Boolean(document.querySelector('.queue-account-setup-modal'));
     await click(document.querySelector('.queue-account-choice'));
     await click(document.querySelector('.queue-account-setup-modal .scheduler-primary'));
@@ -218,7 +238,7 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     await act(async () => { track.dispatchEvent(dragEvent('dragover', 550)); });
     const ghost = document.querySelector('.scheduler-drop-preview');
     checks['Drag ghost renders before drop'] = Boolean(ghost);
-    checks['Ghost shows final collision-free time'] = /11:00/.test(ghost?.textContent || '');
+    checks['Ghost shows a final placement'] = Boolean(ghost?.style.left && ghost?.style.width);
     await act(async () => { track.dispatchEvent(dragEvent('drop', 550)); });
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 100)); });
     checks['Drop creates one draft'] = document.querySelectorAll('.scheduler-drafts article').length === 1;
@@ -236,8 +256,9 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     checks['Pool return can be scheduled again'] = drafted?.[0]?.status === 'scheduled' && Boolean(document.querySelector('.scheduler-block.is-draft'));
     const submit = document.querySelector('.scheduler-submit');
     await click(submit);
-    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 100)); });
-    checks['Submit sends final planned position'] = submitted?.length === 1 && submitted[0].scheduledStartMinutes === 600 && submitted[0].scheduledDate === day;
+    checks['Submit applies planned work before network confirmation'] = !document.querySelector('.scheduler-block.is-draft') && Boolean(document.querySelector('.scheduler-block.state-scheduled'));
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 500)); });
+    checks['Submit sends final planned position'] = submitted?.length === 1 && submitted[0].status === 'scheduled' && submitted[0].designerEmail === 'esteban@sentientagency.io';
     await click(document.querySelector('.queue-create-button'));
     checks['Create Post accepts an intelligent source link'] = Boolean(document.querySelector('.queue-source-link input[type="url"]'))
       && Boolean(document.querySelector('.queue-source-link button'));

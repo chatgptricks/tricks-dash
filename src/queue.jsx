@@ -67,6 +67,29 @@ const displayDate = (value, language) => new Date(`${value}T12:00:00`).toLocaleD
 // simulator can override the reference clock without changing that data.
 const displayTimestamp = (value, language) => new Date(value).toLocaleString(locale(language), { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 const DRAFT_KEY = 'sentient.queueDrafts.v2';
+// A hard browser reload used to reset React state before the Queue request
+// returned, leaving people with an empty "Loading schedule" screen. Keep the
+// most recent live view per signed-in user for the browser session, then
+// reconcile it quietly with the server. Queue content can be sensitive, so
+// this intentionally uses sessionStorage rather than a permanent cache.
+const QUEUE_SNAPSHOT_KEY = 'sentient.queueSnapshot.v1';
+const queueSnapshotKey = (email) => `${QUEUE_SNAPSHOT_KEY}:${String(email || '').trim().toLowerCase()}`;
+const readQueueSnapshot = (email) => {
+  try {
+    const snapshot = JSON.parse(window.sessionStorage.getItem(queueSnapshotKey(email)) || 'null');
+    if (!snapshot || snapshot.version !== 1 || !snapshot.data || !snapshot.date || snapshot.archive) return null;
+    return snapshot;
+  } catch {
+    return null;
+  }
+};
+const writeQueueSnapshot = (email, snapshot) => {
+  try {
+    window.sessionStorage.setItem(queueSnapshotKey(email), JSON.stringify(snapshot));
+  } catch {
+    // A full or unavailable session store should never stop Queue from loading.
+  }
+};
 // Priority is intentionally binary. Older Queue rows can still contain the
 // former four-level value, but only an explicit `urgent` gets special UI.
 const PRIORITIES = ['normal', 'urgent'];
@@ -934,11 +957,12 @@ function PickModal({ requests, hotFallback = false, busy, onClose, onAssign }) {
 
 function QueueApp({ user }) {
   const { t, language, setLanguage } = useQueuePreferences();
-  const [data, setData] = useState(null);
+  const initialSnapshotRef = useRef(readQueueSnapshot(user?.email));
+  const [data, setData] = useState(() => initialSnapshotRef.current?.data || null);
   const [viewer, setViewer] = useState(null);
   const [timeZonePreview, setTimeZonePreview] = useState(readDevTimeZone);
-  const [date, setDate] = useState(() => DAY(new Date(), QUEUE_TIME_ZONE));
-  const [loading, setLoading] = useState(true);
+  const [date, setDate] = useState(() => initialSnapshotRef.current?.date || DAY(new Date(), QUEUE_TIME_ZONE));
+  const [loading, setLoading] = useState(() => !initialSnapshotRef.current?.data);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [toast, setToast] = useState(null);
@@ -978,7 +1002,7 @@ function QueueApp({ user }) {
   const liveRevisionRef = useRef(0);
   const liveRefreshTimerRef = useRef(null);
   const ticketsOpenRef = useRef(ticketsOpen);
-  const loadedOnceRef = useRef(false);
+  const loadedOnceRef = useRef(Boolean(initialSnapshotRef.current?.data));
   const accountSetupDismissedRef = useRef(false);
   const guideCompletedRef = useRef(Boolean(window.localStorage.getItem('sentient.queueGuide.v1')));
 
@@ -1021,6 +1045,10 @@ function QueueApp({ user }) {
   }, [date, archive, applyDraft]);
   loadRef.current = load;
   useEffect(() => { load().catch(() => {}); }, [load]);
+  useEffect(() => {
+    if (!data || archive) return;
+    writeQueueSnapshot(user?.email, { version: 1, date, archive: false, savedAt: Date.now(), data });
+  }, [data, date, archive, user?.email]);
   useEffect(() => { json('/api/dashboard/me').then(setViewer).catch(() => {}); }, []);
   useEffect(() => {
     const sync = () => setTimeZonePreview(readDevTimeZone());
@@ -1165,17 +1193,51 @@ function QueueApp({ user }) {
   // already on their calendar or when the Pool is currently empty.
   const pickAvailable = Boolean(data?.viewer);
   const toggleTickets = async () => { const next = !ticketsOpen; setTicketsOpen(next); if (next) await loadTickets(); };
+  const patchQueueTask = useCallback((taskId, patch) => {
+    const applyPatch = (task) => task.id === taskId ? { ...task, ...patch } : task;
+    setData((current) => current ? {
+      ...current,
+      requests: (current.requests || []).map(applyPatch),
+      planningRequests: (current.planningRequests || []).map(applyPatch),
+      assignedRequests: (current.assignedRequests || []).map(applyPatch),
+      pickRequests: (current.pickRequests || []).map(applyPatch),
+      selfPoolRequests: (current.selfPoolRequests || []).map(applyPatch),
+      liveDrafts: (current.liveDrafts || []).map(applyPatch),
+    } : current);
+    setOpen((current) => current?.id === taskId ? { ...current, ...patch } : current);
+  }, []);
+  const showScheduledLocally = useCallback((task, placement) => {
+    const scheduled = { ...task, ...placement, status: 'scheduled', isDraft: false, draftCoordinatorEmail: null };
+    setData((current) => {
+      if (!current) return current;
+      const without = (items = []) => items.filter((item) => item.id !== task.id);
+      const withScheduled = (items = []) => [scheduled, ...without(items)];
+      const forViewer = scheduled.designerEmail === current.viewer?.email ? withScheduled(current.assignedRequests) : without(current.assignedRequests);
+      return {
+        ...current,
+        requests: withScheduled(current.requests),
+        planningRequests: withScheduled(current.planningRequests),
+        assignedRequests: forViewer,
+        pickRequests: without(current.pickRequests),
+        selfPoolRequests: without(current.selfPoolRequests),
+        liveDrafts: without(current.liveDrafts),
+      };
+    });
+    return scheduled;
+  }, []);
   const pickRequest = async (task) => {
     setPickBusy(true);
     try {
       const now = new Date();
       const placement = { scheduled_date: DAY(now, QUEUE_TIME_ZONE), scheduled_start_minutes: String(Math.min(1430, Math.ceil(currentMinutes(now, QUEUE_TIME_ZONE) / 10) * 10)) };
+      const localPlacement = { designerEmail: data?.viewer?.email || '', scheduledDate: placement.scheduled_date, scheduledStartMinutes: Number(placement.scheduled_start_minutes) };
+      if (!task.isHotCandidate) showScheduledLocally(task, localPlacement);
+      setPickOpen(false);
       const body = task.isHotCandidate
         ? new URLSearchParams({ hot_account: task.post.account, hot_shortcode: task.post.shortcode, ...placement })
         : new URLSearchParams({ request_id: String(task.id), ...placement });
       const result = await json('/api/dashboard/queue/v2/pick', { method: 'POST', body });
-      setPickOpen(false);
-      await load({ silent: true });
+      showScheduledLocally(result.request, { designerEmail: result.request.designerEmail, scheduledDate: result.request.scheduledDate, scheduledStartMinutes: result.request.scheduledStartMinutes });
       notify(t('pickedRequest'));
       return result;
     } catch (err) {
@@ -1184,8 +1246,21 @@ function QueueApp({ user }) {
       return null;
     } finally { setPickBusy(false); }
   };
-  const submit = async () => { try { await draftSavePromiseRef.current.catch(() => {}); const changes = draftRef.current.map((task) => ({ id: task.id, status: task.status, designerEmail: task.designerEmail, scheduledDate: task.scheduledDate, scheduledStartMinutes: task.scheduledStartMinutes, productionPoints: task.productionPoints, recommendedAccounts: task.recommendedAccounts || [] })); const result = await json('/api/dashboard/queue/v2/submit', { method: 'POST', body: new URLSearchParams({ changes: JSON.stringify(changes) }) }); applyDraft([]); await load({ silent: true }); const sent = result.notifications?.sent || 0; const failed = result.notifications?.failed || 0; notify(`${t('scheduleSubmitted')} ${sent} DM${sent === 1 ? '' : 's'} sent${failed ? ` · ${failed} failed` : ''}.`, failed ? 'warning' : 'success'); } catch (err) { notify(err.message, 'error'); } };
-  const clearDrafts = async () => { try { await draftSavePromiseRef.current.catch(() => {}); await json('/api/dashboard/queue/v2/drafts/clear', { method: 'POST', body: new URLSearchParams() }); applyDraft([]); await load({ silent: true }); } catch (err) { notify(err.message, 'error'); } };
+  const submit = () => {
+    const pendingDrafts = [...draftRef.current];
+    const changes = pendingDrafts.map((task) => ({ id: task.id, status: task.status, designerEmail: task.designerEmail, scheduledDate: task.scheduledDate, scheduledStartMinutes: task.scheduledStartMinutes, productionPoints: task.productionPoints, recommendedAccounts: task.recommendedAccounts || [] }));
+    pendingDrafts.forEach((task) => {
+      if (task.status === 'pool') showReturnedInPool(task);
+      else showScheduledLocally(task, task);
+    });
+    applyDraft([]);
+    draftSavePromiseRef.current.catch(() => {}).then(() => json('/api/dashboard/queue/v2/submit', { method: 'POST', body: new URLSearchParams({ changes: JSON.stringify(changes) }) })).then((result) => {
+      (result.adjustments || []).forEach((adjustment) => patchQueueTask(adjustment.id, adjustment));
+      const sent = result.notifications?.sent || 0; const failed = result.notifications?.failed || 0;
+      notify(`${t('scheduleSubmitted')} ${sent} DM${sent === 1 ? '' : 's'} sent${failed ? ` · ${failed} failed` : ''}.`, failed ? 'warning' : 'success');
+    }).catch((err) => { notify(err.message || t('draftSyncFailed'), 'error'); loadRef.current?.({ silent: true }).catch(() => {}); });
+  };
+  const clearDrafts = () => { applyDraft([]); json('/api/dashboard/queue/v2/drafts/clear', { method: 'POST', body: new URLSearchParams() }).catch((err) => { notify(err.message, 'error'); loadRef.current?.({ silent: true }).catch(() => {}); }); };
   const resetQueue = async (confirmation) => {
     await json('/api/admin/queue/reset', { method: 'POST', body: new URLSearchParams({ confirmation }) });
     applyDraft([]);
@@ -1258,16 +1333,49 @@ function QueueApp({ user }) {
     persistPoolReturn(source);
   };
   const closeDetail = () => { openRef.current = null; setOpen(null); };
-  const action = async (actionName, value) => { try { const body = value ? new URLSearchParams(actionName === 'close' ? { final_permalink: value } : {}) : undefined; const result = await json(`/api/dashboard/queue/v2/requests/${open.id}/${actionName}`, { method: 'POST', body }); closeDetail(); await load({ silent: true }); notify(result.deferred ? `${t('movedAfterActive')} ${result.scheduledDate} · ${time(result.scheduledStartMinutes)}.` : t('requestUpdated'), result.deferred ? 'warning' : 'success'); } catch (err) { setDetailNotice({ message: err.message, type: 'error' }); } };
-  const cancel = async (reason) => { try { await json(`/api/dashboard/queue/v2/requests/${open.id}/cancel`, { method: 'POST', body: new URLSearchParams({ reason }) }); closeDetail(); await load({ silent: true }); notify(t('requestUpdated')); } catch (err) { setDetailNotice({ message: err.message, type: 'error' }); } };
-  const edit = async (values) => { try { const result = await json(`/api/dashboard/queue/v2/requests/${open.id}/edit`, { method: 'POST', body: new URLSearchParams({ production_points: String(values.productionPoints), priority: values.priority, tags: values.tags.join(','), brief: values.brief, notes: values.notes, references: JSON.stringify(values.references) }) }); setOpen(result.request); await load({ silent: true }); setDetailNotice({ message: t('requestUpdated'), type: 'success' }); return true; } catch (err) { setDetailNotice({ message: err.message, type: 'error' }); return false; } };
+  const action = (actionName, value) => {
+    const target = open;
+    if (!target) return;
+    const now = new Date().toISOString();
+    const optimistic = actionName === 'start'
+      ? { status: 'in_progress', actualStartedAt: now, completedAt: null, scheduledDate: DAY(new Date(), QUEUE_TIME_ZONE), scheduledStartMinutes: Math.floor(currentMinutes(new Date(), QUEUE_TIME_ZONE) / 10) * 10 }
+      : actionName === 'complete' ? { status: 'completed', completedAt: now }
+      : actionName === 'close' ? { status: 'closed', finalPermalink: value, closedAt: now }
+      : {};
+    patchQueueTask(target.id, optimistic);
+    closeDetail();
+    const body = value ? new URLSearchParams(actionName === 'close' ? { final_permalink: value } : {}) : undefined;
+    json(`/api/dashboard/queue/v2/requests/${target.id}/${actionName}`, { method: 'POST', body }).then((result) => {
+      if (result.deferred) patchQueueTask(target.id, { status: 'scheduled', actualStartedAt: null, completedAt: null, scheduledDate: result.scheduledDate, scheduledStartMinutes: result.scheduledStartMinutes });
+      notify(result.deferred ? `${t('movedAfterActive')} ${result.scheduledDate} · ${time(result.scheduledStartMinutes)}.` : t('requestUpdated'), result.deferred ? 'warning' : 'success');
+    }).catch((err) => { patchQueueTask(target.id, target); notify(err.message, 'error'); loadRef.current?.({ silent: true }).catch(() => {}); });
+  };
+  const cancel = (reason) => {
+    const target = open;
+    if (!target) return;
+    patchQueueTask(target.id, { status: 'cancelled', cancellationReason: reason || '' });
+    closeDetail();
+    json(`/api/dashboard/queue/v2/requests/${target.id}/cancel`, { method: 'POST', body: new URLSearchParams({ reason }) }).then(() => notify(t('requestUpdated'))).catch((err) => { patchQueueTask(target.id, target); notify(err.message, 'error'); loadRef.current?.({ silent: true }).catch(() => {}); });
+  };
+  const edit = (values) => {
+    const target = open;
+    if (!target) return false;
+    const optimistic = { productionPoints: Number(values.productionPoints), durationMinutes: Number(values.productionPoints) * Number(target.minutesPerPP || 10), priority: values.priority, tags: values.tags, brief: values.brief, notes: values.notes, references: values.references };
+    patchQueueTask(target.id, optimistic);
+    setDetailNotice({ message: t('requestUpdated'), type: 'success' });
+    json(`/api/dashboard/queue/v2/requests/${target.id}/edit`, { method: 'POST', body: new URLSearchParams({ production_points: String(values.productionPoints), priority: values.priority, tags: values.tags.join(','), brief: values.brief, notes: values.notes, references: JSON.stringify(values.references) }) }).then((result) => {
+      patchQueueTask(target.id, result.request);
+    }).catch((err) => { patchQueueTask(target.id, target); setDetailNotice({ message: err.message, type: 'error' }); loadRef.current?.({ silent: true }).catch(() => {}); });
+    return true;
+  };
   const resend = async () => { try { const result = await json(`/api/dashboard/queue/v2/requests/${open.id}/notify`, { method: 'POST' }); setDetailNotice({ message: result.sent ? t('slackSent') : t('slackFailed'), type: result.sent ? 'success' : 'error' }); const events = await json(`/api/dashboard/queue/v2/requests/${open.id}/history`); setHistory(events.events || []); } catch (err) { setDetailNotice({ message: err.message, type: 'error' }); } };
-  const upload = async (files) => { let current = open; let failures = 0; for (const file of files) { const body = new FormData(); body.append('file', file); try { const result = await json(`/api/dashboard/queue/v2/requests/${open.id}/attachments`, { method: 'POST', body }); current = result.request; } catch { failures += 1; } } setOpen(current); setDetailNotice({ message: failures ? t('uploadFailed') : t('filesUploaded'), type: failures ? 'error' : 'success' }); await load({ silent: true }); };
+  const upload = async (files) => { let current = open; let failures = 0; for (const file of files) { const body = new FormData(); body.append('file', file); try { const result = await json(`/api/dashboard/queue/v2/requests/${open.id}/attachments`, { method: 'POST', body }); current = result.request; } catch { failures += 1; } } setOpen(current); if (current?.id) patchQueueTask(current.id, current); setDetailNotice({ message: failures ? t('uploadFailed') : t('filesUploaded'), type: failures ? 'error' : 'success' }); };
   const download = async (file) => { const response = await apiFetch(`${API_BASE}/api/dashboard/queue/v2/requests/${open.id}/attachments/${file.id}`); if (!response.ok) throw new Error((await response.json().catch(() => ({}))).detail || 'Download failed.'); const blob = await response.blob(); const href = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = href; link.download = file.name; document.body.appendChild(link); link.click(); link.remove(); window.setTimeout(() => URL.revokeObjectURL(href), 30000); };
   const createTimeBlock = async (form) => {
     try {
-      await json('/api/dashboard/queue/v2/tickets/time-block', { method: 'POST', body: new URLSearchParams({ designer_email: form.designerEmail || data.viewer.email, category: form.category, scheduled_date: form.scheduledDate, scheduled_start_minutes: String(form.startMinutes), duration_minutes: String(form.durationMinutes), title: form.title, note: form.note }) });
-      await load({ silent: true });
+      const result = await json('/api/dashboard/queue/v2/tickets/time-block', { method: 'POST', body: new URLSearchParams({ designer_email: form.designerEmail || data.viewer.email, category: form.category, scheduled_date: form.scheduledDate, scheduled_start_minutes: String(form.startMinutes), duration_minutes: String(form.durationMinutes), title: form.title, note: form.note }) });
+      setData((current) => current ? { ...current, timeBlocks: [result.ticket, ...(current.timeBlocks || [])], pendingTicketCount: (current.pendingTicketCount || 0) + (result.ticket.status === 'pending' ? 1 : 0) } : current);
+      if (ticketsOpen) setTickets((current) => [result.ticket, ...current]);
       notify(t('ticketCreated'));
       return true;
     } catch (err) {
@@ -1277,18 +1385,27 @@ function QueueApp({ user }) {
   };
   const editTimeBlock = async (form) => {
     try {
-      await json(`/api/dashboard/queue/v2/tickets/time-block/${form.ticketId}`, { method: 'POST', body: new URLSearchParams({ designer_email: form.designerEmail || data.viewer.email, category: form.category, scheduled_date: form.scheduledDate, scheduled_start_minutes: String(form.startMinutes), duration_minutes: String(form.durationMinutes), title: form.title, note: form.note }) });
-      await load({ silent: true }); notify(t('requestUpdated')); return true;
+      const result = await json(`/api/dashboard/queue/v2/tickets/time-block/${form.ticketId}`, { method: 'POST', body: new URLSearchParams({ designer_email: form.designerEmail || data.viewer.email, category: form.category, scheduled_date: form.scheduledDate, scheduled_start_minutes: String(form.startMinutes), duration_minutes: String(form.durationMinutes), title: form.title, note: form.note }) });
+      setData((current) => current ? { ...current, timeBlocks: (current.timeBlocks || []).map((block) => block.id === result.ticket.id ? result.ticket : block) } : current);
+      setTickets((current) => current.map((ticket) => ticket.id === result.ticket.id ? result.ticket : ticket));
+      notify(t('requestUpdated')); return true;
     } catch (err) { notify(err.message, 'error'); return false; }
   };
-  const deleteTimeBlock = async (block) => { try { await json(`/api/dashboard/queue/v2/tickets/time-block/${block.id}`, { method: 'POST', body: new URLSearchParams({ delete: 'true' }) }); await load({ silent: true }); notify(t('requestUpdated')); } catch (err) { notify(err.message, 'error'); } };
+  const deleteTimeBlock = (block) => {
+    setData((current) => current ? { ...current, timeBlocks: (current.timeBlocks || []).filter((item) => item.id !== block.id), pendingTicketCount: Math.max(0, (current.pendingTicketCount || 0) - (block.status === 'pending' ? 1 : 0)) } : current);
+    setTickets((current) => current.filter((ticket) => ticket.id !== block.id));
+    json(`/api/dashboard/queue/v2/tickets/time-block/${block.id}`, { method: 'POST', body: new URLSearchParams({ delete: 'true' }) }).then(() => notify(t('requestUpdated'))).catch((err) => { notify(err.message, 'error'); loadRef.current?.({ silent: true }).catch(() => {}); });
+  };
   const saveSchedulerPreferences = async (preferences) => { const optimistic = { hiddenUsers: preferences.hiddenUsers || [], rowOrder: preferences.rowOrder || [] }; setData((current) => current ? { ...current, schedulerPreferences: optimistic } : current); try { const result = await json('/api/dashboard/queue/v2/scheduler-preferences', { method: 'POST', body: new URLSearchParams({ hidden_users: JSON.stringify(optimistic.hiddenUsers), row_order: JSON.stringify(optimistic.rowOrder) }) }); setData((current) => current ? { ...current, schedulerPreferences: result.schedulerPreferences || optimistic } : current); } catch (err) { notify(err.message, 'error'); load({ silent: true }).catch(() => {}); } };
   const returnTaskToPool = (task) => persistPoolReturn(task);
-  const cancelTask = async (task) => { try { await json(`/api/dashboard/queue/v2/requests/${task.id}/cancel`, { method: 'POST', body: new URLSearchParams({ reason: 'Cancelled by coordinator' }) }); await load({ silent: true }); notify(t('requestUpdated')); } catch (err) { notify(err.message, 'error'); } };
+  const cancelTask = (task) => {
+    patchQueueTask(task.id, { status: 'cancelled', cancellationReason: 'Cancelled by coordinator' });
+    json(`/api/dashboard/queue/v2/requests/${task.id}/cancel`, { method: 'POST', body: new URLSearchParams({ reason: 'Cancelled by coordinator' }) }).then(() => notify(t('requestUpdated'))).catch((err) => { patchQueueTask(task.id, task); notify(err.message, 'error'); loadRef.current?.({ silent: true }).catch(() => {}); });
+  };
   const saveManagedAccounts = async (accounts) => {
     const result = await json('/api/dashboard/queue/v2/account-onboarding', { method: 'POST', body: new URLSearchParams({ accounts: JSON.stringify(accounts) }) });
     accountSetupDismissedRef.current = true;
-    await load({ silent: true });
+    setData((current) => current ? { ...current, accountOnboarding: result.accountOnboarding, schedulerUsers: (current.schedulerUsers || []).map((item) => item.email === current.viewer?.email ? { ...item, accounts: result.accountOnboarding.selectedAccounts } : item) } : current);
     notify(t('managedAccountsSaved'));
     return result;
   };
@@ -1398,8 +1515,8 @@ function QueueApp({ user }) {
     </header>
     {refreshing ? <div className="queue-refresh-progress" aria-label="Refreshing Queue" /> : null}
     {toast ? <div className={`queue-toast is-${toast.type}`} role="status">{toast.type === 'success' ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}<span>{toast.message}</span><button type="button" onClick={() => setToast(null)}><X size={14} /></button></div> : null}
-    {loading ? <section className="queue-state"><LoaderCircle className="queue-spin" /><p>{t('loadingSchedule')}</p></section> : null}
-    {error ? <section className="queue-state queue-error"><p>{error}</p><button type="button" onClick={load}>{t('tryAgain')}</button></section> : null}
+    {loading && !data ? <section className="queue-state"><LoaderCircle className="queue-spin" /><p>{t('loadingSchedule')}</p></section> : null}
+    {error && !data ? <section className="queue-state queue-error"><p>{error}</p><button type="button" onClick={load}>{t('tryAgain')}</button></section> : null}
     {data ? <>
       {overviewOpen ? <QueueOverview report={overview} loading={overviewLoading} error={overviewError} onRetry={loadOverview} onOpen={setOpen} /> : null}
       {!overviewOpen ? <>
@@ -1412,7 +1529,7 @@ function QueueApp({ user }) {
     </> : null}
     {ticketsOpen && data?.viewer ? <TicketPanel tickets={tickets} loading={ticketsLoading} error={ticketsError} onClose={() => setTicketsOpen(false)} onReview={reviewTicket} canReview={Boolean(coordinator)} /> : null}
     {pickOpen ? <PickModal requests={pickPool} hotFallback={pickHotFallback} busy={pickBusy} onClose={() => setPickOpen(false)} onAssign={pickRequest} /> : null}
-    {createOpen ? <CreatePostModal tags={data?.tags || []} onClose={() => setCreateOpen(false)} onCreated={async () => { await load({ silent: true }); setCreateOpen(false); notify(t('postCreated')); }} /> : null}
+    {createOpen ? <CreatePostModal tags={data?.tags || []} onClose={() => setCreateOpen(false)} onCreated={(request) => { setData((current) => current ? { ...current, requests: [request, ...(current.requests || []).filter((task) => task.id !== request.id)], pickRequests: [request, ...(current.pickRequests || []).filter((task) => task.id !== request.id)] } : current); setCreateOpen(false); notify(t('postCreated')); }} /> : null}
     {resetOpen ? <ResetQueueModal onClose={() => setResetOpen(false)} onReset={resetQueue} /> : null}
     {accountSetupOpen && data ? <AccountSetupModal onboarding={data.accountOnboarding} accounts={data.accounts || []} onClose={() => { accountSetupDismissedRef.current = true; setAccountSetupOpen(false); }} onSave={saveManagedAccounts} onRequest={requestAccountAccess} /> : null}
     {guideOpen ? <QueueGuide coordinator={Boolean(coordinator)} step={guideStep} setStep={setGuideStep} onChooseLanguage={setLanguage} onComplete={finishGuide} /> : null}
