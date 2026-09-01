@@ -49,7 +49,13 @@
       document.querySelectorAll('a[href]').forEach((link) => {
         try {
           const path = new URL(link.href, window.location.href).pathname;
-          if (/\/(?:tracker|insights)\.html$/i.test(path)) link.hidden = !effectiveCoordinator;
+          if (/\/(?:tracker|insights)\.html$/i.test(path)) {
+            link.hidden = !effectiveCoordinator;
+            // Standalone styles assign `display:flex` to .linkbtn, which can
+            // override the browser's default [hidden] rule. Set the inline
+            // display explicitly so restricted links are actually invisible.
+            link.style.display = effectiveCoordinator ? '' : 'none';
+          }
         } catch {
           // An unrelated malformed link should never block the role switcher.
         }
