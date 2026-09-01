@@ -436,13 +436,49 @@ async function boot(){
   }
 }
 
+const trackerDelay = ms => new Promise(resolve => setTimeout(resolve, ms));
+const RETRYABLE_TRACKER_STATUS = new Set([502, 503, 504]);
+
 async function authedFetch(path){
-  const headers = {};
-  if(window.__firebaseIdToken) headers.Authorization = 'Bearer '+window.__firebaseIdToken;
-  const r = await fetch(API+path, {headers});
-  if(r.status===401||r.status===403){ window.__onInsightsUnauthorized && window.__onInsightsUnauthorized(); throw new Error('unauthorized'); }
-  if(!r.ok) throw new Error('HTTP '+r.status);
-  return r.json();
+  let lastError = null;
+  // A Render restart or an expired Firebase token should not strand one user
+  // on a blank Tracker while everyone else is working. Refresh the token and
+  // retry short-lived network/server failures before surfacing an error.
+  for(let attempt = 0; attempt < 3; attempt += 1){
+    try{
+      if(window.__refreshFirebaseIdToken) await window.__refreshFirebaseIdToken(attempt > 0);
+      const headers = {};
+      if(window.__firebaseIdToken) headers.Authorization = 'Bearer '+window.__firebaseIdToken;
+      const r = await fetch(API+path, {headers});
+      if(r.status===401||r.status===403){
+        if(attempt < 2) {
+          lastError = new Error('unauthorized');
+          await trackerDelay(350 * (attempt + 1));
+          continue;
+        }
+        window.__onInsightsUnauthorized && window.__onInsightsUnauthorized();
+        throw new Error('unauthorized');
+      }
+      if(!r.ok){
+        lastError = new Error('HTTP '+r.status);
+        if(RETRYABLE_TRACKER_STATUS.has(r.status) && attempt < 2){
+          await trackerDelay(500 * (attempt + 1));
+          continue;
+        }
+        throw lastError;
+      }
+      return r.json();
+    }catch(error){
+      lastError = error;
+      if(attempt < 2){
+        await trackerDelay(500 * (attempt + 1));
+        continue;
+      }
+    }
+  }
+  throw new Error(lastError?.message === 'Failed to fetch'
+    ? 'Connection to the Tracker is still reconnecting. Try again in a moment.'
+    : (lastError?.message || 'Could not load Tracker data.'));
 }
 
 async function authedPost(path){
@@ -1082,7 +1118,12 @@ onAuthStateChanged(auth, async (user) => {
     showSignInGate();
     return;
   }
-  window.__firebaseIdToken = await user.getIdToken();
+  window.__refreshFirebaseIdToken = async (forceRefresh = false) => {
+    const token = await auth.currentUser?.getIdToken(forceRefresh);
+    if (token) window.__firebaseIdToken = token;
+    return token || '';
+  };
+  await window.__refreshFirebaseIdToken();
   window.__signedInEmail = user.email || '';
   setSettingsAvatar(user);
   gate.classList.add('hidden');
