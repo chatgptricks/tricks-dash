@@ -37,6 +37,23 @@
     const options = [...new Set(allowed.filter((role) => ALL_ROLES.includes(role)))];
     const selected = window.sessionStorage.getItem(ROLE_KEY) || '';
 
+    // Standalone Tracker/Insights pages do not share React's header. Keep the
+    // same coordinator-only navigation contract here so a PD never sees links
+    // to tools they cannot use, including when role preview is active.
+    const effectiveCoordinator = selected
+      ? ['vc', 'admin'].includes(selected)
+      : Boolean(viewer.is_dev || viewer.is_admin || (viewer.operating_roles || []).includes('vc'));
+    if (!effectiveCoordinator) {
+      document.querySelectorAll('a[href]').forEach((link) => {
+        try {
+          const path = new URL(link.href, window.location.href).pathname;
+          if (/\/(?:tracker|insights)\.html$/i.test(path)) link.hidden = true;
+        } catch {
+          // An unrelated malformed link should never block the role switcher.
+        }
+      });
+    }
+
     const style = document.createElement('style');
     style.textContent = `
       .sentient-role-preview{position:fixed;right:18px;bottom:18px;z-index:100;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}

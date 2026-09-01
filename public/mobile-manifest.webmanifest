@@ -3,7 +3,7 @@
   "name": "Sentient Dash",
   "short_name": "Sentient Dash",
   "description": "Sentient's mobile research and production workspace.",
-  "start_url": "/mobile/?source=pwa",
+  "start_url": "/mobile/",
   "scope": "/mobile/",
   "display": "standalone",
   "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
@@ -17,7 +17,7 @@
     { "src": "/mobile-icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ],
   "shortcuts": [
-    { "name": "My Queue", "short_name": "Queue", "url": "/mobile/?tab=queue", "icons": [{ "src": "/mobile-icon-192.png", "sizes": "192x192" }] },
-    { "name": "Dashboard", "short_name": "Dashboard", "url": "/mobile/?tab=dashboard", "icons": [{ "src": "/mobile-icon-192.png", "sizes": "192x192" }] }
+    { "name": "My Queue", "short_name": "Queue", "url": "/mobile/?r=eyJ0YWIiOiJxdWV1ZSJ9", "icons": [{ "src": "/mobile-icon-192.png", "sizes": "192x192" }] },
+    { "name": "Dashboard", "short_name": "Dashboard", "url": "/mobile/?r=eyJ0YWIiOiJkYXNoYm9hcmQifQ", "icons": [{ "src": "/mobile-icon-192.png", "sizes": "192x192" }] }
   ]
 }
