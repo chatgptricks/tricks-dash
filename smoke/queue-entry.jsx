@@ -121,7 +121,14 @@ const stubFetch = async (url, options = {}) => {
 globalThis.fetch = stubFetch;
 window.fetch = stubFetch;
 
-const transfer = { setData() {}, getData() { return ''; }, dropEffect: 'move' };
+const transferData = new Map();
+const transfer = {
+  setData(type, value) { transferData.set(type, value); },
+  getData(type) { return transferData.get(type) || ''; },
+  get types() { return [...transferData.keys()]; },
+  clearData() { transferData.clear(); },
+  dropEffect: 'move', effectAllowed: 'all',
+};
 const dragEvent = (type, clientX = 0) => {
   const event = new window.MouseEvent(type, { bubbles: true, cancelable: true, clientX });
   Object.defineProperty(event, 'dataTransfer', { value: transfer });
@@ -178,6 +185,12 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     await act(async () => { louisHeader.dispatchEvent(new window.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 240, clientY: 170 })); });
     await click([...document.querySelectorAll('.scheduler-context-menu button')].find((node) => /^Hide Louis/.test(node.textContent || '')));
     checks['Hide user removes that VC row immediately'] = ![...document.querySelectorAll('.scheduler-row')].some((node) => /Louis/.test(node.textContent || ''));
+    transfer.clearData();
+    const traineeHeader = [...document.querySelectorAll('.scheduler-row > header')].find((node) => /Trainee/.test(node.textContent || ''));
+    const ivanRow = [...document.querySelectorAll('.scheduler-row')].find((node) => /Ivan/.test(node.textContent || ''));
+    await act(async () => { traineeHeader.dispatchEvent(dragEvent('dragstart')); ivanRow.dispatchEvent(dragEvent('dragover')); ivanRow.dispatchEvent(dragEvent('drop')); });
+    checks['Drag reorder updates VC rows immediately'] = [...document.querySelectorAll('.scheduler-user-copy b')].map((node) => node.textContent.trim()).join('|') === 'Esteban|Trainee|Ivan';
+    transfer.clearData();
     const createPostButton = document.querySelector('.queue-create-button');
     const addTimeButton = document.querySelector('.scheduler-add-time');
     checks['Add Time is grouped with Create Post'] = Boolean(addTimeButton) && createPostButton?.parentElement === addTimeButton.parentElement;
