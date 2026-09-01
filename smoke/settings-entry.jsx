@@ -83,4 +83,5 @@ const clickTab = async (label) => {
     console.error = originalError;
   }
   console.log(JSON.stringify({ checks, errors }));
+  process.exit(Object.values(checks).every(Boolean) && !errors.length ? 0 : 1);
 })();

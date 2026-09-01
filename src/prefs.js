@@ -69,8 +69,19 @@ function luminance([red, green, blue]) {
   return (0.2126 * channel(red)) + (0.7152 * channel(green)) + (0.0722 * channel(blue));
 }
 
-function darken(hex, amount = 0.28) {
-  return `#${hex.slice(1).match(/../g).map((pair) => Math.round(parseInt(pair, 16) * (1 - amount)).toString(16).padStart(2, '0')).join('')}`;
+function contrastRatio(first, second) {
+  const [bright, dark] = [luminance(first), luminance(second)].sort((a, b) => b - a);
+  return (bright + 0.05) / (dark + 0.05);
+}
+
+function readableAccent(hex, lightTheme) {
+  let rgb = [0, 2, 4].map((offset) => parseInt(hex.slice(1 + offset, 3 + offset), 16));
+  const surface = lightTheme ? [255, 255, 255] : [8, 8, 8];
+  const target = lightTheme ? 0 : 255;
+  while (contrastRatio(rgb, surface) < 4.5) {
+    rgb = rgb.map((channel) => Math.round(channel + ((target - channel) * 0.12)));
+  }
+  return `#${rgb.map((channel) => channel.toString(16).padStart(2, '0')).join('')}`;
 }
 
 export function readAccent() {
@@ -86,7 +97,7 @@ export function applyAccent(value, { persist = true } = {}) {
   const rgb = hexRgb(normalized);
   const root = document.documentElement;
   const lightTheme = root.getAttribute('data-theme') === 'light';
-  const textColor = lightTheme && luminance(rgb) > 0.35 ? darken(hex, 0.28) : hex;
+  const textColor = readableAccent(hex, lightTheme);
   // The foreground on a solid accent must switch much sooner than the
   // foreground used on a dark surface. This is the WCAG contrast crossover.
   const inkColor = luminance(rgb) > 0.179 ? '#151515' : '#f5f8ff';

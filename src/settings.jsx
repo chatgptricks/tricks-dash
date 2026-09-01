@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import { browserPopupRedirectResolver, getRedirectResult, onAuthStateChanged, signOut } from 'firebase/auth';
-import { SettingsPanel } from './App';
+import { DevRolePreview, SettingsPanel } from './App';
 import { API_BASE, apiFetch } from './api';
 import { describeSignInError, firebaseAuth, startGoogleSignIn } from './firebase';
 import { PrefsProvider } from './prefsContext';
@@ -121,10 +121,17 @@ function SettingsApp() {
 
   if (user === undefined || (!user && !checked) || (user && viewer === undefined && !notice)) return <main className="auth-screen" />;
   if (!user) return <SettingsSignIn notice={notice} />;
-  if (!viewer?.is_admin && !viewer?.is_dev) return <SettingsRestricted email={user.email} onSignOut={handleSignOut} />;
+  const rolePreview = (
+    <DevRolePreview
+      isDev={Boolean(viewer?.is_dev)}
+      canSwitchRoles={Boolean(viewer?.can_role_switch)}
+      availableRoles={viewer?.available_operating_roles || viewer?.operating_roles || []}
+    />
+  );
+  if (!viewer?.is_admin && !viewer?.is_dev) return <><SettingsRestricted email={user.email} onSignOut={handleSignOut} />{rolePreview}</>;
 
   const initialTab = new URLSearchParams(window.location.search).get('tab') || 'overview';
-  return (
+  return <>
     <SettingsPanel
       accounts={[]}
       initialTab={initialTab}
@@ -137,7 +144,8 @@ function SettingsApp() {
       refreshing={refreshing}
       refreshNotice={refreshNotice}
     />
-  );
+    {rolePreview}
+  </>;
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(

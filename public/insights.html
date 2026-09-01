@@ -4,6 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <script src="/mobile-redirect.js"></script>
+<script src="/role-preview.js" defer></script>
 <title>Insights · sentientdash.app</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext x='50' y='54' font-size='84' text-anchor='middle' dominant-baseline='central'%3E%F0%9F%93%8A%3C/text%3E%3C/svg%3E" />
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -144,7 +145,7 @@ tbody tr:hover{background:rgba(var(--edge),.03)}
   --bg:#f4f4f5; --panel:#ffffff; --panel-2:#f1f1f2;
   --line:rgba(0,0,0,.12);
   --text:#18181b; --muted:#6b6b70; --muted-2:#3f3f46;
-  --accent:#c3c702; --accent-text:#c3c702; --accent-ink:#2e2f00;
+  --accent:#c3c702; --accent-text:#727600; --accent-ink:#2e2f00;
   --good:#137a35; --warn:#8a5a00; --hot:#b8431a; --cool:#1668b8;
   --pill-s-fg:#0b5ea8; --pill-s-bg:rgba(74,168,255,.18);
   --pill-c-fg:#a33c12; --pill-c-bg:rgba(255,107,53,.18);
@@ -212,6 +213,7 @@ tbody tr:hover{background:rgba(var(--edge),.03)}
 .settings-menu-signout{display:inline-flex;flex:0 0 auto;align-items:center;gap:5px;min-height:28px;padding:0 8px;
   border:1px solid rgba(255,107,107,.32);border-radius:7px;background:rgba(255,107,107,.08);color:#ff9b9b;
   font-size:10px;font-weight:750;font-family:inherit;cursor:pointer}
+:root[data-theme='light'] .settings-menu-signout{color:#9b1c1c}
 @media(max-width:620px){.settings-menu-panel{position:fixed;top:auto;right:8px;bottom:8px;left:8px;width:auto;max-height:70dvh}}
 </style>
 </head>
@@ -419,13 +421,41 @@ function textColorFor(name){
 
 function destroyCharts(){ CHARTS.forEach(c=>{try{c.destroy()}catch(e){}}); CHARTS=[]; }
 
+const insightsDelay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const INSIGHTS_RETRYABLE = new Set([502, 503, 504]);
+async function insightsGet(path){
+  let lastError = null;
+  for(let attempt=0; attempt<4; attempt+=1){
+    try{
+      if(window.__refreshFirebaseIdToken) await window.__refreshFirebaseIdToken(attempt>0);
+      const headers = window.__sentientRolePreviewHeaders ? window.__sentientRolePreviewHeaders() : {};
+      if(window.__firebaseIdToken) headers.Authorization = 'Bearer '+window.__firebaseIdToken;
+      const response = await fetch(API+path, {headers});
+      if(response.status===401||response.status===403){
+        window.__onInsightsUnauthorized && window.__onInsightsUnauthorized();
+        throw new Error('unauthorized');
+      }
+      if(!response.ok){
+        lastError = new Error('HTTP '+response.status);
+        if(INSIGHTS_RETRYABLE.has(response.status) && attempt<3){
+          await insightsDelay(700*(2**attempt));
+          continue;
+        }
+        throw lastError;
+      }
+      return response;
+    }catch(error){
+      lastError = error;
+      if(error?.message==='unauthorized') throw error;
+      if(attempt<3){ await insightsDelay(700*(2**attempt)); continue; }
+    }
+  }
+  throw lastError || new Error('Connection to Insights is still reconnecting.');
+}
+
 async function boot(){
   try{
-    const headers = {};
-    if(window.__firebaseIdToken) headers.Authorization = 'Bearer '+window.__firebaseIdToken;
-    const r = await fetch(API+'/api/insights/posts', {headers});
-    if(r.status===401||r.status===403){ window.__onInsightsUnauthorized && window.__onInsightsUnauthorized(); return; }
-    if(!r.ok) throw new Error('HTTP '+r.status);
+    const r = await insightsGet('/api/insights/posts');
     const data = await r.json();
     RAW = data.posts.map(p=>{
       const t = p.d ? new Date(p.d).getTime() : NaN;
@@ -1049,7 +1079,12 @@ onAuthStateChanged(auth, async (user) => {
     showSignInGate();
     return;
   }
-  window.__firebaseIdToken = await user.getIdToken();
+  window.__refreshFirebaseIdToken = async (forceRefresh = false) => {
+    const token = await auth.currentUser?.getIdToken(forceRefresh);
+    if(token) window.__firebaseIdToken = token;
+    return token || '';
+  };
+  await window.__refreshFirebaseIdToken();
   window.__signedInEmail = user.email || '';
   setSettingsAvatar(user);
   gate.classList.add('hidden');
@@ -1334,7 +1369,8 @@ function normalizeAccent(value) {
 function accentHex(value) { const normalized = normalizeAccent(value); return ACCENT_PRESETS[normalized] || normalized; }
 function accentRgb(value) { const hex = accentHex(value).slice(1); return [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16)); }
 function accentLuminance(rgb) { const channel = (v) => { const s = v / 255; return s <= .03928 ? s / 12.92 : ((s + .055) / 1.055) ** 2.4; }; return .2126 * channel(rgb[0]) + .7152 * channel(rgb[1]) + .0722 * channel(rgb[2]); }
-function accentText(value) { const hex = accentHex(value); const rgb = accentRgb(value); if (document.documentElement.getAttribute('data-theme') === 'light' && accentLuminance(rgb) > .35) return '#' + hex.slice(1).match(/../g).map((p) => Math.round(parseInt(p, 16) * .72).toString(16).padStart(2, '0')).join(''); return hex; }
+function accentContrast(first, second) { const values = [accentLuminance(first), accentLuminance(second)].sort((a, b) => b - a); return (values[0] + .05) / (values[1] + .05); }
+function accentText(value) { let rgb = accentRgb(value); const light = document.documentElement.getAttribute('data-theme') === 'light'; const surface = light ? [255,255,255] : [8,8,8]; const target = light ? 0 : 255; while (accentContrast(rgb, surface) < 4.5) rgb = rgb.map((channel) => Math.round(channel + ((target - channel) * .12))); return '#' + rgb.map((channel) => channel.toString(16).padStart(2, '0')).join(''); }
 function readAccent() {
   try {
     return normalizeAccent(localStorage.getItem(PREF_ACCENT));
@@ -1418,7 +1454,9 @@ let adminChecked = false;
 function checkAdminForSettings() {
   if (adminChecked || !window.__firebaseIdToken) return;
   adminChecked = true;
-  fetch(API + '/api/dashboard/me', { headers: { Authorization: 'Bearer ' + window.__firebaseIdToken } })
+  fetch(API + '/api/dashboard/me', { headers: window.__sentientRolePreviewHeaders
+    ? window.__sentientRolePreviewHeaders({ Authorization: 'Bearer ' + window.__firebaseIdToken })
+    : { Authorization: 'Bearer ' + window.__firebaseIdToken } })
     .then((r) => (r.ok ? r.json() : null))
     .then((me) => {
       const isAdmin = Boolean(me && (me.is_admin || me.is_dev || (Array.isArray(me.operating_roles) && me.operating_roles.includes('admin')) || me.operating_role === 'admin'));

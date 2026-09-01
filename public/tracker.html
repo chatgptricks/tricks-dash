@@ -4,6 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <script src="/mobile-redirect.js"></script>
+<script src="/role-preview.js" defer></script>
 <title>Tracker · sentientdash.app</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext x='50' y='54' font-size='84' text-anchor='middle' dominant-baseline='central'%3E%F0%9F%93%88%3C/text%3E%3C/svg%3E" /><script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script>(function(){try{var t=localStorage.getItem('sentient.theme');if(t!=='light'&&t!=='dark'){t=window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';}document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();</script>
@@ -212,7 +213,7 @@ table.hist-table td{text-align:left;padding:11px 8px;white-space:nowrap}
   --bg:#f4f4f5; --panel:#ffffff; --panel-2:#f1f1f2;
   --line:rgba(0,0,0,.12);
   --text:#18181b; --muted:#6b6b70; --muted-2:#3f3f46;
-  --accent:#c3c702; --accent-text:#c3c702; --accent-ink:#2e2f00;
+  --accent:#c3c702; --accent-text:#727600; --accent-ink:#2e2f00;
   --good:#137a35; --warn:#8a5a00; --hot:#b8431a; --cool:#1668b8;
   --pill-s-fg:#0b5ea8; --pill-s-bg:rgba(74,168,255,.18);
   --pill-c-fg:#a33c12; --pill-c-bg:rgba(255,107,53,.18);
@@ -280,6 +281,7 @@ table.hist-table td{text-align:left;padding:11px 8px;white-space:nowrap}
 .settings-menu-signout{display:inline-flex;flex:0 0 auto;align-items:center;gap:5px;min-height:28px;padding:0 8px;
   border:1px solid rgba(255,107,107,.32);border-radius:7px;background:rgba(255,107,107,.08);color:#ff9b9b;
   font-size:10px;font-weight:750;font-family:inherit;cursor:pointer}
+:root[data-theme='light'] .settings-menu-signout{color:#9b1c1c}
 @media(max-width:620px){.settings-menu-panel{position:fixed;top:auto;right:8px;bottom:8px;left:8px;width:auto;max-height:70dvh}}
 
 .avatar-fallback{display:inline-flex;align-items:center;justify-content:center;
@@ -447,7 +449,7 @@ async function authedFetch(path){
   for(let attempt = 0; attempt < 3; attempt += 1){
     try{
       if(window.__refreshFirebaseIdToken) await window.__refreshFirebaseIdToken(attempt > 0);
-      const headers = {};
+      const headers = window.__sentientRolePreviewHeaders ? window.__sentientRolePreviewHeaders() : {};
       if(window.__firebaseIdToken) headers.Authorization = 'Bearer '+window.__firebaseIdToken;
       const r = await fetch(API+path, {headers});
       if(r.status===401||r.status===403){
@@ -482,7 +484,7 @@ async function authedFetch(path){
 }
 
 async function authedPost(path){
-  const headers = {};
+  const headers = window.__sentientRolePreviewHeaders ? window.__sentientRolePreviewHeaders() : {};
   if(window.__firebaseIdToken) headers.Authorization = 'Bearer '+window.__firebaseIdToken;
   const r = await fetch(API+path, {method:'POST', headers});
   if(r.status===401||r.status===403){ window.__onInsightsUnauthorized && window.__onInsightsUnauthorized(); throw new Error('unauthorized'); }
@@ -1255,7 +1257,8 @@ function normalizeAccent(value) {
 function accentHex(value) { const normalized = normalizeAccent(value); return ACCENT_PRESETS[normalized] || normalized; }
 function accentRgb(value) { const hex = accentHex(value).slice(1); return [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16)); }
 function accentLuminance(rgb) { const channel = (v) => { const s = v / 255; return s <= .03928 ? s / 12.92 : ((s + .055) / 1.055) ** 2.4; }; return .2126 * channel(rgb[0]) + .7152 * channel(rgb[1]) + .0722 * channel(rgb[2]); }
-function accentText(value) { const hex = accentHex(value); const rgb = accentRgb(value); if (document.documentElement.getAttribute('data-theme') === 'light' && accentLuminance(rgb) > .35) return '#' + hex.slice(1).match(/../g).map((p) => Math.round(parseInt(p, 16) * .72).toString(16).padStart(2, '0')).join(''); return hex; }
+function accentContrast(first, second) { const values = [accentLuminance(first), accentLuminance(second)].sort((a, b) => b - a); return (values[0] + .05) / (values[1] + .05); }
+function accentText(value) { let rgb = accentRgb(value); const light = document.documentElement.getAttribute('data-theme') === 'light'; const surface = light ? [255,255,255] : [8,8,8]; const target = light ? 0 : 255; while (accentContrast(rgb, surface) < 4.5) rgb = rgb.map((channel) => Math.round(channel + ((target - channel) * .12))); return '#' + rgb.map((channel) => channel.toString(16).padStart(2, '0')).join(''); }
 function readAccent() {
   try {
     return normalizeAccent(localStorage.getItem(PREF_ACCENT));

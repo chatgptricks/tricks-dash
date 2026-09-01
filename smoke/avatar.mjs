@@ -1,6 +1,12 @@
 import { JSDOM } from 'jsdom';
 import fs from 'node:fs';
-const dom = new JSDOM(fs.readFileSync('public/tracker.html','utf8'), { runScripts:'dangerously', url:'https://sentientdash.app/tracker.html' });
+const dom = new JSDOM(fs.readFileSync('public/tracker.html','utf8'), {
+  runScripts: 'dangerously',
+  url: 'https://sentientdash.app/tracker.html',
+  beforeParse(window) {
+    window.Chart = Object.assign(function Chart() {}, { defaults: { font: {} } });
+  },
+});
 const { window } = dom;
 await new Promise(r => setTimeout(r, 250));
 const d = window.document;

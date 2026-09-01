@@ -11,6 +11,7 @@
     "smoke:queue": "node smoke/run-queue.mjs",
     "smoke:settings": "node smoke/run-settings.mjs",
     "smoke:mobile": "node smoke/run-mobile.mjs",
+    "smoke:roles": "node smoke/roles.mjs",
     "generate:data": "node scripts/build-data.mjs",
     "ocr:covers": "node scripts/ocr-covers.mjs"
   },
