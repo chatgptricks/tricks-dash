@@ -6,6 +6,14 @@ when backend work is released. Esteban is planning to merge the two repos into
 one — read the "Planned repo merge" section near the bottom before you start
 that.
 
+## Current release: role-aware navigation and opaque share links (2026-09-01)
+
+- Dashboard role previews now apply their effective Admin/VC/PD/Sales/Trainee permissions synchronously, so the header and Queue controls do not briefly render with the wrong role while the large catalogue loads.
+- Standalone Tracker and Insights pages apply the same coordinator-only navigation rule; PD/Sales/Trainee previews do not expose those links. Queue remains available to every signed-in dashboard user, with Pick/Create gated by the existing self-assignment permission.
+- Mobile Queue/Create Post uses the same binary priority model as desktop (`normal` or `urgent`); legacy priority values remain readable as normal for old records.
+- Shareable route state is now encoded in a URL-safe `r` token across Dashboard, Queue, Settings, Tracker, Insights, mobile redirects, PWA shortcuts, and Slack deep links. This is portable obfuscation (not encryption): copied links work without a secret, old readable query links remain supported, and account handles/post keys/task ids are no longer exposed in newly generated URLs.
+- Backend Slack dashboard/Queue links use the same token format. The codec is intentionally duplicated in static HTML/redirect entry points so those pages can decode links before the React bundle starts.
+
 ## Production hotfix: PostgreSQL runtime schema (2026-09-01)
 
 - Root cause of the production-wide authenticated failures was confirmed in Render logs: `get_dashboard_user_access()` selected `dashboard_users.time_zone`, but the managed Postgres database had been imported before that column was introduced. Every authenticated request failed in middleware with `psycopg.errors.UndefinedColumn`, while `/api/health` remained misleadingly green.

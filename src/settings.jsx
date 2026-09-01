@@ -5,6 +5,7 @@ import { DevRolePreview, SettingsPanel } from './App';
 import { API_BASE, apiFetch } from './api';
 import { describeSignInError, firebaseAuth, startGoogleSignIn } from './firebase';
 import { PrefsProvider } from './prefsContext';
+import { decodeRouteState } from './urlCodec';
 import { clearSsoCookie, startSsoRefresh, trySsoSignIn } from './sso';
 import './styles.css';
 
@@ -133,7 +134,8 @@ function SettingsApp() {
   const effectiveDevAccess = Boolean(viewer?.is_dev) && !rolePreviewActive;
   if (!viewer?.is_admin && !effectiveDevAccess) return <><SettingsRestricted email={user.email} onSignOut={handleSignOut} />{rolePreview}</>;
 
-  const initialTab = new URLSearchParams(window.location.search).get('tab') || 'overview';
+  const params = new URLSearchParams(window.location.search);
+  const initialTab = decodeRouteState(params.get('r'))?.tab || params.get('tab') || 'overview';
   return <>
     <SettingsPanel
       accounts={[]}

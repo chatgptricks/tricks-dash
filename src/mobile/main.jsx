@@ -12,6 +12,7 @@ import { API_BASE, apiFetch } from '../api';
 import { authPersistenceReady, describeSignInError, firebaseAuth, startGoogleSignIn } from '../firebase';
 import { followQueueLive } from '../queueLive';
 import { clearSsoCookie, startSsoRefresh, trySsoSignIn } from '../sso';
+import { decodeRouteState, encodeRouteState } from '../urlCodec';
 import './mobile.css';
 
 const LEGACY_PASSWORD = 'sentient2026';
@@ -23,7 +24,7 @@ const I18N = {
   en: {
     home: 'Home', dashboard: 'Research', queue: 'Queue', tracker: 'Tracker', insights: 'Insights', settings: 'Settings',
     greeting: 'Good to see you', today: 'Today', myDay: 'My production day', teamPulse: 'Team pulse',
-    assigned: 'Assigned', inProgress: 'In progress', completed: 'Completed', pool: 'Pool', approvals: 'Approvals',
+    assigned: 'Assigned', inProgress: 'In progress', completed: 'Completed', pool: 'Pool', approvals: 'Approvals', normal: 'Normal',
     openQueue: 'Open Queue', openDashboard: 'Explore posts', noWork: 'Nothing assigned right now.',
     noWorkHelp: 'Pick a request or check back when a coordinator schedules one.', loading: 'Loading…', retry: 'Try again',
     search: 'Search posts', filters: 'Filters', all: 'All', sentient: 'Sentient', competitors: 'Competitors', hot: 'HOT',
@@ -63,7 +64,7 @@ const I18N = {
   es: {
     home: 'Inicio', dashboard: 'Research', queue: 'Queue', tracker: 'Tracker', insights: 'Insights', settings: 'Settings',
     greeting: 'Qué bueno verte', today: 'Hoy', myDay: 'Mi día de producción', teamPulse: 'Pulso del equipo',
-    assigned: 'Asignados', inProgress: 'En progreso', completed: 'Completados', pool: 'Pool', approvals: 'Aprobaciones',
+    assigned: 'Asignados', inProgress: 'En progreso', completed: 'Completados', pool: 'Pool', approvals: 'Aprobaciones', normal: 'Normal',
     openQueue: 'Abrir Queue', openDashboard: 'Explorar posts', noWork: 'No tienes nada asignado ahora.',
     noWorkHelp: 'Elige un request o revisa cuando un coordinador programe uno.', loading: 'Cargando…', retry: 'Intentar de nuevo',
     search: 'Buscar posts', filters: 'Filtros', all: 'Todos', sentient: 'Sentient', competitors: 'Competidores', hot: 'HOT',
@@ -104,7 +105,7 @@ const I18N = {
 
 const Prefs = createContext(null);
 const usePrefs = () => useContext(Prefs);
-const priorityOrder = { urgent: 0, high: 1, medium: 2, low: 3 };
+const priorityOrder = { urgent: 0, normal: 1, high: 1, medium: 1, low: 1 };
 const TRACKER_FAVORITES_KEY = 'sentient.tracker.favs';
 const readTrackerFavorites = () => { try { const value = JSON.parse(localStorage.getItem(TRACKER_FAVORITES_KEY) || '[]'); return Array.isArray(value) ? value : []; } catch { return []; } };
 const writeTrackerFavorites = (handles) => { try { localStorage.setItem(TRACKER_FAVORITES_KEY, JSON.stringify(handles)); } catch {} };
@@ -226,16 +227,21 @@ const NAV = [
 
 function MobileShell({ user, viewer }) {
   const { t } = usePrefs();
-  const initial = new URLSearchParams(location.search).get('tab');
-  const [tab, setTab] = useState(NAV.some(([key]) => key === initial) || initial === 'settings' ? initial : 'home');
+  const coordinator = Boolean(viewer.is_admin || viewer.is_dev || viewer.operating_roles?.includes('vc'));
+  const visibleNav = NAV.filter(([key]) => coordinator || !['tracker', 'insights'].includes(key));
+  const initialParams = new URLSearchParams(location.search);
+  const initial = decodeRouteState(initialParams.get('r'))?.tab || initialParams.get('tab');
+  const safeInitial = visibleNav.some(([key]) => key === initial) || initial === 'settings' ? initial : 'home';
+  const [tab, setTab] = useState(safeInitial);
   const [profileOpen, setProfileOpen] = useState(false);
   const [online, setOnline] = useState(navigator.onLine);
   const [installPrompt, setInstallPrompt] = useState(null);
   const [updateReady, setUpdateReady] = useState(false);
   const navigate = useCallback((next) => {
+    if (!visibleNav.some(([key]) => key === next) && next !== 'settings') return;
     setTab(next); setProfileOpen(false); window.scrollTo({ top: 0, behavior: 'instant' });
-    const url = new URL(location.href); url.searchParams.set('tab', next); url.searchParams.delete('post'); url.searchParams.delete('task'); history.replaceState(null, '', url);
-  }, []);
+    const url = new URL(location.href); url.search = ''; if (next !== 'home') url.searchParams.set('r', encodeRouteState({ tab: next })); history.replaceState(null, '', url);
+  }, [visibleNav]);
   useEffect(() => { const on = () => setOnline(true); const off = () => setOnline(false); addEventListener('online', on); addEventListener('offline', off); return () => { removeEventListener('online', on); removeEventListener('offline', off); }; }, []);
   useEffect(() => { const handler = (event) => { event.preventDefault(); setInstallPrompt(event); }; addEventListener('beforeinstallprompt', handler); return () => removeEventListener('beforeinstallprompt', handler); }, []);
   useEffect(() => {
@@ -249,19 +255,19 @@ function MobileShell({ user, viewer }) {
   const logout = () => { clearSsoCookie(); signOut(firebaseAuth); };
   const title = tab === 'home' ? 'Sentient Dash' : t(tab);
   return <div className="m-app">
-    <header className="m-topbar"><div><span>Sentient Dash</span><h1>{title}</h1></div><button className="m-profile" onClick={() => setProfileOpen(true)} aria-label={t('settings')}><UserRound size={18} /></button></header>
+    <header className="m-topbar"><div><span>Sentient Dash</span><h1>{title}</h1></div><button className="m-profile" onClick={() => setProfileOpen(true)} aria-label={t('settings')}><Avatar person={{ email: user.email, displayName: user.displayName, avatarUrl: user.photoURL || viewer.avatar_url }} /></button></header>
     {!online ? <div className="m-connection is-offline"><WifiOff size={14} />{t('offline')}</div> : null}
     {updateReady ? <div className="m-update"><span>{t('updateReady')}</span><button onClick={() => location.reload()}>{t('update')}</button></div> : null}
     <main className="m-content">
       {tab === 'home' ? <HomeView viewer={viewer} navigate={navigate} /> : null}
       {tab === 'dashboard' ? <DashboardView viewer={viewer} /> : null}
       {tab === 'queue' ? <QueueView viewer={viewer} /> : null}
-      {tab === 'tracker' ? <TrackerView /> : null}
-      {tab === 'insights' ? <InsightsView /> : null}
+      {coordinator && tab === 'tracker' ? <TrackerView /> : null}
+      {coordinator && tab === 'insights' ? <InsightsView /> : null}
       {tab === 'settings' ? <SettingsView viewer={viewer} /> : null}
     </main>
-    <nav className="m-bottom-nav" aria-label="Sentient Dash">
-      {NAV.map(([key, Icon]) => <button key={key} className={tab === key ? 'is-active' : ''} onClick={() => navigate(key)}><Icon size={19} /><span>{t(key)}</span></button>)}
+    <nav className="m-bottom-nav" style={{ gridTemplateColumns: `repeat(${visibleNav.length}, minmax(0, 1fr))` }} aria-label="Sentient Dash">
+      {visibleNav.map(([key, Icon]) => <button key={key} className={tab === key ? 'is-active' : ''} onClick={() => navigate(key)}><Icon size={19} /><span>{t(key)}</span></button>)}
     </nav>
     {profileOpen ? <ProfileSheet user={user} viewer={viewer} installPrompt={installPrompt} onInstall={install} onSettings={() => navigate('settings')} onSignOut={logout} onClose={() => setProfileOpen(false)} /> : null}
   </div>;
@@ -276,8 +282,9 @@ function ProfileSheet({ user, viewer, installPrompt, onInstall, onSettings, onSi
     .map((role) => ({ vc: 'VC', sales: 'Sales', trainee: 'Trainee', admin: 'Admin' }[role] || role));
   if (viewer.is_admin && !secondaryRoles.includes('Admin')) secondaryRoles.push('Admin');
   if (viewer.is_dev) secondaryRoles.push('Dev');
+  const profilePerson = { email: user.email, displayName: user.displayName, avatarUrl: user.photoURL || viewer.avatar_url };
   return <Sheet title={displayName(user.email)} onClose={onClose}>
-    <div className="m-profile-card"><UserRound size={24} /><div><strong>{user.email}</strong>{secondaryRoles.length ? <span>{secondaryRoles.join(' · ')}</span> : null}</div></div>
+    <div className="m-profile-card"><Avatar person={profilePerson} /><div><strong>{user.email}</strong>{secondaryRoles.length ? <span>{secondaryRoles.join(' · ')}</span> : null}</div></div>
     {(viewer.is_admin || viewer.is_dev) ? <button className="m-menu-row" onClick={onSettings}><Settings size={18} /><span>{t('settings')}</span><ChevronRight size={17} /></button> : null}
     {installPrompt ? <button className="m-menu-row" onClick={onInstall}><Download size={18} /><span>{t('install')}</span><ChevronRight size={17} /></button> : null}
     {ios ? <div className="m-install-tip"><Download size={18} /><div><strong>{t('install')}</strong><p>{t('iosInstall')}</p></div></div> : null}
@@ -292,7 +299,7 @@ function ProfileSheet({ user, viewer, installPrompt, onInstall, onSettings, onSi
 function HomeView({ viewer, navigate }) {
   const { t, language } = usePrefs();
   const [data, setData] = useState(null); const [tracker, setTracker] = useState(null); const [error, setError] = useState('');
-  const coordinator = viewer.is_admin || viewer.operating_roles?.includes('vc');
+  const coordinator = viewer.is_admin || viewer.is_dev || viewer.operating_roles?.includes('vc');
   const load = useCallback(() => { setError(''); Promise.all([apiJson(`/api/dashboard/queue/v2?date=${DAY()}`), apiJson('/api/tracker/summary')]).then(([queue, track]) => { setData(queue); setTracker(track); }).catch((err) => setError(err.message)); }, []);
   useEffect(() => { load(); }, [load]);
   if (!data && !error) return <Spinner label={t('loading')} />;
@@ -311,7 +318,7 @@ function HomeView({ viewer, navigate }) {
     <section className="m-welcome"><span>{t('greeting')}</span><h2>{displayName(viewer.email)}</h2><p>{dateLabel(DAY(), language)}</p></section>
     {coordinator ? <><div className="m-section-head"><div><span>{t('today')}</span><h2>{t('teamPulse')}</h2></div><button onClick={() => navigate('queue')}>{t('openQueue')}<ArrowUpRight size={15} /></button></div><div className="m-metric-grid"><Metric label={t('pool')} value={poolCount} /><Metric label={t('assigned')} value={todayCount} /><Metric label={t('approvals')} value={data.pendingTicketCount || 0} /></div></> : <><div className="m-section-head"><div><span>{t('today')}</span><h2>{t('myDay')}</h2></div><button onClick={() => navigate('queue')}>{t('openQueue')}<ArrowUpRight size={15} /></button></div>{next ? <QueueTaskCard task={next} compact /> : <Empty title={t('noWork')} text={t('noWorkHelp')} />}</>}
     <button className="m-hero-action" onClick={() => navigate('dashboard')}><span><Search size={20} /><b>{t('openDashboard')}</b></span><ChevronRight size={20} /></button>
-    <div className="m-section-head"><div><span>{t('tracker')}</span><h2>{favoriteAccounts.length ? t('favorites') : t('trackedAccounts')}</h2></div><button onClick={() => navigate('tracker')}><ArrowUpRight size={15} /></button></div>
+    <div className="m-section-head"><div><span>{t('tracker')}</span><h2>{favoriteAccounts.length ? t('favorites') : t('trackedAccounts')}</h2></div>{coordinator ? <button onClick={() => navigate('tracker')}><ArrowUpRight size={15} /></button> : null}</div>
     <div className="m-mini-list">{homeAccounts.map((account) => <div key={account.handle}><Cover src={`/api/dashboard/avatar/${account.handle}`} /><span><b>@{account.handle}</b><small>{fmtExact(account.followers)} {t('followers')}</small></span><strong className={(account.delta_1d?.delta || 0) < 0 ? 'is-negative' : ''}>{account.delta_1d ? `${signedExact(account.delta_1d.delta)} ${t('todayFollowers')}` : '—'}</strong></div>)}</div>
   </div>;
 }
@@ -325,7 +332,8 @@ function DashboardView({ viewer }) {
   const load = useCallback(() => { setError(''); Promise.all([apiJson('/api/dashboard/posts'), apiJson('/api/dashboard/accounts')]).then(([posts, roster]) => { setPayload(posts); setAccounts(roster.accounts || []); }).catch((err) => setError(err.message)); }, []);
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
-    const postId = new URLSearchParams(location.search).get('post');
+    const params = new URLSearchParams(location.search);
+    const postId = decodeRouteState(params.get('r'))?.post || params.get('post');
     if (!postId || !payload?.posts?.length || deepLinkOpened.current) return;
     deepLinkOpened.current = true;
     const decoded = decodeURIComponent(postId).toLowerCase();
@@ -371,8 +379,8 @@ function DashboardView({ viewer }) {
 
 function PostSheet({ post, viewer, onClose, onPooled }) {
   const { t, language } = usePrefs(); const [poolForm, setPoolForm] = useState(false); const [busy, setBusy] = useState(false); const [notice, setNotice] = useState('');
-  const coordinator = viewer.is_admin || viewer.operating_roles?.includes('vc');
-  const [form, setForm] = useState({ pps: 3, priority: 'medium', tags: '', brief: '' });
+  const coordinator = viewer.is_admin || viewer.is_dev || viewer.operating_roles?.includes('vc');
+  const [form, setForm] = useState({ pps: 3, priority: 'normal', tags: '', brief: '' });
   const [videoPoster, setVideoPoster] = useState('');
   useEffect(() => {
     if (!(post.video === 'Yes' || String(post.type || '').toLowerCase().startsWith('video')) || !post.shortcode) return undefined;
@@ -387,18 +395,20 @@ function PostSheet({ post, viewer, onClose, onPooled }) {
     try { const response = await apiFetch(`${API_BASE}/api/dashboard/posts/media?account=${encodeURIComponent(post.account)}&shortcode=${encodeURIComponent(post.shortcode)}`); if (!response.ok) throw new Error((await response.json().catch(() => ({}))).detail || 'Download failed.'); const blob = await response.blob(); const href = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = href; link.download = `${post.account}-${post.shortcode}.zip`; document.body.appendChild(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(href), 30000); } catch (error) { setNotice(error.message); } finally { setBusy(false); }
   };
   const pool = async (event) => { event.preventDefault(); setBusy(true); setNotice(''); try { const body = new URLSearchParams({ account: post.account, shortcode: post.shortcode, production_points: String(form.pps), priority: form.priority, tags: form.tags, brief: form.brief, references: '[]' }); const result = await apiJson('/api/dashboard/queue/v2/pool', { method: 'POST', body }); onPooled(result.request); } catch (error) { setNotice(error.message); setBusy(false); } };
-  return <Sheet title={`@${post.account}`} onClose={onClose} wide><article className="m-post-detail"><Cover src={post.coverUrl} fallbackSrc={videoPoster} /><div className="m-detail-kicker"><span>{post.type}</span><span>{dateLabel(post.postDate, language)}</span></div><div className="m-detail-metrics"><span><Heart size={16} />{fmt(post.likes)} {t('likes')}</span><span><MessageCircle size={16} />{fmt(post.comments)} {t('comments')}</span></div>{post.title ? <h3>{post.title}</h3> : null}<p>{post.caption}</p>{post.queueState ? <Notice>{t('queue')}: {post.queueState}</Notice> : null}<Notice type="error">{notice}</Notice><div className="m-action-grid"><a className="m-secondary" href={post.permalink} target="_blank" rel="noreferrer"><ExternalLink size={16} />{t('viewPost')}</a><button className="m-secondary" onClick={download} disabled={busy}><Download size={16} />{t('downloadMedia')}</button>{coordinator && !post.queueState ? <button className="m-primary" onClick={() => setPoolForm(!poolForm)}><Send size={16} />{t('sendPool')}</button> : null}</div>{poolForm ? <form className="m-form m-inline-form" onSubmit={pool}><label>{t('productionPoints')}<input type="number" min="1" value={form.pps} onChange={(event) => setForm({ ...form, pps: event.target.value })} required /></label><label>{t('priority')}<select value={form.priority} onChange={(event) => setForm({ ...form, priority: event.target.value })}>{['low', 'medium', 'high', 'urgent'].map((value) => <option key={value} value={value}>{t(value)}</option>)}</select></label><label>{t('tags')}<input value={form.tags} onChange={(event) => setForm({ ...form, tags: event.target.value })} placeholder="copy, carousel" /></label><label>{t('brief')}<textarea rows="3" value={form.brief} onChange={(event) => setForm({ ...form, brief: event.target.value })} /></label><button className="m-primary" disabled={busy}>{busy ? t('loading') : t('addPool')}</button></form> : null}</article></Sheet>;
+  return <Sheet title={`@${post.account}`} onClose={onClose} wide><article className="m-post-detail"><Cover src={post.coverUrl} fallbackSrc={videoPoster} /><div className="m-detail-kicker"><span>{post.type}</span><span>{dateLabel(post.postDate, language)}</span></div><div className="m-detail-metrics"><span><Heart size={16} />{fmt(post.likes)} {t('likes')}</span><span><MessageCircle size={16} />{fmt(post.comments)} {t('comments')}</span></div>{post.title ? <h3>{post.title}</h3> : null}<p>{post.caption}</p>{post.queueState ? <Notice>{t('queue')}: {post.queueState}</Notice> : null}<Notice type="error">{notice}</Notice><div className="m-action-grid"><a className="m-secondary" href={post.permalink} target="_blank" rel="noreferrer"><ExternalLink size={16} />{t('viewPost')}</a><button className="m-secondary" onClick={download} disabled={busy}><Download size={16} />{t('downloadMedia')}</button>{coordinator && !post.queueState ? <button className="m-primary" onClick={() => setPoolForm(!poolForm)}><Send size={16} />{t('sendPool')}</button> : null}</div>{poolForm ? <form className="m-form m-inline-form" onSubmit={pool}><label>{t('productionPoints')}<input type="number" min="1" value={form.pps} onChange={(event) => setForm({ ...form, pps: event.target.value })} required /></label><label>{t('priority')}<select value={form.priority} onChange={(event) => setForm({ ...form, priority: event.target.value })}>{['normal', 'urgent'].map((value) => <option key={value} value={value}>{t(value)}</option>)}</select></label><label>{t('tags')}<input value={form.tags} onChange={(event) => setForm({ ...form, tags: event.target.value })} placeholder="copy, carousel" /></label><label>{t('brief')}<textarea rows="3" value={form.brief} onChange={(event) => setForm({ ...form, brief: event.target.value })} /></label><button className="m-primary" disabled={busy}>{busy ? t('loading') : t('addPool')}</button></form> : null}</article></Sheet>;
 }
 
 function QueueView({ viewer }) {
   const { t } = usePrefs();
   const [date, setDate] = useState(DAY()); const [data, setData] = useState(null); const [error, setError] = useState(''); const [mode, setMode] = useState('agenda'); const [open, setOpen] = useState(null); const [assigning, setAssigning] = useState(null); const [ticketsOpen, setTicketsOpen] = useState(false); const [pickOpen, setPickOpen] = useState(false); const [createOpen, setCreateOpen] = useState(false); const [live, setLive] = useState('connecting'); const [toast, setToast] = useState('');
   const revision = useRef(0); const loadRef = useRef(null); const deepLinkOpened = useRef(false);
-  const coordinator = Boolean(data?.viewer?.isAdmin || data?.viewer?.operatingRoles?.includes('vc') || viewer.is_admin || viewer.operating_roles?.includes('vc'));
+  const coordinator = Boolean(data?.viewer?.isAdmin || data?.viewer?.isDev || data?.viewer?.operatingRoles?.includes('vc') || viewer.is_admin || viewer.is_dev || viewer.operating_roles?.includes('vc'));
+  const canSelfAssign = Boolean(data?.viewer?.canSelfAssign || viewer.can_self_assign);
   const load = useCallback(async ({ silent = false } = {}) => { if (!silent) setError(''); try { const next = await apiJson(`/api/dashboard/queue/v2?date=${date}`); setData(next); revision.current = Math.max(revision.current, Number(next.liveRevision || 0)); if (open?.id) { const all = [...(next.requests || []), ...(next.planningRequests || []), ...(next.assignedRequests || []), ...(next.liveDrafts || [])]; setOpen(all.find((task) => task.id === open.id) || null); } } catch (err) { setError(err.message); } }, [date, open?.id]);
   loadRef.current = load; useEffect(() => { load(); }, [date]);
   useEffect(() => {
-    const taskId = Number(new URLSearchParams(location.search).get('task'));
+    const params = new URLSearchParams(location.search);
+    const taskId = Number(decodeRouteState(params.get('r'))?.task || params.get('task'));
     if (!taskId || deepLinkOpened.current) return;
     deepLinkOpened.current = true;
     apiJson(`/api/dashboard/queue/v2/requests/${taskId}`).then(({ request }) => {
@@ -417,15 +427,16 @@ function QueueView({ viewer }) {
     const regular = (data?.pickRequests || []).filter((task) => task.status === 'pool' && !hotIds.has(String(task.id)) && !(task.isHot || task.tags?.includes('hot')));
     return [...hot, ...regular];
   }, [data]);
-  const modes = coordinator ? ['agenda', 'pool', 'team', 'requests'] : ['agenda', 'requests'];
+  const queuePool = coordinator ? pool : canSelfAssign ? (data?.selfPoolRequests || []).filter((task) => task.status === 'pool') : [];
+  const modes = coordinator ? ['agenda', 'pool', 'team', 'requests'] : canSelfAssign ? ['agenda', 'pool', 'requests'] : ['agenda', 'requests'];
   if (!data && !error) return <Spinner label={t('loading')} />;
   return <div className="m-stack">
     <div className="m-queue-toolbar"><div className={`m-live is-${live}`}>{live === 'live' ? <Wifi size={13} /> : <WifiOff size={13} />}{live === 'live' ? t('activityLive') : t('reconnecting')}</div><div><button onClick={() => setDate(shiftDay(date, -1))} aria-label={t('previousDay')}><ChevronLeft size={18} /></button><button onClick={() => setDate(DAY())}>{date === DAY() ? t('today') : dateLabel(date)}</button><button onClick={() => setDate(shiftDay(date, 1))} aria-label={t('nextDay')}><ChevronRight size={18} /></button></div></div>
     <div className="m-tab-scroll">{modes.map((value) => <button key={value} className={mode === value ? 'is-on' : ''} onClick={() => { setMode(value); if (value === 'requests') setTicketsOpen(true); }}>{t(value)}{value === 'requests' && data.pendingTicketCount ? <i>{data.pendingTicketCount}</i> : null}</button>)}</div>
-    <div className="m-queue-quick">{!coordinator ? <button onClick={() => setPickOpen(true)}><Sparkles size={16} />{t('pick')}</button> : <><button onClick={() => setCreateOpen(true)}><Plus size={16} />{t('createPost')}</button><button onClick={() => setTicketsOpen(true)}><Inbox size={16} />{t('approvals')}</button></>}</div>
+    <div className="m-queue-quick">{!coordinator ? <button onClick={() => setPickOpen(true)}><Sparkles size={16} />{t('pick')}</button> : null}{canSelfAssign || coordinator ? <button onClick={() => setCreateOpen(true)}><Plus size={16} />{t('createPost')}</button> : null}{coordinator ? <button onClick={() => setTicketsOpen(true)}><Inbox size={16} />{t('approvals')}</button> : null}</div>
     {error ? <Notice type="error">{error}</Notice> : null}{toast ? <Notice>{toast}</Notice> : null}
     {mode === 'agenda' ? <section className="m-agenda"><div className="m-section-head"><div><span>{dateLabel(date)}</span><h2>{coordinator ? t('team') : t('myDay')}</h2></div></div><MiniSchedule data={data} date={date} coordinator={coordinator} onOpen={setOpen} />{(coordinator ? team.filter((task) => task.scheduledDate === date) : assigned.filter((task) => task.scheduledDate === date)).length ? (coordinator ? team : assigned).filter((task) => task.scheduledDate === date).map((task) => <QueueTaskCard key={task.id} task={task} onClick={() => setOpen(task)} showDesigner={coordinator} />) : <Empty title={t('noAssignments')} />}</section> : null}
-    {mode === 'pool' ? <section className="m-queue-list">{pool.length ? pool.map((task) => <QueueTaskCard key={task.id} task={task} onClick={() => setOpen(task)} />) : <Empty title={t('noPool')} />}</section> : null}
+    {mode === 'pool' ? <section className="m-queue-list">{queuePool.length ? queuePool.map((task) => <QueueTaskCard key={task.id} task={task} onClick={() => setOpen(task)} />) : <Empty title={t('noPool')} />}</section> : null}
     {mode === 'team' ? <section className="m-team-groups">{data.schedulerUsers?.map((person) => { const work = team.filter((task) => task.designerEmail === person.email && task.scheduledDate === date); return <article key={person.email}><header><Avatar person={person} /><span><b>{person.displayName || displayName(person.email)}</b><small>{work.length} {t('assigned')}</small></span></header>{work.length ? work.map((task) => <QueueTaskCard key={task.id} task={task} compact onClick={() => setOpen(task)} />) : <p>{t('noAssignments')}</p>}</article>; })}</section> : null}
     {open ? <QueueDetail task={open} coordinator={coordinator} onAssign={() => setAssigning(open)} onClose={() => setOpen(null)} onChanged={() => { setOpen(null); load({ silent: true }); }} tell={tell} /> : null}
     {assigning ? <AssignmentSheet task={assigning} data={data} onClose={() => setAssigning(null)} onChanged={(message) => { tell(message); load({ silent: true }); }} /> : null}
@@ -485,10 +496,10 @@ function PickSheet({ items, onClose, onPicked }) {
 }
 
 function CreatePostSheet({ onClose, onCreated }) {
-  const { t } = usePrefs(); const [form, setForm] = useState({ title: '', type: 'Image', pps: 3, priority: 'medium', tags: '', brief: '', notes: '' }); const [sourceUrl, setSourceUrl] = useState(''); const [sourcePreview, setSourcePreview] = useState(null); const [sourceLoading, setSourceLoading] = useState(false); const [titleEdited, setTitleEdited] = useState(false); const [briefEdited, setBriefEdited] = useState(false); const [busy, setBusy] = useState(false); const [notice, setNotice] = useState('');
+  const { t } = usePrefs(); const [form, setForm] = useState({ title: '', type: 'Image', pps: 3, priority: 'normal', tags: '', brief: '', notes: '' }); const [sourceUrl, setSourceUrl] = useState(''); const [sourcePreview, setSourcePreview] = useState(null); const [sourceLoading, setSourceLoading] = useState(false); const [titleEdited, setTitleEdited] = useState(false); const [briefEdited, setBriefEdited] = useState(false); const [busy, setBusy] = useState(false); const [notice, setNotice] = useState('');
   const fetchSource = async () => { const candidate = sourceUrl.trim(); if (!candidate || sourceLoading) return; setSourceLoading(true); setNotice(''); try { const result = await apiJson('/api/dashboard/queue/v2/source-preview', { method: 'POST', body: new URLSearchParams({ source_url: candidate }) }); const preview = result.preview || {}; const extractedTitle = preview.title && String(preview.title).trim().toLowerCase() !== String(preview.platform || '').trim().toLowerCase() ? preview.title : ''; setSourcePreview(preview); setSourceUrl(preview.sourceUrl || candidate); setForm((current) => ({ ...current, title: !titleEdited || !current.title.trim() ? (extractedTitle || current.title) : current.title, brief: !briefEdited || !current.brief.trim() ? (preview.description || current.brief) : current.brief })); } catch (error) { setSourcePreview(null); setNotice(error.message); } finally { setSourceLoading(false); } };
   const submit = async (event) => { event.preventDefault(); setBusy(true); try { const reference = sourcePreview?.sourceUrl || sourceUrl.trim(); await apiJson('/api/dashboard/queue/v2/create', { method: 'POST', body: new URLSearchParams({ title: form.title, post_type: form.type, production_points: String(form.pps), priority: form.priority, tags: form.tags, brief: form.brief, notes: form.notes, references: reference ? JSON.stringify([reference]) : '[]', source_url: reference, source_title: sourcePreview?.title || '', source_description: sourcePreview?.description || '', source_image_url: sourcePreview?.imageUrl || '' }) }); onCreated(); onClose(); } catch (error) { setNotice(error.message); setBusy(false); } };
-  return <Sheet title={t('createPost')} onClose={onClose}><form className="m-form" onSubmit={submit}><label>{t('sourceLink')}<div className="m-source-input"><input type="url" value={sourceUrl} placeholder="https://www.reddit.com/..." onChange={(event) => { setSourceUrl(event.target.value); setSourcePreview(null); }} onBlur={() => { if (sourceUrl.trim() && !sourcePreview) fetchSource(); }} /><button type="button" className="m-secondary" disabled={!sourceUrl.trim() || sourceLoading} onClick={fetchSource}>{sourceLoading ? <LoaderCircle size={16} className="m-spin" /> : <Link2 size={16} />}{sourceLoading ? t('gettingSourceDetails') : t('getSourceDetails')}</button></div></label>{sourcePreview ? <article className="m-source-preview">{sourcePreview.imageUrl ? <img src={sourcePreview.imageUrl} alt="" referrerPolicy="no-referrer" /> : null}<div><span>{sourcePreview.platform || t('sourcePreview')}</span><b>{sourcePreview.title || sourcePreview.sourceUrl}</b>{sourcePreview.description ? <small>{sourcePreview.description}</small> : null}</div></article> : null}<label>{t('title')}<input required maxLength="160" value={form.title} onChange={(event) => { setTitleEdited(true); setForm({ ...form, title: event.target.value }); }} /></label><label>{t('postType')}<select value={form.type} onChange={(event) => setForm({ ...form, type: event.target.value })}>{['Image', 'Carousel', 'Reel', 'Promo', 'Story', 'Other'].map((value) => <option key={value}>{value}</option>)}</select></label><div className="m-form-pair"><label>{t('productionPoints')}<input type="number" min="1" value={form.pps} onChange={(event) => setForm({ ...form, pps: event.target.value })} /></label><label>{t('priority')}<select value={form.priority} onChange={(event) => setForm({ ...form, priority: event.target.value })}>{['low', 'medium', 'high', 'urgent'].map((value) => <option key={value} value={value}>{t(value)}</option>)}</select></label></div><label>{t('tags')}<input value={form.tags} onChange={(event) => setForm({ ...form, tags: event.target.value })} /></label><label>{t('brief')}<textarea rows="3" value={form.brief} onChange={(event) => { setBriefEdited(true); setForm({ ...form, brief: event.target.value }); }} /></label><label>{t('notes')}<textarea rows="2" value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} /></label><Notice type="error">{notice}</Notice><button className="m-primary" disabled={busy}>{busy ? t('loading') : t('create')}</button></form></Sheet>;
+  return <Sheet title={t('createPost')} onClose={onClose}><form className="m-form" onSubmit={submit}><label>{t('sourceLink')}<div className="m-source-input"><input type="url" value={sourceUrl} placeholder="https://www.reddit.com/..." onChange={(event) => { setSourceUrl(event.target.value); setSourcePreview(null); }} onBlur={() => { if (sourceUrl.trim() && !sourcePreview) fetchSource(); }} /><button type="button" className="m-secondary" disabled={!sourceUrl.trim() || sourceLoading} onClick={fetchSource}>{sourceLoading ? <LoaderCircle size={16} className="m-spin" /> : <Link2 size={16} />}{sourceLoading ? t('gettingSourceDetails') : t('getSourceDetails')}</button></div></label>{sourcePreview ? <article className="m-source-preview">{sourcePreview.imageUrl ? <img src={sourcePreview.imageUrl} alt="" referrerPolicy="no-referrer" /> : null}<div><span>{sourcePreview.platform || t('sourcePreview')}</span><b>{sourcePreview.title || sourcePreview.sourceUrl}</b>{sourcePreview.description ? <small>{sourcePreview.description}</small> : null}</div></article> : null}<label>{t('title')}<input required maxLength="160" value={form.title} onChange={(event) => { setTitleEdited(true); setForm({ ...form, title: event.target.value }); }} /></label><label>{t('postType')}<select value={form.type} onChange={(event) => setForm({ ...form, type: event.target.value })}>{['Image', 'Carousel', 'Reel', 'Promo', 'Story', 'Other'].map((value) => <option key={value}>{value}</option>)}</select></label><div className="m-form-pair"><label>{t('productionPoints')}<input type="number" min="1" value={form.pps} onChange={(event) => setForm({ ...form, pps: event.target.value })} /></label><label>{t('priority')}<select value={form.priority} onChange={(event) => setForm({ ...form, priority: event.target.value })}>{['normal', 'urgent'].map((value) => <option key={value} value={value}>{t(value)}</option>)}</select></label></div><label>{t('tags')}<input value={form.tags} onChange={(event) => setForm({ ...form, tags: event.target.value })} /></label><label>{t('brief')}<textarea rows="3" value={form.brief} onChange={(event) => { setBriefEdited(true); setForm({ ...form, brief: event.target.value }); }} /></label><label>{t('notes')}<textarea rows="2" value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} /></label><Notice type="error">{notice}</Notice><button className="m-primary" disabled={busy}>{busy ? t('loading') : t('create')}</button></form></Sheet>;
 }
 
 function TaskRequestForm({ task, onClose, onSent }) {

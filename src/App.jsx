@@ -49,6 +49,7 @@ import { ACCENT_CHOICES, accentHex } from './prefs';
 import { API_BASE, IG_HANDLE, apiFetch } from './api';
 import { readDashboardSnapshot, writeDashboardSnapshot } from './dashboardCache';
 import { followQueueLive } from './queueLive';
+import { decodeRouteState, encodeRouteState } from './urlCodec';
 import {
   CoverImage,
   HotBadge,
@@ -188,6 +189,13 @@ function readUrlState() {
   if (typeof window === 'undefined') return { ...URL_DEFAULTS };
   const params = new URLSearchParams(window.location.search);
   const state = { ...URL_DEFAULTS, ...subdomainDefaults() };
+  const opaque = decodeRouteState(params.get('r'));
+  if (opaque) {
+    for (const key of Object.keys(URL_DEFAULTS)) {
+      if (opaque[key] !== undefined && opaque[key] !== null) state[key] = String(opaque[key]);
+    }
+  }
+  // Keep old shared links working; an explicitly supplied legacy value wins.
   for (const key of Object.keys(URL_DEFAULTS)) {
     const value = params.get(key);
     if (value !== null) state[key] = value;
@@ -203,13 +211,16 @@ function writeUrlState(state) {
   // gets written, because it now differs from that host's default -- so the
   // Copy link button keeps producing a URL that reopens what you're seeing.
   const defaults = { ...URL_DEFAULTS, ...subdomainDefaults() };
+  const payload = {};
   for (const [key, fallback] of Object.entries(defaults)) {
     const value = state[key];
     if (value === undefined || value === null) continue;
     const text = String(value);
     if (text === '' || text === String(fallback)) continue;
-    params.set(key, text);
+    payload[key] = text;
   }
+  const opaque = encodeRouteState(payload);
+  if (opaque && Object.keys(payload).length) params.set('r', opaque);
   const search = params.toString();
   const next = `${window.location.pathname}${search ? `?${search}` : ''}`;
   // replaceState, not pushState: filters change on every keystroke and slider
@@ -830,11 +841,26 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
   const reconnectTimer = useRef(null);
   const reconnectAttempt = useRef(0);
   const dashboardLoader = useRef(null);
-  const rolePreviewActive = hasActiveRolePreview();
+  const requestedRolePreview = window.sessionStorage.getItem('sentient.queueRolePreview') || '';
+  const activeRolePreview = ACTIVE_ROLE_PREVIEWS.has(requestedRolePreview) ? requestedRolePreview : '';
+  const rolePreviewActive = Boolean(activeRolePreview);
+  // Apply the chosen preview synchronously. `/api/dashboard/me` remains the
+  // authoritative permission source, but on a 50k-post dashboard its state
+  // update can land several seconds after the cached catalogue paints. The
+  // role floatie must not show a PD header and stale Dev/Coordinator tools (or
+  // a VC header without them) during that window.
+  const effectiveIsAdmin = rolePreviewActive ? activeRolePreview === 'admin' : isAdmin;
+  const effectiveOperatingRoles = useMemo(
+    () => (rolePreviewActive ? [...new Set([activeRolePreview, 'pd'])] : operatingRoles),
+    [activeRolePreview, operatingRoles, rolePreviewActive],
+  );
   // The role switcher is a real UI preview. Dev gets full access only when no
   // simulated role is active; otherwise this tab must behave exactly like the
   // selected role so permission audits are trustworthy.
-  const coordinatorAccess = (isDev && !rolePreviewActive) || isAdmin || operatingRoles.includes('vc');
+  const baseCoordinatorAccess = (isDev && !rolePreviewActive) || isAdmin || operatingRoles.includes('vc');
+  const coordinatorAccess = rolePreviewActive
+    ? effectiveIsAdmin || effectiveOperatingRoles.includes('vc')
+    : baseCoordinatorAccess;
   const posts = useMemo(() => dashboard.posts.map(normalizePost), [dashboard.posts]);
   const summary = dashboard.summary;
   const ranges = useMemo(() => calculateRanges(posts), [posts]);
@@ -908,12 +934,12 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
   // delivery change. Keep the dashboard's Queue badge in sync with that same
   // stream so users never have to reload the post library just to see new work.
   useEffect(() => {
-    if (!(isAdmin || operatingRoles.some((role) => role === 'pd' || role === 'vc'))) return undefined;
+    if (!(effectiveIsAdmin || effectiveOperatingRoles.some((role) => role === 'pd' || role === 'vc'))) return undefined;
     if (import.meta.env.MODE === 'test') return undefined;
     const controller = new AbortController();
     followQueueLive({ after: 0, signal: controller.signal, onEvent: () => refreshQueueSummary() });
     return () => controller.abort();
-  }, [isAdmin, operatingRoles, refreshQueueSummary]);
+  }, [effectiveIsAdmin, effectiveOperatingRoles, refreshQueueSummary]);
 
   const loadDashboard = useCallback(async (signal, { silent = false } = {}) => {
     let loaded = false;
@@ -1143,11 +1169,11 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
   // Keep old bookmarks useful, but move them to the standalone command center
   // as soon as the role check confirms this user can open it.
   useEffect(() => {
-    if (initialUrl.view !== 'admin' || !(isAdmin || isDev)) return;
+    if (initialUrl.view !== 'admin' || !(effectiveIsAdmin || (isDev && !rolePreviewActive))) return;
     const params = new URLSearchParams();
-    if (initialUrl.settingsTab) params.set('tab', initialUrl.settingsTab);
+    if (initialUrl.settingsTab) params.set('r', encodeRouteState({ tab: initialUrl.settingsTab }));
     window.location.replace(`${import.meta.env.BASE_URL}settings.html${params.size ? `?${params}` : ''}`);
-  }, [initialUrl, isAdmin, isDev]);
+  }, [initialUrl, effectiveIsAdmin, isDev, rolePreviewActive]);
 
   // Kicks off the (slow, Apify-bound) initial history import for a
   // freshly-created account without blocking the UI -- tracked as a
@@ -1845,7 +1871,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
                 <SettingsMenu
                   email={userEmail}
                   avatarUrl={userPhoto}
-                  isAdmin={isAdmin}
+                  isAdmin={effectiveIsAdmin}
                   isDev={isDev && !rolePreviewActive}
                   onSignOut={onSignOut}
                 />
@@ -2197,7 +2223,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
                     onReload={reloadPost}
                     onAssign={setAssignmentPost}
                     onQuickAdd={quickAddToPool}
-                    canPool={isAdmin || operatingRoles.includes('vc')}
+                    canPool={coordinatorAccess}
                   />
                 ))}
               </div>
@@ -2282,7 +2308,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
           {selected ? (
             <PostDetailPanel
               post={selected}
-              captionExtra={<>{selected.account === 'chatgptricks' ? <CanvaLine url={canvaLinkForPost(selected.postDate)} /> : null}{(isAdmin || operatingRoles.includes('vc')) ? <><button type="button" className="ghost-button" onClick={() => setAssignmentPost(selected)}><ListTodo size={13} />Send to Pool</button><button type="button" className="ghost-button" title="Quick add to Pool with defaults" onClick={() => quickAddToPool(selected)}><Zap size={13} />Quick add</button></> : null}</>}
+              captionExtra={<>{selected.account === 'chatgptricks' ? <CanvaLine url={canvaLinkForPost(selected.postDate)} /> : null}{coordinatorAccess ? <><button type="button" className="ghost-button" onClick={() => setAssignmentPost(selected)}><ListTodo size={13} />Send to Pool</button><button type="button" className="ghost-button" title="Quick add to Pool with defaults" onClick={() => quickAddToPool(selected)}><Zap size={13} />Quick add</button></> : null}</>}
             />
           ) : null}
 
@@ -2303,7 +2329,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
         <AssignPostModal
           post={assignmentPost}
           userEmail={userEmail}
-          isAdmin={isAdmin}
+          isAdmin={effectiveIsAdmin}
           accounts={accounts}
           onClose={() => setAssignmentPost(null)}
           onAssigned={() => {
@@ -3005,9 +3031,8 @@ export function SettingsPanel({
 
   const selectTab = useCallback((nextTab) => {
     setTab(nextTab);
-    const params = new URLSearchParams(window.location.search);
-    if (nextTab === 'overview') params.delete('tab');
-    else params.set('tab', nextTab);
+    const params = new URLSearchParams();
+    if (nextTab !== 'overview') params.set('r', encodeRouteState({ tab: nextTab }));
     const search = params.toString();
     window.history.replaceState(null, '', `${window.location.pathname}${search ? `?${search}` : ''}`);
   }, []);

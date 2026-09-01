@@ -361,9 +361,29 @@ const WORD_ALIASES={openal:'openai'};
 // ---------------------------------------------------------------------------
 const URL_DEFAULTS = {acc:'', from:'', to:'', preset:'', ftype:'', metric:'l'};
 
+function encodeRoute(state){
+  try{
+    const bytes=new TextEncoder().encode(JSON.stringify(state||{})); let binary='';
+    bytes.forEach(b=>{binary+=String.fromCharCode(b)});
+    return btoa(binary).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+  }catch(e){ return ''; }
+}
+function decodeRoute(token){
+  if(!token) return null;
+  try{
+    const normalized=String(token).replace(/-/g,'+').replace(/_/g,'/');
+    const padded=normalized+'='.repeat((4-(normalized.length%4))%4);
+    const binary=atob(padded); const bytes=Uint8Array.from(binary,c=>c.charCodeAt(0));
+    const value=JSON.parse(new TextDecoder().decode(bytes));
+    return value&&typeof value==='object'&&!Array.isArray(value)?value:null;
+  }catch(e){ return null; }
+}
+
 function readUrl(){
   const p = new URLSearchParams(location.search);
   const out = {...URL_DEFAULTS};
+  const opaque = decodeRoute(p.get('r'));
+  if(opaque) for(const k in URL_DEFAULTS) if(opaque[k]!==undefined && opaque[k]!==null) out[k]=String(opaque[k]);
   for(const k in URL_DEFAULTS){ const v=p.get(k); if(v!==null) out[k]=v; }
   return out;
 }
@@ -377,11 +397,14 @@ function writeUrl(){
     preset: $('#preset').value, ftype: $('#ftype').value, metric: $('#metric').value,
   };
   const p = new URLSearchParams();
+  const payload = {};
   for(const k in URL_DEFAULTS){
     const v = state[k];
     if(v===undefined||v===null||v===''||String(v)===String(URL_DEFAULTS[k])) continue;
-    p.set(k, v);
+    payload[k] = v;
   }
+  const opaque = encodeRoute(payload);
+  if(Object.keys(payload).length && opaque) p.set('r', opaque);
   const qs = p.toString();
   // replaceState: filters change constantly, pushing each would break Back.
   history.replaceState(null, '', location.pathname + (qs ? '?'+qs : ''));

@@ -12,6 +12,7 @@ import chatgptricksProfileImage from './assets/chatgptricks-profile.jpg';
 import traselvelorealProfileImage from './assets/traselveloreal-profile.jpg';
 import { QUEUE_DAY_END, QUEUE_DAY_START, minutesPerPPOf, planQueueDrop } from './queuePlanner';
 import { followQueueLive } from './queueLive';
+import { decodeRouteState } from './urlCodec';
 import './queue.css';
 
 const TIME_ZONE_PREVIEW_KEY = 'sentient.queueTimeZonePreview';
@@ -1073,7 +1074,7 @@ function QueueApp({ user }) {
   useEffect(() => { draftRef.current = draft; }, [draft]);
   useEffect(() => { openRef.current = open; }, [open]);
   useEffect(() => { ticketsOpenRef.current = ticketsOpen; }, [ticketsOpen]);
-  useEffect(() => { const id = Number(new URLSearchParams(window.location.search).get('task')); if (!id) return; json(`/api/dashboard/queue/v2/requests/${id}`).then(({ request }) => { setOpen(request); if (request.scheduledDate) setDate(request.scheduledDate); }).catch((err) => notify(err.message, 'error')); }, [notify]);
+  useEffect(() => { const params = new URLSearchParams(window.location.search); const id = Number(decodeRouteState(params.get('r'))?.task || params.get('task')); if (!id) return; json(`/api/dashboard/queue/v2/requests/${id}`).then(({ request }) => { setOpen(request); if (request.scheduledDate) setDate(request.scheduledDate); }).catch((err) => notify(err.message, 'error')); }, [notify]);
   useEffect(() => { if (!open?.id) { setHistory([]); return; } setDetailNotice(null); setHistoryLoading(true); json(`/api/dashboard/queue/v2/requests/${open.id}/history`).then((result) => setHistory(result.events || [])).catch(() => setHistory([])).finally(() => setHistoryLoading(false)); }, [open?.id]);
 
   const persistDrafts = useCallback((nextDraft) => {
