@@ -6,6 +6,17 @@ import { firebaseAuth } from './firebase';
 export const IG_HANDLE = 'chatgptricks';
 export const API_BASE = (import.meta.env.VITE_API_BASE || 'https://cortex-api-db2e.onrender.com').replace(/\/$/, '');
 
+const TRANSIENT_GATEWAY_STATUSES = new Set([502, 503, 504]);
+
+function waitForRetry(milliseconds, signal) {
+  return new Promise((resolve, reject) => {
+    const timer = window.setTimeout(resolve, milliseconds);
+    if (!signal) return;
+    const abort = () => { window.clearTimeout(timer); reject(new DOMException('Request aborted.', 'AbortError')); };
+    signal.addEventListener('abort', abort, { once: true });
+  });
+}
+
 // Drop-in replacement for fetch() that attaches the signed-in user's Firebase
 // ID token to every call. getIdToken() returns the cached token and only
 // hits the network to refresh it when it's actually close to expiring, so
@@ -31,5 +42,22 @@ export async function apiFetch(url, options = {}) {
       // backend will bounce it with a 401 and the login gate will catch it.
     }
   }
-  return window.fetch(url, { ...options, headers });
+  // Render can briefly return a gateway error while it swaps a service
+  // instance. Retrying safe reads here keeps every tool resilient without
+  // repeating mutations such as Queue assignments or imports.
+  const method = String(options.method || 'GET').toUpperCase();
+  const canRetry = method === 'GET' || method === 'HEAD';
+  let lastError;
+  for (let attempt = 0; attempt < (canRetry ? 4 : 1); attempt += 1) {
+    try {
+      const response = await window.fetch(url, { ...options, headers });
+      if (!canRetry || !TRANSIENT_GATEWAY_STATUSES.has(response.status) || attempt === 3) return response;
+      lastError = new Error(`HTTP ${response.status}`);
+    } catch (error) {
+      if (!canRetry || error?.name === 'AbortError' || attempt === 3) throw error;
+      lastError = error;
+    }
+    await waitForRetry(700 * (2 ** attempt), options.signal);
+  }
+  throw lastError || new Error('Request failed.');
 }
