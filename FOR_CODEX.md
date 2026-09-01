@@ -6,9 +6,11 @@ when backend work is released. Esteban is planning to merge the two repos into
 one — read the "Planned repo merge" section near the bottom before you start
 that.
 
-## Current release: role-aware navigation and opaque share links (2026-09-01)
+## Current release: duplicate Queue requests and sideview actions (2026-09-01)
 
-- Source commit: `29080c4`; static GitHub Pages release: `0944939`; backend release: `6394614` (Render health confirmed live).
+- Source commit: `9527679`; static GitHub Pages release: `c6a959a`; backend release: `2c28dda` (Render deployment queued).
+- Queue requests can now be duplicated from the sideview, pool cards, scheduler blocks, and coordinator's assigned table. Each copy is an independent Pool request with a fresh id, no assignee or schedule, the original brief/tags/PP/account recommendation, and copied attachments when present. This allows the same source request to be assigned to multiple designers without changing the original.
+- The global Queue context menu exposes the same duplicate action wherever a request carries a request id, and mobile Queue exposes it in the coordinator sideview. The sideview header actions now wrap instead of collapsing into the unreadable vertical button shown in the previous release.
 - Dashboard role previews now apply their effective Admin/VC/PD/Sales/Trainee permissions synchronously, so the header and Queue controls do not briefly render with the wrong role while the large catalogue loads.
 - Standalone Tracker and Insights pages apply the same coordinator-only navigation rule; PD/Sales/Trainee previews do not expose those links. Queue remains available to every signed-in dashboard user, with Pick/Create gated by the existing self-assignment permission.
 - Mobile Queue/Create Post uses the same binary priority model as desktop (`normal` or `urgent`); legacy priority values remain readable as normal for old records.
