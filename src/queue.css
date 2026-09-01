@@ -667,8 +667,11 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
 .designer-assignment-row.priority-urgent,.queue-admin-assignment-row.priority-urgent { box-shadow:inset 5px 0 var(--priority-urgent); background:linear-gradient(90deg,rgba(var(--priority-urgent-rgb),.1),transparent 42%),var(--q-panel); }
 
 .queue-designer-ticket-actions { grid-column:1/-1; display:grid; grid-template-columns:1fr 1fr; gap:6px; padding:8px; border-top:1px solid rgba(var(--edge),.09); }
-.queue-designer-ticket-actions>button { display:flex; align-items:center; justify-content:center; gap:5px; min-height:30px; padding:0 7px; border:1px solid rgba(var(--accent-rgb),.25); border-radius:7px; background:rgba(var(--accent-rgb),.06); color:var(--accent-ink); font-size:9px; font-weight:800; }
-.queue-designer-ticket-actions>button:disabled { opacity:.38; }
+.queue-designer-ticket-actions>button { display:flex; align-items:center; justify-content:center; gap:5px; min-height:32px; padding:0 8px; border:1px solid rgba(var(--accent-rgb),.36); border-radius:7px; background:linear-gradient(135deg,rgba(var(--accent-rgb),.13),rgba(var(--accent-rgb),.045)); color:var(--q-text); font-size:10px; font-weight:800; }
+/* Accent ink is intentionally dark for bright custom colors so it can sit on
+   a solid accent fill. These request actions use only a translucent fill, so
+   that dark ink became unreadable against the dark Queue surface. */
+.queue-designer-ticket-actions>button:disabled { border-color:rgba(var(--edge),.16); background:rgba(var(--edge),.035); color:rgba(var(--ink),.58); opacity:1; cursor:not-allowed; }
 .queue-designer-ticket-form { grid-column:1/-1; display:grid; grid-template-columns:90px minmax(0,1fr); gap:8px; }
 .queue-designer-ticket-form>strong { align-self:center; color:var(--q-text); font-size:10px; }
 .queue-designer-ticket-form label { display:grid; gap:4px; color:rgba(var(--ink),.55); font-size:8px; font-weight:800; text-transform:uppercase; }
@@ -676,7 +679,7 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
 .queue-designer-ticket-form textarea { height:45px; padding:6px 7px; resize:vertical; }
 .queue-designer-ticket-form>div { grid-column:1/-1; display:flex; gap:6px; }
 .queue-designer-ticket-form>div button { display:flex; align-items:center; justify-content:center; gap:5px; min-height:29px; padding:0 8px; border:1px solid rgba(var(--edge),.12); border-radius:6px; background:var(--surface-2); color:var(--text); font-size:9px; font-weight:800; }
-.queue-designer-ticket-form>div .is-send { border-color:rgba(var(--accent-rgb),.36); background:rgba(var(--accent-rgb),.09); color:var(--accent-ink); }
+.queue-designer-ticket-form>div .is-send { border-color:rgba(var(--accent-rgb),.42); background:rgba(var(--accent-rgb),.12); color:var(--q-text); }
 .queue-trainee-review { display:grid; grid-column:1/-1; gap:7px; padding:10px; border:1px solid rgba(var(--accent-rgb),.24); border-radius:8px; background:linear-gradient(135deg,rgba(var(--accent-rgb),.1),transparent 78%),var(--surface-2); }
 .queue-trainee-review>strong { color:var(--text-strong); font-size:10px; line-height:1.35; }
 .queue-trainee-review>small { color:rgba(var(--ink),.58); font-size:9px; line-height:1.45; }
