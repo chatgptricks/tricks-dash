@@ -6,7 +6,14 @@ when backend work is released. Esteban is planning to merge the two repos into
 one — read the "Planned repo merge" section near the bottom before you start
 that.
 
-## Current release: compact Queue assignment notifications (2026-09-01)
+## Current release: SPOC approval-request notifications (2026-09-01)
+
+- Backend source commit: `818d188`; Render is live on that commit. `#spoc-dashboard` is now an approval inbox only: it accepts user-created approval requests for PP revisions, moves, cancellations, trainee reviews, personal-time blocks, and account access.
+- Routine Queue activity is intentionally excluded from SPOC: assignments, edits, scheduling/resubmissions, returns to the pool, coordinator cancellations/deletions, Slack delivery events, and ticket approvals/rejections stay in Queue history and do not create channel messages.
+- Pending personal-time and account-access requests now also post to SPOC with an `Approve` action and an `Open Requests` link. Coordinator-created personal time is already firm and does not notify the channel.
+- The allowlist lives in backend `app/slack_alerts.py` (`QUEUE_SPOC_APPROVAL_REQUEST_EVENTS`) and is enforced before any Slack API call, so future Queue mutations must explicitly opt in.
+
+## Previous release: compact Queue assignment notifications (2026-09-01)
 
 - Source commit: `b08bb00`; static GitHub Pages release: `7ab7138`; backend release: `9c1e56e` (Render deployment live).
 - Queue assignment DMs are intentionally minimal: one line in the form `<assigner> assigned you this post for <account>`, the post thumbnail, and one `Open in Queue` button. Briefs, notes, references, priority, PP scope, and schedule stay in the Queue side view instead of being duplicated in Slack.
