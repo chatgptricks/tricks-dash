@@ -8541,6 +8541,27 @@ body {
   word-break: break-word;
   line-height: 1.25;
 }
+.right-rail .caption-header {
+  flex-wrap: wrap;
+}
+.right-rail .queue-detail-header-actions {
+  display: flex;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  max-width: 100%;
+}
+.right-rail .caption-header .ghost-button {
+  flex: 0 0 auto;
+  width: max-content;
+  min-width: max-content;
+  max-width: 100%;
+  white-space: nowrap;
+  word-break: normal;
+  overflow-wrap: normal;
+}
 .right-rail button,
 .right-rail a {
   min-width: 0;

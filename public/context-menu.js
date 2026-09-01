@@ -109,6 +109,8 @@
     var permalink = target.dataset.contextPermalink || target.dataset.permalink || '';
     var postKey = target.dataset.contextPostKey || target.dataset.postKey || '';
     var shortcode = target.dataset.contextShortcode || target.dataset.shortcode || '';
+    var requestId = target.dataset.contextRequestId || target.dataset.requestId || '';
+    var duplicable = target.dataset.contextDuplicate === 'true';
     if (!title) title = textOf(target).slice(0, 120);
     if (!permalink) {
       var link = target.querySelector('a[href^="http"]');
@@ -118,7 +120,7 @@
       var handleMatch = textOf(target).match(/@([a-z0-9._]+)/i);
       if (handleMatch) account = handleMatch[1];
     }
-    return { type: type, title: title, account: account.replace(/^@/, ''), permalink: permalink, postKey: postKey, shortcode: shortcode };
+    return { type: type, title: title, account: account.replace(/^@/, ''), permalink: permalink, postKey: postKey, shortcode: shortcode, requestId: requestId, duplicable: duplicable };
   }
 
   function openTarget(target) {
@@ -150,6 +152,7 @@
       var cancelButton = findButton(/\b(cancel|cancelar)\b/i);
       if (editButton && context.type === 'post') add(es ? 'Editar post' : 'Edit post', 'invoke', { primary: true, element: editButton });
       if (cancelButton && context.type === 'post') add(es ? 'Cancelar post' : 'Cancel post', 'invoke', { element: cancelButton, danger: true });
+      if (context.duplicable && context.requestId) add(es ? 'Duplicar request' : 'Duplicate request', 'duplicate', { primary: true });
       if (context.permalink) add(es ? 'Copiar enlace del post' : 'Copy post link', 'copy-link');
       add(copyLabel, 'copy-text');
     } else if (context.type === 'account') {
@@ -200,6 +203,7 @@
       button.addEventListener('click', function () {
         if (item.action === 'open') openTarget(target);
         else if (item.action === 'quick-add') dispatch('quick-add', target, context);
+        else if (item.action === 'duplicate') dispatch('duplicate', target, context);
         else if (item.action === 'invoke' && item.element) item.element.click();
         else if (item.action === 'open-account') window.open('https://www.instagram.com/' + encodeURIComponent(context.account) + '/', '_blank', 'noopener');
         else if (item.action === 'copy-link') copyText(context.permalink);
