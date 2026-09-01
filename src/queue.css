@@ -981,3 +981,129 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
 .queue-guide-welcome .queue-guide-skip { justify-self:center; margin-top:3px; }
 @media (max-width:620px) { .queue-account-choice-grid { grid-template-columns:1fr; } }
 @media (max-width:620px) { .queue-create-backdrop { padding:10px; } .queue-create-modal { padding:14px; } .queue-create-grid { grid-template-columns:1fr; } .queue-create-grid label.is-wide { grid-column:auto; } .queue-source-link>div { flex-direction:column; } .queue-source-link .scheduler-secondary { width:100%; } }
+
+/* -------------------------------------------------------------------------
+   Action readability contract
+
+   Queue detail panels are deliberately narrow.  A previous accent pass let
+   disabled request buttons inherit the bright accent foreground and allowed
+   anonymous flex text to keep its max-content width.  The result was the
+   familiar yellow-on-yellow button with labels clipped at the right edge.
+   Keep every action readable in both themes: labels may wrap, disabled
+   actions use a neutral surface, and primary actions use the calculated
+   accent ink only when the accent is actually a solid fill.
+   ------------------------------------------------------------------------- */
+.queue-request-rail button,
+.queue-request-rail a.scheduler-primary,
+.queue-ticket-panel button,
+.queue-pick-modal button,
+.queue-create-modal button {
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.2;
+}
+.queue-request-rail .queue-designer-ticket-actions {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+}
+.queue-request-rail .queue-designer-ticket-actions > button {
+  min-width: 0;
+  min-height: 40px;
+  padding: 7px 8px;
+  color: var(--q-text) !important;
+  background: linear-gradient(135deg, rgba(var(--accent-rgb), .13), rgba(var(--accent-rgb), .045));
+  border-color: rgba(var(--accent-rgb), .48);
+  text-align: center;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.queue-request-rail .queue-designer-ticket-actions > button:not(:disabled):hover,
+.queue-request-rail .queue-designer-ticket-actions > button:not(:disabled):focus-visible {
+  color: var(--q-text) !important;
+  background: rgba(var(--accent-rgb), .2);
+  border-color: rgba(var(--accent-rgb), .82);
+}
+.queue-request-rail .queue-designer-ticket-actions > button:disabled {
+  color: rgba(var(--ink), .7) !important;
+  background: rgba(var(--edge), .055) !important;
+  border-color: rgba(var(--edge), .2) !important;
+  opacity: 1;
+  cursor: not-allowed;
+}
+.queue-request-rail .scheduler-primary,
+.queue-request-rail a.scheduler-primary {
+  color: var(--accent-ink) !important;
+  background: var(--accent) !important;
+  border-color: var(--accent) !important;
+  font-weight: 850;
+}
+.queue-request-rail .scheduler-primary:disabled {
+  color: rgba(var(--ink), .7) !important;
+  background: rgba(var(--edge), .055) !important;
+  border-color: rgba(var(--edge), .2) !important;
+}
+.queue-request-rail .scheduler-secondary {
+  color: var(--q-text) !important;
+  background: var(--q-panel-2);
+  border-color: var(--q-line);
+}
+.queue-request-rail .scheduler-secondary:hover:not(:disabled),
+.queue-request-rail .scheduler-secondary:focus-visible {
+  color: var(--q-text) !important;
+  border-color: rgba(var(--accent-rgb), .62);
+  background: rgba(var(--accent-rgb), .1);
+}
+.queue-request-rail .scheduler-danger {
+  color: #ffd0d0 !important;
+  background: rgba(255, 107, 107, .14);
+  border-color: rgba(255, 107, 107, .6);
+}
+.queue-request-rail .scheduler-danger:hover:not(:disabled),
+.queue-request-rail .scheduler-danger:focus-visible {
+  color: #fff !important;
+  background: rgba(255, 107, 107, .24);
+  border-color: #ff8f8f;
+}
+.queue-rail-caption .caption-header > div {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.queue-rail-caption .caption-header h2 {
+  max-width: 100%;
+  overflow: visible;
+  display: block;
+  white-space: normal;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.25;
+}
+.queue-request-rail .queue-designer-ticket-actions > button > span,
+.queue-request-rail .queue-designer-ticket-form button > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  text-align: center;
+}
+.queue-request-rail .queue-designer-ticket-actions > button > svg,
+.queue-request-rail .queue-designer-ticket-form button > svg {
+  flex: 0 0 auto;
+}
+.queue-request-rail .queue-attachments span {
+  overflow: visible;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.queue-detail-copy > p,
+.queue-detail-copy section p,
+.queue-detail-copy section a {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+@media (max-width: 380px) {
+  .queue-request-rail .queue-designer-ticket-actions {
+    grid-template-columns: 1fr;
+  }
+}
