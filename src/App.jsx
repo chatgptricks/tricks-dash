@@ -3279,6 +3279,9 @@ export function SettingsPanel({
         label: account.label || '',
         group: account.group,
         hot_threshold: String(account.hot_threshold ?? ''),
+        scrape_mode: SCRAPE_MODE_OPTIONS.some((option) => option.value === account.scrape_mode)
+          ? account.scrape_mode
+          : 'posts',
       };
     }
     setEdits(next);
@@ -3376,7 +3379,10 @@ export function SettingsPanel({
     return (
       edit.label !== (account.label || '') ||
       edit.group !== account.group ||
-      String(edit.hot_threshold) !== String(account.hot_threshold ?? '')
+      String(edit.hot_threshold) !== String(account.hot_threshold ?? '') ||
+      edit.scrape_mode !== (SCRAPE_MODE_OPTIONS.some((option) => option.value === account.scrape_mode)
+        ? account.scrape_mode
+        : 'posts')
     );
   };
 
@@ -3391,7 +3397,12 @@ export function SettingsPanel({
     setSavingHandle(account.handle);
     setNotice('');
     try {
-      const params = new URLSearchParams({ password, hot_threshold: String(value), group: edit.group });
+      const params = new URLSearchParams({
+        password,
+        hot_threshold: String(value),
+        group: edit.group,
+        scrape_mode: edit.scrape_mode,
+      });
       // Backend ignores a blank label rather than clearing it, so only send
       // one when it actually has content.
       if (edit.label.trim()) params.set('label', edit.label.trim());
@@ -4126,7 +4137,9 @@ export function SettingsPanel({
                       <tbody>
                         {sortedRoster.map((account) => {
                           const isOpen = expandedHandle === account.handle;
-                          const edit = edits[account.handle] || { label: '', group: account.group, hot_threshold: '' };
+                          const edit = edits[account.handle] || {
+                            label: '', group: account.group, hot_threshold: '', scrape_mode: account.scrape_mode || 'posts',
+                          };
                           const isInactive = account.is_active === false;
                           return (
                             <Fragment key={account.handle}>
@@ -4239,6 +4252,23 @@ export function SettingsPanel({
                                             </button>
                                           ) : null}
                                         </label>
+                                        <label className="account-manage-field">
+                                          <span>Extract</span>
+                                          <select
+                                            value={edit.scrape_mode}
+                                            aria-label={`Content to extract for ${account.handle}`}
+                                            onChange={(event) =>
+                                              setEdits((prev) => ({
+                                                ...prev,
+                                                [account.handle]: { ...prev[account.handle], scrape_mode: event.target.value },
+                                              }))
+                                            }
+                                          >
+                                            {SCRAPE_MODE_OPTIONS.map((option) => (
+                                              <option key={option.value} value={option.value}>{option.label}</option>
+                                            ))}
+                                          </select>
+                                        </label>
                                         <button
                                           type="button"
                                           className="ghost-button primary"
@@ -4297,9 +4327,7 @@ export function SettingsPanel({
                                               className="account-manage-import-count"
                                             />
                                             <span className="account-manage-import-cost">
-                                              ~${(
-                                                Math.max(1, Math.min(5000, Math.round(Number(importCount[account.handle]) || 2000))) * 0.0023
-                                              ).toFixed(2)}
+                                              {edit.scrape_mode === 'both' ? 'Limit / source' : 'Limit'}
                                             </span>
                                             <button
                                               type="button"
