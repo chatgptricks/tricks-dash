@@ -5178,6 +5178,18 @@ body {
   gap: 2px;
 }
 
+.settings-user-self-assigned {
+  width: fit-content;
+  margin-top: 3px;
+  padding: 2px 6px;
+  border: 1px solid color-mix(in srgb, var(--accent) 52%, transparent);
+  border-radius: 999px;
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: .02em;
+}
+
 .settings-row-account strong {
   color: var(--text);
   font-size: 12px;
