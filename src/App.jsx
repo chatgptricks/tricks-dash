@@ -4611,6 +4611,7 @@ export function SettingsPanel({
                               if (roles.includes('dev')) labels.push('Dev');
                               return labels.join(' · ') || 'Standard access';
                             })()}</span>
+                            {user.can_self_assign ? <span className="settings-user-self-assigned">Self-assigned</span> : null}
                             </div>
                           </div>
                           <div className="settings-row-controls queue-user-controls">
@@ -4631,10 +4632,6 @@ export function SettingsPanel({
                               <option value="">Automatic browser zone</option><option value="America/Costa_Rica">Costa Rica (UTC−6)</option><option value="America/Bogota">Colombia (UTC−5)</option>
                             </select>
                             <input defaultValue={user.slack_user_id || ''} aria-label={`Slack user ID for ${user.email}`} placeholder="Slack ID" onBlur={(event) => { if (event.target.value.trim() !== (user.slack_user_id || '')) updateUser(user, { slack_user_id: event.target.value.trim().toUpperCase() }); }} />
-                            <label className="settings-user-admin-toggle">
-                              <input type="checkbox" checked={Boolean(user.can_self_assign)} onChange={(event) => updateUser(user, { can_self_assign: event.target.checked })} disabled={userActionEmail === user.email} />
-                              <span>Self-assign</span>
-                            </label>
                             <label className="settings-user-admin-toggle">
                               <input
                                 type="checkbox"
