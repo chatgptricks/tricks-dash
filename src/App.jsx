@@ -3548,7 +3548,11 @@ export function SettingsPanel({
           if (status.error) {
             setImportNotice((prev) => ({ ...prev, [handle]: status.error }));
           } else {
-            setImportNotice((prev) => ({ ...prev, [handle]: `Done: ${status.result?.added ?? 0} new posts.` }));
+            const transcriptCount = Number(status.result?.transcripts_updated || 0);
+            const transcriptNote = transcriptCount
+              ? ` ${transcriptCount} transcript${transcriptCount === 1 ? '' : 's'} saved.`
+              : '';
+            setImportNotice((prev) => ({ ...prev, [handle]: `Done: ${status.result?.added ?? 0} new posts.${transcriptNote}` }));
             onAccountsChanged?.();
             await loadRoster();
           }
