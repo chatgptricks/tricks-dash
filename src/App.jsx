@@ -2942,6 +2942,11 @@ const ACCOUNT_GROUP_OPTIONS = [
   { value: 'sentient', label: 'Sentient' },
   { value: 'competitors', label: 'Competitors' },
 ];
+const SCRAPE_MODE_OPTIONS = [
+  { value: 'posts', label: 'Posts', hint: 'Only regular profile posts' },
+  { value: 'reels', label: 'Reels', hint: 'Only the Reels tab' },
+  { value: 'both', label: 'Both', hint: 'Posts and Reels' },
+];
 
 const WIZARD_STEPS = ['Account', 'Settings', 'Confirm'];
 
@@ -4925,6 +4930,7 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
   const [handle, setHandle] = useState('');
   const [label, setLabel] = useState('');
   const [group, setGroup] = useState('competitors');
+  const [scrapeMode, setScrapeMode] = useState('posts');
   // Held as text, not a number. Coercing on every keystroke meant clearing the
   // field ran Number('') -> 0, so the box refilled itself with a 0 you then had
   // to type around. The value is only turned back into a number where it's
@@ -5014,11 +5020,11 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
       return;
     }
     if (step === 1 && importScope === 'range' && !importFrom) {
-      setNotice('Pick at least a start date, or switch back to All posts.');
+      setNotice('Pick at least a start date, or switch back to All selected content.');
       return;
     }
     if (step === 1 && importScope === 'count' && !(Number(importCount) >= 1)) {
-      setNotice('Enter how many posts to import.');
+      setNotice('Enter how many items to import.');
       return;
     }
     setNotice('');
@@ -5045,6 +5051,7 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
           label: label.trim() || cleanHandle,
           group,
           hot_threshold: String(hotThresholdValue),
+          scrape_mode: scrapeMode,
         }),
       });
       if (createResponse.status === 401) {
@@ -5066,6 +5073,7 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
           handle: cleanHandle,
           label: label.trim() || cleanHandle,
           group,
+          scrapeMode,
           avatarUrl: preview?.profile_pic_url || null,
           dateFrom: importScope === 'range' ? importFrom || null : null,
           dateTo: importScope === 'range' ? importTo || null : null,
@@ -5185,6 +5193,27 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
                 ))}
               </select>
             </label>
+            <div className="modal-field">
+              <span>Content to scrape</span>
+              <div className="wizard-scope-toggle" role="radiogroup" aria-label="Content to scrape">
+                {SCRAPE_MODE_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={scrapeMode === option.value}
+                    className={scrapeMode === option.value ? 'wizard-scope-option wizard-scope-option-active' : 'wizard-scope-option'}
+                    onClick={() => setScrapeMode(option.value)}
+                    title={option.hint}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+              <p className="wizard-hint">
+                {SCRAPE_MODE_OPTIONS.find((option) => option.value === scrapeMode)?.hint}. This choice is also used by future automatic refreshes.
+              </p>
+            </div>
             <label className="modal-field">
               <span>HOT threshold (likes in the first hour)</span>
               <input
@@ -5206,8 +5235,8 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
               />
             </label>
             <div className="modal-field">
-              <span>Post history to import</span>
-              <div className="wizard-scope-toggle" role="radiogroup" aria-label="Post history to import">
+              <span>History to import</span>
+              <div className="wizard-scope-toggle" role="radiogroup" aria-label="History to import">
                 <button
                   type="button"
                   role="radio"
@@ -5215,7 +5244,7 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
                   className={importScope === 'all' ? 'wizard-scope-option wizard-scope-option-active' : 'wizard-scope-option'}
                   onClick={() => setImportScope('all')}
                 >
-                  All posts
+                  All selected content
                 </button>
                 <button
                   type="button"
@@ -5233,7 +5262,7 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
                   className={importScope === 'count' ? 'wizard-scope-option wizard-scope-option-active' : 'wizard-scope-option'}
                   onClick={() => setImportScope('count')}
                 >
-                  Post count
+                  Content count
                 </button>
               </div>
             </div>
@@ -5251,7 +5280,7 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
             ) : importScope === 'count' ? (
               <>
                 <label className="modal-field">
-                  <span>How many of the most recent posts</span>
+                  <span>How many of the most recent items</span>
                   <input
                     type="number"
                     min={1}
@@ -5266,12 +5295,11 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
                   />
                 </label>
                 <p className="wizard-hint">
-                  Newest first. The scraper is billed per post, so this is the direct lever on
-                  what the import costs -- roughly ${(importCountValue * 0.0023).toFixed(2)} for {importCountValue.toLocaleString()} posts.
+                  Newest first. The limit applies to each selected source; choosing Both can run one Posts import and one Reels import.
                 </p>
               </>
             ) : (
-              <p className="wizard-hint">Imports up to the most recent 2,000 posts. Use a date range or a post count for a narrower, faster import.</p>
+              <p className="wizard-hint">Imports up to the most recent 2,000 items per selected source. Use a date range or a count for a narrower, faster import.</p>
             )}
           </div>
         ) : null}
@@ -5292,11 +5320,14 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
                   {ACCOUNT_GROUP_OPTIONS.find((option) => option.value === group)?.label} · HOT at {hotThresholdValue}+ likes/hr
                 </p>
                 <p className="wizard-summary-meta">
+                  Scraping {SCRAPE_MODE_OPTIONS.find((option) => option.value === scrapeMode)?.label}
+                </p>
+                <p className="wizard-summary-meta">
                   {importScope === 'count'
-                    ? `Importing the ${importCountValue.toLocaleString()} most recent posts`
+                    ? `Importing the ${importCountValue.toLocaleString()} most recent items${scrapeMode === 'both' ? ' per source' : ''}`
                     : importScope === 'range'
                     ? `Importing ${importFrom || '…'} to ${importTo || '…'}`
-                    : 'Importing up to 2,000 most recent posts'}
+                    : `Importing up to 2,000 most recent ${scrapeMode === 'both' ? 'items per source' : 'items'}`}
                 </p>
               </div>
             </div>

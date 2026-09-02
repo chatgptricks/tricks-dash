@@ -78,6 +78,18 @@ globalThis.fetch = stub; window.fetch = stub;
   ok['blank on blur falls back, not to 0'] = num.value === '600';
 
 
+  // --- Content source -------------------------------------------------------
+  const reelsBtn = [...document.querySelectorAll('.wizard-scope-option')].find(b => b.textContent.trim() === 'Reels');
+  const bothBtn = [...document.querySelectorAll('.wizard-scope-option')].find(b => b.textContent.trim() === 'Both');
+  ok['Reels source option exists'] = Boolean(reelsBtn);
+  ok['Both source option exists'] = Boolean(bothBtn);
+  if (reelsBtn) await act(async () => { reelsBtn.dispatchEvent(new window.MouseEvent('click', { bubbles: true })); });
+  ok['Reels source becomes active'] = reelsBtn?.getAttribute('aria-checked') === 'true';
+  ok['Reels source explains its tab'] = /Only the Reels tab/.test(document.body.textContent);
+  if (bothBtn) await act(async () => { bothBtn.dispatchEvent(new window.MouseEvent('click', { bubbles: true })); });
+  ok['Both source becomes active'] = bothBtn?.getAttribute('aria-checked') === 'true';
+
+
   // --- Date range toggle ----------------------------------------------------
   const crashes = [];
   window.addEventListener('error', (e) => crashes.push(e.message));
@@ -92,19 +104,19 @@ globalThis.fetch = stub; window.fetch = stub;
   if (crashes.length) console.log('   crash:', crashes[0]);
 
 
-  // --- Post count mode ------------------------------------------------------
-  const countBtn = [...document.querySelectorAll('.wizard-scope-option')].find(b => /Post count/.test(b.textContent));
-  ok['Post count option exists'] = Boolean(countBtn);
+  // --- Content count mode ---------------------------------------------------
+  const countBtn = [...document.querySelectorAll('.wizard-scope-option')].find(b => /Content count/.test(b.textContent));
+  ok['Content count option exists'] = Boolean(countBtn);
   if (countBtn) await act(async () => { countBtn.dispatchEvent(new window.MouseEvent('click', { bubbles: true })); });
   await act(async () => { await new Promise(r => setTimeout(r, 250)); });
   const countInput = [...document.querySelectorAll('.modal-field input[type=number]')].pop();
   ok['count field defaults to 2000'] = countInput?.value === '2000';
-  ok['shows the estimated cost'] = /\$4\.60/.test(document.body.textContent);
+  ok['explains the per-source limit'] = /limit applies to each selected source/.test(document.body.textContent);
   const setC = (v) => act(async () => { setter.call(countInput, v); countInput.dispatchEvent(new window.Event('input', { bubbles: true })); });
   await setC('');
   ok['count clears'] = countInput.value === '';
   await setC('500');
-  ok['cost tracks the count'] = /\$1\.15/.test(document.body.textContent);
+  ok['keeps the per-source explanation'] = /Posts import and one Reels import/.test(document.body.textContent);
   await setC('99999');
   await act(async () => { countInput.dispatchEvent(new window.FocusEvent('focusout', { bubbles: true })); });
   ok['caps at 5000 on blur'] = countInput.value === '5000';
