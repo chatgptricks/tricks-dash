@@ -834,6 +834,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
   const [operatingRole, setOperatingRole] = useState('sales');
   const [operatingRoles, setOperatingRoles] = useState(['sales']);
   const [isDev, setIsDev] = useState(knownDev);
+  const [canSelfAssign, setCanSelfAssign] = useState(false);
   const [canSwitchRoles, setCanSwitchRoles] = useState(knownRoleSwitcher);
   const [availableRoles, setAvailableRoles] = useState(() => ROLE_SWITCHER_DEFAULTS[String(userEmail || '').trim().toLowerCase()] || []);
   const [queuePendingCount, setQueuePendingCount] = useState(0);
@@ -861,6 +862,10 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
   const coordinatorAccess = rolePreviewActive
     ? effectiveIsAdmin || effectiveOperatingRoles.includes('vc')
     : baseCoordinatorAccess;
+  // An internally approved self-assign user can add Dashboard posts to their
+  // own Queue pool, but should not inherit Tracker, Insights, or other VC
+  // coordination controls. Role preview keeps its deliberately strict model.
+  const poolAccess = coordinatorAccess || (!rolePreviewActive && canSelfAssign);
   const posts = useMemo(() => dashboard.posts.map(normalizePost), [dashboard.posts]);
   const summary = dashboard.summary;
   const ranges = useMemo(() => calculateRanges(posts), [posts]);
@@ -890,6 +895,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
     setOperatingRole(body.operating_role || 'sales');
     setOperatingRoles(body.operating_roles || [body.operating_role || 'sales']);
     setIsDev(Boolean(body.is_dev) || knownDev);
+    setCanSelfAssign(Boolean(body.can_self_assign));
     setCanSwitchRoles(Boolean(body.can_role_switch) || knownRoleSwitcher);
     setAvailableRoles(Array.isArray(body.available_operating_roles) ? body.available_operating_roles : (ROLE_SWITCHER_DEFAULTS[String(userEmail || '').trim().toLowerCase()] || body.operating_roles || []));
   }, [knownDev, knownRoleSwitcher, userEmail]);
@@ -926,7 +932,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
   // optimistic queue badge as the visible card action.
   useEffect(() => {
     const onContextAction = (event) => {
-      if (event.detail?.action !== 'quick-add' || !coordinatorAccess) return;
+      if (event.detail?.action !== 'quick-add' || !poolAccess) return;
       const detail = event.detail || {};
       const post = posts.find((item) => (
         (detail.postKey && item.postKey === detail.postKey)
@@ -936,7 +942,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
     };
     window.addEventListener('sentient:context-action', onContextAction);
     return () => window.removeEventListener('sentient:context-action', onContextAction);
-  }, [coordinatorAccess, posts, quickAddToPool]);
+  }, [poolAccess, posts, quickAddToPool]);
 
   useEffect(() => {
     refreshQueueSummary();
@@ -2241,7 +2247,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
                     onReload={reloadPost}
                     onAssign={setAssignmentPost}
                     onQuickAdd={quickAddToPool}
-                    canPool={coordinatorAccess}
+                    canPool={poolAccess}
                   />
                 ))}
               </div>
@@ -2326,7 +2332,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
           {selected ? (
             <PostDetailPanel
               post={selected}
-              captionExtra={<>{selected.account === 'chatgptricks' ? <CanvaLine url={canvaLinkForPost(selected.postDate)} /> : null}{coordinatorAccess ? <><button type="button" className="ghost-button" onClick={() => setAssignmentPost(selected)}><ListTodo size={13} />Send to Pool</button><button type="button" className="ghost-button" title="Quick add to Pool with defaults" onClick={() => quickAddToPool(selected)}><Zap size={13} />Quick add</button></> : null}</>}
+              captionExtra={<>{selected.account === 'chatgptricks' ? <CanvaLine url={canvaLinkForPost(selected.postDate)} /> : null}{poolAccess ? <><button type="button" className="ghost-button" onClick={() => setAssignmentPost(selected)}><ListTodo size={13} />Send to Pool</button><button type="button" className="ghost-button" title="Quick add to Pool with defaults" onClick={() => quickAddToPool(selected)}><Zap size={13} />Quick add</button></> : null}</>}
             />
           ) : null}
 
