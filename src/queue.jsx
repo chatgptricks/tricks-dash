@@ -68,6 +68,11 @@ const displayDate = (value, language) => new Date(`${value}T12:00:00`).toLocaleD
 // simulator can override the reference clock without changing that data.
 const displayTimestamp = (value, language) => new Date(value).toLocaleString(locale(language), { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 const DRAFT_KEY = 'sentient.queueDrafts.v2';
+const DESIGNER_SCOPE_KEY_PREFIX = 'sentient.queueDesignerScope.v1:';
+const designerScopeKey = (email) => `${DESIGNER_SCOPE_KEY_PREFIX}${String(email || '').trim().toLowerCase()}`;
+const readDesignerScope = (email) => {
+  try { return window.localStorage.getItem(designerScopeKey(email)) || ''; } catch { return ''; }
+};
 // A hard browser reload used to reset React state before the Queue request
 // returned, leaving people with an empty "Loading schedule" screen. Keep the
 // most recent live view per signed-in user for the browser session, then
@@ -1020,7 +1025,7 @@ function QueueApp({ user }) {
   const [liveStatus, setLiveStatus] = useState('connecting');
   const [archive, setArchive] = useState(false);
   const [poolDropActive, setPoolDropActive] = useState(false);
-  const [designerScope, setDesignerScope] = useState('');
+  const [designerScope, setDesignerScope] = useState(() => readDesignerScope(user?.email));
   const [ticketsOpen, setTicketsOpen] = useState(false);
   const [tickets, setTickets] = useState([]);
   const [ticketsLoading, setTicketsLoading] = useState(false);
@@ -1043,6 +1048,14 @@ function QueueApp({ user }) {
   const draftSyncingRef = useRef(false);
   const draftHydratedRef = useRef(false);
   const draftSaveVersionRef = useRef(0);
+  const selectDesignerScope = useCallback((event) => {
+    const next = event.target.value;
+    setDesignerScope(next);
+    try {
+      if (next) window.localStorage.setItem(designerScopeKey(user?.email), next);
+      else window.localStorage.removeItem(designerScopeKey(user?.email));
+    } catch {}
+  }, [user?.email]);
   const draftSavePromiseRef = useRef(Promise.resolve());
   const persistDraftsRef = useRef(null);
   const openRef = useRef(open);
@@ -1236,6 +1249,13 @@ function QueueApp({ user }) {
   }, [data]);
   const selfPool = useMemo(() => (data?.selfPoolRequests || []).filter((task) => task.status === 'pool'), [data]);
   const archived = useMemo(() => data?.requests.filter((task) => task.status === 'cancelled') || [], [data]);
+  useEffect(() => {
+    if (!designerScope || !data) return;
+    const users = data.schedulerUsers || data.designers || [];
+    if (users.some((person) => person.email === designerScope)) return;
+    setDesignerScope('');
+    try { window.localStorage.removeItem(designerScopeKey(user?.email)); } catch {}
+  }, [data, designerScope, user?.email]);
   const upcoming = useMemo(() => {
     if (!coordinator) return [];
     const byId = new Map();
@@ -1702,7 +1722,7 @@ function QueueApp({ user }) {
     {data ? <>
       {overviewOpen ? <QueueOverview report={overview} loading={overviewLoading} error={overviewError} onRetry={loadOverview} onOpen={setOpen} /> : null}
       {!overviewOpen ? <>
-      <section className="scheduler-toolbar"><div><p className="scheduler-eyebrow">{coordinator ? t('coordinatorSchedule') : t('mySchedule')}</p><h2>{displayDate(date, language)}</h2></div>{coordinator ? <label className="scheduler-designer-filter">{t('assignedView')}<select value={designerScope} onChange={(event) => setDesignerScope(event.target.value)}><option value="">{t('allUsers')}</option>{(data.schedulerUsers || data.designers).map((person) => <option key={person.email} value={person.email}>{displayName(person.email, person.displayName)}</option>)}</select></label> : null}<div className="scheduler-nav"><button type="button" aria-label="Previous day" onClick={() => setDate(shiftDay(date, -1))}><ChevronLeft size={17} /></button><button type="button" onClick={() => setDate(DAY(new Date(), QUEUE_TIME_ZONE))}>{t('today')}</button><button type="button" aria-label="Next day" onClick={() => setDate(shiftDay(date, 1))}><ChevronRight size={17} /></button></div><button type="button" className={`scheduler-archive-toggle${archive ? ' is-on' : ''}`} onClick={() => setArchive((value) => !value)}><Archive size={14} />{archive ? t('liveQueue') : t('archive')}</button></section>
+      <section className="scheduler-toolbar"><div><p className="scheduler-eyebrow">{coordinator ? t('coordinatorSchedule') : t('mySchedule')}</p><h2>{displayDate(date, language)}</h2></div>{coordinator ? <label className="scheduler-designer-filter">{t('assignedView')}<select value={designerScope} onChange={selectDesignerScope}><option value="">{t('allUsers')}</option>{(data.schedulerUsers || data.designers).map((person) => <option key={person.email} value={person.email}>{displayName(person.email, person.displayName)}</option>)}</select></label> : null}<div className="scheduler-nav"><button type="button" aria-label="Previous day" onClick={() => setDate(shiftDay(date, -1))}><ChevronLeft size={17} /></button><button type="button" onClick={() => setDate(DAY(new Date(), QUEUE_TIME_ZONE))}>{t('today')}</button><button type="button" aria-label="Next day" onClick={() => setDate(shiftDay(date, 1))}><ChevronRight size={17} /></button></div><button type="button" className={`scheduler-archive-toggle${archive ? ' is-on' : ''}`} onClick={() => setArchive((value) => !value)}><Archive size={14} />{archive ? t('liveQueue') : t('archive')}</button></section>
       {coordinator && !archive ? <section className={`scheduler-pool${poolDropActive ? ' is-drop-target' : ''}`} onDragOver={poolDragOver} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setPoolDropActive(false); }} onDrop={poolDrop} aria-label={t('poolDropHint')}><header><div><p className="scheduler-eyebrow">{t('productionPool')}</p><h2>{pool.length} {t('readyToSchedule')}</h2></div><small>{poolDropActive ? t('poolDropHint') : t('visibleSchedule')}</small></header><div className="scheduler-pool-list">{pool.map((task) => <PoolCard key={task.id} task={task} onOpen={setOpen} canMultiAssign={Boolean(coordinator)} />)}{!pool.length ? <p className="scheduler-empty">{t('emptyPool')}</p> : null}</div></section> : null}
       {!coordinator && canSelfAssign && !archive ? <section className="scheduler-pool"><header><div><p className="scheduler-eyebrow">My Pool</p><h2>{selfPool.length} {t('readyToSchedule')}</h2></div><small>Drag your request onto your own schedule.</small></header><div className="scheduler-pool-list">{selfPool.map((task) => <PoolCard key={task.id} task={task} onOpen={setOpen} />)}{!selfPool.length ? <p className="scheduler-empty">Create a post to start your own Pool.</p> : null}</div></section> : null}
       {(coordinator || canSelfAssign) && draft.length ? <div className="scheduler-draft-float"><button type="button" className="scheduler-secondary" onClick={clearDrafts}>{t('clearDrafts')}</button><button type="button" className="scheduler-submit" onClick={submit}><Send size={14} />{t('submit')} {draft.length}</button></div> : null}
