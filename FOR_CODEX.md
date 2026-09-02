@@ -13,6 +13,11 @@ that.
 - Assignments are collision-safe and scheduled at the next available 10-minute slot. Each assignment gets the normal Queue Slack DM (thumbnail plus `Open in Queue` link); this automatic workflow does not emit routine SPOC log messages.
 - Endpoint: `POST /api/dashboard/queue/v2/requests/{request_id}/assign-accounts` with a JSON-encoded `accounts` form field. The frontend action is wired through the global contextual menu (`assign-multiple`) and updates Pool, scheduler, and Pick state optimistically after success.
 
+### Follow-up: resilient Self-assign permission updates (2026-09-01)
+
+- Settings' `Self-assign` checkbox persists through the existing `/api/admin/users` upsert. The shared frontend API retries this idempotent user update on transient Render gateway/network handoffs, so a cold start no longer rolls the optimistic marker back with `Network error while updating.`
+- Frontend source commit: `4ae0d81`; static release: `4a23cc1` on `gh-pages`.
+
 ## Previous release: SPOC approval-request notifications (2026-09-01)
 
 - Backend source commit: `09db1bd`; Render is live on that commit. `#spoc-dashboard` is now an approval inbox only: it accepts user-created approval requests for PP revisions, moves, cancellations, trainee reviews, personal-time blocks, and account access.
