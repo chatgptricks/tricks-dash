@@ -1125,3 +1125,8 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
     grid-template-columns: 1fr;
   }
 }
+.queue-account-picker { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+.queue-account-picker label { display:inline-flex; align-items:center; gap:6px; padding:7px 9px; border:1px solid var(--q-line); border-radius:8px; background:var(--q-panel-2); font-size:11px; }
+.queue-account-picker input { accent-color:var(--q-accent); }
+.queue-multi-link-form { display:grid; gap:10px; }
+.queue-multi-link-form label { display:grid; gap:5px; color:var(--q-muted); font-size:11px; font-weight:700; }
