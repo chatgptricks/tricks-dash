@@ -133,7 +133,7 @@ const fmt = (value) => value == null ? '—' : Intl.NumberFormat('en-US', { nota
 const fmtExact = (value) => value == null || Number.isNaN(Number(value)) ? '—' : Math.round(Number(value)).toLocaleString('en-US');
 const signedExact = (value) => value == null || Number.isNaN(Number(value)) ? '—' : `${Number(value) > 0 ? '+' : ''}${fmtExact(value)}`;
 const matchesMobileSearch = (post, query) => {
-  const haystack = `${post.caption || ''} ${post.ocrText || ''} ${post.account || ''} ${post.musicSong || ''} ${post.musicArtist || ''}`.toLowerCase();
+  const haystack = `${post.caption || ''} ${post.ocrText || ''} ${post.account || ''} ${post.musicSong || ''} ${post.musicArtist || ''} ${post.transcript || ''}`.toLowerCase();
   const include = []; const exclude = [];
   String(query || '').trim().toLowerCase().split(/\s+/).filter(Boolean).forEach((term) => (term.startsWith('-') && term.length > 1 ? exclude : include).push(term.replace(/^-/, '')));
   return include.every((term) => haystack.includes(term)) && exclude.every((term) => !haystack.includes(term));

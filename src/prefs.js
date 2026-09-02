@@ -257,6 +257,7 @@ const ES = {
   'Media': 'Medio',
   'comments': 'comentarios',
   'Download media': 'Descargar media',
+  'Download transcript': 'Descargar transcripción',
   'Fetching media…': 'Buscando media…',
   'Downloading…': 'Descargando…',
   'Downloaded': 'Descargados',
