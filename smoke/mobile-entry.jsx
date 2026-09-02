@@ -78,6 +78,10 @@ const click = async (node) => act(async () => { node.dispatchEvent(new window.Mo
     const accountRow = document.querySelector('.m-settings-list > button');
     await click(accountRow);
     checks['Account parameters are editable'] = Boolean(document.querySelector('.m-account-edit-head')) && document.querySelectorAll('.m-sheet .m-form input').length >= 2;
+    const extractSelect = [...document.querySelectorAll('.m-sheet .m-form select')]
+      .find((select) => [...select.options].some((option) => option.value === 'reels'));
+    checks['Existing account can choose Reels'] = [...(extractSelect?.options || [])]
+      .map((option) => option.value).join('|') === 'posts|reels|both';
     checks['No render errors'] = errors.length === 0;
   } catch (error) {
     const nested = Array.isArray(error?.errors) ? error.errors : [error];
