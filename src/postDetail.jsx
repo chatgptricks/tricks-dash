@@ -534,6 +534,52 @@ export function SlideDownload({ post }) {
   );
 }
 
+// Transcript text is deliberately never rendered in the dashboard. When the
+// Reels actor supplied one, let the coordinator save the original text file
+// without adding it to captions/cards or asking the browser to expose a URL.
+export function TranscriptDownload({ post }) {
+  const { t } = usePrefs();
+  const [state, setState] = useState('idle');
+  const [note, setNote] = useState('');
+  if (!post?.transcriptAvailable) return null;
+
+  const download = async () => {
+    setState('working'); setNote('');
+    try {
+      const response = await apiFetch(
+        `${API_BASE}/api/dashboard/posts/${encodeURIComponent(post.account || IG_HANDLE)}/${encodeURIComponent(post.shortcode)}/transcript`,
+      );
+      if (!response.ok) {
+        let detail = '';
+        try { detail = (await response.json())?.detail || ''; } catch { /* non-JSON response */ }
+        throw new Error(detail || `HTTP ${response.status}`);
+      }
+      const blob = await response.blob();
+      const disposition = response.headers.get('Content-Disposition') || '';
+      const named = /filename="([^"]+)"/.exec(disposition);
+      const href = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = href;
+      link.download = named ? named[1] : `${post.account}-${post.shortcode}-transcript.txt`;
+      document.body.appendChild(link); link.click(); link.remove();
+      setTimeout(() => URL.revokeObjectURL(href), 30000);
+      setState('idle'); setNote(t('Downloaded'));
+    } catch (error) {
+      setState('error'); setNote(error.message || t('Download failed'));
+    }
+  };
+
+  return (
+    <section className="panel slide-download transcript-download">
+      <button type="button" className="ghost-button" disabled={state === 'working'} onClick={download}>
+        <Download size={15} />
+        {state === 'working' ? 'Downloading…' : t('Download transcript')}
+      </button>
+      {note ? <small className={state === 'error' ? 'media-download-error' : 'media-download-note'}>{note}</small> : null}
+    </section>
+  );
+}
+
 // Deep-dive content below the cover art -- caption + song, stats, download
 // button -- for whatever container wants to show it (App.jsx's right rail,
 // queue.jsx's own sidebar). Deliberately does NOT render the cover/SelectedPost
@@ -577,6 +623,7 @@ export function PostDetailPanel({ post, captionExtra = null }) {
       </section>
 
       <SlideDownload post={post} />
+      <TranscriptDownload post={post} />
     </>
   );
 }

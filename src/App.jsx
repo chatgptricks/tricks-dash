@@ -671,6 +671,9 @@ function normalizePost(post) {
       postType,
       post.musicSong,
       post.musicArtist,
+      // Kept out of all visual components; Reels transcripts participate in
+      // the normal search index only when Apify actually returned one.
+      post.transcript,
     ]
       .map(normalizeSearchValue)
       .filter(Boolean)
