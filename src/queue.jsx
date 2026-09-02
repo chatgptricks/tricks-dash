@@ -1240,10 +1240,14 @@ function QueueApp({ user }) {
     if (!coordinator) return [];
     const byId = new Map();
     [...(data?.planningRequests || []), ...(data?.liveDrafts || [])].forEach((task) => {
-      if (task.designerEmail && ['scheduled', 'in_progress', 'completed'].includes(task.status)) byId.set(task.id, task);
+      if (
+        task.designerEmail
+        && (!designerScope || task.designerEmail === designerScope)
+        && ['scheduled', 'in_progress', 'completed'].includes(task.status)
+      ) byId.set(task.id, task);
     });
     return [...byId.values()].sort((a, b) => `${a.scheduledDate || ''}-${String(a.scheduledStartMinutes ?? 0).padStart(4, '0')}-${a.id}`.localeCompare(`${b.scheduledDate || ''}-${String(b.scheduledStartMinutes ?? 0).padStart(4, '0')}-${b.id}`));
-  }, [coordinator, data]);
+  }, [coordinator, data, designerScope]);
   const assigned = useMemo(() => { const byId = new Map((data?.assignedRequests || []).map((task) => [task.id, task])); (data?.liveDrafts || []).filter((task) => task.designerEmail === data?.viewer?.email).forEach((task) => byId.set(task.id, task)); return [...byId.values()].sort((a, b) => `${a.scheduledDate}-${String(a.scheduledStartMinutes).padStart(4, '0')}`.localeCompare(`${b.scheduledDate}-${String(b.scheduledStartMinutes).padStart(4, '0')}`)); }, [data]);
   const pickPool = useMemo(() => {
     const minutesPerPP = Number(data?.viewer?.minutesPerPP || 10);
