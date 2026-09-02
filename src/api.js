@@ -53,17 +53,22 @@ export async function apiFetch(url, options = {}) {
   }
   // Render can briefly return a gateway error while it swaps a service
   // instance. Retrying safe reads here keeps every tool resilient without
-  // repeating mutations such as Queue assignments or imports.
+  // repeating mutations such as Queue assignments or imports. The Users
+  // upsert is intentionally included as a narrow exception: it is an
+  // idempotent write keyed by email, so retrying it prevents a cold-start or
+  // connection handoff from making the Self-assign marker appear broken.
   const method = String(options.method || 'GET').toUpperCase();
   const canRetry = method === 'GET' || method === 'HEAD';
+  const isIdempotentUserUpsert = method === 'POST' && /\/api\/admin\/users\/?(?:\?|$)/.test(String(url));
+  const retryAttempts = canRetry || isIdempotentUserUpsert ? 4 : 1;
   let lastError;
-  for (let attempt = 0; attempt < (canRetry ? 4 : 1); attempt += 1) {
+  for (let attempt = 0; attempt < retryAttempts; attempt += 1) {
     try {
       const response = await window.fetch(url, { ...options, headers });
-      if (!canRetry || !TRANSIENT_GATEWAY_STATUSES.has(response.status) || attempt === 3) return response;
+      if ((!canRetry && !isIdempotentUserUpsert) || !TRANSIENT_GATEWAY_STATUSES.has(response.status) || attempt === retryAttempts - 1) return response;
       lastError = new Error(`HTTP ${response.status}`);
     } catch (error) {
-      if (!canRetry || error?.name === 'AbortError' || attempt === 3) throw error;
+      if ((!canRetry && !isIdempotentUserUpsert) || error?.name === 'AbortError' || attempt === retryAttempts - 1) throw error;
       lastError = error;
     }
     await waitForRetry(700 * (2 ** attempt), options.signal);
