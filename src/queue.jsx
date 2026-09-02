@@ -1284,6 +1284,19 @@ function QueueApp({ user }) {
     });
     return [...byId.values()].sort((a, b) => `${a.scheduledDate || ''}-${String(a.scheduledStartMinutes ?? 0).padStart(4, '0')}-${a.id}`.localeCompare(`${b.scheduledDate || ''}-${String(b.scheduledStartMinutes ?? 0).padStart(4, '0')}-${b.id}`));
   }, [coordinator, data, designerScope]);
+  useEffect(() => {
+    if (!coordinator) return undefined;
+    const openUpcomingContext = (event) => {
+      const row = event.target.closest?.('.queue-admin-assignment-row');
+      if (!row) return;
+      const task = upcoming.find((item) => String(item.id) === String(row.dataset.contextRequestId));
+      if (!task) return;
+      event.preventDefault();
+      setOpen(task);
+    };
+    document.addEventListener('contextmenu', openUpcomingContext);
+    return () => document.removeEventListener('contextmenu', openUpcomingContext);
+  }, [coordinator, upcoming]);
   const assigned = useMemo(() => { const byId = new Map((data?.assignedRequests || []).map((task) => [task.id, task])); (data?.liveDrafts || []).filter((task) => task.designerEmail === data?.viewer?.email).forEach((task) => byId.set(task.id, task)); return [...byId.values()].sort((a, b) => `${a.scheduledDate}-${String(a.scheduledStartMinutes).padStart(4, '0')}`.localeCompare(`${b.scheduledDate}-${String(b.scheduledStartMinutes).padStart(4, '0')}`)); }, [data]);
   const pickPool = useMemo(() => {
     const minutesPerPP = Number(data?.viewer?.minutesPerPP || 10);
