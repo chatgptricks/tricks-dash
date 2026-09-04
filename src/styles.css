@@ -334,18 +334,23 @@ img {
    background, which would otherwise hide the shimmer. */
 .dash-skeleton .skeleton-block {
   background: linear-gradient(
-    90deg,
-    rgba(var(--edge), 0.04) 25%,
-    rgba(var(--edge), 0.09) 37%,
-    rgba(var(--edge), 0.04) 63%
+    105deg,
+    rgba(var(--edge), 0.045) 18%,
+    rgba(var(--edge), 0.08) 35%,
+    rgba(var(--edge), 0.27) 50%,
+    rgba(var(--edge), 0.08) 65%,
+    rgba(var(--edge), 0.045) 82%
   );
-  background-size: 400% 100%;
-  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+  /* Deliberately high contrast: the former .04 → .09 wash technically
+     animated but disappeared into the dark dashboard surface. */
+  background-size: 250% 100%;
+  animation: skeleton-shimmer 950ms linear infinite;
+  will-change: background-position;
 }
 
 @keyframes skeleton-shimmer {
-  0%   { background-position: 100% 50%; }
-  100% { background-position: 0 50%; }
+  0%   { background-position: 200% 50%; }
+  100% { background-position: -100% 50%; }
 }
 
 /* Respect a reduced-motion preference: keep the placeholder, drop the
