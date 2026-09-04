@@ -2970,7 +2970,8 @@ export function SettingsPanel({
   const [users, setUsers] = useState([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [usersNotice, setUsersNotice] = useState('');
-  const [userDisplayDrafts, setUserDisplayDrafts] = useState({});
+  const [userDrafts, setUserDrafts] = useState({});
+  const [userSaveState, setUserSaveState] = useState({});
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserDisplayName, setNewUserDisplayName] = useState('');
   // Admin is an orthogonal flag layered on top of a Queue role, same as
@@ -2986,6 +2987,19 @@ export function SettingsPanel({
   const [userActionEmail, setUserActionEmail] = useState('');
   const [designerAccounts, setDesignerAccounts] = useState([]);
   const [designerAccountChoice, setDesignerAccountChoice] = useState({});
+
+  const userDraft = (person) => ({
+    display_name: person.display_name || person.email.split('@')[0],
+    operating_role: person.operating_role || 'pd',
+    time_zone: person.time_zone || '',
+    minutes_per_pp: person.minutes_per_pp ?? '',
+    slack_user_id: person.slack_user_id || '',
+    role: person.role === 'admin' || person.is_admin ? 'admin' : 'viewer',
+    can_self_assign: Boolean(person.can_self_assign),
+  });
+  const syncUserDrafts = (people) => setUserDrafts(Object.fromEntries(people.map((person) => [person.email, userDraft(person)])));
+  const changeUserDraft = (email, changes) => setUserDrafts((current) => ({ ...current, [email]: { ...(current[email] || {}), ...changes } }));
+  const userDraftIsDirty = (person, draft) => ['display_name', 'operating_role', 'time_zone', 'minutes_per_pp', 'slack_user_id', 'role', 'can_self_assign'].some((field) => String(draft[field] ?? '') !== String(userDraft(person)[field] ?? ''));
 
   // Users tab -- usage heatmap. Separate load/loading state from the roster
   // above: the roster is small and cheap, this is a heavier aggregation
@@ -3204,7 +3218,7 @@ export function SettingsPanel({
       const body = await response.json().catch(() => ({}));
       if (Array.isArray(body.users)) {
         setUsers(body.users);
-        setUserDisplayDrafts(Object.fromEntries(body.users.map((person) => [person.email, person.display_name || person.email.split('@')[0]])));
+        syncUserDrafts(body.users);
       }
     } catch (error) {
       // Keep whatever list we already had rather than blanking the tab.
@@ -3686,7 +3700,7 @@ export function SettingsPanel({
       }
       const nextUsers = body.users || [];
       setUsers(nextUsers);
-      setUserDisplayDrafts(Object.fromEntries(nextUsers.map((person) => [person.email, person.display_name || person.email.split('@')[0]])));
+      syncUserDrafts(nextUsers);
       setNewUserEmail('');
       setNewUserDisplayName('');
       setNewUserIsAdmin(false);
@@ -3703,6 +3717,7 @@ export function SettingsPanel({
   const updateUser = async (user, changes) => {
     setUserActionEmail(user.email);
     setUsersNotice('');
+    setUserSaveState((current) => ({ ...current, [user.email]: 'saving' }));
     const nextRole = changes.role ?? user.role;
     const nextOperatingRole = changes.operating_role ?? user.operating_role ?? 'sales';
     const nextSlackId = changes.slack_user_id ?? user.slack_user_id ?? '';
@@ -3724,7 +3739,7 @@ export function SettingsPanel({
       minutes_per_pp: nextMinutesPerPP === '' ? null : Number(nextMinutesPerPP),
       is_admin: nextRole === 'admin' ? 1 : 0,
     } : person));
-    setUserDisplayDrafts((current) => ({ ...current, [user.email]: nextDisplayName }));
+    changeUserDraft(user.email, { ...changes, display_name: nextDisplayName, operating_role: nextOperatingRole, time_zone: nextTimeZone, slack_user_id: nextSlackId, minutes_per_pp: nextMinutesPerPP, role: nextRole, can_self_assign: nextCanSelfAssign });
     try {
       const response = await apiFetch(`${API_BASE}/api/admin/users`, {
         method: 'POST',
@@ -3744,18 +3759,21 @@ export function SettingsPanel({
       const body = await response.json().catch(() => ({}));
       if (!response.ok) {
         setUsers((current) => current.map((person) => person.email === user.email ? previousUser : person));
-        setUserDisplayDrafts((current) => ({ ...current, [user.email]: previousUser.display_name || user.email.split('@')[0] }));
+        changeUserDraft(user.email, userDraft(previousUser));
+        setUserSaveState((current) => ({ ...current, [user.email]: 'error' }));
         setUsersNotice(body.detail || `Could not update ${user.email}.`);
         return;
       }
       const nextUsers = body.users || [];
       setUsers(nextUsers);
-      setUserDisplayDrafts(Object.fromEntries(nextUsers.map((person) => [person.email, person.display_name || person.email.split('@')[0]])));
+      syncUserDrafts(nextUsers);
+      setUserSaveState((current) => ({ ...current, [user.email]: 'saved' }));
       await loadDesignerAccounts();
       setUsersNotice(`Updated ${user.email}.`);
     } catch (error) {
       setUsers((current) => current.map((person) => person.email === user.email ? previousUser : person));
-      setUserDisplayDrafts((current) => ({ ...current, [user.email]: previousUser.display_name || user.email.split('@')[0] }));
+      changeUserDraft(user.email, userDraft(previousUser));
+      setUserSaveState((current) => ({ ...current, [user.email]: 'error' }));
       setUsersNotice('Network error while updating.');
     } finally {
       setUserActionEmail('');
@@ -4604,9 +4622,23 @@ export function SettingsPanel({
                     {users.map((user) => {
                       const designer = designerAccounts.find((item) => item.email === user.email) || { email: user.email, accounts: [] };
                       const available = roster.filter((account) => account.group === 'sentient' && account.is_active !== false && !designer.accounts.includes(account.handle));
+                      const draft = userDrafts[user.email] || userDraft(user);
+                      const dirty = userDraftIsDirty(user, draft);
+                      const saveState = userSaveState[user.email];
+                      let operatingRoles = user.operating_roles;
+                      if (typeof operatingRoles === 'string') { try { operatingRoles = JSON.parse(operatingRoles); } catch { operatingRoles = []; } }
+                      if (!Array.isArray(operatingRoles)) operatingRoles = [];
+                      const roleBadges = [
+                        ['PD', operatingRoles.includes('pd') || user.operating_role === 'pd'],
+                        ['VC', operatingRoles.includes('vc') || user.operating_role === 'vc'],
+                        ['Sales', operatingRoles.includes('sales') || user.operating_role === 'sales'],
+                        ['Trainee', operatingRoles.includes('trainee') || user.operating_role === 'trainee'],
+                        ['Admin', user.role === 'admin' || user.is_admin],
+                        ['Dev', operatingRoles.includes('dev')],
+                      ].filter(([, enabled]) => enabled).map(([label]) => label);
                       return (
                         <div
-                          className="settings-row settings-row-wide"
+                          className={`settings-row settings-row-wide settings-user-card${dirty ? ' has-draft' : ''}`}
                           key={user.email}
                           data-context-type="user"
                           data-context-title={user.display_name || user.email.split('@')[0]}
@@ -4619,61 +4651,25 @@ export function SettingsPanel({
                             </span>
                             <div className="settings-user-copy">
                               <strong>{user.display_name || user.email.split('@')[0]}</strong>
-                            <small>{user.email}</small>
-                            <span>{(() => {
-                              let roles = user.operating_roles;
-                              if (typeof roles === 'string') {
-                                try { roles = JSON.parse(roles); } catch { roles = []; }
-                              }
-                              if (!Array.isArray(roles)) roles = [];
-                              const labels = [];
-                              if (roles.includes('vc') || user.operating_role === 'vc') labels.push('VC');
-                              if (roles.includes('sales') || user.operating_role === 'sales') labels.push('Sales');
-                              if (roles.includes('trainee') || user.operating_role === 'trainee') labels.push('Trainee');
-                              if (user.role === 'admin' || user.is_admin) labels.push('Admin');
-                              if (roles.includes('dev')) labels.push('Dev');
-                              return labels.join(' · ') || 'Standard access';
-                            })()}</span>
+                              <small>{user.email}</small>
+                              <div className="settings-user-role-badges">{roleBadges.length ? roleBadges.map((role) => <span key={role} className={`is-${role.toLowerCase()}`}>{role}</span>) : <span>Standard</span>}</div>
                             {user.can_self_assign ? <span className="settings-user-self-assigned">Self-assigned</span> : null}
                             </div>
                           </div>
-                          <div className="settings-row-controls queue-user-controls">
-                            <input
-                              value={userDisplayDrafts[user.email] ?? (user.display_name || user.email.split('@')[0])}
-                              aria-label={`Display name for ${user.email}`}
-                              placeholder="Display name"
-                              onChange={(event) => setUserDisplayDrafts((current) => ({ ...current, [user.email]: event.target.value }))}
-                              onBlur={(event) => {
-                                const value = event.target.value.trim();
-                                if (value && value !== (user.display_name || '')) updateUser(user, { display_name: value });
-                              }}
-                            />
-                            <select value={user.operating_role || 'pd'} aria-label={`Queue role for ${user.email}`} onChange={(event) => updateUser(user, { operating_role: event.target.value })} disabled={userActionEmail === user.email}>
-                              <option value="pd">Post Designer only</option><option value="sales">Sales</option><option value="vc">VC</option><option value="trainee">Trainee</option>
-                            </select>
-                            <select value={user.time_zone || ''} aria-label={`Time zone for ${user.email}`} onChange={(event) => updateUser(user, { time_zone: event.target.value })} disabled={userActionEmail === user.email}>
-                              <option value="">Automatic browser zone</option><option value="America/Costa_Rica">Costa Rica (UTC−6)</option><option value="America/Bogota">Colombia (UTC−5)</option>
-                            </select>
-                            <input type="number" min="1" max="240" defaultValue={user.minutes_per_pp ?? ''} aria-label={`Minutes per PP for ${user.email}`} placeholder="Min / PP" onBlur={(event) => { const value = event.target.value.trim(); const next = value ? Number(value) : ''; if (next !== (user.minutes_per_pp ?? '')) updateUser(user, { minutes_per_pp: next }); }} />
-                            <input defaultValue={user.slack_user_id || ''} aria-label={`Slack user ID for ${user.email}`} placeholder="Slack ID" onBlur={(event) => { if (event.target.value.trim() !== (user.slack_user_id || '')) updateUser(user, { slack_user_id: event.target.value.trim().toUpperCase() }); }} />
-                            <label className="settings-user-admin-toggle">
-                              <input
-                                type="checkbox"
-                                checked={user.role === 'admin'}
-                                onChange={(event) => updateUser(user, { role: event.target.checked ? 'admin' : 'viewer' })}
-                                disabled={userActionEmail === user.email || user.email === userEmail}
-                              />
-                              <span>Admin</span>
-                            </label>
-                            <button
-                              type="button"
-                              className="ghost-button ghost-button-danger"
-                              onClick={() => removeUser(user.email)}
-                              disabled={userActionEmail === user.email}
-                            >
-                              Remove
-                            </button>
+                          <div className="settings-user-editor">
+                            <label><span>Display name</span><input aria-label={`Display name for ${user.email}`} value={draft.display_name} onChange={(event) => changeUserDraft(user.email, { display_name: event.target.value })} disabled={userActionEmail === user.email} /></label>
+                            <label><span>Queue role</span><select value={draft.operating_role} onChange={(event) => changeUserDraft(user.email, { operating_role: event.target.value })} disabled={userActionEmail === user.email}><option value="pd">Post Designer</option><option value="sales">Sales</option><option value="vc">Viral Coordinator</option><option value="trainee">Trainee</option></select></label>
+                            <label><span>Time zone</span><select value={draft.time_zone} onChange={(event) => changeUserDraft(user.email, { time_zone: event.target.value })} disabled={userActionEmail === user.email}><option value="">Automatic browser zone</option><option value="America/Costa_Rica">Costa Rica (UTC−6)</option><option value="America/Bogota">Colombia (UTC−5)</option></select></label>
+                            <label><span>Minutes per PP</span><input type="number" min="1" max="240" value={draft.minutes_per_pp} placeholder="Default" onChange={(event) => changeUserDraft(user.email, { minutes_per_pp: event.target.value })} disabled={userActionEmail === user.email} /></label>
+                            <label><span>Slack user ID</span><input value={draft.slack_user_id} placeholder="U0123456789" onChange={(event) => changeUserDraft(user.email, { slack_user_id: event.target.value.toUpperCase() })} disabled={userActionEmail === user.email} /></label>
+                            <label className="settings-user-admin-toggle"><input type="checkbox" checked={draft.role === 'admin'} onChange={(event) => changeUserDraft(user.email, { role: event.target.checked ? 'admin' : 'viewer' })} disabled={userActionEmail === user.email || user.email === userEmail} /><span>Admin access</span></label>
                           </div>
+                          <footer className="settings-user-savebar">
+                            <span className={`settings-user-save-state is-${saveState || (dirty ? 'dirty' : 'saved')}`}>{saveState === 'saving' ? 'Saving…' : saveState === 'error' ? 'Could not save' : dirty ? 'Unsaved changes' : 'All changes saved'}</span>
+                            <button type="button" className="ghost-button" disabled={!dirty || userActionEmail === user.email} onClick={() => { changeUserDraft(user.email, userDraft(user)); setUserSaveState((current) => ({ ...current, [user.email]: 'saved' })); }}>Discard</button>
+                            <button type="button" className="ghost-button primary" disabled={!dirty || userActionEmail === user.email} onClick={() => updateUser(user, draft)}>{userActionEmail === user.email ? 'Saving…' : 'Save changes'}</button>
+                            <button type="button" className="ghost-button ghost-button-danger" onClick={() => removeUser(user.email)} disabled={userActionEmail === user.email}>Remove</button>
+                          </footer>
                           <div className="settings-row-accounts">
                             <span className="settings-row-accounts-label">Queue accounts</span>
                             <div className="queue-designer-account-chips">
