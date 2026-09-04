@@ -312,7 +312,7 @@ tbody tr:hover{background:rgba(var(--edge),.03)}
 </div>
 
 <script>
-const API = 'https://sentientdash-app.onrender.com';
+const API = 'https://cortex-api-db2e.onrender.com';
 const $ = s => document.querySelector(s);
 const fmt = n => n===null||n===undefined||Number.isNaN(n) ? '—'
   : Math.abs(n)>=1e6 ? (n/1e6).toFixed(1)+'M'
@@ -969,7 +969,7 @@ provider.setCustomParameters({ prompt: 'select_account' });
 // Single sign-on across *.sentientdash.app -- see src/sso.js for the full
 // writeup. This is a vanilla-JS copy of the same cookie bootstrap since this
 // page is a standalone static file, not part of the Vite React bundle.
-const SSO_API = 'https://sentientdash-app.onrender.com';
+const SSO_API = 'https://cortex-api-db2e.onrender.com';
 const SSO_COOKIE = 'sentient_sso';
 function ssoCookieDomain() { return location.hostname.endsWith('sentientdash.app') ? '.sentientdash.app' : ''; }
 function ssoReadCookie() {
