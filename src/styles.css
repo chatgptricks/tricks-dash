@@ -5481,11 +5481,22 @@ body {
   width: 150px;
 }
 
+.settings-user-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 370px), 1fr));
+  gap: 14px;
+}
+
+.settings-user-grid > .wizard-hint {
+  grid-column: 1 / -1;
+}
+
 .settings-user-card {
   display: grid;
-  grid-template-columns: minmax(205px, .52fr) minmax(0, 1.48fr);
-  gap: 14px 18px;
-  padding: 15px;
+  grid-template-columns: 1fr;
+  gap: 13px;
+  min-width: 0;
+  padding: 16px;
   border-color: rgba(var(--edge), .12);
   border-radius: 14px;
   background:
@@ -5501,11 +5512,30 @@ body {
 }
 
 .settings-user-card.has-draft { border-color: rgba(var(--accent-rgb), .58); }
-.settings-user-card .settings-row-account { align-self: start; padding: 3px 1px; }
-.settings-user-card .settings-user-avatar { width: 46px; height: 46px; font-size: 13px; box-shadow: 0 5px 15px rgba(var(--shade), .18); }
+.settings-user-card-profile {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.settings-user-card .settings-user-avatar { width: 52px; height: 52px; font-size: 15px; box-shadow: 0 6px 18px rgba(var(--shade), .22); }
 .settings-user-card .settings-user-copy { gap: 4px; }
-.settings-user-card .settings-user-copy strong { font-size: 14px; letter-spacing: -.01em; }
+.settings-user-card .settings-user-copy strong { font-size: 16px; letter-spacing: -.02em; }
 .settings-user-card .settings-user-copy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.settings-user-account-count {
+  align-self: start;
+  padding: 5px 7px;
+  border: 1px solid rgba(var(--accent-rgb), .24);
+  border-radius: 999px;
+  background: rgba(var(--accent-rgb), .09);
+  color: var(--accent-text);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .045em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
 
 .settings-user-role-badges {
   display: flex;
@@ -5514,7 +5544,7 @@ body {
   margin-top: 3px;
 }
 
-.settings-row-account .settings-user-role-badges > span {
+.settings-user-card-profile .settings-user-role-badges > span {
   display: inline-flex;
   align-items: center;
   min-height: 19px;
@@ -5529,23 +5559,22 @@ body {
   text-transform: uppercase;
 }
 
-.settings-row-account .settings-user-role-badges > .is-admin { border-color: rgba(118, 102, 255, .48); background: rgba(118, 102, 255, .15); color: #a9a0ff; }
-.settings-row-account .settings-user-role-badges > .is-vc { border-color: rgba(64, 176, 236, .45); background: rgba(64, 176, 236, .13); color: #78cfff; }
-.settings-row-account .settings-user-role-badges > .is-pd { border-color: rgba(var(--accent-rgb), .45); background: rgba(var(--accent-rgb), .12); color: var(--accent-text); }
-.settings-row-account .settings-user-role-badges > .is-trainee { border-color: rgba(246, 173, 63, .44); background: rgba(246, 173, 63, .12); color: #ffc96b; }
+.settings-user-card-profile .settings-user-role-badges > .is-admin { border-color: rgba(118, 102, 255, .48); background: rgba(118, 102, 255, .15); color: #a9a0ff; }
+.settings-user-card-profile .settings-user-role-badges > .is-vc { border-color: rgba(64, 176, 236, .45); background: rgba(64, 176, 236, .13); color: #78cfff; }
+.settings-user-card-profile .settings-user-role-badges > .is-pd { border-color: rgba(var(--accent-rgb), .45); background: rgba(var(--accent-rgb), .12); color: var(--accent-text); }
+.settings-user-card-profile .settings-user-role-badges > .is-trainee { border-color: rgba(246, 173, 63, .44); background: rgba(246, 173, 63, .12); color: #ffc96b; }
 
 /* User access is edited as a deliberate draft.  These controls used to save
  * individually on blur/change, which made it impossible to tell whether a
  * role, PP rate, or Slack ID had actually reached the server. */
 .settings-user-editor {
   display: grid;
-  grid-template-columns: minmax(160px, 1.35fr) repeat(4, minmax(116px, 1fr)) auto;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
-  flex: 1 1 680px;
   min-width: 0;
 }
 
-.settings-user-card .settings-user-editor { grid-column: 2; align-self: start; }
+.settings-user-card .settings-user-editor { grid-column: auto; align-self: start; }
 
 .settings-user-editor > label {
   display: grid;
@@ -5598,7 +5627,7 @@ body {
 }
 
 .settings-user-card .settings-user-savebar,
-.settings-user-card .settings-row-accounts { grid-column: 1 / -1; }
+.settings-user-card .settings-row-accounts { grid-column: auto; }
 
 .settings-user-savebar .ghost-button {
   min-height: 32px;
@@ -5632,6 +5661,87 @@ body {
   font-size: 10px;
   font-weight: 750;
 }
+
+.settings-user-card .settings-row-accounts {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 9px;
+  margin-top: 0;
+  padding-top: 12px;
+}
+
+.settings-user-accounts-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  grid-column: 1 / -1;
+}
+
+.settings-user-accounts-heading > span:last-child {
+  min-width: 18px;
+  height: 18px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+  background: rgba(var(--edge), .08);
+  color: rgba(var(--ink), .6);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.settings-user-card .settings-user-account-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 7px;
+}
+
+.settings-user-account-grid.queue-designer-account-chips button {
+  width: 100%;
+  height: 34px;
+  justify-content: flex-start;
+  padding: 0 7px;
+  overflow: hidden;
+}
+
+.settings-user-account-grid.queue-designer-account-chips button > span:nth-child(2) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-user-account-grid.queue-designer-account-chips button > svg { margin-left: auto; flex: 0 0 auto; opacity: .58; }
+
+.settings-managed-account-avatar {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  overflow: hidden;
+  border: 1px solid rgba(var(--edge), .16);
+  border-radius: 50%;
+  background: rgba(var(--edge), .08);
+  color: var(--accent-text);
+  font-size: 9px;
+  font-weight: 850;
+}
+
+.settings-managed-account-avatar img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.settings-user-card .queue-designer-add {
+  margin-left: 0;
+  align-self: end;
+}
+
+.settings-user-card .queue-designer-add select { max-width: 150px; }
 
 .settings-user-admin-toggle input {
   width: 14px;
@@ -5805,6 +5915,10 @@ body {
   .settings-user-card .settings-user-editor { grid-column: auto; }
   .settings-user-card .settings-user-savebar,
   .settings-user-card .settings-row-accounts { grid-column: auto; }
+
+  .settings-user-card .settings-row-accounts { grid-template-columns: 1fr; }
+  .settings-user-card .queue-designer-add { justify-content: stretch; }
+  .settings-user-card .queue-designer-add select { flex: 1; max-width: none; }
 
   .settings-user-editor > label:first-child { grid-column: 1 / -1; }
   .settings-user-savebar { flex-wrap: wrap; justify-content: flex-end; }

@@ -4617,11 +4617,15 @@ export function SettingsPanel({
                     different endpoint, which meant scrolling to two places to see one person's
                     full access.
                   </p>
-                  <div className="settings-table">
+                  <div className="settings-table settings-user-grid">
                     {usersLoading ? <p className="wizard-hint">Loading…</p> : null}
                     {users.map((user) => {
                       const designer = designerAccounts.find((item) => item.email === user.email) || { email: user.email, accounts: [] };
                       const available = roster.filter((account) => account.group === 'sentient' && account.is_active !== false && !designer.accounts.includes(account.handle));
+                      const managedAccounts = designer.accounts.map((handle) => ({
+                        handle,
+                        account: roster.find((item) => item.handle === handle),
+                      }));
                       const draft = userDrafts[user.email] || userDraft(user);
                       const dirty = userDraftIsDirty(user, draft);
                       const saveState = userSaveState[user.email];
@@ -4644,7 +4648,7 @@ export function SettingsPanel({
                           data-context-title={user.display_name || user.email.split('@')[0]}
                           data-context-email={user.email}
                         >
-                          <div className="settings-row-account">
+                          <header className="settings-user-card-profile">
                             <span className="settings-user-avatar" aria-hidden="true">
                               <span>{(user.display_name || user.email.split('@')[0]).split(/\s+/).map((word) => word.slice(0, 1)).join('').slice(0, 2).toUpperCase()}</span>
                               {user.avatar_url ? <img src={settingsUserAvatar(user.avatar_url)} alt="" referrerPolicy="no-referrer" onError={(event) => { event.currentTarget.hidden = true; }} /> : null}
@@ -4655,7 +4659,8 @@ export function SettingsPanel({
                               <div className="settings-user-role-badges">{roleBadges.length ? roleBadges.map((role) => <span key={role} className={`is-${role.toLowerCase()}`}>{role}</span>) : <span>Standard</span>}</div>
                             {user.can_self_assign ? <span className="settings-user-self-assigned">Self-assigned</span> : null}
                             </div>
-                          </div>
+                            <span className="settings-user-account-count">{managedAccounts.length} {managedAccounts.length === 1 ? 'account' : 'accounts'}</span>
+                          </header>
                           <div className="settings-user-editor">
                             <label><span>Display name</span><input aria-label={`Display name for ${user.email}`} value={draft.display_name} onChange={(event) => changeUserDraft(user.email, { display_name: event.target.value })} disabled={userActionEmail === user.email} /></label>
                             <label><span>Queue role</span><select value={draft.operating_role} onChange={(event) => changeUserDraft(user.email, { operating_role: event.target.value })} disabled={userActionEmail === user.email}><option value="pd">Post Designer</option><option value="sales">Sales</option><option value="vc">Viral Coordinator</option><option value="trainee">Trainee</option></select></label>
@@ -4671,13 +4676,23 @@ export function SettingsPanel({
                             <button type="button" className="ghost-button ghost-button-danger" onClick={() => removeUser(user.email)} disabled={userActionEmail === user.email}>Remove</button>
                           </footer>
                           <div className="settings-row-accounts">
-                            <span className="settings-row-accounts-label">Queue accounts</span>
-                            <div className="queue-designer-account-chips">
-                              {designer.accounts.map((handle) => (
-                                <button type="button" key={handle} onClick={() => removeDesignerAccount(user.email, handle)} disabled={userActionEmail === user.email}>
-                                  @{handle} <X size={11} />
+                            <div className="settings-user-accounts-heading">
+                              <span className="settings-row-accounts-label">Managed Queue accounts</span>
+                              <span>{managedAccounts.length}</span>
+                            </div>
+                            <div className="queue-designer-account-chips settings-user-account-grid">
+                              {managedAccounts.map(({ handle, account }) => {
+                                const image = account?.avatarUrl || ACCOUNT_PROFILE_IMAGES[handle];
+                                return (
+                                <button type="button" key={handle} onClick={() => removeDesignerAccount(user.email, handle)} disabled={userActionEmail === user.email} title={`Remove @${handle}`}>
+                                  <span className="settings-managed-account-avatar" aria-hidden="true">
+                                    <span>{handle.slice(0, 1).toUpperCase()}</span>
+                                    {image ? <img src={settingsUserAvatar(image)} alt="" referrerPolicy="no-referrer" onError={(event) => { event.currentTarget.hidden = true; }} /> : null}
+                                  </span>
+                                  <span>@{handle}</span> <X size={12} />
                                 </button>
-                              ))}
+                                );
+                              })}
                               {!designer.accounts.length ? <em>No accounts assigned</em> : null}
                             </div>
                             <div className="queue-designer-add">
