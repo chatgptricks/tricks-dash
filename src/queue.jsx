@@ -37,7 +37,7 @@ const DAY = (value = new Date(), timeZone = '') => {
   const parts = zonedParts(value, timeZone);
   return parts ? `${parts.year}-${parts.month}-${parts.day}` : `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
 };
-const shiftDay = (date, amount) => { const value = new Date(`${date}T12:00:00`); value.setDate(value.getDate() + amount); return DAY(value); };
+const shiftDay = (date, amount) => { const value = new Date(`${date}T12:00:00`); value.setDate(value.getDate() + amount); return DAY(value, QUEUE_TIME_ZONE); };
 const time = (minutes) => { const normalized = ((minutes % 1440) + 1440) % 1440; return `${String(Math.floor(normalized / 60)).padStart(2, '0')}:${String(normalized % 60).padStart(2, '0')}`; };
 const minutesFromTime = (value) => { const [hour, minute] = String(value || '00:00').split(':').map(Number); return Math.max(0, Math.min(1430, hour * 60 + minute)); };
 const currentMinutes = (value = new Date(), timeZone = '') => {
@@ -155,6 +155,16 @@ const COPY = {
 
 COPY.en.traineeRole = 'Trainee';
 COPY.es.traineeRole = 'Trainee';
+COPY.en.previousDay = 'Previous day';
+COPY.en.nextDay = 'Next day';
+COPY.en.jumpToDate = 'Jump to date';
+COPY.en.viewingToday = 'Viewing today';
+COPY.en.viewingDate = 'Viewing another day';
+COPY.es.previousDay = 'Día anterior';
+COPY.es.nextDay = 'Día siguiente';
+COPY.es.jumpToDate = 'Ir a una fecha';
+COPY.es.viewingToday = 'Viendo hoy';
+COPY.es.viewingDate = 'Viendo otro día';
 
 COPY.en.returnToPool = 'Return to pool';
 COPY.en.poolDropHint = 'Drop a scheduled request here to return it to the pool.';
@@ -1730,6 +1740,14 @@ function QueueApp({ user }) {
     if (open?.id && coordinator) loadTickets({ silent: true }).catch(() => {});
   }, [open?.id, coordinator, loadTickets]);
 
+  const todayDate = DAY(new Date(), QUEUE_TIME_ZONE);
+  const viewingToday = date === todayDate;
+  const moveDate = (amount) => setDate((current) => shiftDay(current, amount));
+  const selectDate = (event) => {
+    const next = String(event.target.value || '');
+    if (/^\d{4}-\d{2}-\d{2}$/.test(next)) setDate(next);
+  };
+
   return <main className="queue-page scheduler-page">
     <header className="queue-topbar">
       <div className="queue-brand"><CalendarDays size={22} /><div><span>sentientdash.app</span><h1>{t('productionQueue')}</h1></div></div>
@@ -1757,7 +1775,7 @@ function QueueApp({ user }) {
     {data ? <>
       {overviewOpen ? <QueueOverview report={overview} loading={overviewLoading} error={overviewError} onRetry={loadOverview} onOpen={setOpen} /> : null}
       {!overviewOpen ? <>
-      <section className="scheduler-toolbar"><div><p className="scheduler-eyebrow">{coordinator ? t('coordinatorSchedule') : t('mySchedule')}</p><h2>{displayDate(date, language)}</h2></div>{coordinator ? <label className="scheduler-designer-filter">{t('assignedView')}<select value={designerScope} onChange={selectDesignerScope}><option value="">{t('allUsers')}</option>{(data.schedulerUsers || data.designers).map((person) => <option key={person.email} value={person.email}>{displayName(person.email, person.displayName)}</option>)}</select></label> : null}<div className="scheduler-nav"><button type="button" aria-label="Previous day" onClick={() => setDate(shiftDay(date, -1))}><ChevronLeft size={17} /></button><button type="button" onClick={() => setDate(DAY(new Date(), QUEUE_TIME_ZONE))}>{t('today')}</button><button type="button" aria-label="Next day" onClick={() => setDate(shiftDay(date, 1))}><ChevronRight size={17} /></button></div><button type="button" className={`scheduler-archive-toggle${archive ? ' is-on' : ''}`} onClick={() => setArchive((value) => !value)}><Archive size={14} />{archive ? t('liveQueue') : t('archive')}</button></section>
+      <section className="scheduler-toolbar"><div className="scheduler-date-title"><p className="scheduler-eyebrow">{coordinator ? t('coordinatorSchedule') : t('mySchedule')}</p><h2><CalendarDays size={18} aria-hidden="true" />{displayDate(date, language)}</h2><span className={`scheduler-date-status${viewingToday ? ' is-today' : ''}`}>{viewingToday ? t('viewingToday') : t('viewingDate')}</span></div>{coordinator ? <label className="scheduler-designer-filter">{t('assignedView')}<select value={designerScope} onChange={selectDesignerScope}><option value="">{t('allUsers')}</option>{(data.schedulerUsers || data.designers).map((person) => <option key={person.email} value={person.email}>{displayName(person.email, person.displayName)}</option>)}</select></label> : null}<div className="scheduler-date-nav" aria-label={t('jumpToDate')}><button type="button" className="scheduler-date-arrow" aria-label={t('previousDay')} title={t('previousDay')} onClick={() => moveDate(-1)}><ChevronLeft size={17} /></button><label className="scheduler-date-picker" title={t('jumpToDate')}><input type="date" value={date} onChange={selectDate} aria-label={t('jumpToDate')} /></label><button type="button" className={`scheduler-date-today${viewingToday ? ' is-current' : ''}`} onClick={() => setDate(todayDate)} disabled={viewingToday} aria-current={viewingToday ? 'date' : undefined} title={viewingToday ? t('viewingToday') : t('today')}><CalendarDays size={14} />{t('today')}</button><button type="button" className="scheduler-date-arrow" aria-label={t('nextDay')} title={t('nextDay')} onClick={() => moveDate(1)}><ChevronRight size={17} /></button></div><button type="button" className={`scheduler-archive-toggle${archive ? ' is-on' : ''}`} onClick={() => setArchive((value) => !value)}><Archive size={14} />{archive ? t('liveQueue') : t('archive')}</button></section>
       {coordinator && !archive ? <section className={`scheduler-pool${poolDropActive ? ' is-drop-target' : ''}`} onDragOver={poolDragOver} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setPoolDropActive(false); }} onDrop={poolDrop} aria-label={t('poolDropHint')}><header><div><p className="scheduler-eyebrow">{t('productionPool')}</p><h2>{pool.length} {t('readyToSchedule')}</h2></div><small>{poolDropActive ? t('poolDropHint') : t('visibleSchedule')}</small></header><div className="scheduler-pool-list">{pool.map((task) => <PoolCard key={task.id} task={task} onOpen={setOpen} canMultiAssign={Boolean(coordinator)} />)}{!pool.length ? <p className="scheduler-empty">{t('emptyPool')}</p> : null}</div></section> : null}
       {!coordinator && canSelfAssign && !archive ? <section className="scheduler-pool"><header><div><p className="scheduler-eyebrow">My Pool</p><h2>{selfPool.length} {t('readyToSchedule')}</h2></div><small>Drag your request onto your own schedule.</small></header><div className="scheduler-pool-list">{selfPool.map((task) => <PoolCard key={task.id} task={task} onOpen={setOpen} />)}{!selfPool.length ? <p className="scheduler-empty">Create a post to start your own Pool.</p> : null}</div></section> : null}
       {(coordinator || canSelfAssign) && draft.length ? <div className="scheduler-draft-float"><button type="button" className="scheduler-secondary" onClick={clearDrafts}>{t('clearDrafts')}</button><button type="button" className="scheduler-submit" onClick={submit}><Send size={14} />{t('submit')} {draft.length}</button></div> : null}
