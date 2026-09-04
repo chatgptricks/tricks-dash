@@ -287,7 +287,8 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     if (errors.length) errors.slice(0, 5).forEach((error) => console.log('ERROR ', error.slice(0, 300)));
     process.exit(Object.values(checks).every(Boolean) ? 0 : 1);
   } catch (error) {
-    console.log('QUEUE HARNESS ERROR:', error?.stack || error);
+    for (const [label, passed] of Object.entries(checks)) console.log(`${passed ? 'PASS' : 'FAIL'}  ${label}`);
+    console.log('QUEUE HARNESS ERROR:', String(error?.stack || error).replace(/data:text\/javascript;base64,[A-Za-z0-9+/=]+/g, '<bundled-smoke>'));
     process.exit(1);
   }
 })();

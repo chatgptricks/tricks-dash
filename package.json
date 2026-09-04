@@ -8,6 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "test:queue": "node scripts/test-queue.mjs",
+    "test:resilience": "node scripts/test-retry.mjs && node scripts/test-api-resilience.mjs",
     "smoke:queue": "node smoke/run-queue.mjs",
     "smoke:settings": "node smoke/run-settings.mjs",
     "smoke:mobile": "node smoke/run-mobile.mjs",

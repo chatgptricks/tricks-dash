@@ -70,9 +70,13 @@ const clickTab = async (label) => {
       && [...(scrapeSelect?.options || [])].map((option) => option.value).join('|') === 'posts|reels|both';
 
     await clickTab('Users');
+    checks['User admin controls are collapsed by default'] = !document.querySelector('.settings-user-admin-options');
+    await act(async () => {
+      document.querySelector('[aria-label="Open admin options for esteban@sentientagency.io"]').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    });
     checks['Users centralizes identity and roles'] = Boolean(document.querySelector('[aria-label="Display name for esteban@sentientagency.io"]'))
       && Boolean(document.querySelector('.settings-user-admin-toggle'))
-      && Boolean(document.querySelector('.settings-row-accounts'));
+      && Boolean(document.querySelector('.settings-user-admin-accounts'));
     checks['Users show Slack avatar slot'] = Boolean(document.querySelector('.settings-user-avatar img'));
 
     await clickTab('Usage');

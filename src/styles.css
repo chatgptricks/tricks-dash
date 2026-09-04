@@ -5964,6 +5964,217 @@ body {
   .settings-user-save-state { flex: 1 1 100%; }
 }
 
+/* Users are browsed as identity badges first. The administrative form is
+   deliberately secondary and only opens from the card gear. */
+.settings-user-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 275px), 1fr));
+  gap: 12px;
+}
+
+.settings-user-badge {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  min-height: 0;
+  padding: 15px;
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 0 0, rgba(var(--accent-rgb), .15), transparent 48%),
+    var(--surface-1);
+}
+
+.settings-user-badge .settings-user-card-profile {
+  grid-template-columns: 62px minmax(0, 1fr);
+  padding-right: 30px;
+  gap: 11px;
+}
+
+.settings-user-badge .settings-user-avatar {
+  width: 62px;
+  height: 62px;
+  font-size: 17px;
+  border-width: 2px;
+  box-shadow: 0 9px 20px rgba(var(--shade), .28);
+}
+
+.settings-user-badge .settings-user-copy strong { font-size: 16px; }
+.settings-user-badge .settings-user-copy small { max-width: 100%; font-size: 11px; }
+
+.settings-user-card-gear {
+  position: absolute;
+  z-index: 1;
+  top: 12px;
+  right: 12px;
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid rgba(var(--edge), .13);
+  border-radius: 9px;
+  background: rgba(var(--edge), .045);
+  color: rgba(var(--ink), .64);
+  cursor: pointer;
+}
+
+.settings-user-card-gear:hover,
+.settings-user-badge.is-editor-open .settings-user-card-gear {
+  border-color: rgba(var(--accent-rgb), .55);
+  background: rgba(var(--accent-rgb), .13);
+  color: var(--accent-text);
+}
+
+.settings-user-badge-roles {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 4px;
+}
+
+.settings-user-highest-role,
+.settings-user-extra-roles {
+  display: inline-flex;
+  align-items: center;
+  min-height: 19px;
+  padding: 0 7px;
+  border: 1px solid rgba(var(--edge), .16);
+  border-radius: 999px;
+  background: rgba(var(--edge), .06);
+  color: rgba(var(--ink), .68);
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: .045em;
+  text-transform: uppercase;
+}
+
+.settings-user-highest-role.is-dev,
+.settings-user-highest-role.is-admin { border-color: rgba(118, 102, 255, .48); background: rgba(118, 102, 255, .15); color: #b3abff; }
+.settings-user-highest-role.is-vc { border-color: rgba(64, 176, 236, .45); background: rgba(64, 176, 236, .13); color: #7dd4ff; }
+.settings-user-highest-role.is-pd { border-color: rgba(var(--accent-rgb), .45); background: rgba(var(--accent-rgb), .12); color: var(--accent-text); }
+.settings-user-highest-role.is-trainee { border-color: rgba(246, 173, 63, .44); background: rgba(246, 173, 63, .12); color: #ffc96b; }
+.settings-user-extra-roles { padding: 0 6px; color: rgba(var(--ink), .54); }
+
+.settings-user-badge-meta {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding-top: 9px;
+  border-top: 1px solid rgba(var(--edge), .07);
+}
+
+.settings-user-badge-meta > span,
+.settings-user-badge-accounts::before {
+  flex: 0 0 auto;
+  color: rgba(var(--ink), .4);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.settings-user-badge-meta code {
+  overflow: hidden;
+  color: rgba(var(--ink), .76);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-user-badge-accounts {
+  display: flex;
+  align-items: center;
+  min-height: 30px;
+  padding-top: 2px;
+}
+
+.settings-user-badge-accounts::before { content: 'Accounts'; margin-right: 8px; }
+
+.settings-user-badge-accounts .settings-managed-account-avatar {
+  width: 28px;
+  height: 28px;
+  margin-left: -5px;
+  border: 2px solid var(--surface-1);
+  box-shadow: 0 2px 7px rgba(var(--shade), .16);
+}
+
+.settings-user-badge-accounts .settings-managed-account-avatar:first-of-type { margin-left: 0; }
+.settings-user-badge-accounts .settings-managed-account-avatar:hover { z-index: 2; transform: translateY(-2px); }
+
+.settings-user-accounts-more {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin-left: -5px;
+  border: 2px solid var(--surface-1);
+  border-radius: 50%;
+  background: rgba(var(--edge), .1);
+  color: rgba(var(--ink), .72);
+  font-size: 9px;
+  font-weight: 850;
+}
+
+.settings-user-no-accounts { color: rgba(var(--ink), .42); font-size: 11px; font-style: italic; }
+
+.settings-user-admin-panel {
+  display: grid;
+  gap: 10px;
+  margin-top: 1px;
+  padding: 12px;
+  border: 1px solid rgba(var(--accent-rgb), .2);
+  border-radius: 11px;
+  background: rgba(var(--shade), .12);
+}
+
+.settings-user-badge .settings-user-editor { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.settings-user-badge .settings-user-savebar { margin-top: 0; }
+
+.settings-user-admin-accounts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(var(--edge), .07);
+}
+
+.settings-user-admin-account-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+}
+
+.settings-user-admin-account-chips button {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 29px;
+  height: 29px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+}
+
+.settings-user-admin-account-chips .settings-managed-account-avatar { width: 29px; height: 29px; }
+.settings-user-admin-account-chips button > svg { position: absolute; display: none; color: #fff; filter: drop-shadow(0 1px 2px #000); }
+.settings-user-admin-account-chips button:hover > svg { display: block; }
+.settings-user-admin-account-chips button:hover .settings-managed-account-avatar { filter: brightness(.55); }
+
+.settings-user-badge .queue-designer-add { margin-left: auto; }
+
+@media (max-width: 620px) {
+  .settings-user-badge .settings-user-editor { grid-template-columns: 1fr; }
+  .settings-user-badge .settings-user-editor > label:first-child { grid-column: auto; }
+  .settings-user-admin-accounts { align-items: stretch; }
+  .settings-user-badge .queue-designer-add { width: 100%; margin-left: 0; }
+}
+
 /* Admin panel: Accounts / System tab switch. */
 .settings-tabs {
   display: flex;

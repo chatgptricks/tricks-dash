@@ -2,9 +2,17 @@ import { JSDOM } from 'jsdom';
 import * as esbuild from 'esbuild';
 import path from 'node:path';
 
+const queueTestTime = Date.parse('2026-09-04T14:00:00Z');
+class QueueTestDate extends Date {
+  constructor(...args) { super(...(args.length ? args : [queueTestTime])); }
+  static now() { return queueTestTime; }
+}
+globalThis.Date = QueueTestDate;
+
 const dom = new JSDOM('<!doctype html><html><head><title>Queue</title></head><body><div id="root"></div></body></html>', {
   url: 'https://sentientdash.app/queue.html', pretendToBeVisual: true,
 });
+dom.window.Date = QueueTestDate;
 for (const key of ['window', 'document', 'navigator', 'HTMLElement', 'Element', 'Node', 'Event', 'KeyboardEvent', 'MouseEvent', 'requestAnimationFrame', 'cancelAnimationFrame', 'getComputedStyle', 'localStorage']) {
   if (dom.window[key] !== undefined) { try { globalThis[key] = dom.window[key]; } catch {} }
 }
