@@ -2405,12 +2405,22 @@ function DashboardSkeleton() {
   return (
     <section className="dash-skeleton" role="status" aria-live="polite">
       <span className="sr-only">Loading the post library</span>
-      {/* No filter placeholders here: the real topbar already renders its own
-          disabled search and six placeholder pills while loading, so a second
-          set below duplicated the row and overlapped it. This is only the
-          grid, built from the real .gallery-grid / .post-card classes so the
-          placeholders inherit the actual column count, gaps, card height and
-          3:4 media ratio. */}
+      {/* This is the same tabs + filters row that appears once the catalogue
+          arrives. Keeping it in the document during the request prevents the
+          grid from jumping down when controls mount. */}
+      <div className="tabs-bar dash-skeleton-tabs" aria-hidden="true">
+        <div className="group-tabs">
+          {Array.from({ length: 5 }).map((_, index) => (
+            <span className={`skeleton-block dash-skeleton-tab${index === 0 ? ' is-active' : ''}`} key={index} />
+          ))}
+          <span className="skeleton-block dash-skeleton-tab dash-skeleton-tab-add" />
+        </div>
+        <div className="filter-row">
+          <div className="filter-triggers">
+            {Array.from({ length: 5 }).map((_, index) => <span className="skeleton-block dash-skeleton-filter" key={index} />)}
+          </div>
+        </div>
+      </div>
       <div className="gallery-grid" aria-hidden="true">
         {Array.from({ length: 10 }).map((_, index) => (
           <article className="post-card dash-skeleton-card" key={index}>
