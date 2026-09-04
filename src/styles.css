@@ -751,6 +751,43 @@ img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  z-index: 1;
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+
+.cover-image.is-loaded {
+  opacity: 1;
+}
+
+/* A post card is mounted as soon as its metadata reaches the browser, while
+   its cover may still be travelling from Instagram or the durable cover
+   route. A per-card shimmer makes that intermediate state explicit instead
+   of leaving a grid of silent dark rectangles. */
+.cover-image-skeleton {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    105deg,
+    rgba(var(--edge), 0.07) 18%,
+    rgba(var(--edge), 0.14) 35%,
+    rgba(var(--edge), 0.34) 50%,
+    rgba(var(--edge), 0.14) 65%,
+    rgba(var(--edge), 0.07) 82%
+  );
+  background-size: 250% 100%;
+  animation: cover-image-shimmer 1s linear infinite;
+}
+
+@keyframes cover-image-shimmer {
+  0% { background-position: 200% 50%; }
+  100% { background-position: -100% 50%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cover-image-skeleton { animation: none; }
 }
 
 /* Corner ribbon for paid placements (#aitoolsentient, or set by hand from

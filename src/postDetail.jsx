@@ -148,6 +148,11 @@ export const HotBadge = memo(function HotBadge({ post, large = false }) {
 export const CoverImage = memo(function CoverImage({ className, post, priority = false, children }) {
   const sources = useMemo(() => coverSources(post), [post]);
   const [sourceIndex, setSourceIndex] = useState(0);
+  // The catalogue can arrive before the cover files do. Keep a tiny piece of
+  // state per image so the card has a visible loading affordance until the
+  // browser has actually painted the selected source, not merely until its
+  // <img> element exists in the DOM.
+  const [loadedSource, setLoadedSource] = useState('');
   const sourceKey = sources.join('|');
 
   useEffect(() => {
@@ -155,22 +160,28 @@ export const CoverImage = memo(function CoverImage({ className, post, priority =
   }, [post.shortcode, sourceKey]);
 
   const activeSource = sources[sourceIndex];
+  const imageLoaded = Boolean(activeSource) && loadedSource === activeSource;
 
   return (
     <div className={className}>
       {activeSource ? (
-        <img
-          className="cover-image"
-          src={activeSource}
-          alt={post.shortcode}
-          loading={priority ? 'eager' : 'lazy'}
-          decoding="async"
-          fetchPriority={priority ? 'high' : 'auto'}
-          referrerPolicy="no-referrer"
-          onError={() => {
-            setSourceIndex((current) => Math.min(current + 1, sources.length));
-          }}
-        />
+        <>
+          {!imageLoaded ? <span className="cover-image-skeleton" aria-hidden="true" /> : null}
+          <img
+            className={`cover-image${imageLoaded ? ' is-loaded' : ''}`}
+            src={activeSource}
+            alt={post.shortcode}
+            loading={priority ? 'eager' : 'lazy'}
+            decoding="async"
+            fetchPriority={priority ? 'high' : 'auto'}
+            referrerPolicy="no-referrer"
+            onLoad={() => setLoadedSource(activeSource)}
+            onError={() => {
+              setLoadedSource('');
+              setSourceIndex((current) => Math.min(current + 1, sources.length));
+            }}
+          />
+        </>
       ) : (
         <div className="cover-fallback">
           <div>{post.postType || post.type}</div>
