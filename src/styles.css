@@ -5481,6 +5481,144 @@ body {
   width: 150px;
 }
 
+.settings-user-card {
+  display: grid;
+  grid-template-columns: minmax(205px, .52fr) minmax(0, 1.48fr);
+  gap: 14px 18px;
+  padding: 15px;
+  border-color: rgba(var(--edge), .12);
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 0 0, rgba(var(--accent-rgb), .11), transparent 38%),
+    var(--surface-1);
+  box-shadow: 0 10px 26px rgba(var(--shade), .08);
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.settings-user-card:hover {
+  border-color: rgba(var(--accent-rgb), .28);
+  box-shadow: 0 14px 32px rgba(var(--shade), .13);
+}
+
+.settings-user-card.has-draft { border-color: rgba(var(--accent-rgb), .58); }
+.settings-user-card .settings-row-account { align-self: start; padding: 3px 1px; }
+.settings-user-card .settings-user-avatar { width: 46px; height: 46px; font-size: 13px; box-shadow: 0 5px 15px rgba(var(--shade), .18); }
+.settings-user-card .settings-user-copy { gap: 4px; }
+.settings-user-card .settings-user-copy strong { font-size: 14px; letter-spacing: -.01em; }
+.settings-user-card .settings-user-copy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.settings-user-role-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 3px;
+}
+
+.settings-row-account .settings-user-role-badges > span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 19px;
+  padding: 0 7px;
+  border: 1px solid rgba(var(--edge), .14);
+  border-radius: 999px;
+  background: rgba(var(--edge), .055);
+  color: rgba(var(--ink), .68);
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.settings-row-account .settings-user-role-badges > .is-admin { border-color: rgba(118, 102, 255, .48); background: rgba(118, 102, 255, .15); color: #a9a0ff; }
+.settings-row-account .settings-user-role-badges > .is-vc { border-color: rgba(64, 176, 236, .45); background: rgba(64, 176, 236, .13); color: #78cfff; }
+.settings-row-account .settings-user-role-badges > .is-pd { border-color: rgba(var(--accent-rgb), .45); background: rgba(var(--accent-rgb), .12); color: var(--accent-text); }
+.settings-row-account .settings-user-role-badges > .is-trainee { border-color: rgba(246, 173, 63, .44); background: rgba(246, 173, 63, .12); color: #ffc96b; }
+
+/* User access is edited as a deliberate draft.  These controls used to save
+ * individually on blur/change, which made it impossible to tell whether a
+ * role, PP rate, or Slack ID had actually reached the server. */
+.settings-user-editor {
+  display: grid;
+  grid-template-columns: minmax(160px, 1.35fr) repeat(4, minmax(116px, 1fr)) auto;
+  gap: 8px;
+  flex: 1 1 680px;
+  min-width: 0;
+}
+
+.settings-user-card .settings-user-editor { grid-column: 2; align-self: start; }
+
+.settings-user-editor > label {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  color: rgba(var(--ink), .48);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .055em;
+  text-transform: uppercase;
+}
+
+.settings-user-editor input,
+.settings-user-editor select {
+  width: 100%;
+  height: 34px;
+  padding: 0 9px;
+  border: 1px solid rgba(var(--edge), .13);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text-strong);
+  font-size: 12px;
+  font-weight: 600;
+  box-sizing: border-box;
+}
+
+.settings-user-editor input:focus,
+.settings-user-editor select:focus {
+  border-color: rgba(var(--accent-rgb), .7);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), .11);
+  outline: none;
+}
+
+.settings-user-editor .settings-user-admin-toggle {
+  align-self: end;
+  height: 34px;
+  box-sizing: border-box;
+  white-space: nowrap;
+}
+
+.settings-user-savebar {
+  display: flex;
+  flex: 1 1 100%;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+  margin-top: 2px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(var(--edge), .07);
+}
+
+.settings-user-card .settings-user-savebar,
+.settings-user-card .settings-row-accounts { grid-column: 1 / -1; }
+
+.settings-user-savebar .ghost-button {
+  min-height: 32px;
+  height: 32px;
+  padding: 0 11px;
+  font-size: 11px;
+}
+
+.settings-user-save-state {
+  margin-right: auto;
+  color: rgba(var(--ink), .48);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.settings-user-save-state.is-dirty { color: var(--accent-text); }
+.settings-user-save-state.is-saving { color: var(--accent-text); }
+.settings-user-save-state.is-saved { color: #48bd82; }
+.settings-user-save-state.is-error { color: #ff8888; }
+
 .settings-user-admin-toggle {
   display: inline-flex;
   align-items: center;
@@ -5657,6 +5795,20 @@ body {
     flex: 1 1 auto;
     width: auto;
   }
+
+  .settings-user-editor {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    flex-basis: 100%;
+  }
+
+  .settings-user-card { grid-template-columns: 1fr; gap: 12px; padding: 13px; }
+  .settings-user-card .settings-user-editor { grid-column: auto; }
+  .settings-user-card .settings-user-savebar,
+  .settings-user-card .settings-row-accounts { grid-column: auto; }
+
+  .settings-user-editor > label:first-child { grid-column: 1 / -1; }
+  .settings-user-savebar { flex-wrap: wrap; justify-content: flex-end; }
+  .settings-user-save-state { flex: 1 1 100%; }
 }
 
 /* Admin panel: Accounts / System tab switch. */
