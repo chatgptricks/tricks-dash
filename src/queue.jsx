@@ -1028,7 +1028,13 @@ function QueueApp({ user }) {
   const [data, setData] = useState(() => initialSnapshotRef.current?.data || null);
   const [viewer, setViewer] = useState(null);
   const [timeZonePreview, setTimeZonePreview] = useState(readDevTimeZone);
-  const [date, setDate] = useState(() => initialSnapshotRef.current?.date || DAY(new Date(), QUEUE_TIME_ZONE));
+  const [date, setDate] = useState(() => {
+    const today = DAY(new Date(), QUEUE_TIME_ZONE);
+    // Keep a same-day snapshot for a quick reload, but never reopen Queue on
+    // yesterday's schedule merely because the browser retained local state.
+    const savedDate = initialSnapshotRef.current?.date;
+    return savedDate === today ? savedDate : today;
+  });
   const [loading, setLoading] = useState(() => !initialSnapshotRef.current?.data);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
