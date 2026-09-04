@@ -2422,7 +2422,7 @@ function DashboardSkeleton() {
         </div>
       </div>
       <div className="gallery-grid" aria-hidden="true">
-        {Array.from({ length: 10 }).map((_, index) => (
+        {Array.from({ length: 12 }).map((_, index) => (
           <article className="post-card dash-skeleton-card" key={index}>
             <div className="post-header">
               <div className="post-user">
