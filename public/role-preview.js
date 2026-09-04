@@ -1,6 +1,6 @@
 (() => {
   const ROLE_KEY = 'sentient.queueRolePreview';
-  const API = 'https://cortex-api-db2e.onrender.com';
+  const API = 'https://sentientdash-app.onrender.com';
   const ALL_ROLES = ['sales', 'pd', 'vc', 'trainee', 'admin'];
   const LABELS = { sales: 'Sales', pd: 'Post Designer', vc: 'Viral Coordinator', trainee: 'Trainee', admin: 'Admin' };
 

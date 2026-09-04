@@ -356,7 +356,7 @@ table.hist-table td{text-align:left;padding:11px 8px;white-space:nowrap}
 </div>
 
 <script>
-const API = 'https://cortex-api-db2e.onrender.com';
+const API = 'https://sentientdash-app.onrender.com';
 /* A missing avatar used to set visibility:hidden, which leaves an invisible
    gap -- the row still reserves the space but shows nothing, so it reads as a
    rendering bug rather than "no picture on file". Swap in the initial instead,
@@ -1004,7 +1004,7 @@ provider.setCustomParameters({ prompt: 'select_account' });
 // Single sign-on across *.sentientdash.app -- see src/sso.js for the full
 // writeup. This is a vanilla-JS copy of the same cookie bootstrap since this
 // page is a standalone static file, not part of the Vite React bundle.
-const SSO_API = 'https://cortex-api-db2e.onrender.com';
+const SSO_API = 'https://sentientdash-app.onrender.com';
 const SSO_COOKIE = 'sentient_sso';
 function ssoCookieDomain() { return location.hostname.endsWith('sentientdash.app') ? '.sentientdash.app' : ''; }
 function ssoReadCookie() {
