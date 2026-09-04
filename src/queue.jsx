@@ -1319,9 +1319,15 @@ function QueueApp({ user }) {
   }, [data?.viewer?.email, loadTickets]);
 
   const isDev = Boolean(viewer?.is_dev || data?.viewer?.isDev || String(user?.email || '').trim().toLowerCase() === DEV_EMAIL);
+  const previewRole = window.sessionStorage.getItem('sentient.queueRolePreview') || '';
   const rolePreviewActive = hasActiveRolePreview();
   const effectiveDevAccess = isDev && !rolePreviewActive;
-  const coordinator = data?.viewer && (effectiveDevAccess || data.viewer.isAdmin || data.viewer.operatingRoles?.includes('vc'));
+  // The Dev role selector intentionally lets Esteban exercise the real Admin
+  // and VC Queue workflows. Do not render a PD-only board merely because a
+  // stale Queue snapshot predates the role response; the API still enforces
+  // the same role for every mutation.
+  const devCoordinatorPreview = isDev && ['admin', 'vc'].includes(previewRole);
+  const coordinator = data?.viewer && (effectiveDevAccess || devCoordinatorPreview || data.viewer.isAdmin || data.viewer.operatingRoles?.includes('vc'));
   const simulatedTimeZone = isDev ? timeZonePreview : (data?.viewer?.timeZone || 'America/Costa_Rica');
   const canSelfAssign = Boolean(data?.viewer?.canSelfAssign);
   const pool = useMemo(() => {
