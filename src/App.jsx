@@ -48,6 +48,7 @@ import { clearSsoCookie, startSsoRefresh, trySsoSignIn } from './sso';
 import { PrefsProvider, usePrefs } from './prefsContext';
 import { ACCENT_CHOICES, accentHex } from './prefs';
 import { API_BASE, IG_HANDLE, apiFetch } from './api';
+import { mergeUserDrafts, saveUserProfile, userProfileDraft as userDraft } from './userAdmin';
 import { readDashboardSnapshot, writeDashboardSnapshot } from './dashboardCache';
 import { followQueueLive } from './queueLive';
 import { decodeRouteState, encodeRouteState } from './urlCodec';
@@ -2974,6 +2975,10 @@ export function SettingsPanel({
   const [usersNotice, setUsersNotice] = useState('');
   const [userDrafts, setUserDrafts] = useState({});
   const [userSaveState, setUserSaveState] = useState({});
+  const [userSaveErrors, setUserSaveErrors] = useState({});
+  const [userSearch, setUserSearch] = useState('');
+  const userDraftBaselines = useRef({});
+  const userWriteInFlight = useRef(false);
   const [openUserEditorEmail, setOpenUserEditorEmail] = useState('');
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserDisplayName, setNewUserDisplayName] = useState('');
@@ -2991,18 +2996,13 @@ export function SettingsPanel({
   const [designerAccounts, setDesignerAccounts] = useState([]);
   const [designerAccountChoice, setDesignerAccountChoice] = useState({});
 
-  const userDraft = (person) => ({
-    display_name: person.display_name || person.email.split('@')[0],
-    operating_role: person.operating_role || 'pd',
-    time_zone: person.time_zone || '',
-    minutes_per_pp: person.minutes_per_pp ?? '',
-    slack_user_id: person.slack_user_id || '',
-    role: person.role === 'admin' || person.is_admin ? 'admin' : 'viewer',
-    can_self_assign: Boolean(person.can_self_assign),
-  });
-  const syncUserDrafts = (people) => setUserDrafts(Object.fromEntries(people.map((person) => [person.email, userDraft(person)])));
+  const syncUserDrafts = (people, savedEmail = '') => {
+    const previous = userDraftBaselines.current;
+    userDraftBaselines.current = Object.fromEntries(people.map((person) => [person.email, userDraft(person)]));
+    setUserDrafts((current) => mergeUserDrafts(previous, people, current, savedEmail));
+  };
   const changeUserDraft = (email, changes) => setUserDrafts((current) => ({ ...current, [email]: { ...(current[email] || {}), ...changes } }));
-  const userDraftIsDirty = (person, draft) => ['display_name', 'operating_role', 'time_zone', 'minutes_per_pp', 'slack_user_id', 'role', 'can_self_assign'].some((field) => String(draft[field] ?? '') !== String(userDraft(person)[field] ?? ''));
+  const userDraftIsDirty = (person, draft) => Object.keys(userDraft(person)).some((field) => String(draft[field] ?? '') !== String(userDraft(person)[field] ?? ''));
 
   // Users tab -- usage heatmap. Separate load/loading state from the roster
   // above: the roster is small and cheap, this is a heavier aggregation
@@ -3704,31 +3704,28 @@ export function SettingsPanel({
 
   const addUser = async (event) => {
     event.preventDefault();
+    if (userWriteInFlight.current || userActionEmail) return;
     const email = newUserEmail.trim().toLowerCase();
     if (!email || !email.includes('@')) {
       setUsersNotice('Enter a valid email address.');
       return;
     }
+    if (users.some((person) => person.email === email)) {
+      setOpenUserEditorEmail(email);
+      setUsersNotice('This person already has access. Edit their existing badge instead.');
+      return;
+    }
+    userWriteInFlight.current = true;
     setAddingUser(true);
     setUsersNotice('');
     try {
-      const response = await apiFetch(`${API_BASE}/api/admin/users`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          email,
-          display_name: newUserDisplayName.trim() || email.split('@')[0],
-          role: newUserIsAdmin ? 'admin' : 'viewer',
-          operating_role: newUserOperatingRole,
-          is_admin: String(newUserIsAdmin),
-          slack_user_id: newUserSlackId.trim(),
-        }),
+      const body = await saveUserProfile({
+        email,
+        display_name: newUserDisplayName.trim() || email.split('@')[0],
+        role: newUserIsAdmin ? 'admin' : 'viewer',
+        operating_role: newUserOperatingRole,
+        slack_user_id: newUserSlackId.trim(),
       });
-      const body = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        setUsersNotice(body.detail || 'Could not add that person.');
-        return;
-      }
       const nextUsers = body.users || [];
       setUsers(nextUsers);
       syncUserDrafts(nextUsers);
@@ -3739,79 +3736,43 @@ export function SettingsPanel({
       setNewUserSlackId('');
       setUsersNotice(`Added @${email}.`);
     } catch (error) {
-      setUsersNotice('Network error while adding.');
+      setUsersNotice(error.message || 'Could not confirm the new user. Your entries are kept; try again.');
     } finally {
+      userWriteInFlight.current = false;
       setAddingUser(false);
     }
   };
 
   const updateUser = async (user, changes) => {
+    if (userWriteInFlight.current || userActionEmail) return;
+    userWriteInFlight.current = true;
     setUserActionEmail(user.email);
     setUsersNotice('');
+    setUserSaveErrors((current) => ({ ...current, [user.email]: '' }));
     setUserSaveState((current) => ({ ...current, [user.email]: 'saving' }));
-    const nextRole = changes.role ?? user.role;
-    const nextOperatingRole = changes.operating_role ?? user.operating_role ?? 'sales';
-    const nextSlackId = changes.slack_user_id ?? user.slack_user_id ?? '';
-    const nextDisplayName = changes.display_name ?? user.display_name ?? user.email.split('@')[0];
-    const nextTimeZone = changes.time_zone ?? user.time_zone ?? '';
-    const nextCanSelfAssign = changes.can_self_assign ?? Boolean(user.can_self_assign);
-    const nextMinutesPerPP = changes.minutes_per_pp ?? user.minutes_per_pp ?? '';
-    const previousUser = user;
-    // Reflect edits immediately. The API response remains authoritative, but
-    // a slow round trip should never make the Users table feel unresponsive.
-    setUsers((current) => current.map((person) => person.email === user.email ? {
-      ...person,
-      display_name: nextDisplayName,
-      role: nextRole,
-      operating_role: nextOperatingRole,
-      slack_user_id: nextSlackId,
-      time_zone: nextTimeZone,
-      can_self_assign: nextCanSelfAssign ? 1 : 0,
-      minutes_per_pp: nextMinutesPerPP === '' ? null : Number(nextMinutesPerPP),
-      is_admin: nextRole === 'admin' ? 1 : 0,
-    } : person));
-    changeUserDraft(user.email, { ...changes, display_name: nextDisplayName, operating_role: nextOperatingRole, time_zone: nextTimeZone, slack_user_id: nextSlackId, minutes_per_pp: nextMinutesPerPP, role: nextRole, can_self_assign: nextCanSelfAssign });
     try {
-      const response = await apiFetch(`${API_BASE}/api/admin/users`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          email: user.email,
-          display_name: nextDisplayName,
-          role: nextRole,
-          operating_role: nextOperatingRole,
-          is_admin: String(nextRole === 'admin'),
-          slack_user_id: nextSlackId,
-          time_zone: nextTimeZone,
-          can_self_assign: String(Boolean(nextCanSelfAssign)),
-          ...(nextMinutesPerPP === '' ? {} : { minutes_per_pp: String(nextMinutesPerPP) }),
-        }),
+      const submitted = { ...userDraft(user), ...changes };
+      const body = await saveUserProfile({ email: user.email, ...submitted }, {
+        onStatus: (status) => setUserSaveState((current) => ({ ...current, [user.email]: status })),
       });
-      const body = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        setUsers((current) => current.map((person) => person.email === user.email ? previousUser : person));
-        changeUserDraft(user.email, userDraft(previousUser));
-        setUserSaveState((current) => ({ ...current, [user.email]: 'error' }));
-        setUsersNotice(body.detail || `Could not update ${user.email}.`);
-        return;
-      }
-      const nextUsers = body.users || [];
+      const nextUsers = body.users;
       setUsers(nextUsers);
-      syncUserDrafts(nextUsers);
+      syncUserDrafts(nextUsers, user.email);
       setUserSaveState((current) => ({ ...current, [user.email]: 'saved' }));
-      await loadDesignerAccounts();
       setUsersNotice(`Updated ${user.email}.`);
     } catch (error) {
-      setUsers((current) => current.map((person) => person.email === user.email ? previousUser : person));
-      changeUserDraft(user.email, userDraft(previousUser));
       setUserSaveState((current) => ({ ...current, [user.email]: 'error' }));
-      setUsersNotice('Network error while updating.');
+      const message = error.message || 'Could not confirm the change. Your draft is kept; try again.';
+      setUserSaveErrors((current) => ({ ...current, [user.email]: message }));
+      setUsersNotice(message);
     } finally {
+      userWriteInFlight.current = false;
       setUserActionEmail('');
     }
   };
 
   const addDesignerAccount = async (designerEmail) => {
+    if (userWriteInFlight.current || userActionEmail || addingUser) return;
     const handle = designerAccountChoice[designerEmail];
     if (!handle) return;
     setUserActionEmail(designerEmail);
@@ -3825,6 +3786,7 @@ export function SettingsPanel({
   };
 
   const removeDesignerAccount = async (designerEmail, handle) => {
+    if (userWriteInFlight.current || userActionEmail || addingUser) return;
     setUserActionEmail(designerEmail);
     try {
       const query = new URLSearchParams({ designer_email: designerEmail, account_handle: handle });
@@ -3836,6 +3798,7 @@ export function SettingsPanel({
   };
 
   const removeUser = async (email) => {
+    if (userWriteInFlight.current || userActionEmail || addingUser) return;
     setUserActionEmail(email);
     setUsersNotice('');
     try {
@@ -4656,24 +4619,23 @@ export function SettingsPanel({
                       <input type="checkbox" checked={newUserIsAdmin} onChange={(event) => setNewUserIsAdmin(event.target.checked)} />
                       <span>{t('Admin (full Settings access)')}</span>
                     </label>
-                    <button type="submit" className="ghost-button primary" disabled={addingUser}>
+                    <button type="submit" className="ghost-button primary" disabled={addingUser || Boolean(userActionEmail)}>
                       {addingUser ? t('Adding…') : t('Add')}
                     </button>
                   </form>
-                  {usersNotice ? <p className="settings-notice">{usersNotice}</p> : null}
+                  {usersNotice ? <p className="settings-notice" role="status" aria-live="polite">{usersNotice}</p> : null}
                 </section>
 
                 <section className="settings-section">
                   <h3>{t('People with access')}</h3>
                   <p className="wizard-hint">
-                    Role and Queue account assignment live on the same row per person now -- there
-                    used to be a second, separate list here just for accounts, keyed off a
-                    different endpoint, which meant scrolling to two places to see one person's
-                    full access.
+                    Each badge shows identity, roles, and managed accounts. Open the gear to edit.
+                    Changes are only marked saved after the server confirms them.
                   </p>
+                  <input className="settings-user-search" aria-label="Search users by name, email, or role" placeholder="Search people or roles…" value={userSearch} onChange={(event) => setUserSearch(event.target.value)} />
                   <div className="settings-table settings-user-grid">
                     {usersLoading ? <p className="wizard-hint">Loading…</p> : null}
-                    {users.map((user) => {
+                    {users.filter((person) => `${person.display_name} ${person.email} ${person.operating_roles} ${person.role}`.toLowerCase().includes(userSearch.trim().toLowerCase())).map((user) => {
                       const designer = designerAccounts.find((item) => item.email === user.email) || { email: user.email, accounts: [] };
                       const available = roster.filter((account) => account.group === 'sentient' && account.is_active !== false && !designer.accounts.includes(account.handle));
                       const managedAccounts = designer.accounts.map((handle) => ({
@@ -4708,6 +4670,7 @@ export function SettingsPanel({
                           <button
                             type="button"
                             className="settings-user-card-gear"
+                            aria-expanded={editorOpen}
                             aria-label={`${editorOpen ? 'Close' : 'Open'} admin options for ${user.email}`}
                             title={editorOpen ? 'Close admin options' : 'Manage user'}
                             onClick={() => setOpenUserEditorEmail((current) => current === user.email ? '' : user.email)}
@@ -4722,7 +4685,7 @@ export function SettingsPanel({
                             <div className="settings-user-copy">
                               <strong>{user.display_name || user.email.split('@')[0]}</strong>
                               <small>{user.email}</small>
-                              <div className="settings-user-badge-roles">
+                              <div className="settings-user-badge-roles" title={roleBadges.join(', ')} aria-label={`Roles: ${roleBadges.join(', ')}`}>
                                 <span className={`settings-user-highest-role is-${highestRole.toLowerCase()}`}>{highestRole}</span>
                                 {extraRoleCount ? <span className="settings-user-extra-roles">+{extraRoleCount}</span> : null}
                               </div>
@@ -4743,6 +4706,7 @@ export function SettingsPanel({
                             {managedAccounts.length > 7 ? <span className="settings-user-accounts-more">+{managedAccounts.length - 7}</span> : null}
                             {!managedAccounts.length ? <span className="settings-user-no-accounts">No accounts</span> : null}
                           </div>
+                          {dirty || saveState === 'saving' || saveState === 'checking' || saveState === 'error' ? <span className={`settings-user-save-state is-${saveState || 'dirty'}`} role="status">{saveState === 'saving' ? 'Saving…' : saveState === 'checking' ? 'Confirming with server…' : saveState === 'error' ? 'Not confirmed · draft kept' : 'Unsaved changes'}</span> : null}
                           {editorOpen ? <section className="settings-user-admin-panel">
                             <div className="settings-user-editor">
                               <label><span>Display name</span><input aria-label={`Display name for ${user.email}`} value={draft.display_name} onChange={(event) => changeUserDraft(user.email, { display_name: event.target.value })} disabled={userActionEmail === user.email} /></label>
@@ -4753,11 +4717,12 @@ export function SettingsPanel({
                               <label className="settings-user-admin-toggle"><input type="checkbox" checked={draft.role === 'admin'} onChange={(event) => changeUserDraft(user.email, { role: event.target.checked ? 'admin' : 'viewer' })} disabled={userActionEmail === user.email || user.email === userEmail} /><span>Admin access</span></label>
                             </div>
                             <footer className="settings-user-savebar">
-                              <span className={`settings-user-save-state is-${saveState || (dirty ? 'dirty' : 'saved')}`}>{saveState === 'saving' ? 'Saving…' : saveState === 'error' ? 'Could not save' : dirty ? 'Unsaved changes' : 'All changes saved'}</span>
-                              <button type="button" className="ghost-button" disabled={!dirty || userActionEmail === user.email} onClick={() => { changeUserDraft(user.email, userDraft(user)); setUserSaveState((current) => ({ ...current, [user.email]: 'saved' })); }}>Discard</button>
-                              <button type="button" className="ghost-button primary" disabled={!dirty || userActionEmail === user.email} onClick={() => updateUser(user, draft)}>{userActionEmail === user.email ? 'Saving…' : 'Save changes'}</button>
-                              <button type="button" className="ghost-button ghost-button-danger" onClick={() => removeUser(user.email)} disabled={userActionEmail === user.email}>Remove</button>
+                              <span className={`settings-user-save-state is-${saveState || (dirty ? 'dirty' : 'saved')}`}>{saveState === 'saving' ? 'Saving…' : saveState === 'checking' ? 'Confirming…' : saveState === 'error' ? 'Draft kept' : dirty ? 'Unsaved changes' : 'All changes saved'}</span>
+                              <button type="button" className="ghost-button" disabled={!dirty || Boolean(userActionEmail) || addingUser} onClick={() => { changeUserDraft(user.email, userDraft(user)); setUserSaveState((current) => ({ ...current, [user.email]: 'saved' })); setUserSaveErrors((current) => ({ ...current, [user.email]: '' })); }}>Discard</button>
+                              <button type="button" className="ghost-button primary" disabled={(!dirty && saveState !== 'error') || Boolean(userActionEmail) || addingUser} onClick={() => updateUser(user, draft)}>{userActionEmail === user.email ? 'Saving…' : saveState === 'error' ? 'Retry save' : 'Save changes'}</button>
+                              <button type="button" className="ghost-button ghost-button-danger" onClick={() => removeUser(user.email)} disabled={Boolean(userActionEmail) || addingUser || user.email === userEmail}>Remove</button>
                             </footer>
+                            {userSaveErrors[user.email] ? <p className="settings-user-save-error" role="alert">{userSaveErrors[user.email]}</p> : null}
                             <div className="settings-user-admin-accounts">
                               <span className="settings-row-accounts-label">Managed Queue accounts</span>
                               <div className="settings-user-admin-account-chips">

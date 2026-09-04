@@ -5984,6 +5984,26 @@ body {
     var(--surface-1);
 }
 
+.settings-user-search {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 12px 0;
+  padding: 11px 13px;
+  border: 1px solid rgba(var(--edge), .18);
+  border-radius: 10px;
+  background: var(--surface-1);
+  color: rgb(var(--ink));
+}
+
+.settings-user-save-error {
+  margin: 8px 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #f87171;
+}
+
+.settings-user-save-state.is-checking { color: var(--accent-text); }
+
 .settings-user-badge .settings-user-card-profile {
   grid-template-columns: 62px minmax(0, 1fr);
   padding-right: 30px;
