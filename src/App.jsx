@@ -17,6 +17,7 @@ import {
   ImagePlus,
   Link2,
   ListTodo,
+  LoaderCircle,
   LogOut,
   MessageCircle,
   MessageSquare,
@@ -434,6 +435,27 @@ const compactFormatter = new Intl.NumberFormat('en-US', { notation: 'compact', m
 // them (or the old 500 placeholder) would be misleading -- render a dash.
 const UNKNOWN_LIKES_MAX = 3;
 
+// The API returns the full post collection, so this compact fingerprint lets
+// an open dashboard distinguish a real server-side change from a routine
+// background poll without comparing or rendering 50k records twice.
+function dashboardDataRevision(posts = [], summary = {}) {
+  let hash = 2166136261;
+  const add = (value) => {
+    const text = String(value ?? '');
+    for (let index = 0; index < text.length; index += 1) {
+      hash ^= text.charCodeAt(index);
+      hash = Math.imul(hash, 16777619);
+    }
+  };
+  add(JSON.stringify(summary));
+  posts.forEach((post) => add([
+    post.account, post.shortcode, post.postDate, post.likes, post.comments,
+    post.isHot, post.hotRateMultiplier, post.queueState, post.queueRequestId,
+    post.isPromo, post.hidden, post.permalink, post.imagePath,
+  ].join('|')));
+  return `${posts.length}:${hash >>> 0}`;
+}
+
 function formatLikes(value) {
   if (value === null || value === undefined || Number(value) <= UNKNOWN_LIKES_MAX) return '—';
   return compactFormatter.format(value);
@@ -830,6 +852,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
   const [connectionNotice, setConnectionNotice] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [refreshNotice, setRefreshNotice] = useState(null);
+  const [incomingData, setIncomingData] = useState(false);
   // Two-tier roles: everyone allowlisted sees the dashboard, only admins see
   // Settings. This is purely a UI convenience -- the backend rejects
   // /api/admin/* for non-admins regardless of what this flag says.
@@ -845,6 +868,8 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
   const reconnectTimer = useRef(null);
   const reconnectAttempt = useRef(0);
   const dashboardLoader = useRef(null);
+  const dashboardRevisionRef = useRef(null);
+  const incomingDataTimerRef = useRef(null);
   const requestedRolePreview = window.sessionStorage.getItem('sentient.queueRolePreview') || '';
   const activeRolePreview = ACTIVE_ROLE_PREVIEWS.has(requestedRolePreview) ? requestedRolePreview : '';
   const rolePreviewActive = Boolean(activeRolePreview);
@@ -873,6 +898,9 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
   const summary = dashboard.summary;
   const ranges = useMemo(() => calculateRanges(posts), [posts]);
   const datePresets = useMemo(() => buildDatePresets(ranges), [ranges]);
+  useEffect(() => {
+    dashboardRevisionRef.current = dashboardDataRevision(dashboard.posts, dashboard.summary);
+  }, [dashboard]);
 
   const refreshQueueSummary = useCallback(async () => {
     try {
@@ -990,6 +1018,12 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
       if (!Array.isArray(postsData.posts) || !Array.isArray(accountsData.accounts)) {
         throw new Error('The shared post database returned an invalid response.');
       }
+      const nextRevision = dashboardDataRevision(postsData.posts, postsData.summary || {});
+      const hasIncomingData = silent && dashboardRevisionRef.current !== null && dashboardRevisionRef.current !== nextRevision;
+      if (hasIncomingData) {
+        window.clearTimeout(incomingDataTimerRef.current);
+        setIncomingData(true);
+      }
       setDashboard({ posts: postsData.posts, summary: postsData.summary || {} });
       setAccounts(accountsData.accounts);
       writeDashboardSnapshot({ posts: postsData.posts, summary: postsData.summary || {}, accounts: accountsData.accounts }).catch(() => {});
@@ -1001,6 +1035,9 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
         reconnectTimer.current = null;
       }
       loadAccess(signal);
+      if (hasIncomingData) {
+        incomingDataTimerRef.current = window.setTimeout(() => setIncomingData(false), 900);
+      }
     } catch (error) {
       if (error.name !== 'AbortError') {
         // Render can briefly replace the API instance during deploys. Do not
@@ -1044,6 +1081,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
 
   useEffect(() => () => {
     if (reconnectTimer.current) window.clearTimeout(reconnectTimer.current);
+    if (incomingDataTimerRef.current) window.clearTimeout(incomingDataTimerRef.current);
   }, []);
 
   useEffect(() => {
@@ -1911,6 +1949,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
                 {refreshNotice.text}
               </p>
             ) : null}
+            {incomingData ? <div className="live-data-notice" role="status" aria-live="polite"><LoaderCircle className="spin" size={16} /><span><b>New data is incoming</b><small>Refreshing dashboard…</small></span></div> : null}
             {/* Refreshes are deliberately silent once a real catalogue is on
                 screen. A transient background failure used to leave the
                 reconnect banner visible forever even though the cached
