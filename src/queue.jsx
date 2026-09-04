@@ -60,7 +60,7 @@ const queueScheduleFromViewer = (date, minutes, timeZone = QUEUE_TIME_ZONE) => q
 // particular, never prefix an already-absolute Instagram CDN URL with the
 // API origin (that produced an invalid URL), and use Cortex's cached cover
 // route when a newly imported post has no usable CDN URL yet.
-const cover = (task) => coverUrlForPost(task?.post);
+const cover = (task) => coverUrlForPost(task?.publishedPost || task?.post);
 const accountMention = (value) => { const clean = String(value || '').trim().replace(/^@/, ''); return clean ? `@${clean}` : ''; };
 const locale = (language) => language === 'es' ? 'es-CR' : 'en-US';
 const displayDate = (value, language) => new Date(`${value}T12:00:00`).toLocaleDateString(locale(language), { weekday: 'long', month: 'short', day: 'numeric' });
@@ -262,8 +262,9 @@ async function json(path, options) {
 }
 
 function queuePost(task) {
-  const type = task.post?.type || 'Image';
-  return { ...task.post, postKey: `${task.post?.account}:${task.post?.shortcode}`, account: task.post?.account, shortcode: task.post?.shortcode, title: task.post?.title || task.title || '', isCustom: Boolean(task.post?.isCustom || task.isCustom), coverUrl: task.post?.coverUrl, caption: task.post?.caption || '', postDate: task.post?.publishedAt, postType: type, type, isVideo: String(type).toLowerCase().includes('video') || String(type).toLowerCase().includes('reel'), showsHotBadge: false };
+  const post = task?.publishedPost || task?.post || {};
+  const type = post.type || 'Image';
+  return { ...post, postKey: `${post.account}:${post.shortcode}`, account: post.account, shortcode: post.shortcode, title: post.title || task?.title || '', isCustom: Boolean(post.isCustom || task?.isCustom), coverUrl: post.coverUrl, caption: post.caption || '', postDate: post.publishedAt, postType: type, type, isVideo: String(type).toLowerCase().includes('video') || String(type).toLowerCase().includes('reel'), showsHotBadge: false };
 }
 
 function AuthGate({ notice, setNotice }) {
