@@ -112,6 +112,7 @@
     var requestId = target.dataset.contextRequestId || target.dataset.requestId || '';
     var duplicable = target.dataset.contextDuplicate === 'true';
     var multiAssignable = target.dataset.contextMultiAssign === 'true';
+    var cancellable = target.dataset.contextCancel === 'true';
     if (!title) title = textOf(target).slice(0, 120);
     if (!permalink) {
       var link = target.querySelector('a[href^="http"]');
@@ -121,7 +122,7 @@
       var handleMatch = textOf(target).match(/@([a-z0-9._]+)/i);
       if (handleMatch) account = handleMatch[1];
     }
-    return { type: type, title: title, account: account.replace(/^@/, ''), permalink: permalink, postKey: postKey, shortcode: shortcode, requestId: requestId, duplicable: duplicable, multiAssignable: multiAssignable };
+    return { type: type, title: title, account: account.replace(/^@/, ''), permalink: permalink, postKey: postKey, shortcode: shortcode, requestId: requestId, duplicable: duplicable, multiAssignable: multiAssignable, cancellable: cancellable };
   }
 
   function openTarget(target) {
@@ -150,6 +151,7 @@
       add(context.type === 'post' ? (es ? 'Abrir post' : 'Open post') : openLabel, 'open', { primary: true });
       if (target.dataset.contextQuickAdd === 'true') add(es ? 'Agregar rápido al Queue' : 'Quick add to Queue', 'quick-add', { primary: true });
       if (context.type === 'pool' && context.multiAssignable && context.requestId) add(es ? 'Asignar a varias cuentas' : 'Assign to multiple accounts', 'assign-multiple', { primary: true });
+      if (context.type === 'pool' && context.cancellable && context.requestId) add(es ? 'Cancelar post' : 'Cancel post', 'cancel', { danger: true });
       var editButton = findButton(/\b(edit|editar)\b/i);
       var cancelButton = findButton(/\b(cancel|cancelar)\b/i);
       if (editButton && context.type === 'post') add(es ? 'Editar post' : 'Edit post', 'invoke', { primary: true, element: editButton });
@@ -207,6 +209,7 @@
         else if (item.action === 'quick-add') dispatch('quick-add', target, context);
         else if (item.action === 'duplicate') dispatch('duplicate', target, context);
         else if (item.action === 'assign-multiple') dispatch('assign-multiple', target, context);
+        else if (item.action === 'cancel') dispatch('cancel', target, context);
         else if (item.action === 'invoke' && item.element) item.element.click();
         else if (item.action === 'open-account') window.open('https://www.instagram.com/' + encodeURIComponent(context.account) + '/', '_blank', 'noopener');
         else if (item.action === 'copy-link') copyText(context.permalink);

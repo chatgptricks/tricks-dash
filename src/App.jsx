@@ -2057,6 +2057,30 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
                   </FilterPopover>
 
                   <FilterPopover
+                    id="sort"
+                    icon={<ArrowUpDown size={13} />}
+                    label={t('Sort')}
+                    summary={sortBy !== 'newest' ? SORT_OPTIONS.find((o) => o.value === sortBy)?.label : ''}
+                    isActive={sortBy !== 'newest'}
+                    width={240}
+                  >
+                    <div className="sort-options">
+                      {SORT_OPTIONS.map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          className={option.value === sortBy ? 'sort-option sort-option-active' : 'sort-option'}
+                          onClick={() => startTransition(() => setSortBy(option.value))}
+                          aria-pressed={option.value === sortBy}
+                        >
+                          {option.label}
+                          {option.value === sortBy ? <Check size={14} /> : null}
+                        </button>
+                      ))}
+                    </div>
+                  </FilterPopover>
+
+                  <FilterPopover
                     id="type"
                     icon={<Filter size={13} />}
                     label={t('Type')}
@@ -2066,49 +2090,17 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
                   >
                     <div className="chip-row">
                       {TYPE_OPTIONS.map((option) => (
-                        <button
-                          key={option}
-                          type="button"
-                          className={option === activeType ? 'chip chip-active' : 'chip'}
-                          onClick={() => startTransition(() => setActiveType(option))}
-                          aria-pressed={option === activeType}
-                        >
-                          {TYPE_LABELS[option] ?? option}
-                          {option !== 'All posts' ? <span>{typeCounts[option] ?? 0}</span> : null}
+                        <button key={option} type="button" className={option === activeType ? 'chip chip-active' : 'chip'} onClick={() => startTransition(() => setActiveType(option))} aria-pressed={option === activeType}>
+                          {TYPE_LABELS[option] ?? option}{option !== 'All posts' ? <span>{typeCounts[option] ?? 0}</span> : null}
                         </button>
                       ))}
                     </div>
-
-                    {/* Promo and Hidden are the same question as Type -- "which
-                        posts do I want to see?" -- so they live here instead of
-                        as two more pills competing for room on the tab row. */}
                     <p className="popover-subhead">{t('Flags')}</p>
                     <div className="chip-row">
-                      <button
-                        type="button"
-                        className={promoOnly ? 'chip chip-active' : 'chip'}
-                        onClick={() => startTransition(() => setPromoOnly((value) => !value))}
-                        aria-pressed={promoOnly}
-                        title={`Only posts carrying ${PROMO_HASHTAG} or flagged as promo by hand`}
-                      >
-                        <Megaphone size={12} />
-                        {t('Promo')}
-                      </button>
-                      <button
-                        type="button"
-                        className={showHidden ? 'chip chip-active' : 'chip'}
-                        onClick={() => startTransition(() => setShowHidden((value) => !value))}
-                        aria-pressed={showHidden}
-                        disabled={!hiddenCount}
-                        title={hiddenCount ? 'Show the posts you have hidden, so you can bring them back' : 'Nothing hidden yet'}
-                      >
-                        {showHidden ? <Eye size={12} /> : <EyeOff size={12} />}
-                        {t('Hidden')}
-                        <span>{hiddenCount}</span>
-                      </button>
+                      <button type="button" className={promoOnly ? 'chip chip-active' : 'chip'} onClick={() => startTransition(() => setPromoOnly((value) => !value))} aria-pressed={promoOnly} title={`Only posts carrying ${PROMO_HASHTAG} or flagged as promo by hand`}><Megaphone size={12} />{t('Promo')}</button>
+                      <button type="button" className={showHidden ? 'chip chip-active' : 'chip'} onClick={() => startTransition(() => setShowHidden((value) => !value))} aria-pressed={showHidden} disabled={!hiddenCount} title={hiddenCount ? 'Show the posts you have hidden, so you can bring them back' : 'Nothing hidden yet'}>{showHidden ? <Eye size={12} /> : <EyeOff size={12} />}{t('Hidden')}<span>{hiddenCount}</span></button>
                     </div>
                   </FilterPopover>
-
 
                   <FilterPopover
                     id="date"
@@ -2119,21 +2111,9 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
                     width={280}
                   >
                     <div className="date-fields">
-                      <label className="select-field">
-                        <span>{t('Range')}</span>
-                        <select aria-label="Date range" value={datePreset} onChange={(event) => applyDatePreset(event.target.value)}>
-                          {datePreset === 'custom' ? <option value="custom">Custom range</option> : null}
-                          {datePresets.map((preset) => <option key={preset.value} value={preset.value}>{preset.label}</option>)}
-                        </select>
-                      </label>
-                      <label className="date-field">
-                        <span>{t('From')}</span>
-                        <input type="date" aria-label="Date from" value={dateFrom} min={ranges.dateMin} max={ranges.dateMax} onChange={(e) => { setDatePreset('custom'); setDateFrom(e.target.value); }} />
-                      </label>
-                      <label className="date-field">
-                        <span>{t('To')}</span>
-                        <input type="date" aria-label="Date to" value={dateTo} min={ranges.dateMin} max={ranges.dateMax} onChange={(e) => { setDatePreset('custom'); setDateTo(e.target.value); }} />
-                      </label>
+                      <label className="select-field"><span>{t('Range')}</span><select aria-label="Date range" value={datePreset} onChange={(event) => applyDatePreset(event.target.value)}>{datePreset === 'custom' ? <option value="custom">Custom range</option> : null}{datePresets.map((preset) => <option key={preset.value} value={preset.value}>{preset.label}</option>)}</select></label>
+                      <label className="date-field"><span>{t('From')}</span><input type="date" aria-label="Date from" value={dateFrom} min={ranges.dateMin} max={ranges.dateMax} onChange={(e) => { setDatePreset('custom'); setDateFrom(e.target.value); }} /></label>
+                      <label className="date-field"><span>{t('To')}</span><input type="date" aria-label="Date to" value={dateTo} min={ranges.dateMin} max={ranges.dateMax} onChange={(e) => { setDatePreset('custom'); setDateTo(e.target.value); }} /></label>
                     </div>
                   </FilterPopover>
 
@@ -2159,16 +2139,6 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
                           value={likesStopIndex(minLikes)}
                           onChange={(e) => startTransition(() => setMinLikes(LIKES_STOPS[clampNumber(e.target.value, 0)]))}
                         />
-                        {/* Each tick is positioned with the exact same formula the
-                            browser uses to place the native thumb: the thumb's
-                            travel path runs from THUMB_PX / 2 to
-                            100% - THUMB_PX / 2 (see the CSS thumb rules), so a
-                            stop at fraction f of the way through the stops sits
-                            at calc(THUMB_PX/2 + f * (100% - THUMB_PX)). Centering
-                            each tick on that exact point with translateX(-50%)
-                            (rather than a plain flex space-between row of
-                            variable-width text) is what makes the marks land
-                            exactly under the thumb regardless of label width. */}
                         <div className="range-ticks" aria-hidden="true">
                           {LIKES_STOPS.map((stop, index) => {
                             const fraction = index / (LIKES_STOPS.length - 1);
@@ -2190,59 +2160,15 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
                         </div>
                       </label>
                       <div className="engagement-numbers">
-                        {/* Both of these are floors, not equality matches -- the
-                            box exists so you can type a threshold between the
-                            slider's stops (e.g. 3,500), not to find posts with
-                            exactly that many likes. */}
                         <label className="number-field">
                           <span>{t('Min likes')}</span>
-                          <input
-                            aria-label="Minimum likes"
-                            type="number"
-                            min={0}
-                            placeholder="0"
-                            title="Show posts with at least this many likes"
-                            value={minLikes}
-                            onChange={(e) => startTransition(() => setMinLikes(clampNumber(e.target.value, 0)))}
-                          />
+                          <input aria-label="Minimum likes" type="number" min={0} placeholder="0" title="Show posts with at least this many likes" value={minLikes} onChange={(e) => startTransition(() => setMinLikes(clampNumber(e.target.value, 0)))} />
                         </label>
                         <label className="number-field">
                           <span>{t('Min comments')}</span>
-                          <input
-                            aria-label="Minimum comments"
-                            placeholder="0"
-                            title="Show posts with at least this many comments"
-                            type="number"
-                            min={0}
-                            value={minComments}
-                            onChange={(e) => startTransition(() => setMinComments(clampNumber(e.target.value, ranges.commentsMin)))}
-                          />
+                          <input aria-label="Minimum comments" placeholder="0" title="Show posts with at least this many comments" type="number" min={0} value={minComments} onChange={(e) => startTransition(() => setMinComments(clampNumber(e.target.value, ranges.commentsMin)))} />
                         </label>
                       </div>
-                    </div>
-                  </FilterPopover>
-
-                  <FilterPopover
-                    id="sort"
-                    icon={<ArrowUpDown size={13} />}
-                    label={t('Sort')}
-                    summary={sortBy !== 'newest' ? SORT_OPTIONS.find((o) => o.value === sortBy)?.label : ''}
-                    isActive={sortBy !== 'newest'}
-                    width={240}
-                  >
-                    <div className="sort-options">
-                      {SORT_OPTIONS.map((option) => (
-                        <button
-                          key={option.value}
-                          type="button"
-                          className={option.value === sortBy ? 'sort-option sort-option-active' : 'sort-option'}
-                          onClick={() => startTransition(() => setSortBy(option.value))}
-                          aria-pressed={option.value === sortBy}
-                        >
-                          {option.label}
-                          {option.value === sortBy ? <Check size={14} /> : null}
-                        </button>
-                      ))}
                     </div>
                   </FilterPopover>
                 </div>
@@ -3773,6 +3699,7 @@ export function SettingsPanel({
     const nextDisplayName = changes.display_name ?? user.display_name ?? user.email.split('@')[0];
     const nextTimeZone = changes.time_zone ?? user.time_zone ?? '';
     const nextCanSelfAssign = changes.can_self_assign ?? Boolean(user.can_self_assign);
+    const nextMinutesPerPP = changes.minutes_per_pp ?? user.minutes_per_pp ?? '';
     const previousUser = user;
     // Reflect edits immediately. The API response remains authoritative, but
     // a slow round trip should never make the Users table feel unresponsive.
@@ -3784,6 +3711,7 @@ export function SettingsPanel({
       slack_user_id: nextSlackId,
       time_zone: nextTimeZone,
       can_self_assign: nextCanSelfAssign ? 1 : 0,
+      minutes_per_pp: nextMinutesPerPP === '' ? null : Number(nextMinutesPerPP),
       is_admin: nextRole === 'admin' ? 1 : 0,
     } : person));
     setUserDisplayDrafts((current) => ({ ...current, [user.email]: nextDisplayName }));
@@ -3800,6 +3728,7 @@ export function SettingsPanel({
           slack_user_id: nextSlackId,
           time_zone: nextTimeZone,
           can_self_assign: String(Boolean(nextCanSelfAssign)),
+          ...(nextMinutesPerPP === '' ? {} : { minutes_per_pp: String(nextMinutesPerPP) }),
         }),
       });
       const body = await response.json().catch(() => ({}));
@@ -4091,16 +4020,15 @@ export function SettingsPanel({
                                   <strong>@{task.handle}</strong>
                                   <span>{task.label || task.handle}</span>
                                 </div>
-                                {['done', 'error'].includes(task.phase) ? (
-                                  <button
-                                    type="button"
-                                    className="settings-account-backfill-dismiss"
-                                    onClick={() => dismissAccountBackfill(task.handle)}
-                                    aria-label={`Dismiss import status for ${task.handle}`}
-                                  >
-                                    <X size={13} />
-                                  </button>
-                                ) : null}
+                                <button
+                                  type="button"
+                                  className="settings-account-backfill-dismiss"
+                                  onClick={() => dismissAccountBackfill(task.handle)}
+                                  aria-label={`Hide import status for ${task.handle}`}
+                                  title="Hide this status; the import continues on the server"
+                                >
+                                  <X size={13} />
+                                </button>
                               </div>
                               <p>{statusText}</p>
                               <div className="settings-account-backfill-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={percent ?? undefined}>
@@ -4716,6 +4644,7 @@ export function SettingsPanel({
                             <select value={user.time_zone || ''} aria-label={`Time zone for ${user.email}`} onChange={(event) => updateUser(user, { time_zone: event.target.value })} disabled={userActionEmail === user.email}>
                               <option value="">Automatic browser zone</option><option value="America/Costa_Rica">Costa Rica (UTC−6)</option><option value="America/Bogota">Colombia (UTC−5)</option>
                             </select>
+                            <input type="number" min="1" max="240" defaultValue={user.minutes_per_pp ?? ''} aria-label={`Minutes per PP for ${user.email}`} placeholder="Min / PP" onBlur={(event) => { const value = event.target.value.trim(); const next = value ? Number(value) : ''; if (next !== (user.minutes_per_pp ?? '')) updateUser(user, { minutes_per_pp: next }); }} />
                             <input defaultValue={user.slack_user_id || ''} aria-label={`Slack user ID for ${user.email}`} placeholder="Slack ID" onBlur={(event) => { if (event.target.value.trim() !== (user.slack_user_id || '')) updateUser(user, { slack_user_id: event.target.value.trim().toUpperCase() }); }} />
                             <label className="settings-user-admin-toggle">
                               <input

@@ -150,6 +150,10 @@ th:first-child{text-align:left}
 th.sorted{color:var(--accent-text)}
 td{text-align:right;padding:9px 8px;border-bottom:1px solid rgba(var(--edge),.045);white-space:nowrap}
 td:first-child{text-align:left}
+.column-filter-row td{padding:5px 4px 7px;border-bottom:1px solid var(--line);background:rgba(var(--edge),.018)}
+.column-filter-row input{width:100%;min-width:58px;height:27px;padding:0 6px;border:1px solid var(--line);border-radius:6px;background:var(--panel-2);color:var(--text);font:600 10px inherit;outline:none}
+.column-filter-row input:focus{border-color:rgba(var(--accent-rgb),.55);box-shadow:0 0 0 2px rgba(var(--accent-rgb),.1)}
+.column-filter-row input:disabled{opacity:.45;cursor:not-allowed}
 /* Account cell (avatar + handle) shrink-wraps to its own content width --
    without an explicit left align here, shorter rows (no full name shown,
    or a broken avatar) drift toward the column's right edge instead of
@@ -187,6 +191,8 @@ tbody tr:hover{background:rgba(var(--edge),.03)}
 .detail-head img{width:46px;height:46px;border-radius:999px;object-fit:cover;background:var(--panel-2)}
 .detail-head h2{margin:0;font-size:17px}
 .detail-head-id span{color:var(--muted);font-size:11px}
+.instagram-account-link{color:inherit;text-decoration:none}.instagram-account-link:hover{color:var(--accent-text);text-decoration:underline}
+.tracker-history-head{align-items:flex-start}.tracker-history-head .sub{margin:4px 0 0}.tracker-history-window{display:grid;gap:4px;flex:none;color:var(--muted);font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}.tracker-history-window select{height:32px;min-width:118px;padding:0 8px;border:1px solid var(--line);border-radius:7px;background:var(--panel-2);color:var(--text);font:700 11px inherit;text-transform:none;letter-spacing:normal}
 
 /* historical stats table (Social-Blade-style day-by-day breakdown) */
 table.hist-table{font-size:12px}
@@ -711,6 +717,37 @@ function render(){
 
 /* ---------------- Leaderboard ---------------- */
 let sortKey='followers', sortDir=-1;
+// Overview filters intentionally live in memory: this is a working view, not
+// a preference that should surprise someone returning tomorrow. Every data
+// column gets its own filter instead of one global search, so an operator can
+// combine checks such as "sentient + positive 7d growth + 10K followers".
+let leaderboardFilters = {};
+
+function leaderboardCellText(row, key){
+  if(key === 'rank') return String(row.rank_by_followers ?? '');
+  if(key === 'handle') return `${row.handle || ''} ${row.full_name || ''} ${row.group || ''}`;
+  if(key === 'followers' || key === 'posts_count' || key === 'avg_likes_30d') return String(row[key] ?? '');
+  if(key === 'delta_1d' || key === 'delta_7d' || key === 'delta_30d') return String(row[key]?.delta ?? '');
+  if(key === 'engagement_trend_pct') return String(row.engagement_trend_pct ?? '');
+  if(key === 'captured_at') return row.captured_at ? new Date(row.captured_at).toLocaleDateString() : '';
+  return '';
+}
+
+function leaderboardMatchesFilter(row, key, query){
+  const value = String(query || '').trim().toLowerCase();
+  if(!value) return true;
+  const numeric = Number(leaderboardCellText(row, key));
+  const comparison = value.match(/^(>=|<=|>|<|=)\s*(-?[\d,.]+)$/);
+  if(comparison && Number.isFinite(numeric)){
+    const target = Number(comparison[2].replace(/,/g, ''));
+    return comparison[1] === '>=' ? numeric >= target : comparison[1] === '<=' ? numeric <= target : comparison[1] === '>' ? numeric > target : comparison[1] === '<' ? numeric < target : numeric === target;
+  }
+  return leaderboardCellText(row, key).toLowerCase().includes(value);
+}
+
+function escapeAttribute(value){
+  return String(value || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
 
 function trackingSinceNote(){
   if(!SUMMARY.tracking_since) return `<div class="note">No follower history recorded yet -- the first daily snapshot runs at 7am CST, or use <b>Settings → System</b> to capture one right now. Growth columns fill in day by day from there; there's no way to recover Instagram's past follower counts for an account that just started being tracked.</div>`;
@@ -720,7 +757,7 @@ function trackingSinceNote(){
 
 function renderLeaderboard(){
   destroyCharts();
-  const rows = [...SUMMARY.accounts];
+  const rows = [...SUMMARY.accounts].filter((row) => Object.entries(leaderboardFilters).every(([key, query]) => leaderboardMatchesFilter(row, key, query)));
   const val = r => {
     if(sortKey==='handle') return r.handle;
     if(sortKey==='followers') return r.followers ?? -1;
@@ -767,11 +804,12 @@ function renderLeaderboard(){
         <h2>Leaderboard <span class="tag">all tracked accounts</span></h2>
         <button type="button" class="linkbtn refresh-btn" id="refreshAllBtn" title="Re-scrape every account's real follower count from Instagram right now (~$0.002 each)">&#8635; Refresh all</button>
       </div>
-      <p class="sub">Ranked by followers by default -- click any column to re-sort. Click a row to open its growth chart. "Engagement trend" compares this month's average likes to the previous month, from post history we already have. The &#8635; next to a follower count re-scrapes just that account.</p>
+      <p class="sub">Ranked by followers by default -- click any column to re-sort. Use the filter directly below each heading; numeric columns accept a number or comparisons such as <code>>=10000</code>. Click a row to open its growth chart. The &#8635; next to a follower count re-scrapes just that account.</p>
       ${trackingSinceNote()}
       <div style="overflow-x:auto;margin-top:12px">
       <table id="tLeaderboard">
         <thead><tr>${cols.map(([k,l])=>`<th data-k="${k}" class="${sortKey===k?'sorted':''}">${l}</th>`).join('')}</tr></thead>
+        <tbody class="column-filter-row"><tr>${cols.map(([k,l])=>`<td><input data-column-filter="${k}" value="${escapeAttribute(leaderboardFilters[k])}" placeholder="Filter" aria-label="Filter ${l}"></td>`).join('')}</tr></tbody>
         <tbody>${rows.map((r,i)=>`
           <tr data-handle="${r.handle}">
             <td class="rank-num">${r.rank_by_followers ?? '—'}</td>
@@ -800,7 +838,15 @@ function renderLeaderboard(){
     const k=th.dataset.k; if(k==='rank') return;
     sortDir = sortKey===k ? -sortDir : -1; sortKey=k; renderLeaderboard();
   });
-  $('#tLeaderboard').querySelectorAll('tbody tr').forEach(tr=>tr.onclick=()=>{
+  $('#tLeaderboard').querySelectorAll('[data-column-filter]').forEach(input=>input.oninput=(event)=>{
+    const key = event.currentTarget.dataset.columnFilter;
+    const value = event.currentTarget.value;
+    if(value) leaderboardFilters[key] = value; else delete leaderboardFilters[key];
+    renderLeaderboard();
+    const replacement = document.querySelector(`[data-column-filter="${key}"]`);
+    if(replacement){ replacement.focus(); replacement.setSelectionRange(value.length, value.length); }
+  });
+  $('#tLeaderboard').querySelectorAll('tbody:not(.column-filter-row) tr[data-handle]').forEach(tr=>tr.onclick=()=>{
     writeAcc(tr.dataset.handle); render();
   });
   $('#tLeaderboard').querySelectorAll('[data-refresh]').forEach(btn=>btn.onclick=(e)=>{
@@ -834,12 +880,19 @@ function collapseToLastPerDay(hist){
   return [...byDay.values()];
 }
 
-function renderHistoricalStats(hist){
-  if(!hist.length) return '<div class="empty">No snapshots yet.</div>';
+function historyWindowLabel(windowDays){ return windowDays === 'all' ? 'All recorded data' : `Last ${windowDays} days`; }
+
+function historyWindowRows(hist, windowDays){
+  const days = collapseToLastPerDay(hist);
+  return windowDays === 'all' ? days : days.slice(-Number(windowDays));
+}
+
+function renderHistoricalStats(dayRows){
+  if(!dayRows.length) return '<div class="empty">No snapshots in this period.</div>';
   // Oldest at the top, newest at the bottom -- reading downwards follows the
   // account forwards in time, which is how Social Blade presents it and how
   // people actually read a run of daily numbers.
-  const rows = collapseToLastPerDay(hist).slice(-15);
+  const rows = dayRows;
   const rateOf = h => (h.avg_likes_that_day!=null && h.followers) ? h.avg_likes_that_day/h.followers*100 : null;
   const dailyDelta = (curr, prev) =>
     (prev && curr.followers!=null && prev.followers!=null) ? curr.followers-prev.followers : null;
@@ -897,6 +950,8 @@ async function renderDetail(handle){
   // note above. Everything below that renders "N days" or plots the growth
   // line reads from this instead of the raw per-snapshot history.
   const dayHist = collapseToLastPerDay(hist);
+  const selectedWindow = window.__trackerHistoryWindow || '30';
+  const visibleDayHist = historyWindowRows(hist, selectedWindow);
 
   $('#app').innerHTML = `
     <button class="linkbtn" id="backBtn" style="margin-bottom:14px">← All accounts</button>
@@ -904,7 +959,7 @@ async function renderDetail(handle){
       <div class="detail-head-id">
         <img src="${API}/api/dashboard/avatar/${encodeURIComponent(handle)}" referrerpolicy="no-referrer" onerror="avFail(this,'${handle}')">
         <div>
-          <h2>@${handle}${row.verified?' <span title="Verified" style="color:#4aa8ff;font-size:14px">✓</span>':''}${row.private?' <span class="na" title="Private account" style="font-size:13px">🔒</span>':''}</h2>
+          <h2><a class="instagram-account-link" href="https://www.instagram.com/${encodeURIComponent(handle)}/" target="_blank" rel="noreferrer" title="Open @${handle} on Instagram">@${handle}</a>${row.verified?' <span title="Verified" style="color:#4aa8ff;font-size:14px">✓</span>':''}${row.private?' <span class="na" title="Private account" style="font-size:13px">🔒</span>':''}</h2>
           ${row.full_name && row.full_name.toLowerCase()!==handle.toLowerCase() ? `<span>${row.full_name} · </span>` : ''}
           <span class="pill ${row.group==='sentient'?'s':'c'}">${row.group==='sentient'?'ours':'competitor'}</span>
           ${row.rank_by_followers ? ' <span>rank #'+row.rank_by_followers+' by followers</span>' : ''}
@@ -925,14 +980,13 @@ async function renderDetail(handle){
     </div>
 
     <section>
-      <h2>Historical Stats</h2>
-      <p class="sub">Last ${Math.min(dayHist.length,15)} day${Math.min(dayHist.length,15)===1?'':'s'} of recorded snapshots, oldest first. "Followers +/-" is that day's change -- the running total sits beside it for reference. Refreshing more than once a day updates that day's row instead of adding another one. Engagement rate is that day's average likes divided by that day's follower count, shown only for days with a post.</p>
-      ${renderHistoricalStats(hist)}
+      <div class="section-head tracker-history-head"><div><h2>Historical Stats</h2><p class="sub">${historyWindowLabel(selectedWindow)} of recorded snapshots, oldest first. "Followers +/-" is that day's change -- the running total sits beside it for reference. Refreshing more than once a day updates that day's row instead of adding another one.</p></div><label class="tracker-history-window"><span>Range</span><select id="historyWindow" aria-label="Follower history range">${[['7','7 days'],['14','14 days'],['30','30 days'],['60','60 days'],['180','180 days'],['365','365 days'],['all','All']].map(([value,label])=>`<option value="${value}" ${selectedWindow===value?'selected':''}>${label}</option>`).join('')}</select></label></div>
+      ${renderHistoricalStats(visibleDayHist)}
     </section>
 
     <section>
       <h2>Follower growth</h2>
-      <p class="sub">${dayHist.length>1?'One point per day, starting the day this account began being tracked -- a same-day refresh updates that day\'s point instead of adding a new one.':'Only one snapshot recorded so far -- this chart fills in day by day. There is no way to recover Instagram’s past follower counts.'}</p>
+      <p class="sub">${visibleDayHist.length>1?`${historyWindowLabel(selectedWindow)}; one point per day. A same-day refresh updates that day’s point instead of adding a new one.`:'Only one snapshot recorded in this period -- choose a larger range as history accumulates.'}</p>
       <div class="chartbox"><canvas id="cFollowers"></canvas></div>
     </section>
 
@@ -944,12 +998,13 @@ async function renderDetail(handle){
   `;
   $('#backBtn').onclick = () => { writeAcc(''); render(); };
   $('#detailRefreshBtn').onclick = (e) => refreshAccountNow(handle, e.currentTarget);
+  $('#historyWindow').onchange = (event) => { window.__trackerHistoryWindow = event.currentTarget.value; renderDetail(handle); };
 
-  if(dayHist.length){
+  if(visibleDayHist.length){
     CHARTS.push(new Chart($('#cFollowers'),{type:'line',
-      data:{labels:dayHist.map(h=>new Date(h.date).toLocaleDateString()),
-        datasets:[{label:'Followers',data:dayHist.map(h=>h.followers),borderColor:'#f5ff00',
-          backgroundColor:'#f5ff0022',fill:true,tension:.3,pointRadius:dayHist.length>1?2:4}]},
+      data:{labels:visibleDayHist.map(h=>new Date(h.date).toLocaleDateString()),
+        datasets:[{label:'Followers',data:visibleDayHist.map(h=>h.followers),borderColor:'#f5ff00',
+          backgroundColor:'#f5ff0022',fill:true,tension:.3,pointRadius:visibleDayHist.length>1?2:4}]},
       options:{maintainAspectRatio:false,plugins:{legend:{display:false},
         tooltip:{callbacks:{label:c=>fmt(c.parsed.y)+' followers'}}},
         scales:{y:{ticks:{callback:v=>fmtAxis(v)}}}}}));
