@@ -1,0 +1,1 @@
+import{R as e,j as t,a as r}from"./queueLive-DF0Rf59A.js";import{A as o}from"./styles-saJ341Ay.js";import"./traselveloreal-profile-DbZ_ytNM.js";import"./search-CHAEq8Bb.js";e.createRoot(document.getElementById("root")).render(t.jsx(r.StrictMode,{children:t.jsx(o,{})}));

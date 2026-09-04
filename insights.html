@@ -1,0 +1,1493 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<script src="/mobile-redirect.js?v=20260901-3"></script>
+<script src="/role-preview.js?v=20260901-3" defer></script>
+<script src="/context-menu.js?v=20260901-context1" defer></script>
+<title>Insights · sentientdash.app</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext x='50' y='54' font-size='84' text-anchor='middle' dominant-baseline='central'%3E%F0%9F%93%8A%3C/text%3E%3C/svg%3E" />
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>(function(){try{var t=localStorage.getItem('sentient.theme');if(t!=='light'&&t!=='dark'){t=window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';}document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();</script>
+<style>
+/* Google sign-in gate -- Insights is a standalone static page (not part of the
+   React bundle), so it gets its own minimal copy of the same Firebase gate
+   instead of sharing App.jsx's. */
+#authGate{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+  background:#000;z-index:999}
+#authGate .card{width:100%;max-width:340px;padding:30px 26px;border:1px solid rgba(var(--edge),.1);
+  border-radius:8px;background:#0d0d0d;text-align:center}
+#authGate h1{margin:0 0 8px;font-size:19px;font-weight:900;color:#f5f5f5}
+#authGate p{margin:0 0 18px;color:var(--muted-2);font-size:13px;line-height:1.5}
+#authGate button{width:100%;height:34px;border:1px solid rgba(var(--accent-rgb),.5);border-radius:8px;
+  background:rgba(var(--accent-rgb),.14);color:var(--text);font-size:12px;font-weight:800;cursor:pointer}
+#authGate button:hover{background:rgba(var(--accent-rgb),.22)}
+#authGate.hidden{display:none}
+:root{
+  color-scheme:dark;
+  --edge:255,255,255; --ink:245,245,245; --shade:0,0,0; --accent-rgb:245,255,0;
+  --bg:#000; --panel:#0b0b0b; --panel-2:#101010; --line:rgba(var(--edge),.09);
+  --text:#f5f5f5; --muted:#8a8a8a; --muted-2:#b5b5b5; --accent:#f5ff00; --accent-text:#f5ff00; --accent-ink:#151500;
+  --good:#35c759; --warn:#ff9f0a; --hot:#ff6b35; --cool:#4aa8ff;
+  --pill-s-fg:#8fc9ff; --pill-s-bg:rgba(74,168,255,.15);
+  --pill-c-fg:#ffa480; --pill-c-bg:rgba(255,107,53,.15);
+  --pos:#48d18b; --neg:#ff6b6b; --cloud:#9ad34a;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,sans-serif;
+  font-size:13px;-webkit-font-smoothing:antialiased}
+a{color:inherit}
+/* Full width, matching the tracker and the dashboard. */
+.wrap{max-width:none;margin:0;padding:18px 24px 80px}
+
+/* topbar */
+.top{display:flex;align-items:center;justify-content:space-between;gap:18px;
+  padding:14px 18px;border:1px solid var(--line);border-radius:12px;background:var(--panel);margin-bottom:14px}
+.brand small{display:block;color:var(--muted);font-size:9px;font-weight:800;
+  letter-spacing:.16em;text-transform:uppercase;margin-bottom:3px}
+.brand h1{margin:0;font-size:23px;font-weight:800;letter-spacing:-.02em}
+.brand h1 span{color:var(--accent-text)}
+.top-actions{display:flex;gap:8px;align-items:center}
+.linkbtn{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 13px;
+  border:1px solid var(--line);border-radius:8px;background:var(--panel-2);color:var(--muted-2);
+  font-size:11px;font-weight:700;text-decoration:none;cursor:pointer}
+.linkbtn:hover{border-color:rgba(var(--accent-rgb),.4);color:var(--text)}
+
+/* filters */
+.filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:8px;
+  padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--panel);margin-bottom:14px}
+.f{display:flex;flex-direction:column;gap:5px;min-width:0}
+.f>label{color:var(--muted);font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+.f select,.f input{height:32px;padding:0 9px;border:1px solid var(--line);border-radius:7px;
+  background:rgba(var(--edge),.04);color:var(--text);font-size:12px;outline:none;width:100%}
+.f select:focus,.f input:focus{border-color:rgba(var(--accent-rgb),.6)}
+.chips{display:flex;flex-wrap:wrap;gap:5px}
+.chip{padding:5px 10px;border:1px solid var(--line);border-radius:999px;background:var(--panel-2);
+  color:var(--muted-2);font-size:10px;font-weight:700;cursor:pointer;user-select:none}
+.chip.on{border-color:rgba(var(--accent-rgb),.55);background:rgba(var(--accent-rgb),.12);color:var(--text)}
+.f-wide{grid-column:1/-1}
+
+/* kpis */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:16px}
+.kpi{padding:13px 15px;border:1px solid var(--line);border-radius:11px;background:var(--panel)}
+.kpi b{display:block;color:var(--muted);font-size:9px;font-weight:800;letter-spacing:.1em;
+  text-transform:uppercase;margin-bottom:6px}
+.kpi strong{font-size:22px;font-weight:800;letter-spacing:-.02em}
+.kpi em{display:block;font-style:normal;color:var(--muted);font-size:10px;margin-top:3px}
+
+/* sections */
+section{border:1px solid var(--line);border-radius:12px;background:var(--panel);
+  padding:16px 18px;margin-bottom:14px}
+section>h2{margin:0 0 4px;font-size:14px;font-weight:800;letter-spacing:-.01em}
+section>h2 .tag{margin-left:8px;padding:2px 7px;border-radius:999px;background:rgba(var(--accent-rgb),.12);
+  color:var(--accent-text);font-size:9px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
+section>p.sub{margin:0 0 14px;color:var(--muted);font-size:11px;line-height:1.5}
+/* minmax(0,1fr) and min-width:0 are not cosmetic here: a plain `1fr` resolves
+   its minimum to min-content, and the min-content of a <canvas> is its own
+   width. Chart.js widens the canvas -> the column grows -> Chart.js widens it
+   again. Infinite loop that hard-freezes the tab. */
+.grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.grid2>*,.grid3>*{min-width:0;overflow:hidden}
+@media(max-width:1000px){.grid2,.grid3{grid-template-columns:minmax(0,1fr)}}
+.chartbox{position:relative;height:260px;min-width:0;width:100%}
+.chartbox.tall{height:320px}
+.chartbox canvas{max-width:100%}
+
+/* table */
+table{width:100%;border-collapse:collapse;font-size:11.5px}
+th{text-align:right;padding:7px 8px;color:var(--muted);font-size:9px;font-weight:800;
+  letter-spacing:.07em;text-transform:uppercase;border-bottom:1px solid var(--line);white-space:nowrap;cursor:pointer}
+th:first-child{text-align:left}
+th.sorted{color:var(--accent-text)}
+td{text-align:right;padding:8px;border-bottom:1px solid rgba(var(--edge),.045);white-space:nowrap}
+td:first-child{text-align:left;font-weight:700}
+tbody tr:hover{background:rgba(var(--edge),.03)}
+.bar{position:relative;height:5px;border-radius:3px;background:rgba(var(--edge),.07);margin-top:4px;overflow:hidden}
+.bar i{position:absolute;inset:0 auto 0 0;background:var(--accent);border-radius:3px}
+.pill{display:inline-block;padding:2px 7px;border-radius:999px;font-size:9px;font-weight:800}
+.pill.s{background:var(--pill-s-bg);color:var(--pill-s-fg)}
+.pill.c{background:var(--pill-c-bg);color:var(--pill-c-fg)}
+
+/* word / hashtag clouds */
+.cloud{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.cloud span{padding:5px 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel-2);cursor:default}
+.cloud span b{color:var(--accent-text);font-weight:800;margin-left:5px;font-size:10px}
+.cloud-h{font-size:11px;color:var(--muted);margin:0 0 9px;text-transform:uppercase;letter-spacing:.08em}
+
+/* heatmap */
+.heat{display:grid;grid-template-columns:38px repeat(24,1fr);gap:2px;font-size:8px}
+.heat div{border-radius:2px}
+.heat .lbl{color:var(--muted);font-weight:700;display:flex;align-items:center;justify-content:flex-end;
+  padding-right:5px;font-size:9px}
+.heat .hr{color:var(--muted);text-align:center;font-size:8px}
+.cell{aspect-ratio:1;position:relative}
+.legend{display:flex;align-items:center;gap:7px;margin-top:10px;color:var(--muted);font-size:10px}
+.legend i{width:15px;height:9px;border-radius:2px;display:inline-block}
+
+.empty{padding:26px;text-align:center;color:var(--muted);font-size:12px}
+.loading{padding:60px;text-align:center;color:var(--muted)}
+.note{margin-top:10px;padding:9px 11px;border-left:2px solid rgba(var(--accent-rgb),.4);
+  background:rgba(var(--accent-rgb),.04);color:var(--muted-2);font-size:11px;line-height:1.55;border-radius:0 6px 6px 0}
+.note b{color:var(--text)}
+
+/* --- themes -------------------------------------------------------------
+   Same channel approach as the dashboard: --edge is the border/hover channel
+   and --ink the text channel, so every rgba() call site follows the theme
+   without being rewritten one by one. Dark renders exactly as before.
+   The neon accent is ~1.1:1 on white, so light gets a darkened amber -- same
+   hue, luminance that can actually be read.
+   ------------------------------------------------------------------------ */
+:root[data-theme='light']{
+  color-scheme:light;
+  --edge:0,0,0; --ink:20,20,20; --shade:15,23,42; --accent-rgb:195,199,2;
+  --bg:#f4f4f5; --panel:#ffffff; --panel-2:#f1f1f2;
+  --line:rgba(0,0,0,.12);
+  --text:#18181b; --muted:#6b6b70; --muted-2:#3f3f46;
+  --accent:#c3c702; --accent-text:#727600; --accent-ink:#2e2f00;
+  --good:#137a35; --warn:#8a5a00; --hot:#b8431a; --cool:#1668b8;
+  --pill-s-fg:#0b5ea8; --pill-s-bg:rgba(74,168,255,.18);
+  --pill-c-fg:#a33c12; --pill-c-bg:rgba(255,107,53,.18);
+  --pos:#0f7a3d; --neg:#b3261e; --cloud:#4a6b12;
+}
+:root[data-theme='light'] #authGate{background:#f4f4f5}
+:root[data-theme='light'] #authGate .card{background:#fff}
+:root[data-theme='light'] #authGate h1{color:#18181b}
+:root[data-theme='light'] #authGate button{background:rgba(122,106,0,.14);color:#3d3600;
+  border-color:rgba(122,106,0,.5)}
+
+/* language toggle -- now nested inside the Settings panel below */
+.lang-toggle{display:inline-flex;align-items:center;height:32px;padding:2px;
+  border:1px solid var(--line);border-radius:8px}
+.lang-option{height:26px;padding:0 8px;border:0;border-radius:6px;background:none;
+  color:var(--muted);font-size:11px;font-weight:800;font-family:inherit;cursor:pointer}
+.lang-option:hover{color:var(--text)}
+.lang-option.is-on{background:rgba(var(--edge),.1);color:var(--text)}
+
+/* Settings: one gear-icon entry point (accent, theme, language, admin link,
+   sign out) -- same shape repeated across Dashboard/Queue/Tracker/Insights,
+   each page implementing it locally since none of them share a bundle. */
+:root[data-accent='blue']{--accent-rgb:96,165,250;--accent:#60a5fa;--accent-text:#60a5fa;--accent-ink:#151515}
+:root[data-accent='coral']{--accent-rgb:251,113,133;--accent:#fb7185;--accent-text:#fb7185;--accent-ink:#151515}
+.settings-menu{position:relative}
+.settings-menu-trigger{display:grid;place-items:center;width:32px;height:32px;padding:0;
+  overflow:hidden;border:1px solid var(--line);border-radius:50%;background:var(--panel-2);color:var(--muted);
+  font-size:11px;font-weight:850;line-height:1;cursor:pointer}
+.settings-menu-trigger img{display:block;width:100%;height:100%;object-fit:cover}
+.settings-menu-trigger span{display:grid;width:100%;height:100%;place-items:center;background:rgba(var(--accent-rgb),.13);color:var(--text)}
+.settings-menu-trigger:hover,.settings-menu-trigger.is-active{border-color:rgba(var(--accent-rgb),.45);color:var(--text)}
+.settings-menu-panel{position:absolute;top:calc(100% + 8px);right:0;z-index:60;display:none;gap:2px;
+  width:280px;max-height:calc(100dvh - 90px);overflow:auto;padding:6px;border:1px solid var(--line);
+  border-radius:12px;background:var(--panel);box-shadow:0 18px 44px rgba(var(--shade),.5)}
+.settings-menu-panel.is-open{display:grid}
+.settings-menu-section{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 8px}
+.settings-menu-section>span{color:var(--muted);font-size:11px;font-weight:750}
+.settings-accent-picker{display:flex;align-items:center;gap:6px}
+.settings-accent-picker button{width:18px;height:18px;padding:0;border:1px solid rgba(255,255,255,.35);
+  border-radius:50%;cursor:pointer}
+.settings-accent-picker button.is-on{box-shadow:0 0 0 2px var(--panel),0 0 0 3px var(--accent)}
+.settings-accent-picker .accent-green{background:#00ac80}
+.settings-accent-picker .accent-lime{background:#f5ff00}
+.settings-accent-picker .accent-blue{background:#60a5fa}
+.settings-accent-picker .accent-coral{background:#fb7185}
+.settings-custom-color{display:inline-flex;align-items:center;gap:5px;color:var(--muted);font-size:9px;font-weight:750;cursor:pointer}
+.settings-custom-color input{width:22px;height:22px;padding:0;border:1px solid rgba(var(--edge),.28);border-radius:50%;background:transparent;cursor:pointer;overflow:hidden}
+.settings-custom-color input::-webkit-color-swatch-wrapper{padding:0}.settings-custom-color input::-webkit-color-swatch{border:0;border-radius:50%}
+.settings-custom-color input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.settings-menu-segment{display:flex;padding:2px;border:1px solid var(--line);border-radius:7px;background:var(--panel-2)}
+.settings-menu-segment button{display:inline-flex;align-items:center;gap:5px;min-height:27px;padding:0 8px;
+  border:0;border-radius:5px;background:transparent;color:var(--muted);font-size:10px;font-weight:750;
+  font-family:inherit;cursor:pointer}
+.settings-menu-segment button.is-on{background:rgba(var(--accent-rgb),.18);color:var(--accent-text)}
+.settings-menu-admin{display:none;flex-direction:column;align-items:stretch;gap:8px;margin-top:2px;
+  padding-top:11px;border-top:1px solid var(--line)}
+.settings-menu-admin.is-visible{display:flex}
+.settings-menu-admin>span{font-size:9px;font-weight:850;letter-spacing:.06em;text-transform:uppercase}
+.settings-menu-link{display:inline-flex;align-items:center;gap:6px;align-self:flex-start;min-height:28px;
+  padding:0 8px;border:1px solid rgba(var(--accent-rgb),.32);border-radius:7px;background:rgba(var(--accent-rgb),.08);
+  color:var(--accent-text);font-size:11px;font-weight:750;text-decoration:none}
+.settings-menu-footer{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:2px;
+  padding:10px 8px 6px;border-top:1px solid var(--line)}
+.settings-menu-footer small{overflow:hidden;color:var(--muted);font-size:10px;text-overflow:ellipsis;white-space:nowrap}
+.settings-menu-signout{display:inline-flex;flex:0 0 auto;align-items:center;gap:5px;min-height:28px;padding:0 8px;
+  border:1px solid rgba(255,107,107,.32);border-radius:7px;background:rgba(255,107,107,.08);color:#ff9b9b;
+  font-size:10px;font-weight:750;font-family:inherit;cursor:pointer}
+:root[data-theme='light'] .settings-menu-signout{color:#9b1c1c}
+@media(max-width:620px){.settings-menu-panel{position:fixed;top:auto;right:8px;bottom:8px;left:8px;width:auto;max-height:70dvh}}
+</style>
+</head>
+<body>
+<div id="authGate" class="hidden">
+  <div class="card">
+    <h1>Sentient Insights</h1>
+    <p id="authGateText">Sign in with your Google account to continue.</p>
+    <button id="authGateBtn" type="button">Sign in with Google</button>
+  </div>
+</div>
+<div class="wrap">
+  <div class="top">
+    <div class="brand">
+      <small>Sentient</small>
+      <h1>Insights<span>.</span></h1>
+    </div>
+    <div class="top-actions">
+      <div class="settings-menu" id="settingsMenu">
+        <button type="button" class="settings-menu-trigger" id="settingsTrigger" aria-label="Settings" aria-expanded="false" title="Settings"><span>?</span></button>
+        <div class="settings-menu-panel" id="settingsPanel" role="dialog" aria-label="Settings">
+          <div class="settings-menu-section">
+            <span data-i18n="Accent color">Accent color</span>
+            <div class="settings-accent-picker" id="settingsAccentPicker">
+              <button type="button" class="accent-green" data-accent-choice="green" aria-label="green accent"></button>
+              <button type="button" class="accent-lime" data-accent-choice="lime" aria-label="lime accent"></button>
+              <button type="button" class="accent-blue" data-accent-choice="blue" aria-label="blue accent"></button>
+              <button type="button" class="accent-coral" data-accent-choice="coral" aria-label="coral accent"></button>
+              <label class="settings-custom-color" title="Custom color"><input type="color" id="settingsCustomColor" aria-label="Custom color"><span>Custom</span></label>
+            </div>
+          </div>
+          <div class="settings-menu-section">
+            <span data-i18n="Theme">Theme</span>
+            <div class="settings-menu-segment" id="settingsThemeSegment">
+              <button type="button" data-theme-choice="dark">🌙 <span data-i18n="Dark">Dark</span></button>
+              <button type="button" data-theme-choice="light">☀️ <span data-i18n="Light">Light</span></button>
+            </div>
+          </div>
+          <div class="settings-menu-section">
+            <span data-i18n="Language">Language</span>
+            <div class="lang-toggle" role="group" aria-label="Language">
+              <button type="button" class="lang-option" data-lang="en">ENG</button>
+              <button type="button" class="lang-option" data-lang="es">ES</button>
+            </div>
+          </div>
+          <div class="settings-menu-admin" id="settingsAdmin">
+            <span>Command center</span>
+            <a class="settings-menu-link" href="./settings.html">⚙ <span data-i18n="Settings">Settings</span></a>
+          </div>
+          <div class="settings-menu-footer">
+            <small id="settingsEmail"></small>
+            <button type="button" class="settings-menu-signout" id="settingsSignOut">⎋ <span data-i18n="Sign out">Sign out</span></button>
+          </div>
+        </div>
+      </div>
+      <span id="scope" style="color:var(--muted);font-size:11px"></span>
+      <button class="linkbtn" id="shareBtn" title="Copy a link to this exact view">Copy link</button>
+      <button class="linkbtn" id="pdfBtn" title="Download a PDF of the current selection">Export PDF</button>
+      <a class="linkbtn" href="./tracker.html">Tracker</a>
+      <a class="linkbtn" href="./queue.html">Queue</a>
+      <a class="linkbtn" href="./index.html">← Dashboard</a>
+    </div>
+  </div>
+
+  <div class="filters">
+    <div class="f f-wide">
+      <label>Accounts</label>
+      <div class="chips" id="accChips"></div>
+    </div>
+    <div class="f"><label>From</label><input type="date" id="from"></div>
+    <div class="f"><label>To</label><input type="date" id="to"></div>
+    <div class="f"><label>Quick range</label>
+      <select id="preset">
+        <option value="" selected>All time</option>
+        <option value="30">Last 30 days</option>
+        <option value="90">Last 90 days</option>
+        <option value="180">Last 6 months</option>
+        <option value="365">Last year</option>
+      </select>
+    </div>
+    <div class="f"><label>Format</label>
+      <select id="ftype"><option value="">All</option><option>Video</option><option>Carousel</option><option>Image</option></select>
+    </div>
+    <div class="f"><label>Rank by</label>
+      <select id="metric">
+        <option value="l">Likes</option>
+        <option value="v">Views</option>
+        <option value="c">Comments</option>
+        <option value="er">Engagement / view</option>
+      </select>
+    </div>
+  </div>
+
+  <div id="app"><div class="loading">Loading data…</div></div>
+</div>
+
+<script>
+const API = 'https://cortex-api-db2e.onrender.com';
+const $ = s => document.querySelector(s);
+const fmt = n => n===null||n===undefined||Number.isNaN(n) ? '—'
+  : Math.abs(n)>=1e6 ? (n/1e6).toFixed(1)+'M'
+  : Math.abs(n)>=1e3 ? (n/1e3).toFixed(1)+'K' : Math.round(n).toLocaleString('en-US');
+const xf  = n => (n===null||n===undefined||!isFinite(n)) ? '—' : n.toFixed(2)+'×';
+const pct = n => (n===null||n===undefined||!isFinite(n)) ? '—' : n.toFixed(1)+'%';
+
+let RAW=[], ACCOUNTS=[], SEL=new Set(), CHARTS=[];
+
+// Every account's handle/label shows up as a watermark on its own covers, so
+// without this the "topics" cloud is dominated by page names instead of
+// actual content -- @getintoai's top "topic" was always "getintoai". Split
+// composed names ("Get Into AI") into their individual words too, since
+// each one alone is just as much the page's own branding as the whole phrase.
+// Keyed PER ACCOUNT (not one global set): @tecnologia's own name shouldn't
+// erase the generic hashtag #tecnologia when 15 *other* accounts use it to
+// tag actual technology content -- only strip a name from its own posts.
+let NAME_WORDS_BY_ACCOUNT={};
+const EMPTY_WORDS=new Set();
+function buildNameWords(){
+  NAME_WORDS_BY_ACCOUNT={};
+  ACCOUNTS.forEach(a=>{
+    const words=new Set();
+    [a.handle, a.label].filter(Boolean).forEach(s=>{
+      const lower=String(s).toLowerCase();
+      lower.split(/[^a-z0-9áéíóúñü]+/i).filter(Boolean).forEach(w=>words.add(w));
+      // Covers often watermark the handle with the separators removed
+      // ("acknowledge.ai" -> "acknowledgeai" burned into the image), which
+      // wouldn't match either individual split word above.
+      const compact=lower.replace(/[^a-z0-9áéíóúñü]/gi,'');
+      if(compact) words.add(compact);
+    });
+    NAME_WORDS_BY_ACCOUNT[a.handle]=words;
+  });
+}
+
+// A handful of OCR misreads that split one real word into two different
+// cloud entries (e.g. the "AI" in "OpenAI" getting read as "al"). Folding
+// them together keeps the frequency count honest instead of splitting it.
+const WORD_ALIASES={openal:'openai'};
+
+// ---------------------------------------------------------------------------
+// URL state -- same contract as the dashboard: the query string is the only
+// place this lives, so a reload restores the view and a copied link reproduces
+// it exactly for someone else. Defaults are omitted so a plain view keeps a
+// plain URL. Accounts are only written when the selection is a real subset.
+// ---------------------------------------------------------------------------
+const URL_DEFAULTS = {acc:'', from:'', to:'', preset:'', ftype:'', metric:'l'};
+
+function encodeRoute(state){
+  try{
+    const bytes=new TextEncoder().encode(JSON.stringify(state||{})); let binary='';
+    bytes.forEach(b=>{binary+=String.fromCharCode(b)});
+    return btoa(binary).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+  }catch(e){ return ''; }
+}
+function decodeRoute(token){
+  if(!token) return null;
+  try{
+    const normalized=String(token).replace(/-/g,'+').replace(/_/g,'/');
+    const padded=normalized+'='.repeat((4-(normalized.length%4))%4);
+    const binary=atob(padded); const bytes=Uint8Array.from(binary,c=>c.charCodeAt(0));
+    const value=JSON.parse(new TextDecoder().decode(bytes));
+    return value&&typeof value==='object'&&!Array.isArray(value)?value:null;
+  }catch(e){ return null; }
+}
+
+function readUrl(){
+  const p = new URLSearchParams(location.search);
+  const out = {...URL_DEFAULTS};
+  const opaque = decodeRoute(p.get('r'));
+  if(opaque) for(const k in URL_DEFAULTS) if(opaque[k]!==undefined && opaque[k]!==null) out[k]=String(opaque[k]);
+  for(const k in URL_DEFAULTS){ const v=p.get(k); if(v!==null) out[k]=v; }
+  return out;
+}
+
+function writeUrl(){
+  const all = ACCOUNTS.map(a=>a.handle);
+  const isAll = all.length>0 && SEL.size===all.length && all.every(h=>SEL.has(h));
+  const state = {
+    acc: isAll ? '' : [...SEL].join(','),
+    from: $('#from').value, to: $('#to').value,
+    preset: $('#preset').value, ftype: $('#ftype').value, metric: $('#metric').value,
+  };
+  const p = new URLSearchParams();
+  const payload = {};
+  for(const k in URL_DEFAULTS){
+    const v = state[k];
+    if(v===undefined||v===null||v===''||String(v)===String(URL_DEFAULTS[k])) continue;
+    payload[k] = v;
+  }
+  const opaque = encodeRoute(payload);
+  if(Object.keys(payload).length && opaque) p.set('r', opaque);
+  const qs = p.toString();
+  // replaceState: filters change constantly, pushing each would break Back.
+  history.replaceState(null, '', location.pathname + (qs ? '?'+qs : ''));
+}
+
+// Chart.js defaults matched to the dark theme
+Chart.defaults.color='#8a8a8a';
+Chart.defaults.font.family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,sans-serif";
+Chart.defaults.font.size=10;
+Chart.defaults.borderColor='rgba(var(--edge),.07)';
+Chart.defaults.resizeDelay=120; // damp resize bursts instead of recomputing per pixel
+
+// Math.max(...arr) with 11.5k arguments can blow the call stack; reduce can't.
+const maxOf=a=>a.reduce((m,x)=>x>m?x:m,-Infinity);
+const minOf=a=>a.reduce((m,x)=>x<m?x:m,Infinity);
+
+const PALETTE=['#f5ff00','#4aa8ff','#ff6b35','#35c759','#c77dff','#ff9f0a','#00d4c8','#ff5c8a','#9ad34a'];
+const colorFor = name => PALETTE[ACCOUNTS.map(a=>a.handle).indexOf(name) % PALETTE.length] || '#888';
+/* The palette gives each account one identity colour across every chart, where
+   it is a fill and reads fine. As *text* on a white page several of those --
+   the neon, the green, the teal -- land under 2:1. Darkened only for light
+   mode, and only for text; chart fills keep the original. */
+function textColorFor(name){
+  const hex = colorFor(name);
+  if(document.documentElement.getAttribute('data-theme') !== 'light') return hex;
+  const n = parseInt(hex.slice(1), 16);
+  let [r,g,b] = [(n>>16)&255, (n>>8)&255, n&255];
+  const rel = (v)=>{v/=255; return v<=.03928?v/12.92:((v+.055)/1.055)**2.4;};
+  let guard = 0;
+  while(guard++ < 40){
+    const L = .2126*rel(r)+.7152*rel(g)+.0722*rel(b);
+    if((1.05)/(L+.05) >= 4.5) break;      // contrast against white
+    [r,g,b] = [r,g,b].map(v=>Math.max(0, Math.round(v*0.88)));
+  }
+  return '#' + [r,g,b].map(v=>v.toString(16).padStart(2,'0')).join('');
+}
+
+function destroyCharts(){ CHARTS.forEach(c=>{try{c.destroy()}catch(e){}}); CHARTS=[]; }
+
+const insightsDelay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const INSIGHTS_RETRYABLE = new Set([502, 503, 504]);
+async function insightsGet(path){
+  let lastError = null;
+  for(let attempt=0; attempt<4; attempt+=1){
+    try{
+      if(window.__refreshFirebaseIdToken) await window.__refreshFirebaseIdToken(attempt>0);
+      const headers = window.__sentientRolePreviewHeaders ? window.__sentientRolePreviewHeaders() : {};
+      if(window.__firebaseIdToken) headers.Authorization = 'Bearer '+window.__firebaseIdToken;
+      const response = await fetch(API+path, {headers});
+      if(response.status===401||response.status===403){
+        window.__onInsightsUnauthorized && window.__onInsightsUnauthorized();
+        throw new Error('unauthorized');
+      }
+      if(!response.ok){
+        lastError = new Error('HTTP '+response.status);
+        if(INSIGHTS_RETRYABLE.has(response.status) && attempt<3){
+          await insightsDelay(700*(2**attempt));
+          continue;
+        }
+        throw lastError;
+      }
+      return response;
+    }catch(error){
+      lastError = error;
+      if(error?.message==='unauthorized') throw error;
+      if(attempt<3){ await insightsDelay(700*(2**attempt)); continue; }
+    }
+  }
+  throw lastError || new Error('Connection to Insights is still reconnecting.');
+}
+
+async function boot(){
+  try{
+    const r = await insightsGet('/api/insights/posts');
+    const data = await r.json();
+    RAW = data.posts.map(p=>{
+      const t = p.d ? new Date(p.d).getTime() : NaN;
+      const dt = new Date(t);
+      return {...p, ts:t, hour:isNaN(t)?null:dt.getUTCHours(), dow:isNaN(t)?null:dt.getUTCDay()};
+    }).filter(p=>!isNaN(p.ts));
+    ACCOUNTS = data.accounts;
+    buildNameWords();
+
+    // The URL wins over the defaults, and only over accounts that still exist
+    // (a shared link can outlive an account being removed).
+    const u = readUrl();
+    const known = new Set(ACCOUNTS.map(a=>a.handle));
+    const wanted = u.acc.split(',').map(h=>h.trim()).filter(h=>known.has(h));
+    SEL = wanted.length ? new Set(wanted) : new Set(known);
+    $('#from').value = u.from;
+    $('#to').value = u.to;
+    $('#preset').value = u.preset;
+    $('#ftype').value = u.ftype;
+    $('#metric').value = u.metric;
+
+    buildChips();
+    ['from','to','ftype','metric'].forEach(id=>$('#'+id).addEventListener('change',render));
+    $('#preset').addEventListener('change',applyPreset);
+    $('#shareBtn').addEventListener('click',shareLink);
+    // A preset in the URL already came with its own from/to, so re-running
+    // applyPreset would recompute them off today's date and quietly shift the
+    // window a shared link was pointing at.
+    render();
+  }catch(e){
+    $('#app').innerHTML = '<div class="empty">Could not load the data.<br><small>'+e.message+'</small></div>';
+  }
+}
+
+function buildChips(){
+  const box = $('#accChips');
+  box.innerHTML='';
+  const mk=(label,handler,on)=>{const s=document.createElement('span');s.className='chip'+(on?' on':'');
+    s.textContent=label;s.onclick=handler;box.appendChild(s);return s;};
+  mk('All',()=>{SEL=new Set(ACCOUNTS.map(a=>a.handle));buildChips();render()},SEL.size===ACCOUNTS.length);
+  // Deselecting everything is a real state, not an error: it is how you
+  // start from nothing and add back just the accounts you want to compare.
+  mk('Clear',()=>{SEL=new Set();buildChips();render()},SEL.size===0);
+  mk('Ours only',()=>{SEL=new Set(ACCOUNTS.filter(a=>a.group==='sentient').map(a=>a.handle));buildChips();render()},false);
+  mk('Competitors only',()=>{SEL=new Set(ACCOUNTS.filter(a=>a.group==='competitors').map(a=>a.handle));buildChips();render()},false);
+  ACCOUNTS.forEach(a=>{
+    const s=mk('@'+a.handle,()=>{SEL.has(a.handle)?SEL.delete(a.handle):SEL.add(a.handle);buildChips();render()},SEL.has(a.handle));
+    if(SEL.has(a.handle)) s.style.borderColor=colorFor(a.handle)+'88';
+  });
+}
+
+function applyPreset(){
+  const days=$('#preset').value;
+  if(!days){ $('#from').value=''; $('#to').value=''; }
+  else{
+    $('#to').value=new Date().toISOString().slice(0,10);
+    $('#from').value=new Date(Date.now()-days*864e5).toISOString().slice(0,10);
+  }
+  render();
+}
+
+async function shareLink(){
+  const btn=$('#shareBtn');
+  try{
+    await navigator.clipboard.writeText(location.href);
+    btn.textContent='Copied'; setTimeout(()=>{btn.textContent='Copy link'},1600);
+  }catch(e){
+    prompt('Copy this link:', location.href);
+  }
+}
+
+function filtered(){
+  const f=$('#from').value?new Date($('#from').value+'T00:00:00').getTime():null;
+  const t=$('#to').value?new Date($('#to').value+'T23:59:59').getTime():null;
+  const ty=$('#ftype').value;
+  return RAW.filter(p=>{
+    if(!SEL.has(p.a)) return false;
+    if(f&&p.ts<f) return false;
+    if(t&&p.ts>t) return false;
+    if(ty&&p.t!==ty) return false;
+    return true;
+  });
+}
+
+/* ---------------- metric helpers ---------------- */
+const eng = p => (p.l||0)+(p.c||0);
+const avg = arr => arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : null;
+const med = arr => { if(!arr.length) return null; const s=[...arr].sort((a,b)=>a-b); const m=s.length>>1;
+  return s.length%2 ? s[m] : (s[m-1]+s[m])/2; };
+const engPerView = p => (p.v && p.v>0) ? eng(p)/p.v*100 : null;
+
+// Aggregate ratio, not an average of ratios. Averaging per-post percentages
+// lets one video with 40 views and 300 likes contribute 750% and drag the mean
+// with it -- that's how accounts showed "1142% engagement", which is impossible.
+// Summing numerator and denominator separately weights each post by its reach.
+function aggEngPerView(list){
+  let e=0,v=0;
+  list.forEach(p=>{ if(p.v&&p.v>0){ e+=eng(p); v+=p.v; } });
+  return v>0 ? e/v*100 : null;
+}
+
+// Relative performance index: how many times a post performs versus what's
+// normal FOR ITS OWN ACCOUNT. Without this, any ranking mixes views (hundreds
+// of thousands) with likes (thousands), across accounts of wildly different
+// sizes, and ends up measuring "who has more followers" instead of "what
+// works". 1.0 = typical for that account; 2.0 = twice its usual.
+let BASE={};
+function computeBaselines(list){
+  const byAcc={};
+  list.forEach(p=>{ (byAcc[p.a]=byAcc[p.a]||[]).push(p); });
+  BASE={};
+  for(const a in byAcc){
+    BASE[a]={ v: med(byAcc[a].filter(p=>p.v>0).map(p=>p.v))||null,
+              l: med(byAcc[a].filter(p=>p.l>0).map(p=>p.l))||null };
+  }
+}
+function idx(p){
+  const b=BASE[p.a]; if(!b) return null;
+  if(p.v>0 && b.v) return p.v/b.v;
+  if(p.l>0 && b.l) return p.l/b.l;
+  return null;
+}
+
+function render(){
+  destroyCharts();
+  writeUrl();
+  const P = filtered();
+  computeBaselines(P);
+  $('#scope').textContent = P.length.toLocaleString('en-US')+' posts · '+SEL.size+' accounts';
+  if(!P.length){ $('#app').innerHTML='<div class="empty">No posts match these filters.</div>'; return; }
+
+  $('#app').innerHTML = `
+    ${kpiBlock(P)}
+    ${sectionFormat()}
+    ${sectionAccounts()}
+    ${sectionTopics()}
+    ${sectionTiming()}
+    ${sectionTop(P)}
+  `;
+  drawFormat(P); drawAccounts(P); drawTopics(P); drawTiming(P);
+}
+
+/* ---------------- KPIs ---------------- */
+function kpiBlock(P){
+  const withV = P.filter(p=>p.v!=null);
+  const totalLikes = P.reduce((s,p)=>s+(p.l||0),0);
+  const totalViews = withV.reduce((s,p)=>s+p.v,0);
+  const totalCom = P.reduce((s,p)=>s+(p.c||0),0);
+  const tss=P.map(p=>p.ts); const days=(maxOf(tss)-minOf(tss))/864e5 || 1;
+  const hot = P.filter(p=>p.hot).length;
+  return `<div class="kpis">
+    <div class="kpi"><b>Posts</b><strong>${fmt(P.length)}</strong><em>${(P.length/days).toFixed(1)} per day</em></div>
+    <div class="kpi"><b>Likes</b><strong>${fmt(totalLikes)}</strong><em>${fmt(totalLikes/P.length)} average</em></div>
+    <div class="kpi"><b>Views (video)</b><strong>${fmt(totalViews)}</strong><em>${withV.length} videos measured</em></div>
+    <div class="kpi"><b>Comments</b><strong>${fmt(totalCom)}</strong><em>${fmt(totalCom/P.length)} average</em></div>
+    <div class="kpi"><b>Engagement / view</b><strong>${pct(aggEngPerView(P))}</strong><em>aggregate, not a mean of %</em></div>
+    <div class="kpi"><b>HOT posts</b><strong>${fmt(hot)}</strong><em>${pct(hot/P.length*100)} of total</em></div>
+  </div>`;
+}
+
+/* ---------------- 1. Format ---------------- */
+function sectionFormat(){return `
+<section>
+  <h2>What format performs best <span class="tag">production</span></h2>
+  <p class="sub">Reels vs carousels vs images. Below: how many slides a carousel should have, and which reel length travels furthest.</p>
+  <div class="grid3">
+    <div><div class="chartbox"><canvas id="cFormat"></canvas></div></div>
+    <div><div class="chartbox"><canvas id="cSlides"></canvas></div></div>
+    <div><div class="chartbox"><canvas id="cDur"></canvas></div></div>
+  </div>
+  <div id="formatNote"></div>
+</section>`;}
+
+function drawFormat(P){
+  const types=['Video','Carousel','Image'];
+  const stats=types.map(t=>{
+    const g=P.filter(p=>p.t===t);
+    return {t, n:g.length, likes:avg(g.map(p=>p.l||0))||0,
+      views:avg(g.filter(p=>p.v!=null).map(p=>p.v))||0};
+  }).filter(s=>s.n>0);
+
+  CHARTS.push(new Chart($('#cFormat'),{type:'bar',
+    data:{labels:stats.map(s=>s.t+' ('+s.n+')'),
+      datasets:[
+        {label:'Avg likes',data:stats.map(s=>Math.round(s.likes)),backgroundColor:'#f5ff00cc',borderRadius:4},
+        {label:'Avg views',data:stats.map(s=>Math.round(s.views)),backgroundColor:'#4aa8ffcc',borderRadius:4},
+      ]},
+    options:{maintainAspectRatio:false,plugins:{title:{display:true,text:'Performance by format',color:'#f5f5f5',font:{size:11,weight:'800'}},
+      legend:{labels:{boxWidth:9,boxHeight:9}}},scales:{y:{beginAtZero:true,ticks:{callback:v=>fmt(v)}}}}}));
+
+  const car=P.filter(p=>p.t==='Carousel'&&p.sl);
+  const buckets={};
+  car.forEach(p=>{const k=Math.min(p.sl,10);(buckets[k]=buckets[k]||[]).push(p.l||0)});
+  const ks=Object.keys(buckets).map(Number).sort((a,b)=>a-b);
+  const bestSl=bestKey(buckets);
+  // Filtering to a single format leaves the other charts with nothing to draw;
+  // an empty axis reads as broken, so say why it's empty instead.
+  const blank=(id,msg)=>{const c=$(id); if(c) c.parentElement.innerHTML=
+    `<div style="display:flex;align-items:center;justify-content:center;height:100%;
+      color:var(--muted);font-size:11px;text-align:center;padding:0 18px">${msg}</div>`;};
+  if(!car.length){ blank('#cSlides','No carousels match the current filters.'); }
+  if(car.length) CHARTS.push(new Chart($('#cSlides'),{type:'bar',
+    data:{labels:ks.map(k=>k===10?'10+':k+''),
+      datasets:[{label:'Avg likes',data:ks.map(k=>Math.round(avg(buckets[k]))),
+        backgroundColor:ks.map(k=>k===bestSl?'#35c759cc':'#ffffff22'),borderRadius:4}]},
+    options:{maintainAspectRatio:false,plugins:{title:{display:true,text:'Slides per carousel ('+car.length+' posts)',color:'#f5f5f5',font:{size:11,weight:'800'}},
+      legend:{display:false},tooltip:{callbacks:{afterLabel:c=>buckets[ks[c.dataIndex]].length+' posts'}}},
+      scales:{y:{beginAtZero:true,ticks:{callback:v=>fmt(v)}},x:{title:{display:true,text:'number of slides'}}}}}));
+
+  const reels=P.filter(p=>p.dur);
+  const db={}; const range=d=>d<15?'<15s':d<30?'15-30s':d<60?'30-60s':d<90?'60-90s':'90s+';
+  reels.forEach(p=>{const k=range(p.dur);(db[k]=db[k]||[]).push(p.v ?? p.l ?? 0)});
+  const order=['<15s','15-30s','30-60s','60-90s','90s+'].filter(k=>db[k]);
+  const bestDur=bestKey(db);
+  if(!reels.length){ blank('#cDur','No videos with a known duration match the current filters.'); }
+  if(reels.length) CHARTS.push(new Chart($('#cDur'),{type:'bar',
+    data:{labels:order,datasets:[{label:'Avg views',data:order.map(k=>Math.round(avg(db[k]))),
+      backgroundColor:order.map(k=>k===bestDur?'#35c759cc':'#ffffff22'),borderRadius:4}]},
+    options:{maintainAspectRatio:false,plugins:{title:{display:true,text:'Reel length ('+reels.length+' videos)',color:'#f5f5f5',font:{size:11,weight:'800'}},
+      legend:{display:false},tooltip:{callbacks:{afterLabel:c=>db[order[c.dataIndex]].length+' videos'}}},
+      scales:{y:{beginAtZero:true,ticks:{callback:v=>fmt(v)}}}}}));
+
+  const notes=[];
+  if(stats.length>1){
+    const top=[...stats].sort((a,b)=>b.likes-a.likes)[0];
+    notes.push(`Highest average likes: <b>${top.t}</b> (${fmt(top.likes)}).`);
+  }
+  if(bestSl!=null) notes.push(`Carousels with <b>${bestSl===10?'10+':bestSl} slides</b> average the most likes (${buckets[bestSl].length} posts).`);
+  if(bestDur) notes.push(`<b>${bestDur}</b> reels travel furthest (${db[bestDur].length} videos).`);
+  $('#formatNote').innerHTML = notes.length?`<div class="note">${notes.join(' ')}</div>`:'';
+}
+// Requires >=3 posts so a single lucky post can't crown a bucket.
+function bestKey(obj){let bk=null,bv=-1;for(const k in obj){const a=avg(obj[k]);if(obj[k].length>=3&&a>bv){bv=a;bk=isNaN(k)?k:Number(k)}}return bk;}
+
+/* ---------------- 2. Accounts ---------------- */
+function sectionAccounts(){return `
+<section>
+  <h2>Account comparison <span class="tag">competitors</span></h2>
+  <p class="sub">Head to head. <b>Engagement / view</b> is the most honest column: it measures how many of the people who saw actually reacted, without rewarding whoever simply has more reach. Click any header to sort.</p>
+  <div class="grid2">
+    <div><div class="chartbox tall"><canvas id="cAcc"></canvas></div></div>
+    <div style="overflow:auto;max-height:320px"><table id="tAcc"></table></div>
+  </div>
+  <div id="accNote"></div>
+</section>`;}
+
+let accSort={k:'likes',dir:-1};
+function drawAccounts(P){
+  const rows=[...SEL].map(h=>{
+    const g=P.filter(p=>p.a===h); if(!g.length) return null;
+    const wv=g.filter(p=>p.v!=null);
+    const gts=g.map(p=>p.ts); const days=(maxOf(gts)-minOf(gts))/864e5||1;
+    return {h, group:(ACCOUNTS.find(a=>a.handle===h)||{}).group, n:g.length,
+      likes:avg(g.map(p=>p.l||0))||0, views:wv.length?avg(wv.map(p=>p.v)):null,
+      com:avg(g.map(p=>p.c||0))||0, er:aggEngPerView(g),
+      pace:g.length/days, hot:g.filter(p=>p.hot).length};
+  }).filter(Boolean);
+
+  rows.sort((a,b)=>((b[accSort.k]??-1)-(a[accSort.k]??-1))*(accSort.dir<0?1:-1));
+  const maxL=maxOf(rows.map(r=>r.likes))||1;
+  const cols=[['h','Account'],['n','Posts'],['likes','Avg likes'],['views','Avg views'],
+              ['com','Comments'],['er','Eng./view'],['pace','Posts/day'],['hot','HOT']];
+  $('#tAcc').innerHTML =
+    '<thead><tr>'+cols.map(([k,l])=>`<th data-k="${k}" class="${accSort.k===k?'sorted':''}">${l}</th>`).join('')+'</tr></thead>'+
+    '<tbody>'+rows.map(r=>`<tr>
+      <td>@${r.h}<div class="bar"><i style="width:${(r.likes/maxL*100).toFixed(0)}%;background:${colorFor(r.h)}"></i></div>
+        <span class="pill ${r.group==='sentient'?'s':'c'}" style="margin-top:4px">${r.group==='sentient'?'ours':'competitor'}</span></td>
+      <td>${fmt(r.n)}</td><td>${fmt(r.likes)}</td><td>${r.views==null?'—':fmt(r.views)}</td>
+      <td>${fmt(r.com)}</td><td>${pct(r.er)}</td><td>${r.pace.toFixed(1)}</td><td>${r.hot}</td></tr>`).join('')+'</tbody>';
+  $('#tAcc').querySelectorAll('th').forEach(th=>th.onclick=()=>{
+    const k=th.dataset.k; accSort={k, dir: accSort.k===k?-accSort.dir:-1}; drawAccounts(P);});
+
+  CHARTS.push(new Chart($('#cAcc'),{type:'bubble',
+    data:{datasets:rows.filter(r=>r.views!=null&&r.er!=null).map(r=>({label:'@'+r.h,
+      data:[{x:r.views,y:r.er,r:Math.max(5,Math.min(26,Math.sqrt(r.n)*1.6))}],
+      backgroundColor:colorFor(r.h)+'bb',borderColor:colorFor(r.h)}))},
+    options:{maintainAspectRatio:false,plugins:{
+      title:{display:true,text:'Reach vs engagement quality',color:'#f5f5f5',font:{size:11,weight:'800'}},
+      legend:{labels:{boxWidth:8,boxHeight:8}},
+      tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${fmt(c.raw.x)} views · ${c.raw.y.toFixed(1)}% eng.`}}},
+      scales:{x:{title:{display:true,text:'average views'},ticks:{callback:v=>fmt(v)}},
+              y:{title:{display:true,text:'engagement per view (%)'},beginAtZero:true}}}}));
+
+  const best=[...rows].filter(r=>r.er!=null).sort((a,b)=>b.er-a.er)[0];
+  const wide=[...rows].filter(r=>r.views!=null).sort((a,b)=>b.views-a.views)[0];
+  const notes=[];
+  if(best) notes.push(`<b>@${best.h}</b> has the best engagement per view (${pct(best.er)}): of every 100 people who watch, ${best.er.toFixed(1)} react.`);
+  if(wide&&best&&wide.h!==best.h) notes.push(`<b>@${wide.h}</b> reaches more people (${fmt(wide.views)} avg views) but converts at ${pct(wide.er)} — more reach isn't more connection.`);
+  $('#accNote').innerHTML = notes.length?`<div class="note">${notes.join(' ')}</div>`:'';
+}
+
+/* ---------------- 3. Topics & language ---------------- */
+const STOP=new Set(('the of to and a in is it you that for on with as are was be this have from or an by not but what all we your can will just how new now get out has had who why when where which their there them then than more most some such only other into over after also back down out off up if do does did can could would should who whom whose'
+  +' de la el en y a los las que con por para un una del al es se su lo como mas más este esta estos estas o u ni si no te tu mi sus le les ha han hay muy ya sin sobre entre cuando donde quien porque'
+  // Calls-to-action and boilerplate that ride on nearly every cover regardless
+  // of topic (swipe, follow, link in bio...) -- high frequency, zero signal.
+  +' swipe swipeup ad ads advert advertisement sponsored follow followers like likes subscribe share shares comment comments tap taphere link linkinbio bio dm watch video page click here see via amp today full fullvideo part1 part2'
+  // Spanish equivalents of the same CTAs (deslizar = to swipe).
+  +' desliza deslizar deslízalo deslízate desliz'
+  // OCR fragments of page names that don't cleanly attach to one account
+  // (e.g. "Tras el Velo Real" split across a logo + a title card).
+  +' tras velo').split(' '));
+function sectionTopics(){return `
+<section>
+  <h2>Topics &amp; language that work <span class="tag">content</span></h2>
+  <p class="sub">Mined from cover text (OCR) and hashtags. Size is frequency; the number is the <b>median relative index</b> — <b>1.00×</b> is normal performance, <b>2.00×</b> is twice the usual for that account. Median, not mean: one viral post would otherwise make a word look 900× better than it is.</p>
+  <div class="grid2">
+    <div><h3 class="cloud-h">Words on covers</h3><div class="cloud" id="wordCloud"></div></div>
+    <div><h3 class="cloud-h">Hashtags</h3><div class="cloud" id="tagCloud"></div></div>
+  </div>
+  <div id="topicsNote"></div>
+</section>`;}
+
+function drawTopics(P){
+  const wordStats={}, tagStats={};
+  P.forEach(p=>{
+    const metric = idx(p); if(metric==null) return;
+    const ownName = NAME_WORDS_BY_ACCOUNT[p.a] || EMPTY_WORDS;
+    if(p.ocr){
+      const seen=new Set();
+      p.ocr.toLowerCase().replace(/[^a-záéíóúñü0-9\s]/gi,' ').split(/\s+/)
+        .map(w=>WORD_ALIASES[w]||w)
+        .filter(w=>w.length>3&&!STOP.has(w)&&!ownName.has(w)&&!/^\d+$/.test(w))
+        .forEach(w=>{ if(seen.has(w))return; seen.add(w);
+          (wordStats[w]=wordStats[w]||[]).push(metric); });
+    }
+    if(p.h) p.h.split(',').map(s=>s.trim().toLowerCase()).filter(Boolean)
+      .filter(t=>!STOP.has(t)&&!ownName.has(t))
+      .forEach(t=>{(tagStats[t]=tagStats[t]||[]).push(metric)});
+  });
+  const top=(o,min)=>Object.entries(o).filter(([,v])=>v.length>=min)
+    .sort((a,b)=>b[1].length-a[1].length).slice(0,34);
+
+  const paint=(el,items)=>{
+    if(!items.length){$(el).innerHTML='<span style="color:var(--muted)">Not enough data</span>';return;}
+    const max=maxOf(items.map(([,v])=>v.length))||1;
+    $(el).innerHTML=items.map(([w,v])=>{
+      const sz=11+Math.round(v.length/max*9);
+      const m=med(v);
+      return `<span style="font-size:${sz}px" title="${v.length} posts · median ${xf(m)} its account's normal">${w}<b>${xf(m)}</b></span>`;
+    }).join('');
+  };
+  paint('#wordCloud',top(wordStats,4)); paint('#tagCloud',top(tagStats,3));
+
+  // Best-performing words, not the most frequent ones.
+  const perf=Object.entries(wordStats).filter(([,v])=>v.length>=6)
+    .map(([k,v])=>({k,n:v.length,a:med(v)})).sort((a,b)=>b.a-a.a).slice(0,3);
+  const notes=[];
+  if(perf.length) notes.push(`Top-performing words (by median): ${perf.map(p=>`<b>${p.k}</b> (${xf(p.a)}, ${p.n} posts)`).join(', ')}.`);
+  const audio=P.filter(p=>p.oa!=null);
+  if(audio.length>8){
+    const orig=med(audio.filter(p=>p.oa===1).map(idx).filter(x=>x!=null));
+    const ext=med(audio.filter(p=>p.oa===0).map(idx).filter(x=>x!=null));
+    if(orig&&ext) notes.push(`Original audio performs at <b>${xf(orig)}</b> vs <b>${xf(ext)}</b> for third-party audio.`);
+  }
+  $('#topicsNote').innerHTML = notes.length?`<div class="note">${notes.join(' ')}</div>`:'';
+}
+
+/* ---------------- 4. When to post ---------------- */
+function sectionTiming(){return `
+<section>
+  <h2>When to post <span class="tag">timing</span></h2>
+  <p class="sub">Performance by publish day and hour (UTC), measured as the <b>median relative index</b>: how many times a typical post in that slot performs versus what's normal for its own account, so neither a big account nor one viral post drowns out the signal. Brighter = better.</p>
+  <div id="heat"></div>
+  <div class="legend"><span>worse</span><i style="background:rgba(var(--accent-rgb),.12)"></i><i style="background:rgba(var(--accent-rgb),.35)"></i><i style="background:rgba(var(--accent-rgb),.6)"></i><i style="background:rgba(var(--accent-rgb),.9)"></i><span>better</span>
+    <span style="margin-left:14px"><i style="background:rgba(var(--edge),.07)"></i> too few posts</span>
+    <span style="margin-left:14px"><i style="background:rgba(var(--edge),.03)"></i> never posted</span></div>
+  <div class="grid2" style="margin-top:16px">
+    <div><div class="chartbox"><canvas id="cDow"></canvas></div></div>
+    <div><div class="chartbox"><canvas id="cHour"></canvas></div></div>
+  </div>
+  <div id="timingNote"></div>
+</section>`;}
+
+const DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+function drawTiming(P){
+  const cell={}, byDow={}, byHour={};
+  P.forEach(p=>{
+    if(p.hour==null) return;
+    const m=idx(p); if(m==null) return;
+    (cell[p.dow+'-'+p.hour]=cell[p.dow+'-'+p.hour]||[]).push(m);
+    (byDow[p.dow]=byDow[p.dow]||[]).push(m);
+    (byHour[p.hour]=byHour[p.hour]||[]).push(m);
+  });
+
+  // Percentile-rank colour scale rather than linear min-max: a single viral
+  // slot pushes the maximum so high that the other 167 cells collapse into the
+  // same indistinguishable black. Ranking restores real contrast.
+  const MIN_POSTS=2;
+  const ranked=Object.entries(cell).filter(([,v])=>v.length>=MIN_POSTS)
+    .map(([k,v])=>[k,med(v)]).sort((a,b)=>a[1]-b[1]);
+  const rank={}; ranked.forEach(([k],i)=>{ rank[k]= ranked.length>1 ? i/(ranked.length-1) : .5; });
+
+  let html='<div class="heat"><div class="lbl"></div>';
+  for(let h=0;h<24;h++) html+=`<div class="hr">${h%3===0?h:''}</div>`;
+  for(let d=0;d<7;d++){
+    html+=`<div class="lbl">${DOW[d]}</div>`;
+    for(let h=0;h<24;h++){
+      const key=d+'-'+h, v=cell[key];
+      if(!v){ html+='<div class="cell" title="never posted" style="background:rgba(var(--edge),.03)"></div>'; continue; }
+      if(rank[key]===undefined){
+        html+=`<div class="cell" title="${DOW[d]} ${h}:00 · only ${v.length} post, not enough to conclude"
+          style="background:rgba(var(--edge),.07)"></div>`; continue; }
+      html+=`<div class="cell" title="${DOW[d]} ${h}:00 · median ${xf(med(v))} its normal · ${v.length} posts"
+        style="background:rgba(var(--accent-rgb),${(0.08+rank[key]*0.85).toFixed(2)})"></div>`;
+    }
+  }
+  $('#heat').innerHTML=html+'</div>';
+
+  const dk=[...Array(7).keys()].filter(d=>byDow[d]);
+  CHARTS.push(new Chart($('#cDow'),{type:'bar',
+    data:{labels:dk.map(d=>DOW[d]),datasets:[{label:'Median index',data:dk.map(d=>+med(byDow[d]).toFixed(2)),
+      backgroundColor:'#f5ff00aa',borderRadius:4}]},
+    options:{maintainAspectRatio:false,plugins:{title:{display:true,text:'By day of week (index)',color:'#f5f5f5',font:{size:11,weight:'800'}},
+      legend:{display:false},tooltip:{callbacks:{afterLabel:c=>byDow[dk[c.dataIndex]].length+' posts'}}},
+      scales:{y:{beginAtZero:true,ticks:{callback:v=>v+'×'}}}}}));
+
+  const hk=[...Array(24).keys()].filter(h=>byHour[h]);
+  CHARTS.push(new Chart($('#cHour'),{type:'line',
+    data:{labels:hk.map(h=>h+'h'),datasets:[{label:'Median index',data:hk.map(h=>+med(byHour[h]).toFixed(2)),
+      borderColor:'#4aa8ff',backgroundColor:'#4aa8ff22',fill:true,tension:.35,pointRadius:2}]},
+    options:{maintainAspectRatio:false,plugins:{title:{display:true,text:'By hour of day, UTC (index)',color:'#f5f5f5',font:{size:11,weight:'800'}},
+      legend:{display:false},tooltip:{callbacks:{afterLabel:c=>byHour[hk[c.dataIndex]].length+' posts'}}},
+      scales:{y:{beginAtZero:true,ticks:{callback:v=>v+'×'}}}}}));
+
+  const bd=Object.entries(byDow).filter(([,v])=>v.length>=5).sort((a,b)=>med(b[1])-med(a[1]))[0];
+  const bh=Object.entries(byHour).filter(([,v])=>v.length>=5).sort((a,b)=>med(b[1])-med(a[1]))[0];
+  const notes=[];
+  if(bd) notes.push(`Best day is <b>${DOW[bd[0]]}</b> (${xf(med(bd[1]))} its normal, ${bd[1].length} posts).`);
+  if(bh) notes.push(`Best window is around <b>${bh[0]}:00 UTC</b> (${xf(med(bh[1]))}).`);
+  notes.push(`<span style="color:var(--muted)">These are correlations over what was already published, not a guarantee — a slot nobody has ever posted in has no evidence behind it either way.</span>`);
+  $('#timingNote').innerHTML=`<div class="note">${notes.join(' ')}</div>`;
+}
+
+/* ---------------- 5. Top posts ---------------- */
+function sectionTop(P){
+  const m=$('#metric').value;
+  const val=p=>m==='er'?engPerView(p):m==='v'?p.v:m==='c'?p.c:p.l;
+  const rows=[...P].filter(p=>val(p)!=null).sort((a,b)=>val(b)-val(a)).slice(0,25);
+  const label={l:'Likes',v:'Views',c:'Comments',er:'Eng./view'}[m];
+  return `<section>
+    <h2>Top 25 posts <span class="tag">${label}</span></h2>
+    <p class="sub">Switch the ranking metric in the filters above. Click a row to open the post on Instagram.</p>
+    <div style="overflow:auto;max-height:460px"><table>
+      <thead><tr><th>#</th><th style="text-align:left">Account</th><th style="text-align:left">Cover text</th>
+        <th>Date</th><th>Format</th><th>Likes</th><th>Views</th><th>Eng./view</th></tr></thead>
+      <tbody>${rows.map((p,i)=>`<tr style="cursor:pointer" onclick="window.open('${p.u||'#'}','_blank')">
+        <td style="text-align:left;color:var(--muted)">${i+1}</td>
+        <td style="text-align:left"><span style="color:${textColorFor(p.a)}">@${p.a}</span></td>
+        <td style="text-align:left;max-width:340px;overflow:hidden;text-overflow:ellipsis;color:var(--muted-2)">${(p.ocr||'—').slice(0,90)}</td>
+        <td>${new Date(p.ts).toISOString().slice(0,10)}</td>
+        <td>${p.pt==='clips'?'Reel':p.t}</td>
+        <td>${fmt(p.l)}</td><td>${p.v==null?'—':fmt(p.v)}</td><td>${pct(engPerView(p))}</td></tr>`).join('')}</tbody>
+    </table></div>
+  </section>`;
+}
+
+window.__startInsightsBoot = boot;
+</script>
+
+<script type="module">
+// Same Firebase project/config as the main dashboard (src/App.jsx) -- Insights
+// is a standalone static page so it can't share that module, but it needs the
+// same Google sign-in gate now that the backend requires a Bearer token.
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
+import {
+  getAuth, GoogleAuthProvider, getRedirectResult, onAuthStateChanged,
+  signInWithPopup, signInWithRedirect, signInWithCustomToken, signOut,
+  setPersistence, browserLocalPersistence,
+} from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js';
+
+const firebaseConfig = {
+  apiKey: 'AIzaSyDrtLGrnRJ3cj64sJ6Ykn-yRGtemybzoN0',
+  authDomain: 'sentient-dash.firebaseapp.com',
+  projectId: 'sentient-dash',
+  storageBucket: 'sentient-dash.firebasestorage.app',
+  messagingSenderId: '74046012975',
+  appId: '1:74046012975:web:02013849972baca1f950da',
+};
+const auth = getAuth(initializeApp(firebaseConfig));
+// Match the Dashboard's persistent Firebase session before checking the SSO
+// cookie so a restored session never races the standalone page's login gate.
+const authPersistenceReady = setPersistence(auth, browserLocalPersistence).catch(() => null);
+const provider = new GoogleAuthProvider();
+provider.setCustomParameters({ prompt: 'select_account' });
+
+// Single sign-on across *.sentientdash.app -- see src/sso.js for the full
+// writeup. This is a vanilla-JS copy of the same cookie bootstrap since this
+// page is a standalone static file, not part of the Vite React bundle.
+const SSO_API = 'https://cortex-api-db2e.onrender.com';
+const SSO_COOKIE = 'sentient_sso';
+function ssoCookieDomain() { return location.hostname.endsWith('sentientdash.app') ? '.sentientdash.app' : ''; }
+function ssoReadCookie() {
+  const match = document.cookie.match(new RegExp('(?:^|; )' + SSO_COOKIE + '=([^;]*)'));
+  return match ? decodeURIComponent(match[1]) : null;
+}
+function ssoWriteCookie(value, maxAgeSeconds) {
+  const domain = ssoCookieDomain();
+  let cookie = SSO_COOKIE + '=' + encodeURIComponent(value) + '; path=/; max-age=' + maxAgeSeconds + '; secure; samesite=lax';
+  if (domain) cookie += '; domain=' + domain;
+  document.cookie = cookie;
+}
+function ssoClearCookie() {
+  const domain = ssoCookieDomain();
+  let cookie = SSO_COOKIE + '=; path=/; max-age=0; secure; samesite=lax';
+  if (domain) cookie += '; domain=' + domain;
+  document.cookie = cookie;
+}
+async function ssoPublishCookie() {
+  const user = auth.currentUser;
+  if (!user) return;
+  try {
+    const idToken = await user.getIdToken();
+    const response = await fetch(SSO_API + '/api/auth/custom-token', { method: 'POST', headers: { Authorization: 'Bearer ' + idToken } });
+    if (!response.ok) return;
+    const body = await response.json();
+    if (body.customToken) ssoWriteCookie(body.customToken, 45 * 60);
+  } catch (err) { /* best-effort */ }
+}
+async function ssoTrySignIn() {
+  await authPersistenceReady;
+  if (auth.currentUser) return true;
+  const token = ssoReadCookie();
+  if (!token) return false;
+  try {
+    await signInWithCustomToken(auth, token);
+    return true;
+  } catch (err) {
+    ssoClearCookie();
+    return false;
+  }
+}
+let ssoRefreshTimer = null;
+function ssoStartRefresh() {
+  ssoPublishCookie();
+  if (ssoRefreshTimer) clearInterval(ssoRefreshTimer);
+  ssoRefreshTimer = setInterval(ssoPublishCookie, 20 * 60 * 1000);
+}
+
+// Popup first (keeps us first-party); full-page redirect when the browser
+// won't give us a popup, which is the common case on mobile.
+const POPUP_FALLBACK_CODES = new Set([
+  'auth/popup-blocked',
+  'auth/operation-not-supported-in-this-environment',
+  'auth/web-storage-unsupported',
+  'auth/internal-error',
+]);
+
+async function startSignIn() {
+  try {
+    await signInWithPopup(auth, provider);
+    return null;
+  } catch (err) {
+    const code = err?.code || '';
+    if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') return null;
+    if (POPUP_FALLBACK_CODES.has(code)) {
+      await signInWithRedirect(auth, provider);
+      return null;
+    }
+    return err;
+  }
+}
+
+function describeSignInError(err) {
+  const code = err?.code || '';
+  if (code === 'auth/unauthorized-domain') {
+    return 'This domain (' + location.hostname + ') isn’t authorized in Firebase yet.';
+  }
+  if (code === 'auth/network-request-failed') {
+    return 'Network error reaching Google. Check your connection and try again.';
+  }
+  return code ? 'Sign-in failed (' + code + '). Try again.' : 'Sign-in failed. Try again.';
+}
+
+const gate = document.getElementById('authGate');
+const gateText = document.getElementById('authGateText');
+const gateBtn = document.getElementById('authGateBtn');
+let booted = false;
+
+window.__onInsightsUnauthorized = () => {
+  gateText.textContent = (auth.currentUser?.email || 'This Google account') + ' isn’t authorized for Sentient Dash.';
+  gateBtn.textContent = 'Sign out';
+  gateBtn.onclick = () => { ssoClearCookie(); signOut(auth); };
+  gate.classList.remove('hidden');
+};
+
+// The Settings panel's sign-out button lives in a classic <script> below,
+// outside this module's scope -- expose a global the same way as the other
+// __-prefixed bridges on this page.
+window.__signOut = () => { ssoClearCookie(); signOut(auth); };
+
+// Picks the user back up when the redirect fallback returns them here.
+getRedirectResult(auth).catch((err) => { gateText.textContent = describeSignInError(err); });
+
+function showSignInGate() {
+  gateText.textContent = 'Sign in with your Google account to continue.';
+  gateBtn.textContent = 'Sign in with Google';
+  gateBtn.onclick = runSignIn;
+  gate.classList.remove('hidden');
+}
+
+// Same-session-everywhere: try the shared cookie (minted by the main
+// dashboard or Queue board) before ever showing the Google gate here. If it
+// turns out there was no cookie (or it didn't work), and Firebase still
+// hasn't produced a signed-in user by the time the check finishes, show the
+// gate ourselves -- onAuthStateChanged won't fire again on its own if the
+// state never actually changed.
+let ssoChecked = false;
+
+async function runSignIn() {
+  gateBtn.disabled = true;
+  const err = await startSignIn();
+  if (err) gateText.textContent = describeSignInError(err);
+  gateBtn.disabled = false;
+}
+
+onAuthStateChanged(auth, async (user) => {
+  if (!user) {
+    booted = false;
+    if (!ssoChecked) return; // give the silent cookie sign-in a chance first
+    showSignInGate();
+    return;
+  }
+  window.__refreshFirebaseIdToken = async (forceRefresh = false) => {
+    const token = await auth.currentUser?.getIdToken(forceRefresh);
+    if(token) window.__firebaseIdToken = token;
+    return token || '';
+  };
+  await window.__refreshFirebaseIdToken();
+  window.__signedInEmail = user.email || '';
+  setSettingsAvatar(user);
+  gate.classList.add('hidden');
+  ssoStartRefresh();
+  if (!booted) {
+    booted = true;
+    window.__startInsightsBoot();
+  }
+});
+
+// The observer must exist before a shared-token sign-in begins; otherwise a
+// fast state transition can be missed and leave this static page on its gate.
+ssoTrySignIn().finally(() => {
+  ssoChecked = true;
+  if (!auth.currentUser) showSignInGate();
+});
+</script>
+<script>
+
+/* --- PDF export ---------------------------------------------------------
+   Built from the DOM that is already on screen rather than from RAW, so the
+   report always matches exactly what the filters are showing -- there is no
+   second code path that can drift out of step with the page.
+
+   jsPDF is loaded on first click, not at page load: most visits never export,
+   and it is ~350KB. */
+let jsPdfReady = null;
+function loadJsPdf(){
+  if(jsPdfReady) return jsPdfReady;
+  jsPdfReady = new Promise((res, rej) => {
+    const sc = document.createElement('script');
+    sc.src = 'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js';
+    sc.onload = () => res(window.jspdf.jsPDF);
+    sc.onerror = () => rej(new Error('Could not load the PDF library'));
+    document.head.appendChild(sc);
+  });
+  return jsPdfReady;
+}
+
+/* Chart.js canvases are transparent, and their labels are drawn in whatever
+   colour suited the theme at construction. Dropped straight onto a white PDF
+   page a dark-theme chart would be invisible, so each one is composited onto
+   an opaque swatch of the panel colour it was designed against. */
+function canvasOnPanel(canvas){
+  const bg = getComputedStyle(document.body).backgroundColor || '#000';
+  const out = document.createElement('canvas');
+  out.width = canvas.width; out.height = canvas.height;
+  const ctx = out.getContext('2d');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, out.width, out.height);
+  ctx.drawImage(canvas, 0, 0);
+  return out.toDataURL('image/png');
+}
+
+async function exportPdf(){
+  const btn = document.getElementById('pdfBtn');
+  const label = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Building…';
+  try {
+    const JsPDF = await loadJsPdf();
+    const doc = new JsPDF({ unit: 'pt', format: 'a4' });
+    const M = 40, W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
+    const CW = W - M * 2;
+    let y = M;
+
+    const room = (need) => { if(y + need > H - M){ doc.addPage(); y = M; } };
+    const text = (str, size, style, gap) => {
+      doc.setFont('helvetica', style || 'normal'); doc.setFontSize(size);
+      const lines = doc.splitTextToSize(String(str), CW);
+      room(lines.length * (size + 2));
+      doc.text(lines, M, y);
+      y += lines.length * (size + 2) + (gap === undefined ? 6 : gap);
+    };
+
+    // header
+    text('Sentient Insights', 20, 'bold', 2);
+    const when = new Date().toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
+    doc.setTextColor(120);
+    text(`${document.getElementById('scope')?.textContent || ''}  ·  generated ${when}`, 9, 'normal', 10);
+
+    // the filters this report was built from
+    const filters = [];
+    document.querySelectorAll('.filters .f').forEach((f) => {
+      const lab = f.querySelector('label')?.textContent?.trim();
+      const ctl = f.querySelector('select, input');
+      if(lab && ctl && ctl.value) filters.push(`${lab}: ${ctl.selectedOptions ? ctl.selectedOptions[0].text : ctl.value}`);
+    });
+    const accs = [...document.querySelectorAll('#accChips .chip.on')]
+      .map(c => c.textContent).filter(t => t.startsWith('@'));
+    if(accs.length) filters.push(`Accounts: ${accs.join(', ')}`);
+    if(filters.length) text(filters.join('   |   '), 8, 'normal', 14);
+    doc.setTextColor(0);
+
+    // KPIs, two columns
+    const kpis = [...document.querySelectorAll('.kpi')].map(k => ({
+      label: k.querySelector('b')?.textContent?.trim() || '',
+      value: k.querySelector('strong')?.textContent?.trim() || '',
+      note: k.querySelector('em')?.textContent?.trim() || '',
+    }));
+    if(kpis.length){
+      room(30); text('Summary', 12, 'bold', 8);
+      const colW = CW / 2;
+      kpis.forEach((k, i) => {
+        const col = i % 2, x = M + col * colW;
+        if(col === 0) room(30);
+        doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.text(k.value, x, y);
+        doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(120);
+        doc.text(`${k.label}${k.note ? '  ' + k.note : ''}`, x, y + 11);
+        doc.setTextColor(0);
+        if(col === 1 || i === kpis.length - 1) y += 30;
+      });
+      y += 6;
+    }
+
+    // one block per on-screen section: heading, then its charts
+    // Every section, not '.wrap > section': they're rendered into an inner
+    // container, so the child combinator matched nothing and the report
+    // came out as just the header and KPIs.
+    for(const sec of document.querySelectorAll('section')){
+      const h = sec.querySelector('h2');
+      const canvases = [...sec.querySelectorAll('canvas')].filter(c => c.width && c.height);
+      const table = sec.querySelector('table');
+      if(!h || (!canvases.length && !table)) continue;
+
+      room(40);
+      text(h.textContent.replace(/\s+/g, ' ').trim(), 12, 'bold', 4);
+      const sub = sec.querySelector('p.sub');
+      if(sub){ doc.setTextColor(120); text(sub.textContent.trim(), 8, 'normal', 8); doc.setTextColor(0); }
+
+      for(const c of canvases){
+        const ratio = c.height / c.width;
+        const w = CW, hgt = Math.min(CW * ratio, 260);
+        room(hgt + 10);
+        doc.addImage(canvasOnPanel(c), 'PNG', M, y, w, hgt);
+        y += hgt + 12;
+      }
+
+      if(table){
+        const head = [...table.querySelectorAll('thead th')].map(t => t.textContent.trim());
+        const rows = [...table.querySelectorAll('tbody tr')].slice(0, 20)
+          .map(tr => [...tr.children].map(td => td.textContent.replace(/\s+/g,' ').trim()));
+        if(head.length && rows.length){
+          const cw = CW / head.length;
+          room(20);
+          doc.setFont('helvetica','bold'); doc.setFontSize(7); doc.setTextColor(120);
+          head.forEach((t, i) => doc.text(doc.splitTextToSize(t, cw - 4)[0] || '', M + i * cw, y));
+          doc.setTextColor(0); y += 10;
+          doc.setFont('helvetica','normal'); doc.setFontSize(7);
+          rows.forEach((r) => {
+            room(11);
+            r.forEach((t, i) => doc.text(doc.splitTextToSize(t, cw - 4)[0] || '', M + i * cw, y));
+            y += 11;
+          });
+          y += 8;
+        }
+      }
+    }
+
+    const stamp = new Date().toISOString().slice(0, 10);
+    doc.save(`sentient-insights-${stamp}.pdf`);
+    btn.textContent = 'Saved';
+    setTimeout(() => { btn.textContent = label; }, 1800);
+  } catch (err) {
+    btn.textContent = 'Failed';
+    console.error('PDF export failed:', err);
+    setTimeout(() => { btn.textContent = label; }, 2200);
+  } finally {
+    btn.disabled = false;
+  }
+}
+document.getElementById('pdfBtn')?.addEventListener('click', exportPdf);
+
+/* --- language + theme -------------------------------------------------
+   Same localStorage keys as the dashboard, so the choice carries across all
+   three pages. Each translated node keeps its original English on the node
+   itself, so switching back is an exact restore rather than a reverse
+   lookup -- which would mistranslate any word that appears in both maps. */
+const PREF_LANG = 'sentient.lang', PREF_THEME = 'sentient.theme';
+const ES = {"Copy link": "Copiar link", "Dashboard": "Dashboard", "Insights": "Insights", "Tracker": "Tracker", "Sign in with your Google account to continue.": "Iniciá sesión con tu cuenta de Google para continuar.", "Sign in with Google": "Iniciar sesión con Google", "Sign out": "Cerrar sesión", "Copy a link to this exact view": "Copiar link a esta vista exacta", "Loading…": "Cargando…", "Loading...": "Cargando...", "Toggle theme": "Cambiar tema", "Language": "Idioma", "Accounts": "Cuentas", "All": "Todas", "Ours only": "Solo nuestras", "Competitors only": "Solo competidores", "From": "Desde", "To": "Hasta", "Quick range": "Rango rápido", "Format": "Formato", "Rank by": "Ordenar por", "All time": "Todo el tiempo", "Likes": "Likes", "Comments": "Comentarios", "Posts": "Posts", "Views (video)": "Vistas (video)", "Engagement / view": "Engagement / vista", "Hot posts": "Posts hot", "per day": "por día", "average": "promedio", "of total": "del total", "What format performs best": "Qué formato funciona mejor", "Performance by format": "Rendimiento por formato", "Slides per carousel": "Slides por carrusel", "Reel length": "Duración del reel", "number of slides": "cantidad de slides", "Production": "Producción", "Avg likes": "Likes prom.", "Avg views": "Vistas prom.", "Video": "Video", "Carousel": "Carrusel", "Image": "Imagen", "Settings": "Ajustes", "Accent color": "Color de acento", "Theme": "Tema", "Dark": "Oscuro", "Light": "Claro", "Admin": "Admin", "Open full settings": "Abrir Settings completo"};
+
+function readPref(key, allowed, fallback) {
+  try { const v = localStorage.getItem(key); if (allowed.includes(v)) return v; } catch {}
+  return fallback;
+}
+let lang = readPref(PREF_LANG, ['en', 'es'],
+  (navigator.language || 'en').toLowerCase().startsWith('es') ? 'es' : 'en');
+let theme = readPref(PREF_THEME, ['dark', 'light'],
+  window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+
+function setTheme(next) {
+  theme = next;
+  document.documentElement.setAttribute('data-theme', theme);
+  try { localStorage.setItem(PREF_THEME, theme); } catch {}
+  document.querySelectorAll('#settingsThemeSegment button').forEach((b) => {
+    b.classList.toggle('is-on', b.dataset.themeChoice === theme);
+  });
+  // Chart.js bakes colours in at construction, so a live chart keeps the old
+  // palette until it is rebuilt.
+  if (typeof window.__rerenderCharts === 'function') window.__rerenderCharts();
+}
+
+function translateNode(node) {
+  if (node.__en === undefined) node.__en = node.nodeValue;
+  const key = (node.__en || '').trim();
+  if (!key) return;
+  node.nodeValue = lang === 'es' && ES[key]
+    ? node.__en.replace(key, ES[key])
+    : node.__en;
+}
+
+function applyI18n() {
+  document.documentElement.setAttribute('lang', lang);
+  // SCRIPT and STYLE hold text nodes too. Rewriting those would mean editing
+  // source code and CSS with a phrase dictionary -- harmless today only
+  // because neither is re-parsed after load.
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      const tag = node.parentNode && node.parentNode.nodeName;
+      return (tag === 'SCRIPT' || tag === 'STYLE')
+        ? NodeFilter.FILTER_REJECT
+        : NodeFilter.FILTER_ACCEPT;
+    },
+  });
+  const nodes = [];
+  while (walker.nextNode()) nodes.push(walker.currentNode);
+  nodes.forEach(translateNode);
+  document.querySelectorAll('[placeholder],[title]').forEach((el) => {
+    for (const attr of ['placeholder', 'title']) {
+      const original = el.getAttribute(attr);
+      if (original === null) continue;
+      const store = '__en_' + attr;
+      if (el[store] === undefined) el[store] = original;
+      const key = (el[store] || '').trim();
+      el.setAttribute(attr, lang === 'es' && ES[key] ? ES[key] : el[store]);
+    }
+  });
+  document.querySelectorAll('.lang-option').forEach((b) => {
+    b.classList.toggle('is-on', b.dataset.lang === lang);
+  });
+}
+window.__applyI18n = applyI18n;
+
+/* These pages paint their content from JS after the data lands, long after
+   this script runs. Rather than hunting every render path, re-apply on DOM
+   change -- debounced, and guarded so our own text edits don't retrigger it
+   into an endless loop. */
+let i18nBusy = false, i18nTimer = null;
+const observer = new MutationObserver(() => {
+  if (i18nBusy) return;
+  clearTimeout(i18nTimer);
+  i18nTimer = setTimeout(() => {
+    i18nBusy = true;
+    try { applyI18n(); } finally { i18nBusy = false; }
+  }, 60);
+});
+observer.observe(document.body, { childList: true, subtree: true });
+
+function setLang(next) {
+  lang = next;
+  try { localStorage.setItem(PREF_LANG, lang); } catch {}
+  applyI18n();
+}
+
+document.querySelectorAll('.lang-option').forEach((b) => {
+  b.addEventListener('click', () => setLang(b.dataset.lang));
+});
+setTheme(theme);
+applyI18n();
+
+/* --- Settings panel: accent, theme, language, admin link, sign out ------
+   Same shape as the Dashboard/Queue/Tracker Settings menu, wired locally
+   since this page has no build step or shared component to import it from. */
+const PREF_ACCENT = 'sentient.accent';
+const ACCENT_PRESETS = { green: '#00ac80', lime: '#f5ff00', blue: '#60a5fa', coral: '#fb7185' };
+function normalizeAccent(value) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (ACCENT_PRESETS[raw]) return raw;
+  if (/^#[0-9a-f]{6}$/i.test(raw)) return raw;
+  if (/^#[0-9a-f]{3}$/i.test(raw)) return `#${raw.slice(1).split('').map((d) => d + d).join('')}`;
+  return 'lime';
+}
+function accentHex(value) { const normalized = normalizeAccent(value); return ACCENT_PRESETS[normalized] || normalized; }
+function accentRgb(value) { const hex = accentHex(value).slice(1); return [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16)); }
+function accentLuminance(rgb) { const channel = (v) => { const s = v / 255; return s <= .03928 ? s / 12.92 : ((s + .055) / 1.055) ** 2.4; }; return .2126 * channel(rgb[0]) + .7152 * channel(rgb[1]) + .0722 * channel(rgb[2]); }
+function accentContrast(first, second) { const values = [accentLuminance(first), accentLuminance(second)].sort((a, b) => b - a); return (values[0] + .05) / (values[1] + .05); }
+function accentText(value) { let rgb = accentRgb(value); const light = document.documentElement.getAttribute('data-theme') === 'light'; const surface = light ? [255,255,255] : [8,8,8]; const target = light ? 0 : 255; while (accentContrast(rgb, surface) < 4.5) rgb = rgb.map((channel) => Math.round(channel + ((target - channel) * .12))); return '#' + rgb.map((channel) => channel.toString(16).padStart(2, '0')).join(''); }
+function readAccent() {
+  try {
+    return normalizeAccent(localStorage.getItem(PREF_ACCENT));
+  } catch {}
+  return 'lime';
+}
+function setAccent(next) {
+  const normalized = normalizeAccent(next);
+  const rgb = accentRgb(normalized);
+  const root = document.documentElement;
+  root.setAttribute('data-accent', normalized);
+  root.style.setProperty('--accent-rgb', rgb.join(', '));
+  root.style.setProperty('--accent', accentHex(normalized));
+  root.style.setProperty('--accent-text', accentText(normalized));
+  root.style.setProperty('--accent-ink', accentLuminance(rgb) > .179 ? '#151515' : '#f5f8ff');
+  root.style.setProperty('--accent-soft', `rgba(${rgb.join(', ')}, .15)`);
+  try { localStorage.setItem(PREF_ACCENT, normalized); } catch {}
+  document.querySelectorAll('#settingsAccentPicker button').forEach((b) => {
+    b.classList.toggle('is-on', b.dataset.accentChoice === normalized);
+  });
+  const custom = document.getElementById('settingsCustomColor');
+  if (custom) custom.value = accentHex(normalized);
+}
+setAccent(readAccent());
+document.querySelectorAll('#settingsAccentPicker button').forEach((b) => {
+  b.addEventListener('click', () => setAccent(b.dataset.accentChoice));
+});
+document.getElementById('settingsCustomColor')?.addEventListener('input', (event) => setAccent(event.target.value));
+document.querySelectorAll('#settingsThemeSegment button').forEach((b) => {
+  b.addEventListener('click', () => { setTheme(b.dataset.themeChoice); setAccent(readAccent()); });
+});
+window.addEventListener('storage', (event) => { if (event.key === PREF_ACCENT) setAccent(readAccent()); });
+
+const settingsMenu = document.getElementById('settingsMenu');
+const settingsTrigger = document.getElementById('settingsTrigger');
+const settingsPanel = document.getElementById('settingsPanel');
+function setSettingsAvatar(user) {
+  const initial = (user?.email || '?').trim().charAt(0).toUpperCase();
+  settingsTrigger.replaceChildren();
+  if (user?.photoURL) {
+    const image = document.createElement('img');
+    image.alt = '';
+    image.referrerPolicy = 'no-referrer';
+    image.src = user.photoURL;
+    image.onerror = () => { settingsTrigger.replaceChildren(Object.assign(document.createElement('span'), { textContent: initial })); };
+    settingsTrigger.append(image);
+  } else settingsTrigger.append(Object.assign(document.createElement('span'), { textContent: initial }));
+}
+function closeSettings() {
+  settingsPanel.classList.remove('is-open');
+  settingsTrigger.classList.remove('is-active');
+  settingsTrigger.setAttribute('aria-expanded', 'false');
+}
+function openSettings() {
+  document.getElementById('settingsEmail').textContent = window.__signedInEmail || '';
+  settingsPanel.classList.add('is-open');
+  settingsTrigger.classList.add('is-active');
+  settingsTrigger.setAttribute('aria-expanded', 'true');
+  checkAdminForSettings();
+}
+settingsTrigger.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (settingsPanel.classList.contains('is-open')) closeSettings(); else openSettings();
+});
+document.addEventListener('click', (e) => {
+  if (!settingsMenu.contains(e.target)) closeSettings();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeSettings();
+});
+document.getElementById('settingsSignOut').addEventListener('click', () => {
+  closeSettings();
+  window.__signOut && window.__signOut();
+});
+
+// Admin-only "Open full settings" link -- deferred until the panel is opened
+// (rather than on page load) so this never races the sign-in flow and fires
+// __onInsightsUnauthorized before Firebase has produced a token. Best-effort:
+// if the check fails (offline, not booted yet) the section just stays hidden.
+let adminChecked = false;
+function checkAdminForSettings() {
+  if (adminChecked || !window.__firebaseIdToken) return;
+  adminChecked = true;
+  fetch(API + '/api/dashboard/me', { headers: window.__sentientRolePreviewHeaders
+    ? window.__sentientRolePreviewHeaders({ Authorization: 'Bearer ' + window.__firebaseIdToken })
+    : { Authorization: 'Bearer ' + window.__firebaseIdToken } })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((me) => {
+      const isAdmin = Boolean(me && (me.is_admin || me.is_dev || (Array.isArray(me.operating_roles) && me.operating_roles.includes('admin')) || me.operating_role === 'admin'));
+      document.getElementById('settingsAdmin').classList.toggle('is-visible', isAdmin);
+    })
+    .catch(() => { adminChecked = false; });
+}
+</script>
+</body>
+</html>
