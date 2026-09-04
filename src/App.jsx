@@ -2953,6 +2953,8 @@ export function SettingsPanel({
   const [unlocked, setUnlocked] = useState(true);
   const [checking, setChecking] = useState(false);
   const [notice, setNotice] = useState('');
+  const [catchingUpPosts, setCatchingUpPosts] = useState(false);
+  const [catchUpNotice, setCatchUpNotice] = useState(null);
   const settingsTabs = ['overview', 'accounts', 'users', 'usage', 'notifications', 'system', 'reports'];
   const [tab, setTab] = useState(settingsTabs.includes(initialTab) ? initialTab : 'overview');
   const [showAddAccount, setShowAddAccount] = useState(false);
@@ -3263,6 +3265,34 @@ export function SettingsPanel({
       setApifyLoading(false);
     }
   }, [password]);
+
+  const catchUpDashboardPosts = useCallback(async () => {
+    if (!password || catchingUpPosts) return;
+    setCatchingUpPosts(true);
+    setCatchUpNotice(null);
+    try {
+      const response = await apiFetch(`${API_BASE}/api/dashboard/posts/catch-up`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ password }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.detail || 'Post catch-up failed.');
+      const added = Object.values(body.results || {}).reduce(
+        (total, result) => total + (result?.new_posts?.added ?? 0),
+        0,
+      );
+      setCatchUpNotice({
+        type: 'success',
+        text: added ? `${added} missing post${added === 1 ? '' : 's'} added from the last 24 hours.` : 'No additional regular posts found in the last 24 hours.',
+      });
+      loadApifyRuns();
+    } catch (error) {
+      setCatchUpNotice({ type: 'error', text: error.message || 'Post catch-up failed.' });
+    } finally {
+      setCatchingUpPosts(false);
+    }
+  }, [catchingUpPosts, loadApifyRuns, password]);
 
   useEffect(() => {
     const next = {};
@@ -4384,6 +4414,29 @@ export function SettingsPanel({
                   {refreshNotice ? (
                     <p className={refreshNotice.type === 'error' ? 'settings-notice-error' : 'settings-notice'}>
                       {refreshNotice.text}
+                    </p>
+                  ) : null}
+                </section>
+
+                <section className="settings-section system-card">
+                  <div className="settings-section-head">
+                    <h3>Catch up missing posts</h3>
+                    <button
+                      type="button"
+                      className="ghost-button settings-refresh"
+                      onClick={catchUpDashboardPosts}
+                      disabled={catchingUpPosts}
+                    >
+                      <RefreshCw size={14} className={catchingUpPosts ? 'spin' : ''} />
+                      <span>{catchingUpPosts ? 'Catching up…' : 'Catch up posts'}</span>
+                    </button>
+                  </div>
+                  <p className="wizard-hint">
+                    One manual 24-hour recovery pass for regular posts across active accounts. Reels are excluded.
+                  </p>
+                  {catchUpNotice ? (
+                    <p className={catchUpNotice.type === 'error' ? 'settings-notice-error' : 'settings-notice'}>
+                      {catchUpNotice.text}
                     </p>
                   ) : null}
                 </section>
