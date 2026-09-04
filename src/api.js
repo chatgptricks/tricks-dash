@@ -4,9 +4,10 @@
 import { firebaseAuth } from './firebase';
 
 export const IG_HANDLE = 'chatgptricks';
-// The diskless parallel backend is the production origin.  Keep the base
-// override for local previews and an immediate rollback through a rebuild.
-export const API_BASE = (import.meta.env.VITE_API_BASE || 'https://sentientdash-app.onrender.com').replace(/\/$/, '');
+// Cortex owns the persistent production database. Keep the override for
+// local previews and controlled rollback, but never send the live dashboard
+// to the parallel diskless service.
+export const API_BASE = (import.meta.env.VITE_API_BASE || 'https://cortex-api-db2e.onrender.com').replace(/\/$/, '');
 
 const TRANSIENT_GATEWAY_STATUSES = new Set([500, 502, 503, 504]);
 const USER_UPSERT_RETRY_ATTEMPTS = 6;
