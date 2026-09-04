@@ -2,6 +2,7 @@
 // board (queue.jsx), and anything else that needs to call Cortex. Kept in
 // one module so the request/auth behavior can't drift between entry points.
 import { firebaseAuth } from './firebase';
+import { retryDelay, waitForRetry } from './retry';
 
 export const IG_HANDLE = 'chatgptricks';
 // Cortex owns the persistent production database. Keep the override for
@@ -11,15 +12,6 @@ export const API_BASE = (import.meta.env.VITE_API_BASE || 'https://cortex-api-db
 
 const TRANSIENT_GATEWAY_STATUSES = new Set([500, 502, 503, 504]);
 const USER_UPSERT_RETRY_ATTEMPTS = 6;
-
-function waitForRetry(milliseconds, signal) {
-  return new Promise((resolve, reject) => {
-    const timer = window.setTimeout(resolve, milliseconds);
-    if (!signal) return;
-    const abort = () => { window.clearTimeout(timer); reject(new DOMException('Request aborted.', 'AbortError')); };
-    signal.addEventListener('abort', abort, { once: true });
-  });
-}
 
 // Drop-in replacement for fetch() that attaches the signed-in user's Firebase
 // ID token to every call. getIdToken() returns the cached token and only
@@ -74,6 +66,7 @@ export async function apiFetch(url, options = {}) {
   const retryAttempts = isIdempotentUserUpsert ? USER_UPSERT_RETRY_ATTEMPTS : (canRetry ? 4 : 1);
   let lastError;
   for (let attempt = 0; attempt < retryAttempts; attempt += 1) {
+    if (options.signal?.aborted) throw new DOMException('Request aborted.', 'AbortError');
     try {
       const response = await window.fetch(url, { ...options, headers });
       const refreshMayRecoverUnauthorizedUserUpsert = isIdempotentUserUpsert && response.status === 401;
@@ -86,7 +79,7 @@ export async function apiFetch(url, options = {}) {
     if (isIdempotentUserUpsert) await refreshAuthToken(true);
     // Keep the final waits bounded: they give Render enough time to accept a
     // request after a handoff without trapping the Settings control forever.
-    await waitForRetry(Math.min(800 * (2 ** attempt), 8000), options.signal);
+    await waitForRetry(retryDelay(attempt), options.signal);
   }
   throw lastError || new Error('Request failed.');
 }

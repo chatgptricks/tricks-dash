@@ -2974,6 +2974,7 @@ export function SettingsPanel({
   const [usersNotice, setUsersNotice] = useState('');
   const [userDrafts, setUserDrafts] = useState({});
   const [userSaveState, setUserSaveState] = useState({});
+  const [openUserEditorEmail, setOpenUserEditorEmail] = useState('');
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserDisplayName, setNewUserDisplayName] = useState('');
   // Admin is an orthogonal flag layered on top of a Queue role, same as
@@ -4693,14 +4694,26 @@ export function SettingsPanel({
                         ['Admin', user.role === 'admin' || user.is_admin],
                         ['Dev', operatingRoles.includes('dev')],
                       ].filter(([, enabled]) => enabled).map(([label]) => label);
+                      const highestRole = ['Dev', 'Admin', 'VC', 'Sales', 'Trainee', 'PD'].find((role) => roleBadges.includes(role)) || 'Member';
+                      const extraRoleCount = Math.max(0, roleBadges.length - 1);
+                      const editorOpen = openUserEditorEmail === user.email;
                       return (
                         <div
-                          className={`settings-row settings-row-wide settings-user-card${dirty ? ' has-draft' : ''}`}
+                          className={`settings-row settings-row-wide settings-user-card settings-user-badge${dirty ? ' has-draft' : ''}${editorOpen ? ' is-editor-open' : ''}`}
                           key={user.email}
                           data-context-type="user"
                           data-context-title={user.display_name || user.email.split('@')[0]}
                           data-context-email={user.email}
                         >
+                          <button
+                            type="button"
+                            className="settings-user-card-gear"
+                            aria-label={`${editorOpen ? 'Close' : 'Open'} admin options for ${user.email}`}
+                            title={editorOpen ? 'Close admin options' : 'Manage user'}
+                            onClick={() => setOpenUserEditorEmail((current) => current === user.email ? '' : user.email)}
+                          >
+                            {editorOpen ? <X size={15} /> : <Settings size={15} />}
+                          </button>
                           <header className="settings-user-card-profile">
                             <span className="settings-user-avatar" aria-hidden="true">
                               <span>{(user.display_name || user.email.split('@')[0]).split(/\s+/).map((word) => word.slice(0, 1)).join('').slice(0, 2).toUpperCase()}</span>
@@ -4709,53 +4722,61 @@ export function SettingsPanel({
                             <div className="settings-user-copy">
                               <strong>{user.display_name || user.email.split('@')[0]}</strong>
                               <small>{user.email}</small>
-                              <div className="settings-user-role-badges">{roleBadges.length ? roleBadges.map((role) => <span key={role} className={`is-${role.toLowerCase()}`}>{role}</span>) : <span>Standard</span>}</div>
-                            {user.can_self_assign ? <span className="settings-user-self-assigned">Self-assigned</span> : null}
+                              <div className="settings-user-badge-roles">
+                                <span className={`settings-user-highest-role is-${highestRole.toLowerCase()}`}>{highestRole}</span>
+                                {extraRoleCount ? <span className="settings-user-extra-roles">+{extraRoleCount}</span> : null}
+                              </div>
                             </div>
-                            <span className="settings-user-account-count">{managedAccounts.length} {managedAccounts.length === 1 ? 'account' : 'accounts'}</span>
                           </header>
-                          <div className="settings-user-editor">
-                            <label><span>Display name</span><input aria-label={`Display name for ${user.email}`} value={draft.display_name} onChange={(event) => changeUserDraft(user.email, { display_name: event.target.value })} disabled={userActionEmail === user.email} /></label>
-                            <label><span>Queue role</span><select value={draft.operating_role} onChange={(event) => changeUserDraft(user.email, { operating_role: event.target.value })} disabled={userActionEmail === user.email}><option value="pd">Post Designer</option><option value="sales">Sales</option><option value="vc">Viral Coordinator</option><option value="trainee">Trainee</option></select></label>
-                            <label><span>Time zone</span><select value={draft.time_zone} onChange={(event) => changeUserDraft(user.email, { time_zone: event.target.value })} disabled={userActionEmail === user.email}><option value="">Automatic browser zone</option><option value="America/Costa_Rica">Costa Rica (UTC−6)</option><option value="America/Bogota">Colombia (UTC−5)</option></select></label>
-                            <label><span>Minutes per PP</span><input type="number" min="1" max="240" value={draft.minutes_per_pp} placeholder="Default" onChange={(event) => changeUserDraft(user.email, { minutes_per_pp: event.target.value })} disabled={userActionEmail === user.email} /></label>
-                            <label><span>Slack user ID</span><input value={draft.slack_user_id} placeholder="U0123456789" onChange={(event) => changeUserDraft(user.email, { slack_user_id: event.target.value.toUpperCase() })} disabled={userActionEmail === user.email} /></label>
-                            <label className="settings-user-admin-toggle"><input type="checkbox" checked={draft.role === 'admin'} onChange={(event) => changeUserDraft(user.email, { role: event.target.checked ? 'admin' : 'viewer' })} disabled={userActionEmail === user.email || user.email === userEmail} /><span>Admin access</span></label>
+                          <div className="settings-user-badge-meta">
+                            <span>Slack ID</span>
+                            <code>{draft.slack_user_id || 'Not linked'}</code>
                           </div>
-                          <footer className="settings-user-savebar">
-                            <span className={`settings-user-save-state is-${saveState || (dirty ? 'dirty' : 'saved')}`}>{saveState === 'saving' ? 'Saving…' : saveState === 'error' ? 'Could not save' : dirty ? 'Unsaved changes' : 'All changes saved'}</span>
-                            <button type="button" className="ghost-button" disabled={!dirty || userActionEmail === user.email} onClick={() => { changeUserDraft(user.email, userDraft(user)); setUserSaveState((current) => ({ ...current, [user.email]: 'saved' })); }}>Discard</button>
-                            <button type="button" className="ghost-button primary" disabled={!dirty || userActionEmail === user.email} onClick={() => updateUser(user, draft)}>{userActionEmail === user.email ? 'Saving…' : 'Save changes'}</button>
-                            <button type="button" className="ghost-button ghost-button-danger" onClick={() => removeUser(user.email)} disabled={userActionEmail === user.email}>Remove</button>
-                          </footer>
-                          <div className="settings-row-accounts">
-                            <div className="settings-user-accounts-heading">
+                          <div className="settings-user-badge-accounts" title={managedAccounts.length ? `${managedAccounts.length} managed Queue account${managedAccounts.length === 1 ? '' : 's'}` : 'No managed Queue accounts'}>
+                            {managedAccounts.slice(0, 7).map(({ handle, account }) => {
+                              const image = account?.avatarUrl || ACCOUNT_PROFILE_IMAGES[handle];
+                              return <span className="settings-managed-account-avatar" key={handle} title={`@${handle}`} aria-label={`@${handle}`}>
+                                <span>{handle.slice(0, 1).toUpperCase()}</span>
+                                {image ? <img src={settingsUserAvatar(image)} alt="" referrerPolicy="no-referrer" onError={(event) => { event.currentTarget.hidden = true; }} /> : null}
+                              </span>;
+                            })}
+                            {managedAccounts.length > 7 ? <span className="settings-user-accounts-more">+{managedAccounts.length - 7}</span> : null}
+                            {!managedAccounts.length ? <span className="settings-user-no-accounts">No accounts</span> : null}
+                          </div>
+                          {editorOpen ? <section className="settings-user-admin-panel">
+                            <div className="settings-user-editor">
+                              <label><span>Display name</span><input aria-label={`Display name for ${user.email}`} value={draft.display_name} onChange={(event) => changeUserDraft(user.email, { display_name: event.target.value })} disabled={userActionEmail === user.email} /></label>
+                              <label><span>Queue role</span><select value={draft.operating_role} onChange={(event) => changeUserDraft(user.email, { operating_role: event.target.value })} disabled={userActionEmail === user.email}><option value="pd">Post Designer</option><option value="sales">Sales</option><option value="vc">Viral Coordinator</option><option value="trainee">Trainee</option></select></label>
+                              <label><span>Time zone</span><select value={draft.time_zone} onChange={(event) => changeUserDraft(user.email, { time_zone: event.target.value })} disabled={userActionEmail === user.email}><option value="">Automatic browser zone</option><option value="America/Costa_Rica">Costa Rica (UTC−6)</option><option value="America/Bogota">Colombia (UTC−5)</option></select></label>
+                              <label><span>Minutes per PP</span><input type="number" min="1" max="240" value={draft.minutes_per_pp} placeholder="Default" onChange={(event) => changeUserDraft(user.email, { minutes_per_pp: event.target.value })} disabled={userActionEmail === user.email} /></label>
+                              <label><span>Slack user ID</span><input value={draft.slack_user_id} placeholder="U0123456789" onChange={(event) => changeUserDraft(user.email, { slack_user_id: event.target.value.toUpperCase() })} disabled={userActionEmail === user.email} /></label>
+                              <label className="settings-user-admin-toggle"><input type="checkbox" checked={draft.role === 'admin'} onChange={(event) => changeUserDraft(user.email, { role: event.target.checked ? 'admin' : 'viewer' })} disabled={userActionEmail === user.email || user.email === userEmail} /><span>Admin access</span></label>
+                            </div>
+                            <footer className="settings-user-savebar">
+                              <span className={`settings-user-save-state is-${saveState || (dirty ? 'dirty' : 'saved')}`}>{saveState === 'saving' ? 'Saving…' : saveState === 'error' ? 'Could not save' : dirty ? 'Unsaved changes' : 'All changes saved'}</span>
+                              <button type="button" className="ghost-button" disabled={!dirty || userActionEmail === user.email} onClick={() => { changeUserDraft(user.email, userDraft(user)); setUserSaveState((current) => ({ ...current, [user.email]: 'saved' })); }}>Discard</button>
+                              <button type="button" className="ghost-button primary" disabled={!dirty || userActionEmail === user.email} onClick={() => updateUser(user, draft)}>{userActionEmail === user.email ? 'Saving…' : 'Save changes'}</button>
+                              <button type="button" className="ghost-button ghost-button-danger" onClick={() => removeUser(user.email)} disabled={userActionEmail === user.email}>Remove</button>
+                            </footer>
+                            <div className="settings-user-admin-accounts">
                               <span className="settings-row-accounts-label">Managed Queue accounts</span>
-                              <span>{managedAccounts.length}</span>
+                              <div className="settings-user-admin-account-chips">
+                                {managedAccounts.map(({ handle, account }) => {
+                                  const image = account?.avatarUrl || ACCOUNT_PROFILE_IMAGES[handle];
+                                  return <button type="button" key={handle} onClick={() => removeDesignerAccount(user.email, handle)} disabled={userActionEmail === user.email} title={`Remove @${handle}`} aria-label={`Remove @${handle}`}>
+                                    <span className="settings-managed-account-avatar" aria-hidden="true"><span>{handle.slice(0, 1).toUpperCase()}</span>{image ? <img src={settingsUserAvatar(image)} alt="" referrerPolicy="no-referrer" onError={(event) => { event.currentTarget.hidden = true; }} /> : null}</span><X size={11} />
+                                  </button>;
+                                })}
+                              </div>
+                              <div className="queue-designer-add">
+                                <select value={designerAccountChoice[user.email] || ''} onChange={(event) => setDesignerAccountChoice((current) => ({ ...current, [user.email]: event.target.value }))}>
+                                  <option value="">Choose Sentient account</option>
+                                  {available.map((account) => <option key={account.handle} value={account.handle}>@{account.handle}</option>)}
+                                </select>
+                                <button type="button" className="ghost-button" disabled={!designerAccountChoice[user.email] || userActionEmail === user.email} onClick={() => addDesignerAccount(user.email)}>Assign</button>
+                              </div>
                             </div>
-                            <div className="queue-designer-account-chips settings-user-account-grid">
-                              {managedAccounts.map(({ handle, account }) => {
-                                const image = account?.avatarUrl || ACCOUNT_PROFILE_IMAGES[handle];
-                                return (
-                                <button type="button" key={handle} onClick={() => removeDesignerAccount(user.email, handle)} disabled={userActionEmail === user.email} title={`Remove @${handle}`}>
-                                  <span className="settings-managed-account-avatar" aria-hidden="true">
-                                    <span>{handle.slice(0, 1).toUpperCase()}</span>
-                                    {image ? <img src={settingsUserAvatar(image)} alt="" referrerPolicy="no-referrer" onError={(event) => { event.currentTarget.hidden = true; }} /> : null}
-                                  </span>
-                                  <span>@{handle}</span> <X size={12} />
-                                </button>
-                                );
-                              })}
-                              {!designer.accounts.length ? <em>No accounts assigned</em> : null}
-                            </div>
-                            <div className="queue-designer-add">
-                              <select value={designerAccountChoice[user.email] || ''} onChange={(event) => setDesignerAccountChoice((current) => ({ ...current, [user.email]: event.target.value }))}>
-                                <option value="">Choose Sentient account</option>
-                                {available.map((account) => <option key={account.handle} value={account.handle}>@{account.handle}</option>)}
-                              </select>
-                              <button type="button" className="ghost-button" disabled={!designerAccountChoice[user.email] || userActionEmail === user.email} onClick={() => addDesignerAccount(user.email)}>Assign</button>
-                            </div>
-                          </div>
+                          </section> : null}
                         </div>
                       );
                     })}
