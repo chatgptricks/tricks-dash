@@ -160,11 +160,15 @@ COPY.en.nextDay = 'Next day';
 COPY.en.jumpToDate = 'Jump to date';
 COPY.en.viewingToday = 'Viewing today';
 COPY.en.viewingDate = 'Viewing another day';
+COPY.en.newDataIncoming = 'New data is incoming';
+COPY.en.updatingQueue = 'Updating your Queue…';
 COPY.es.previousDay = 'Día anterior';
 COPY.es.nextDay = 'Día siguiente';
 COPY.es.jumpToDate = 'Ir a una fecha';
 COPY.es.viewingToday = 'Viendo hoy';
 COPY.es.viewingDate = 'Viendo otro día';
+COPY.es.newDataIncoming = 'Hay datos nuevos entrando';
+COPY.es.updatingQueue = 'Actualizando tu Queue…';
 
 COPY.en.returnToPool = 'Return to pool';
 COPY.en.poolDropHint = 'Drop a scheduled request here to return it to the pool.';
@@ -1047,6 +1051,7 @@ function QueueApp({ user }) {
   });
   const [loading, setLoading] = useState(() => !initialSnapshotRef.current?.data);
   const [refreshing, setRefreshing] = useState(false);
+  const [incomingUpdate, setIncomingUpdate] = useState(false);
   const [error, setError] = useState('');
   const [toast, setToast] = useState(null);
   const [open, setOpen] = useState(null);
@@ -1094,6 +1099,7 @@ function QueueApp({ user }) {
   const loadRef = useRef(null);
   const liveRevisionRef = useRef(0);
   const liveRefreshTimerRef = useRef(null);
+  const incomingUpdateTimerRef = useRef(null);
   const deferredLiveRefreshRef = useRef(false);
   const quietMutationUntilRef = useRef(0);
   const schedulerPreferencesRef = useRef(null);
@@ -1189,7 +1195,7 @@ function QueueApp({ user }) {
       draftSyncingRef.current = false;
       if (deferredLiveRefreshRef.current) {
         deferredLiveRefreshRef.current = false;
-        loadRef.current?.({ silent: true }).catch(() => {});
+        loadRef.current?.({ silent: true }).catch(() => {}).finally(() => setIncomingUpdate(false));
       }
     });
     return request;
@@ -1245,20 +1251,29 @@ function QueueApp({ user }) {
         // Other tabs/users have no active draft sync, so they still receive the
         // event and refresh from the shared live state.
         if (draftSyncingRef.current || (event.actorEmail === data.viewer.email && Date.now() < quietMutationUntilRef.current)) {
-          if (event.actorEmail !== data.viewer.email) deferredLiveRefreshRef.current = true;
+          if (event.actorEmail !== data.viewer.email) {
+            deferredLiveRefreshRef.current = true;
+            setIncomingUpdate(true);
+          }
           return;
         }
+        setIncomingUpdate(true);
         window.clearTimeout(liveRefreshTimerRef.current);
         liveRefreshTimerRef.current = window.setTimeout(async () => {
-          await loadRef.current?.({ silent: true }).catch(() => {});
-          if (openRef.current?.id) {
-            json(`/api/dashboard/queue/v2/requests/${openRef.current.id}/history`).then((result) => setHistory(result.events || [])).catch(() => {});
+          try {
+            await loadRef.current?.({ silent: true }).catch(() => {});
+            if (openRef.current?.id) {
+              json(`/api/dashboard/queue/v2/requests/${openRef.current.id}/history`).then((result) => setHistory(result.events || [])).catch(() => {});
+            }
+            if (ticketsOpenRef.current) loadTickets({ silent: true });
+          } finally {
+            window.clearTimeout(incomingUpdateTimerRef.current);
+            incomingUpdateTimerRef.current = window.setTimeout(() => setIncomingUpdate(false), 350);
           }
-          if (ticketsOpenRef.current) loadTickets({ silent: true });
         }, 90);
       },
     });
-    return () => { controller.abort(); window.clearTimeout(liveRefreshTimerRef.current); };
+    return () => { controller.abort(); window.clearTimeout(liveRefreshTimerRef.current); window.clearTimeout(incomingUpdateTimerRef.current); };
   }, [data?.viewer?.email, loadTickets]);
 
   const isDev = Boolean(viewer?.is_dev || data?.viewer?.isDev || String(user?.email || '').trim().toLowerCase() === DEV_EMAIL);
@@ -1769,6 +1784,7 @@ function QueueApp({ user }) {
       </div>
     </header>
     {refreshing ? <div className="queue-refresh-progress" aria-label="Refreshing Queue" /> : null}
+    {incomingUpdate ? <div className="queue-live-refresh-notice" role="status" aria-live="polite"><LoaderCircle className="queue-spin" size={16} /><span><b>{t('newDataIncoming')}</b><small>{t('updatingQueue')}</small></span></div> : null}
     {toast ? <div className={`queue-toast is-${toast.type}`} role="status">{toast.type === 'success' ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}<span>{toast.message}</span><button type="button" onClick={() => setToast(null)}><X size={14} /></button></div> : null}
     {loading && !data ? <section className="queue-state"><LoaderCircle className="queue-spin" /><p>{t('loadingSchedule')}</p></section> : null}
     {error && !data ? <section className="queue-state queue-error"><p>{error}</p><button type="button" onClick={load}>{t('tryAgain')}</button></section> : null}
