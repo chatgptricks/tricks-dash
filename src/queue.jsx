@@ -1,6 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import ReactDOM from 'react-dom/client';
-import { AlertTriangle, Archive, ArrowLeft, Ban, BarChart3, BellRing, CalendarDays, CalendarPlus, Check, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Clock3, Coffee, Download, History, Link2, LoaderCircle, LocateFixed, LogOut, Moon, Paperclip, Pencil, Plus, Radio, Send, Settings, Sun, TimerReset, WifiOff, X } from 'lucide-react';
+import { AlertTriangle, Archive, ArrowLeft, Ban, BarChart3, BellRing, CalendarDays, CalendarPlus, Check, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Clock3, Coffee, Download, History, Lightbulb, Link2, LoaderCircle, LocateFixed, LogOut, Moon, Paperclip, Pencil, Plus, Radio, Send, Settings, Sun, TimerReset, WifiOff, X } from 'lucide-react';
 import { browserPopupRedirectResolver, getRedirectResult, onAuthStateChanged, signOut } from 'firebase/auth';
 import { describeSignInError, firebaseAuth as auth, startGoogleSignIn } from './firebase';
 import { clearSsoCookie, startSsoRefresh, trySsoSignIn } from './sso';
@@ -488,10 +488,10 @@ function ResetQueueModal({ onClose, onReset }) {
   </div>;
 }
 
-function CreatePostModal({ tags = [], onClose, onCreated }) {
+function CreatePostModal({ tags = [], initial = null, onClose, onCreated }) {
   const { t } = useQueuePreferences();
-  const [form, setForm] = useState({ title: '', postType: 'Image', productionPoints: 3, brief: '', notes: '', references: '' });
-  const [sourceUrl, setSourceUrl] = useState('');
+  const [form, setForm] = useState(() => ({ title: '', postType: 'Image', productionPoints: 3, priority: 'normal', brief: initial?.reason || '', notes: '', references: initial?.sourceUrl || '' }));
+  const [sourceUrl, setSourceUrl] = useState(() => initial?.sourceUrl || '');
   const [sourcePreview, setSourcePreview] = useState(null);
   const [sourceLoading, setSourceLoading] = useState(false);
   const [titleEdited, setTitleEdited] = useState(false);
@@ -546,7 +546,7 @@ function CreatePostModal({ tags = [], onClose, onCreated }) {
 
   const submit = async (event) => {
     event.preventDefault();
-    if (!form.title.trim()) { setError(t('titleRequired')); return; }
+    if (!form.title.trim() && !sourcePreview?.dashboardPost) { setError(t('titleRequired')); return; }
     if (!Number.isInteger(Number(form.productionPoints)) || Number(form.productionPoints) < 1) { setError('Production points must be at least 1.'); return; }
     setSaving(true);
     setError('');
@@ -555,18 +555,27 @@ function CreatePostModal({ tags = [], onClose, onCreated }) {
       let createdRequest = null;
       if (!requestId) {
         const body = new FormData();
-        body.append('title', form.title.trim());
-        body.append('post_type', form.postType);
         body.append('production_points', String(form.productionPoints));
+        body.append('priority', form.priority);
         body.append('brief', form.brief);
         body.append('notes', form.notes);
         body.append('references', JSON.stringify(form.references.split(/\n|,/).map((item) => item.trim()).filter(Boolean)));
         body.append('tags', [...tagSet].join(','));
-        body.append('source_url', sourcePreview?.sourceUrl || sourceUrl.trim());
-        body.append('source_title', sourcePreview?.title || '');
-        body.append('source_description', sourcePreview?.description || '');
-        body.append('source_image_url', sourcePreview?.imageUrl || '');
-        const response = await apiFetch(`${API_BASE}/api/dashboard/queue/v2/create`, { method: 'POST', body });
+        const existing = sourcePreview?.dashboardPost;
+        let endpoint = `${API_BASE}/api/dashboard/queue/v2/create`;
+        if (existing?.account && existing?.shortcode) {
+          endpoint = `${API_BASE}/api/dashboard/queue/v2/pool`;
+          body.append('account', existing.account);
+          body.append('shortcode', existing.shortcode);
+        } else {
+          body.append('title', form.title.trim());
+          body.append('post_type', form.postType);
+          body.append('source_url', sourcePreview?.sourceUrl || sourceUrl.trim());
+          body.append('source_title', sourcePreview?.title || '');
+          body.append('source_description', sourcePreview?.description || '');
+          body.append('source_image_url', sourcePreview?.imageUrl || '');
+        }
+        const response = await apiFetch(endpoint, { method: 'POST', body });
         const result = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(result.detail || 'Could not create this Queue post.');
         createdRequest = result.request;
@@ -603,11 +612,12 @@ function CreatePostModal({ tags = [], onClose, onCreated }) {
   return <div className="queue-create-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) onClose(); }}>
     <form className="queue-create-modal" onSubmit={submit} aria-labelledby="queue-create-title">
       <header className="queue-create-head"><div><p className="scheduler-eyebrow">Queue</p><h2 id="queue-create-title">{t('createPostTitle')}</h2><small>{t('createPostHelp')}</small></div><button type="button" onClick={onClose} aria-label={t('close')} disabled={saving}><X size={16} /></button></header>
-      <section className="queue-source-link"><header><div><span>{t('sourceLink')} <i>optional</i></span><small>{t('sourceLinkHelp')}</small></div></header><div><input type="url" value={sourceUrl} placeholder="https://www.reddit.com/..." onChange={(event) => { setSourceUrl(event.target.value); setSourcePreview(null); }} onBlur={() => { if (sourceUrl.trim() && !sourcePreview) fetchSource(); }} /><button type="button" className="scheduler-secondary" disabled={!sourceUrl.trim() || sourceLoading} onClick={fetchSource}>{sourceLoading ? <LoaderCircle className="queue-spin" size={14} /> : <Link2 size={14} />}{sourceLoading ? t('gettingSourceDetails') : t('getSourceDetails')}</button></div>{sourcePreview ? <article className="queue-source-preview"><div>{sourcePreview.imageUrl ? <img src={sourcePreview.imageUrl} alt="" referrerPolicy="no-referrer" onError={(event) => { event.currentTarget.parentElement.hidden = true; }} /> : null}</div><span><b>{sourcePreview.platform || t('sourcePreview')}</b><strong>{sourcePreview.title || sourcePreview.sourceUrl}</strong>{sourcePreview.description ? <small>{sourcePreview.description}</small> : null}</span></article> : null}</section>
+      <section className="queue-source-link"><header><div><span>{t('sourceLink')} <i>optional</i></span><small>{t('sourceLinkHelp')}</small></div></header><div><input type="url" value={sourceUrl} placeholder="https://www.reddit.com/..." onChange={(event) => { setSourceUrl(event.target.value); setSourcePreview(null); }} onBlur={() => { if (sourceUrl.trim() && !sourcePreview) fetchSource(); }} /><button type="button" className="scheduler-secondary" disabled={!sourceUrl.trim() || sourceLoading} onClick={fetchSource}>{sourceLoading ? <LoaderCircle className="queue-spin" size={14} /> : <Link2 size={14} />}{sourceLoading ? t('gettingSourceDetails') : t('getSourceDetails')}</button></div>{sourcePreview ? <article className="queue-source-preview"><div>{sourcePreview.imageUrl ? <img src={sourcePreview.imageUrl} alt="" referrerPolicy="no-referrer" onError={(event) => { event.currentTarget.parentElement.hidden = true; }} /> : null}</div><span><b>{sourcePreview.dashboardPost ? 'Already in Dashboard' : sourcePreview.platform || t('sourcePreview')}</b><strong>{sourcePreview.title || sourcePreview.sourceUrl}</strong><small>{sourcePreview.dashboardPost ? 'This will be added to the Pool as the existing Dashboard post.' : sourcePreview.description || ''}</small></span></article> : null}</section>
       <div className="queue-create-grid">
         <label className="is-wide"><span>{t('postTitle')} <i>required</i></span><input value={form.title} maxLength="160" autoFocus onChange={(event) => { setTitleEdited(true); setForm((current) => ({ ...current, title: event.target.value })); }} placeholder={t('postTitlePlaceholder')} /></label>
         <label><span>{t('postType')}</span><select value={form.postType} onChange={(event) => setForm((current) => ({ ...current, postType: event.target.value }))}>{typeOptions.map(([value, key]) => <option key={value} value={value}>{t(key)}</option>)}</select></label>
         <label><span>{t('productionPoints')} <i>required</i></span><input type="number" min="1" step="1" value={form.productionPoints} onChange={(event) => setForm((current) => ({ ...current, productionPoints: event.target.value }))} /></label>
+        <label className="queue-urgent-toggle"><input type="checkbox" checked={isUrgent(form.priority)} onChange={(event) => setForm((current) => ({ ...current, priority: event.target.checked ? 'urgent' : 'normal' }))} /><span>{t('markUrgent')}</span></label>
       </div>
       <label className="queue-create-note"><span>{t('brief')} <i>optional</i></span><textarea value={form.brief} onChange={(event) => { setBriefEdited(true); setForm((current) => ({ ...current, brief: event.target.value })); }} rows={3} /></label>
       <label className="queue-create-note"><span>{t('notes')} <i>optional</i></span><textarea value={form.notes} onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))} rows={2} /></label>
@@ -616,6 +626,31 @@ function CreatePostModal({ tags = [], onClose, onCreated }) {
       {tagOptions.length ? <fieldset className="queue-create-fieldset"><legend>{t('tags')} <i>optional</i></legend><div className="queue-tag-picker">{tagOptions.map((tag) => <button type="button" key={tag} className={tagSet.has(tag) ? 'is-on' : ''} onClick={() => toggleTag(tag)}>{tag}</button>)}</div></fieldset> : null}
       {error ? <p className="queue-create-error" role="alert">{error}</p> : null}
       <footer className="queue-create-actions"><button type="button" className="scheduler-secondary" onClick={onClose} disabled={saving}>{t('cancel')}</button><button type="submit" className="scheduler-primary" disabled={saving}>{saving ? <LoaderCircle className="queue-spin" size={14} /> : <Plus size={14} />}{t('createPost')}</button></footer>
+    </form>
+  </div>;
+}
+
+function SuggestPostModal({ onClose, onCreated }) {
+  const [sourceUrl, setSourceUrl] = useState('');
+  const [reason, setReason] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const submit = async (event) => {
+    event.preventDefault();
+    setSaving(true); setError('');
+    try {
+      await onCreated({ sourceUrl, reason });
+    } catch (err) {
+      setError(err.message || 'Could not send your suggestion.');
+    } finally { setSaving(false); }
+  };
+  return <div className="queue-create-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) onClose(); }}>
+    <form className="queue-create-modal queue-suggest-modal" onSubmit={submit} aria-labelledby="queue-suggest-title">
+      <header className="queue-create-head"><div><p className="scheduler-eyebrow">Queue</p><h2 id="queue-suggest-title">Suggest a post</h2><small>Send an Instagram post to a VC or admin for review.</small></div><button type="button" onClick={onClose} aria-label="Close" disabled={saving}><X size={16} /></button></header>
+      <label className="queue-create-note"><span>Instagram post link <i>required</i></span><input type="url" value={sourceUrl} placeholder="https://www.instagram.com/p/..." onChange={(event) => setSourceUrl(event.target.value)} required /></label>
+      <label className="queue-create-note"><span>Why would this work? <i>required</i></span><textarea value={reason} rows={5} maxLength="1000" onChange={(event) => setReason(event.target.value)} required /></label>
+      {error ? <p className="queue-create-error" role="alert">{error}</p> : null}
+      <footer className="queue-create-actions"><button type="button" className="scheduler-secondary" onClick={onClose} disabled={saving}>Cancel</button><button type="submit" className="scheduler-primary" disabled={saving || !sourceUrl.trim() || !reason.trim()}>{saving ? <LoaderCircle className="queue-spin" size={14} /> : <Send size={14} />}Send suggestion</button></footer>
     </form>
   </div>;
 }
@@ -650,14 +685,16 @@ function AssignMultipleAccountsModal({ task, accounts = [], designers = [], busy
   </div>;
 }
 
-function PoolCard({ task, onOpen, canMultiAssign = false }) {
+function PoolCard({ task, onOpen, canMultiAssign = false, canCancel = false }) {
   const { t } = useQueuePreferences();
-  return <article className={`queue-pool-card ${priorityClass(task.priority)}${hotClass(task)}${task.isDraft ? ' is-draft' : ''}`} draggable data-context-type="pool" data-context-title={task.post.title || accountMention(task.post.account) || t('post')} data-context-post-key={task.postKey || task.id} data-context-request-id={task.id} data-context-duplicate="true" data-context-multi-assign={canMultiAssign ? 'true' : 'false'} data-context-account={task.post.account || ''} data-context-shortcode={task.post.shortcode || ''} data-context-permalink={task.post.permalink || ''} onDragStart={(event) => { activeQueueDragId = task.id; event.dataTransfer.setData('queue-task', String(task.id)); }} onDragEnd={() => { activeQueueDragId = null; }}><button type="button" onClick={() => onOpen(task)}>{cover(task) ? <img src={cover(task)} alt="" /> : <span className="queue-pool-empty">@</span>}<span><b>{task.post.title || accountMention(task.post.account) || t('post')}</b><small>{task.post.title && task.post.account ? `${accountMention(task.post.account)} · ` : task.post.account ? `${accountMention(task.post.account)} · ` : `${t('accountToSelect')} · `}{task.productionPoints} PP · {task.durationMinutes} min</small>{task.isDraft ? <em>{t('returnToPool')}</em> : null}</span><span className="queue-pool-card-badges"><PriorityBadge priority={task.priority} />{isHotTask(task) ? <i className="queue-hot-badge">🔥 {hotText(task)}</i> : null}</span></button><div>{task.tags?.filter((tag) => tag !== 'hot').map((tag) => <i key={tag}>{tag}</i>)}</div></article>;
+  return <article className={`queue-pool-card ${priorityClass(task.priority)}${hotClass(task)}${task.isDraft ? ' is-draft' : ''}`} draggable data-context-type="pool" data-context-title={task.post.title || accountMention(task.post.account) || t('post')} data-context-post-key={task.postKey || task.id} data-context-request-id={task.id} data-context-duplicate="true" data-context-multi-assign={canMultiAssign ? 'true' : 'false'} data-context-cancel={canCancel ? 'true' : 'false'} data-context-account={task.post.account || ''} data-context-shortcode={task.post.shortcode || ''} data-context-permalink={task.post.permalink || ''} onDragStart={(event) => { activeQueueDragId = task.id; event.dataTransfer.setData('queue-task', String(task.id)); }} onDragEnd={() => { activeQueueDragId = null; }}><button type="button" onClick={() => onOpen(task)}>{cover(task) ? <img src={cover(task)} alt="" /> : <span className="queue-pool-empty">@</span>}<span><b>{task.post.title || accountMention(task.post.account) || t('post')}</b><small>{task.post.title && task.post.account ? `${accountMention(task.post.account)} · ` : task.post.account ? `${accountMention(task.post.account)} · ` : `${t('accountToSelect')} · `}{task.productionPoints} PP · {task.durationMinutes} min</small>{task.prc ? <em className="queue-prc">PRC · {task.prc === 'Auto PRC' ? task.prc : displayName(task.prc)}</em> : null}{task.isDraft ? <em>{t('returnToPool')}</em> : null}</span><span className="queue-pool-card-badges"><PriorityBadge priority={task.priority} />{isHotTask(task) ? <i className="queue-hot-badge">🔥 {hotText(task)}</i> : null}</span></button><div>{task.tags?.filter((tag) => tag !== 'hot').map((tag) => <i key={tag}>{tag}</i>)}</div></article>;
 }
 
-function DesignerAssignments({ tasks, onOpen, timeZone = QUEUE_TIME_ZONE }) {
+function DesignerAssignments({ tasks, closedTasks = [], onOpen, timeZone = QUEUE_TIME_ZONE }) {
   const { t, language } = useQueuePreferences();
-  return <section className="designer-assignments"><header><div><p className="scheduler-eyebrow">{t('myAssignedWork')}</p><h2>{t('upcomingProduction')}</h2></div><small>{tasks.length} {tasks.length === 1 ? t('activeRequest') : t('activeRequests')}</small></header>{tasks.length ? <div className="designer-assignment-table" role="table"><div className="designer-assignment-head" role="row"><span>{t('post')}</span><span>{t('scheduled')}</span><span>{t('priority')}</span><span>{t('scope')}</span><span>{t('status')}</span></div>{tasks.map((task) => <button type="button" role="row" key={task.id} className={`designer-assignment-row state-${task.status} ${priorityClass(task.priority)}${hotClass(task)}${task.isDraft ? ' is-draft' : ''}`} onClick={() => onOpen(task)}><span className="designer-assignment-post">{cover(task) ? <img src={cover(task)} alt="" /> : <span className="designer-assignment-empty">@</span>}<span><b>{task.post.title || accountMention(task.post.account) || t('post')}</b><small>{task.post.account ? accountMention(task.post.account) : t('accountToSelect')} · {task.brief || task.post.caption || t('post')}</small></span></span><span className="designer-assignment-time"><b>{displayDate(scheduleDateForViewer(task.scheduledDate, task.scheduledStartMinutes ?? QUEUE_DAY_START, timeZone), language)}</b><small>{scheduleTimeForViewer(task.scheduledDate, task.scheduledStartMinutes ?? QUEUE_DAY_START, timeZone)} · {task.durationMinutes} {t('minutes')}</small></span><span className="designer-assignment-priority"><PriorityBadge priority={task.priority} />{isHotTask(task) ? <i className="queue-hot-badge">🔥 {hotText(task)}</i> : null}</span><span className="designer-assignment-pp"><b>{task.productionPoints} PP</b><small>{task.tags?.filter((tag) => tag !== 'hot').slice(0, 2).join(' · ') || t('noTags')}</small></span><span className="designer-assignment-status"><i>{statusCopy(task.status, t, task.isDraft)}</i>{task.isDraft ? <small>{t('tentativeBy')} {displayName(task.draftCoordinatorEmail)}</small> : null}</span></button>)}</div> : <div className="designer-assignments-empty"><CalendarDays size={18} /><strong>{t('noActiveAssignments')}</strong><span>{t('emptyAssignments')}</span></div>}</section>;
+  const row = (task) => <button type="button" role="row" key={task.id} className={`designer-assignment-row state-${task.status} ${priorityClass(task.priority)}${hotClass(task)}${task.isDraft ? ' is-draft' : ''}`} onClick={() => onOpen(task)}><span className="designer-assignment-post">{cover(task) ? <img src={cover(task)} alt="" /> : <span className="designer-assignment-empty">@</span>}<span><b>{task.post.title || accountMention(task.post.account) || t('post')}</b><small>{task.post.account ? accountMention(task.post.account) : t('accountToSelect')} · {task.brief || task.post.caption || t('post')}</small></span></span><span className="designer-assignment-time"><b>{displayDate(scheduleDateForViewer(task.scheduledDate, task.scheduledStartMinutes ?? QUEUE_DAY_START, timeZone), language)}</b><small>{scheduleTimeForViewer(task.scheduledDate, task.scheduledStartMinutes ?? QUEUE_DAY_START, timeZone)} · {task.durationMinutes} {t('minutes')}</small></span><span className="designer-assignment-priority"><PriorityBadge priority={task.priority} />{isHotTask(task) ? <i className="queue-hot-badge">🔥 {hotText(task)}</i> : null}</span><span className="designer-assignment-pp"><b>{task.productionPoints} PP</b><small>{task.tags?.filter((tag) => tag !== 'hot').slice(0, 2).join(' · ') || t('noTags')}</small></span><span className="designer-assignment-status"><i>{statusCopy(task.status, t, task.isDraft)}</i></span></button>;
+  const header = <div className="designer-assignment-head" role="row"><span>{t('post')}</span><span>{t('scheduled')}</span><span>{t('priority')}</span><span>{t('scope')}</span><span>{t('status')}</span></div>;
+  return <section className="designer-assignments"><header><div><p className="scheduler-eyebrow">{t('myAssignedWork')}</p><h2>{t('upcomingProduction')}</h2></div><small>{tasks.length} {tasks.length === 1 ? t('activeRequest') : t('activeRequests')}</small></header>{tasks.length ? <div className="designer-assignment-table" role="table">{header}{tasks.map(row)}</div> : <div className="designer-assignments-empty"><CalendarDays size={18} /><strong>{t('noActiveAssignments')}</strong><span>{t('emptyAssignments')}</span></div>}{closedTasks.length ? <section className="designer-closed-assignments"><header><div><p className="scheduler-eyebrow">{t('closed')}</p><h3>{closedTasks.length} · last 24h</h3></div><small>Hidden automatically after 24h</small></header><div className="designer-assignment-table" role="table">{header}{closedTasks.map(row)}</div></section> : null}</section>;
 }
 
 function AdminAssignmentTable({ tasks, onOpen, headingKey = 'allAssignedPosts', countKey = 'assignedPostsCount' }) {
@@ -676,7 +713,7 @@ function QueueOverview({ report, loading, error, onRetry, onOpen }) {
   return <section className="queue-overview-page"><header className="queue-overview-header"><div><p className="scheduler-eyebrow">{t('adminOverview')}</p><h2>{t('productionReports')}</h2><small>{t('workloadHelp')}</small></div><div className="queue-overview-header-meta"><span>{assignedPosts.length} {t('assignedPostsCount')}</span><span>{designers.length} {t('designer')}</span></div></header><div className="queue-overview-metrics">{metric('pool', t('inPool'))}{metric('scheduled', t('scheduled'))}{metric('in_progress', t('inProgress'))}{metric('completed', t('readyToClose'))}{metric('closed', t('closed'))}</div><section className="queue-overview-designers"><header><div><p className="scheduler-eyebrow">{t('designerWorkload')}</p><h3>{designers.length} {t('allUsers')}</h3></div></header><div className="queue-overview-designer-grid">{designers.map((designer) => <article key={designer.email}><div><b>{displayName(designer.email, designer.displayName)}</b><small>{designer.activeRequests} {t('activeRequests')}</small></div><strong>{designer.productionPoints} PP</strong><span>{designer.closedRequests} {t('closed')}</span></article>)}{!designers.length ? <p className="scheduler-empty">{t('noAssignedPosts')}</p> : null}</div></section><AdminAssignmentTable tasks={assignedPosts} onOpen={onOpen} headingKey="allAssignedPosts" countKey="assignedPostsCount" /></section>;
 }
 
-function TicketPanel({ tickets, loading, error, onClose, onReview, canReview }) {
+function TicketPanel({ tickets, loading, error, onClose, onReview, onContinueSuggestion, canReview }) {
   const { t, language } = useQueuePreferences();
   const [tab, setTab] = useState('pending');
   const [busy, setBusy] = useState('');
@@ -693,13 +730,14 @@ function TicketPanel({ tickets, loading, error, onClose, onReview, canReview }) 
   ];
   const emptyMessage = tabs.find((item) => item.status === tab)?.empty || 'noPendingTickets';
   const review = async (ticket, action) => { setBusy(`${ticket.id}:${action}`); try { await onReview(ticket.id, action); } finally { setBusy(''); } };
-  const ticketTitle = (ticket) => ticket.type === 'account_access' ? t('accountAccessRequest') : ticket.type === 'move' ? t('moveRequest') : ticket.type === 'time_block' ? (ticket.title || t(ticket.category || 'other')) : ticket.type === 'pp_revision' ? t('ppRevision') : ticket.type === 'trainee_review' ? t('traineeReview') : t('cancellationRequest');
+  const ticketTitle = (ticket) => ticket.type === 'post_suggestion' ? 'Post suggestion' : ticket.type === 'account_access' ? t('accountAccessRequest') : ticket.type === 'move' ? t('moveRequest') : ticket.type === 'time_block' ? (ticket.title || t(ticket.category || 'other')) : ticket.type === 'pp_revision' ? t('ppRevision') : ticket.type === 'trainee_review' ? t('traineeReview') : t('cancellationRequest');
   const ticketMeta = (ticket) => {
     if (ticket.type === 'account_access') return (ticket.requestedAccounts || []).map((account) => `@${account}`).join(' · ') || t('noAccounts');
     if (ticket.type === 'move') {
       const account = ticket.request?.post?.account ? `@${ticket.request.post.account}` : t('post');
       return `${account} · ${ticket.scheduledDate || '—'} · ${time(ticket.scheduledStartMinutes ?? 0)}`;
     }
+    if (ticket.type === 'post_suggestion') return ticket.title;
     if (ticket.type === 'time_block') return `${displayDate(ticket.scheduledDate, language)} · ${time(ticket.scheduledStartMinutes)} · ${ticket.durationMinutes} min`;
     const account = ticket.request?.post?.account ? `@${ticket.request.post.account}` : t('post');
     if (ticket.type === 'pp_revision') return `${account} · ${ticket.request?.productionPoints || '—'} PP → ${ticket.requestedProductionPoints} PP`;
@@ -713,7 +751,7 @@ function TicketPanel({ tickets, loading, error, onClose, onReview, canReview }) 
       {loading ? <div className="queue-ticket-state"><LoaderCircle className="queue-spin" />{t('loadingSchedule')}</div> : null}
       {error ? <p className="queue-ticket-error">{error}</p> : null}
       {!loading && !items.length ? <div className="queue-ticket-empty"><ClipboardList size={20} /><span>{t(emptyMessage)}</span></div> : null}
-      {items.map((ticket) => <article key={ticket.id} className={`ticket-${ticket.type} status-${ticket.status}`}><header><span>{ticket.type === 'account_access' ? <Settings size={14} /> : ticket.type === 'time_block' ? <CalendarPlus size={14} /> : ticket.type === 'pp_revision' ? <TimerReset size={14} /> : ticket.type === 'move' ? <TimerReset size={14} /> : ticket.type === 'trainee_review' ? <Pencil size={14} /> : <Ban size={14} />}</span><div><b>{ticketTitle(ticket)}</b><small>{displayName(ticket.requesterEmail)} · {displayTimestamp(ticket.createdAt, language)}</small></div><i>{ticket.status === 'pending' ? t('ticketsPending') : t(ticket.status)}</i></header><p>{ticketMeta(ticket)}</p>{ticket.reason ? ticket.type === 'trainee_review' ? <a className="queue-ticket-link" href={ticket.reason} target="_blank" rel="noreferrer">{t('openCanva')}</a> : <blockquote>{ticket.reason}</blockquote> : null}{ticket.status === 'pending' && canReview ? <footer><button type="button" className="is-approve" disabled={Boolean(busy)} onClick={() => review(ticket, 'approve')}>{busy === `${ticket.id}:approve` ? <LoaderCircle className="queue-spin" size={13} /> : <Check size={13} />}{t('approve')}</button><button type="button" className="is-reject" disabled={Boolean(busy)} onClick={() => review(ticket, 'reject')}>{busy === `${ticket.id}:reject` ? <LoaderCircle className="queue-spin" size={13} /> : <X size={13} />}{t('reject')}</button></footer> : ticket.status === 'pending' ? <small className="ticket-reviewer">{t('pendingApproval')}</small> : <small className="ticket-reviewer">{ticket.reviewerEmail ? displayName(ticket.reviewerEmail) : '—'} · {ticket.reviewedAt ? displayTimestamp(ticket.reviewedAt, language) : ''}</small>}</article>)}
+      {items.map((ticket) => <article key={ticket.id} className={`ticket-${ticket.type} status-${ticket.status}`}><header><span>{ticket.type === 'post_suggestion' ? <Lightbulb size={14} /> : ticket.type === 'account_access' ? <Settings size={14} /> : ticket.type === 'time_block' ? <CalendarPlus size={14} /> : ticket.type === 'pp_revision' ? <TimerReset size={14} /> : ticket.type === 'move' ? <TimerReset size={14} /> : ticket.type === 'trainee_review' ? <Pencil size={14} /> : <Ban size={14} />}</span><div><b>{ticketTitle(ticket)}</b><small>{displayName(ticket.requesterEmail)} · {displayTimestamp(ticket.createdAt, language)}</small></div><i>{ticket.status === 'pending' ? t('ticketsPending') : t(ticket.status)}</i></header><p>{ticketMeta(ticket)}</p>{ticket.reason ? ticket.type === 'trainee_review' ? <a className="queue-ticket-link" href={ticket.reason} target="_blank" rel="noreferrer">{t('openCanva')}</a> : <blockquote>{ticket.reason}</blockquote> : null}{ticket.status === 'pending' && canReview ? <footer><button type="button" className="is-approve" disabled={Boolean(busy)} onClick={() => review(ticket, 'approve')}>{busy === `${ticket.id}:approve` ? <LoaderCircle className="queue-spin" size={13} /> : <Check size={13} />}{t('approve')}</button><button type="button" className="is-reject" disabled={Boolean(busy)} onClick={() => review(ticket, 'reject')}>{busy === `${ticket.id}:reject` ? <LoaderCircle className="queue-spin" size={13} /> : <X size={13} />}{t('reject')}</button></footer> : ticket.type === 'post_suggestion' && ticket.status === 'approved' && canReview ? <footer><button type="button" className="is-approve" onClick={() => onContinueSuggestion?.(ticket)}><Plus size={13} />Create post</button></footer> : ticket.status === 'pending' ? <small className="ticket-reviewer">{t('pendingApproval')}</small> : <small className="ticket-reviewer">{ticket.reviewerEmail ? displayName(ticket.reviewerEmail) : '—'} · {ticket.reviewedAt ? displayTimestamp(ticket.reviewedAt, language) : ''}</small>}</article>)}
     </div>
   </aside></>;
 }
@@ -1070,6 +1108,8 @@ function QueueApp({ user }) {
   const [pickOpen, setPickOpen] = useState(false);
   const [pickBusy, setPickBusy] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const [createSeed, setCreateSeed] = useState(null);
+  const [suggestOpen, setSuggestOpen] = useState(false);
   const [multiAssignRequest, setMultiAssignRequest] = useState(null);
   const [multiAssignBusy, setMultiAssignBusy] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
@@ -1081,6 +1121,7 @@ function QueueApp({ user }) {
   const [overviewLoading, setOverviewLoading] = useState(false);
   const [overviewError, setOverviewError] = useState('');
   const [addTimeNonce, setAddTimeNonce] = useState(0);
+  const [queueClock, setQueueClock] = useState(() => Date.now());
   const draftRef = useRef(draft);
   const draftSyncingRef = useRef(false);
   const draftHydratedRef = useRef(false);
@@ -1159,6 +1200,7 @@ function QueueApp({ user }) {
     return () => window.removeEventListener(TIME_ZONE_PREVIEW_EVENT, sync);
   }, []);
   useEffect(() => { draftRef.current = draft; }, [draft]);
+  useEffect(() => { const timer = window.setInterval(() => setQueueClock(Date.now()), 30_000); return () => window.clearInterval(timer); }, []);
   useEffect(() => { openRef.current = open; }, [open]);
   useEffect(() => { ticketsOpenRef.current = ticketsOpen; }, [ticketsOpen]);
   useEffect(() => { const params = new URLSearchParams(window.location.search); const id = Number(decodeRouteState(params.get('r'))?.task || params.get('task')); if (!id) return; json(`/api/dashboard/queue/v2/requests/${id}`).then(({ request }) => { setOpen(request); if (request.scheduledDate) setDate(request.scheduledDate); }).catch((err) => notify(err.message, 'error')); }, [notify]);
@@ -1329,6 +1371,13 @@ function QueueApp({ user }) {
     return () => document.removeEventListener('contextmenu', openUpcomingContext);
   }, [coordinator, upcoming]);
   const assigned = useMemo(() => { const byId = new Map((data?.assignedRequests || []).map((task) => [task.id, task])); (data?.liveDrafts || []).filter((task) => task.designerEmail === data?.viewer?.email).forEach((task) => byId.set(task.id, task)); return [...byId.values()].sort((a, b) => `${a.scheduledDate}-${String(a.scheduledStartMinutes).padStart(4, '0')}`.localeCompare(`${b.scheduledDate}-${String(b.scheduledStartMinutes).padStart(4, '0')}`)); }, [data]);
+  const recentClosed = useMemo(() => (data?.recentClosedRequests || []).filter((task) => task.designerEmail === data?.viewer?.email), [data]);
+  const lateStart = useMemo(() => {
+    const now = new Date();
+    const today = DAY(now, QUEUE_TIME_ZONE);
+    const minute = currentMinutes(now, QUEUE_TIME_ZONE);
+    return assigned.find((task) => task.status === 'scheduled' && task.scheduledDate === today && Number(task.scheduledStartMinutes) <= minute) || null;
+  }, [assigned, queueClock]);
   const pickPool = useMemo(() => {
     const minutesPerPP = Number(data?.viewer?.minutesPerPP || 10);
     const forViewer = (task) => ({ ...task, minutesPerPP, durationMinutes: Number(task.productionPoints || 1) * minutesPerPP });
@@ -1436,10 +1485,20 @@ function QueueApp({ user }) {
         const target = [...(data?.requests || []), ...(data?.liveDrafts || [])].find((item) => Number(item.id) === id && item.status === 'pool');
         if (target) setMultiAssignRequest(target);
       }
+      if (action === 'cancel' && coordinator) {
+        const target = [...(data?.requests || []), ...(data?.liveDrafts || [])].find((item) => Number(item.id) === Number(requestId) && item.status === 'pool');
+        if (target) {
+          saveQuietly();
+          patchQueueTask(target.id, { status: 'cancelled', cancellationReason: 'Cancelled by coordinator' });
+          json(`/api/dashboard/queue/v2/requests/${target.id}/cancel`, { method: 'POST', body: new URLSearchParams({ reason: 'Cancelled by coordinator' }) })
+            .then(() => notify(t('requestUpdated')))
+            .catch((err) => { patchQueueTask(target.id, target); notify(err.message, 'error'); });
+        }
+      }
     };
     window.addEventListener('sentient:context-action', handleContextAction);
     return () => window.removeEventListener('sentient:context-action', handleContextAction);
-  }, [coordinator, data, duplicateRequest]);
+  }, [coordinator, data, duplicateRequest, notify, patchQueueTask, saveQuietly, t]);
   const showScheduledLocally = useCallback((task, placement) => {
     const scheduled = { ...task, ...placement, status: 'scheduled', isDraft: false, draftCoordinatorEmail: null };
     setData((current) => {
@@ -1742,6 +1801,16 @@ function QueueApp({ user }) {
       throw err;
     }
   };
+  const createSuggestion = async ({ sourceUrl, reason }) => {
+    const result = await json('/api/dashboard/queue/v2/tickets/post-suggestion', {
+      method: 'POST', body: new URLSearchParams({ source_url: sourceUrl, reason }),
+    });
+    setTickets((current) => [result.ticket, ...current]);
+    setData((current) => current ? { ...current, pendingTicketCount: (current.pendingTicketCount || 0) + 1 } : current);
+    setSuggestOpen(false);
+    setTicketsOpen(true);
+    notify('Suggestion sent for review.');
+  };
   const openPendingTickets = useMemo(() => {
     if (!open?.id) return [];
     const fromTask = (open.pendingTickets || []).map((ticket) => ({ ...ticket }));
@@ -1769,7 +1838,9 @@ function QueueApp({ user }) {
       <div className="queue-actions">
         <div className="queue-actions-group queue-actions-primary">
           <span className={`queue-live-status is-${liveStatus}`} title={liveStatus === 'live' ? t('liveConnected') : liveStatus === 'offline' ? t('liveOffline') : t('liveConnecting')}>{liveStatus === 'offline' ? <WifiOff size={12} /> : <Radio size={12} />}<b>{liveStatus === 'live' ? t('liveConnected') : liveStatus === 'offline' ? t('liveOffline') : t('liveConnecting')}</b></span>
-          {(coordinator || canSelfAssign) ? <button type="button" className="queue-create-button" onClick={() => setCreateOpen(true)}><Plus size={14} />{t('createPost')}</button> : null}
+          {lateStart ? <button type="button" className="queue-start-warning" onClick={() => setOpen(lateStart)} title="Open the scheduled job"><AlertTriangle size={14} /><span>Current job has not started</span></button> : null}
+          {(coordinator || canSelfAssign) ? <button type="button" className="queue-create-button" onClick={() => { setCreateSeed(null); setCreateOpen(true); }}><Plus size={14} />{t('createPost')}</button> : null}
+          {!coordinator && !canSelfAssign && data?.viewer?.operatingRoles?.includes('pd') ? <button type="button" className="queue-create-button" onClick={() => setSuggestOpen(true)}><Lightbulb size={14} />Suggest post</button> : null}
           {coordinator ? <button type="button" className="scheduler-add-time" onClick={() => setAddTimeNonce((value) => value + 1)}><CalendarPlus size={13} />{t('addTime')}</button> : null}
           {coordinator ? <button type="button" className={`queue-overview-button${overviewOpen ? ' is-active' : ''}`} onClick={toggleOverview}><BarChart3 size={14} />{t('adminOverview')}</button> : null}
           {data?.viewer ? <button type="button" className={`queue-ticket-button${ticketsOpen ? ' is-active' : ''}`} onClick={toggleTickets}><ClipboardList size={14} />{t('tickets')}{data.pendingTicketCount ? <b>{data.pendingTicketCount}</b> : null}</button> : null}
@@ -1791,16 +1862,17 @@ function QueueApp({ user }) {
     {data ? <>
       {overviewOpen ? <QueueOverview report={overview} loading={overviewLoading} error={overviewError} onRetry={loadOverview} onOpen={setOpen} /> : null}
       {!overviewOpen ? <>
-      <section className="scheduler-toolbar"><div className="scheduler-date-title"><p className="scheduler-eyebrow">{coordinator ? t('coordinatorSchedule') : t('mySchedule')}</p><h2><CalendarDays size={18} aria-hidden="true" />{displayDate(date, language)}</h2><span className={`scheduler-date-status${viewingToday ? ' is-today' : ''}`}>{viewingToday ? t('viewingToday') : t('viewingDate')}</span></div>{coordinator ? <label className="scheduler-designer-filter">{t('assignedView')}<select value={designerScope} onChange={selectDesignerScope}><option value="">{t('allUsers')}</option>{(data.schedulerUsers || data.designers).map((person) => <option key={person.email} value={person.email}>{displayName(person.email, person.displayName)}</option>)}</select></label> : null}<div className="scheduler-date-nav" aria-label={t('jumpToDate')}><button type="button" className="scheduler-date-arrow" aria-label={t('previousDay')} title={t('previousDay')} onClick={() => moveDate(-1)}><ChevronLeft size={17} /></button><label className="scheduler-date-picker" title={t('jumpToDate')}><input type="date" value={date} onChange={selectDate} aria-label={t('jumpToDate')} /></label><button type="button" className={`scheduler-date-today${viewingToday ? ' is-current' : ''}`} onClick={() => setDate(todayDate)} disabled={viewingToday} aria-current={viewingToday ? 'date' : undefined} title={viewingToday ? t('viewingToday') : t('today')}><CalendarDays size={14} />{t('today')}</button><button type="button" className="scheduler-date-arrow" aria-label={t('nextDay')} title={t('nextDay')} onClick={() => moveDate(1)}><ChevronRight size={17} /></button></div><button type="button" className={`scheduler-archive-toggle${archive ? ' is-on' : ''}`} onClick={() => setArchive((value) => !value)}><Archive size={14} />{archive ? t('liveQueue') : t('archive')}</button></section>
-      {coordinator && !archive ? <section className={`scheduler-pool${poolDropActive ? ' is-drop-target' : ''}`} onDragOver={poolDragOver} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setPoolDropActive(false); }} onDrop={poolDrop} aria-label={t('poolDropHint')}><header><div><p className="scheduler-eyebrow">{t('productionPool')}</p><h2>{pool.length} {t('readyToSchedule')}</h2></div><small>{poolDropActive ? t('poolDropHint') : t('visibleSchedule')}</small></header><div className="scheduler-pool-list">{pool.map((task) => <PoolCard key={task.id} task={task} onOpen={setOpen} canMultiAssign={Boolean(coordinator)} />)}{!pool.length ? <p className="scheduler-empty">{t('emptyPool')}</p> : null}</div></section> : null}
+      <section className="scheduler-toolbar"><div className="scheduler-date-title"><p className="scheduler-eyebrow">{coordinator ? t('coordinatorSchedule') : t('mySchedule')}</p><h2><CalendarDays size={18} aria-hidden="true" />{displayDate(date, language)}</h2><span className={`scheduler-date-status${viewingToday ? ' is-today' : ''}`}>{viewingToday ? t('viewingToday') : t('viewingDate')}</span></div>{coordinator ? <label className="scheduler-designer-filter">{t('assignedView')}<select value={designerScope} onChange={selectDesignerScope}><option value="">{t('allUsers')}</option>{(data.schedulerUsers || data.designers).map((person) => <option key={person.email} value={person.email}>{displayName(person.email, person.displayName)}</option>)}</select></label> : null}<div className="scheduler-date-nav" aria-label={t('jumpToDate')}><button type="button" className="scheduler-date-arrow" aria-label={t('previousDay')} title={t('previousDay')} onClick={() => moveDate(-1)}><ChevronLeft size={17} /></button><label className="scheduler-date-picker" title={t('jumpToDate')}><input type="date" value={date} onChange={selectDate} aria-label={t('jumpToDate')} /></label><button type="button" className={`scheduler-date-today${viewingToday ? ' is-current' : ''}`} onClick={() => setDate(todayDate)} disabled={viewingToday} aria-current={viewingToday ? 'date' : undefined} aria-label={viewingToday ? t('viewingToday') : t('today')} title={viewingToday ? t('viewingToday') : t('today')}><CalendarDays size={14} /></button><button type="button" className="scheduler-date-arrow" aria-label={t('nextDay')} title={t('nextDay')} onClick={() => moveDate(1)}><ChevronRight size={17} /></button></div><button type="button" className={`scheduler-archive-toggle${archive ? ' is-on' : ''}`} onClick={() => setArchive((value) => !value)}><Archive size={14} />{archive ? t('liveQueue') : t('archive')}</button></section>
+      {coordinator && !archive ? <section className={`scheduler-pool${poolDropActive ? ' is-drop-target' : ''}`} onDragOver={poolDragOver} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setPoolDropActive(false); }} onDrop={poolDrop} aria-label={t('poolDropHint')}><header><div><p className="scheduler-eyebrow">{t('productionPool')}</p><h2>{pool.length} {t('readyToSchedule')}</h2></div><small>{poolDropActive ? t('poolDropHint') : t('visibleSchedule')}</small></header><div className="scheduler-pool-list">{pool.map((task) => <PoolCard key={task.id} task={task} onOpen={setOpen} canMultiAssign canCancel />)}{!pool.length ? <p className="scheduler-empty">{t('emptyPool')}</p> : null}</div></section> : null}
       {!coordinator && canSelfAssign && !archive ? <section className="scheduler-pool"><header><div><p className="scheduler-eyebrow">My Pool</p><h2>{selfPool.length} {t('readyToSchedule')}</h2></div><small>Drag your request onto your own schedule.</small></header><div className="scheduler-pool-list">{selfPool.map((task) => <PoolCard key={task.id} task={task} onOpen={setOpen} />)}{!selfPool.length ? <p className="scheduler-empty">Create a post to start your own Pool.</p> : null}</div></section> : null}
       {(coordinator || canSelfAssign) && draft.length ? <div className="scheduler-draft-float"><button type="button" className="scheduler-secondary" onClick={clearDrafts}>{t('clearDrafts')}</button><button type="button" className="scheduler-submit" onClick={submit}><Send size={14} />{t('submit')} {draft.length}</button></div> : null}
-      {archive ? <section className="queue-archive-list"><header><p className="scheduler-eyebrow">{t('archive')}</p><h2>{archived.length} {t('cancelled')}</h2></header>{archived.length ? archived.map((task) => <button type="button" key={task.id} className={`${priorityClass(task.priority)}${hotClass(task)}`} onClick={() => setOpen(task)}><span>{cover(task) ? <img src={cover(task)} alt="" /> : '@'}</span><div><b>@{task.post.account}</b><small>{task.cancellationReason || t('cancelled')}</small>{isHotTask(task) ? <i className="queue-hot-badge">🔥 {hotText(task)}</i> : null}</div><em>{displayTimestamp(task.updatedAt, language)}</em></button>) : <p className="scheduler-empty">{t('noArchived')}</p>}</section> : <>{coordinator && draft.length ? <DraftAccounts draft={draft} designers={data.designers} onAccountsChange={changeDraftAccounts} /> : null}<Scheduler data={data} draft={draft} setDraft={setDraft} onDraftChange={persistDrafts} selectedDate={date} designerScope={designerScope} timeZone={simulatedTimeZone} onOpen={setOpen} onError={(message) => notify(message, 'error')} onCreateTimeBlock={createTimeBlock} onEditTimeBlock={editTimeBlock} onDeleteTimeBlock={deleteTimeBlock} onReturnToPool={returnTaskToPool} onCancelTask={cancelTask} onDuplicateTask={(task) => duplicateRequest(task.id)} onSavePreferences={saveSchedulerPreferences} addTimeNonce={addTimeNonce} />{coordinator ? <AdminAssignmentTable tasks={upcoming} onOpen={setOpen} headingKey="upcomingProduction" countKey="activeRequests" /> : <DesignerAssignments tasks={assigned} timeZone={simulatedTimeZone} onOpen={setOpen} />}</>}
+      {archive ? <section className="queue-archive-list"><header><p className="scheduler-eyebrow">{t('archive')}</p><h2>{archived.length} {t('cancelled')}</h2></header>{archived.length ? archived.map((task) => <button type="button" key={task.id} className={`${priorityClass(task.priority)}${hotClass(task)}`} onClick={() => setOpen(task)}><span>{cover(task) ? <img src={cover(task)} alt="" /> : '@'}</span><div><b>@{task.post.account}</b><small>{task.cancellationReason || t('cancelled')}</small>{isHotTask(task) ? <i className="queue-hot-badge">🔥 {hotText(task)}</i> : null}</div><em>{displayTimestamp(task.updatedAt, language)}</em></button>) : <p className="scheduler-empty">{t('noArchived')}</p>}</section> : <>{coordinator && draft.length ? <DraftAccounts draft={draft} designers={data.designers} onAccountsChange={changeDraftAccounts} /> : null}<Scheduler data={data} draft={draft} setDraft={setDraft} onDraftChange={persistDrafts} selectedDate={date} designerScope={designerScope} timeZone={simulatedTimeZone} onOpen={setOpen} onError={(message) => notify(message, 'error')} onCreateTimeBlock={createTimeBlock} onEditTimeBlock={editTimeBlock} onDeleteTimeBlock={deleteTimeBlock} onReturnToPool={returnTaskToPool} onCancelTask={cancelTask} onDuplicateTask={(task) => duplicateRequest(task.id)} onSavePreferences={saveSchedulerPreferences} addTimeNonce={addTimeNonce} />{coordinator ? <AdminAssignmentTable tasks={upcoming} onOpen={setOpen} headingKey="upcomingProduction" countKey="activeRequests" /> : <DesignerAssignments tasks={assigned} closedTasks={recentClosed} timeZone={simulatedTimeZone} onOpen={setOpen} />}</>}
       </> : null}
     </> : null}
-    {ticketsOpen && data?.viewer ? <TicketPanel tickets={tickets} loading={ticketsLoading} error={ticketsError} onClose={() => setTicketsOpen(false)} onReview={reviewTicket} canReview={Boolean(coordinator)} /> : null}
+    {ticketsOpen && data?.viewer ? <TicketPanel tickets={tickets} loading={ticketsLoading} error={ticketsError} onClose={() => setTicketsOpen(false)} onReview={reviewTicket} onContinueSuggestion={(ticket) => { setCreateSeed({ sourceUrl: ticket.title, reason: ticket.reason }); setTicketsOpen(false); setCreateOpen(true); }} canReview={Boolean(coordinator)} /> : null}
     {pickOpen ? <PickModal requests={pickPool} hotFallback={pickHotFallback} busy={pickBusy} onClose={() => setPickOpen(false)} onAssign={pickRequest} /> : null}
-    {createOpen ? <CreatePostModal tags={data?.tags || []} onClose={() => setCreateOpen(false)} onCreated={(request) => { saveQuietly(); setData((current) => current ? { ...current, requests: [request, ...(current.requests || []).filter((task) => task.id !== request.id)], pickRequests: [request, ...(current.pickRequests || []).filter((task) => task.id !== request.id)] } : current); setCreateOpen(false); notify(t('postCreated')); }} /> : null}
+    {suggestOpen ? <SuggestPostModal onClose={() => setSuggestOpen(false)} onCreated={createSuggestion} /> : null}
+    {createOpen ? <CreatePostModal tags={data?.tags || []} initial={createSeed} onClose={() => { setCreateOpen(false); setCreateSeed(null); }} onCreated={(request) => { saveQuietly(); setData((current) => current ? { ...current, requests: [request, ...(current.requests || []).filter((task) => task.id !== request.id)], pickRequests: [request, ...(current.pickRequests || []).filter((task) => task.id !== request.id)] } : current); setCreateOpen(false); setCreateSeed(null); notify(t('postCreated')); }} /> : null}
     {multiAssignRequest ? <AssignMultipleAccountsModal key={multiAssignRequest.id} task={multiAssignRequest} accounts={data?.accounts || []} designers={data?.schedulerUsers || data?.designers || []} busy={multiAssignBusy} onClose={() => { if (!multiAssignBusy) setMultiAssignRequest(null); }} onSubmit={(selectedAccounts) => assignToMultipleAccounts(multiAssignRequest.id, selectedAccounts)} /> : null}
     {resetOpen ? <ResetQueueModal onClose={() => setResetOpen(false)} onReset={resetQueue} /> : null}
     {accountSetupOpen && data ? <AccountSetupModal onboarding={data.accountOnboarding} accounts={data.accounts || []} onClose={() => { accountSetupDismissedRef.current = true; setAccountSetupOpen(false); }} onSave={saveManagedAccounts} onRequest={requestAccountAccess} /> : null}
