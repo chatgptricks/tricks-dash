@@ -1151,3 +1151,8 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
 .queue-account-picker input { accent-color:var(--q-accent); }
 .queue-multi-link-form { display:grid; gap:10px; }
 .queue-multi-link-form label { display:grid; gap:5px; color:var(--q-muted); font-size:11px; font-weight:700; }
+.queue-close-panel { grid-template-rows:auto minmax(0,1fr); }
+.queue-close-panel .queue-multi-link-form { align-content:start; overflow:auto; padding:2px 1px 1px; }
+.queue-close-actions { display:flex; gap:8px; padding-top:4px; }
+.queue-close-actions .scheduler-primary,.queue-close-actions .scheduler-secondary { flex:1 1 0; width:auto; min-height:38px; margin:0; }
+@media (max-width:640px) { .queue-close-actions { flex-direction:column; }.queue-close-actions .scheduler-primary,.queue-close-actions .scheduler-secondary { width:100%; } }
