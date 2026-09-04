@@ -12,11 +12,20 @@ const usage = {
   day_keys: ['2026-08-30'], dow_labels: ['Mon'], global_dow_hour: [Array(24).fill(0)],
   users: [{ email: users[0].email, role: 'admin', daily: [{ date: '2026-08-30', count: 12 }], total_all_time: 12, last_7d: 12, active_days: 1, last_seen: new Date().toISOString(), sections: { dashboard: 8, insights: 2, admin: 2 } }],
 };
-const stubFetch = async (url) => {
+let rejectUserSave = false;
+const stubFetch = async (url, options = {}) => {
   const value = String(url);
   if (value.includes('/api/dashboard/me')) return ok({ email: users[0].email, is_admin: true, is_dev: true });
   if (value.includes('/api/admin/accounts')) return ok({ accounts });
-  if (value.includes('/api/admin/users')) return ok({ users });
+  if (value.includes('/api/admin/users')) {
+    if (options.method === 'POST') {
+      if (rejectUserSave) return { ok: false, status: 400, json: async () => ({ detail: 'Test validation failure' }) };
+      const values = Object.fromEntries(options.body);
+      const index = users.findIndex((person) => person.email === values.email);
+      users[index] = { ...users[index], ...values, is_admin: values.is_admin === 'true', minutes_per_pp: values.minutes_per_pp || null };
+    }
+    return ok({ users });
+  }
   if (value.includes('/api/admin/queue/designer-accounts')) return ok({ designers: [{ email: users[0].email, displayName: 'Esteban', accounts: ['chatgptricks'] }] });
   if (value.includes('/api/admin/disk-status')) return ok({ pct_used: 22, used_mb: 220, total_mb: 1000, free_mb: 780 });
   if (value.includes('/api/admin/slack-status')) return ok({ configured: true, alert_groups: 'queue, system' });
@@ -70,7 +79,7 @@ const clickTab = async (label) => {
       && [...(scrapeSelect?.options || [])].map((option) => option.value).join('|') === 'posts|reels|both';
 
     await clickTab('Users');
-    checks['User admin controls are collapsed by default'] = !document.querySelector('.settings-user-admin-options');
+    checks['User admin controls are collapsed by default'] = !document.querySelector('.settings-user-admin-panel');
     await act(async () => {
       document.querySelector('[aria-label="Open admin options for esteban@sentientagency.io"]').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
     });
@@ -78,6 +87,27 @@ const clickTab = async (label) => {
       && Boolean(document.querySelector('.settings-user-admin-toggle'))
       && Boolean(document.querySelector('.settings-user-admin-accounts'));
     checks['Users show Slack avatar slot'] = Boolean(document.querySelector('.settings-user-avatar img'));
+
+    const nameInput = document.querySelector('[aria-label="Display name for esteban@sentientagency.io"]');
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+    await act(async () => {
+      setter.call(nameInput, 'Esteban edited');
+      nameInput.dispatchEvent(new window.Event('input', { bubbles: true }));
+    });
+    rejectUserSave = true;
+    await act(async () => {
+      document.querySelector('.settings-user-savebar .primary').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 30));
+    });
+    checks['Failed save preserves the typed draft'] = nameInput.value === 'Esteban edited' && /Test validation failure/.test(document.querySelector('.settings-user-save-error')?.textContent || '');
+    checks['Failed save offers retry without retyping'] = /Retry save/.test(document.querySelector('.settings-user-savebar .primary')?.textContent || '');
+    rejectUserSave = false;
+    await act(async () => {
+      document.querySelector('.settings-user-savebar .primary').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 30));
+    });
+    checks['Retry confirms saved data and clears the error'] = users[0].display_name === 'Esteban edited' && !document.querySelector('.settings-user-save-error') && document.querySelector('.settings-user-savebar .primary').disabled;
+    checks['Saved badge retains the Slack avatar'] = Boolean(document.querySelector('.settings-user-avatar img'));
 
     await clickTab('Usage');
     checks['Usage has its own tab'] = Boolean(document.querySelector('.usage-section')) && !document.querySelector('.settings-row-accounts');
