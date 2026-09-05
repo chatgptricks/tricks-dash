@@ -23,8 +23,8 @@ try {
   await act(async () => root.render(<TopicStack posts={variants} renderCard={(post, expand) => <button className="test-card" onClick={expand || (() => { chosen = post.postKey; })}>{post.postKey}</button>} />));
   if (el.querySelectorAll('.test-card').length !== 1 || el.querySelector('.test-card').textContent !== 'b') throw new Error('Stack must show most liked cover only');
   await act(async () => el.querySelector('.test-card').click());
-  if ([...el.querySelectorAll('.test-card')].map((x) => x.textContent).join(',') !== 'b,c,a') throw new Error('Expand must expose every version in likes order');
-  await act(async () => el.querySelectorAll('.test-card')[1].click());
+  if ([...el.querySelectorAll('.post-stack-modal .test-card')].map((x) => x.textContent).join(',') !== 'b,c,a') throw new Error('Expand must expose every version in likes order');
+  await act(async () => el.querySelectorAll('.post-stack-modal .test-card')[1].click());
   if (chosen !== 'c') throw new Error('Expanded version must be selectable');
   await act(async () => el.querySelector('.post-stack-heading button').click());
   if (el.querySelectorAll('.test-card').length !== 1) throw new Error('Collapse must restore stack');
