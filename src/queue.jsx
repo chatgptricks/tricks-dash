@@ -1,3 +1,4 @@
+import ProductHeader from './ProductHeader';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import { AlertTriangle, Archive, ArrowLeft, Ban, BarChart3, BellRing, CalendarDays, CalendarPlus, Check, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Clock3, Coffee, Download, History, Lightbulb, Link2, LoaderCircle, LocateFixed, LogOut, Moon, Paperclip, Pencil, Plus, Radio, Send, Settings, Sun, TimerReset, WifiOff, X } from 'lucide-react';
@@ -405,7 +406,7 @@ function QueueGuide({ coordinator, step, setStep, onChooseLanguage, onComplete }
     ...(coordinator ? [{ selector: '.scheduler-pool', title: 'guidePoolTitle', body: 'guidePoolBody' }] : []),
     { selector: '.scheduler-canvas', title: 'guidePlannerTitle', body: 'guidePlannerBody', extraBody: coordinator ? 'guideSubmitBody' : 'guideRoleBody' },
     { selector: coordinator ? '.queue-admin-assignments' : '.designer-assignments', title: 'guideUpcomingTitle', body: 'guideUpcomingBody' },
-    { selector: '.queue-dashboard-link', title: 'guideDashboardTitle', body: 'guideDashboardBody' },
+    { selector: '.product-nav a[href*="index.html"]', title: 'guideDashboardTitle', body: 'guideDashboardBody' },
   ], [coordinator]);
   const active = step >= 0 ? steps[step] : null;
   useEffect(() => {
@@ -631,8 +632,8 @@ function CreatePostModal({ tags = [], initial = null, onClose, onCreated }) {
   </div>;
 }
 
-function SuggestPostModal({ onClose, onCreated }) {
-  const [sourceUrl, setSourceUrl] = useState('');
+function SuggestPostModal({ onClose, onCreated, initialUrl = '' }) {
+  const [sourceUrl, setSourceUrl] = useState(initialUrl);
   const [reason, setReason] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -1128,7 +1129,7 @@ function QueueApp({ user }) {
   const [archive, setArchive] = useState(false);
   const [poolDropActive, setPoolDropActive] = useState(false);
   const [designerScope, setDesignerScope] = useState(() => readDesignerScope(user?.email));
-  const [ticketsOpen, setTicketsOpen] = useState(false);
+  const [ticketsOpen, setTicketsOpen] = useState(new URLSearchParams(window.location.search).get('inbox') === '1');
   const [tickets, setTickets] = useState([]);
   const [ticketsLoading, setTicketsLoading] = useState(false);
   const [ticketsError, setTicketsError] = useState('');
@@ -1136,7 +1137,7 @@ function QueueApp({ user }) {
   const [pickBusy, setPickBusy] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [createSeed, setCreateSeed] = useState(null);
-  const [suggestOpen, setSuggestOpen] = useState(false);
+  const [suggestOpen, setSuggestOpen] = useState(Boolean(decodeRouteState(new URLSearchParams(window.location.search).get('r'))?.suggest));
   const [multiAssignRequest, setMultiAssignRequest] = useState(null);
   const [multiAssignBusy, setMultiAssignBusy] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
@@ -1283,6 +1284,7 @@ function QueueApp({ user }) {
       if (!silent) setTicketsLoading(false);
     }
   }, []);
+  useEffect(() => { if (data?.viewer?.email && new URLSearchParams(window.location.search).get('inbox') === '1') loadTickets(); }, [data?.viewer?.email, loadTickets]);
   const loadOverview = useCallback(async () => {
     setOverviewLoading(true);
     setOverviewError('');
@@ -1866,9 +1868,7 @@ function QueueApp({ user }) {
   };
 
   return <main className="queue-page scheduler-page">
-    <header className="queue-topbar">
-      <div className="queue-brand"><CalendarDays size={22} /><div><span>sentientdash.app</span><h1>{t('productionQueue')}</h1></div></div>
-      <div className="queue-actions">
+    <ProductHeader current="queue" coordinator={coordinator} account={<QueueSettings isAdmin={Boolean(data?.viewer?.isAdmin)} isDev={effectiveDevAccess} userEmail={user.email} avatarUrl={user?.photoURL || data?.viewer?.avatarUrl} displayLabel={user?.displayName || data?.viewer?.displayName} onManageAccounts={() => { accountSetupDismissedRef.current = false; setAccountSetupOpen(true); }} onStartGuide={() => { setGuideStep(-1); setGuideOpen(true); }} onResetQueue={(data?.viewer?.isAdmin || effectiveDevAccess) ? () => setResetOpen(true) : null} onSignOut={() => { clearSsoCookie(); signOut(auth); }} />}><h1>{t('productionQueue')}</h1>
         <div className="queue-actions-group queue-actions-primary">
           <span className={`queue-live-status is-${liveStatus}`} title={liveStatus === 'live' ? t('liveConnected') : liveStatus === 'offline' ? t('liveOffline') : t('liveConnecting')}>{liveStatus === 'offline' ? <WifiOff size={12} /> : <Radio size={12} />}<b>{liveStatus === 'live' ? t('liveConnected') : liveStatus === 'offline' ? t('liveOffline') : t('liveConnecting')}</b></span>
           {lateStart ? <button type="button" className="queue-start-warning" onClick={() => setOpen(lateStart)} title="Open the scheduled job"><AlertTriangle size={14} /><span>Current job has not started</span></button> : null}
@@ -1879,14 +1879,7 @@ function QueueApp({ user }) {
           {data?.viewer ? <button type="button" className={`queue-ticket-button${ticketsOpen ? ' is-active' : ''}`} onClick={toggleTickets}><ClipboardList size={14} />{t('tickets')}{data.pendingTicketCount ? <b>{data.pendingTicketCount}</b> : null}</button> : null}
           {pickAvailable ? <button type="button" className={`queue-pick-button${pickOpen ? ' is-active' : ''}`} onClick={() => setPickOpen(true)}><Check size={14} />{t('pick')}</button> : null}
         </div>
-        <nav className="queue-actions-nav" aria-label={t('dashboard')}>
-          <span className="queue-nav-current" aria-current="page">Queue</span>{coordinator ? <><a href={`${import.meta.env.BASE_URL}tracker.html`} target="sentient-tracker">Tracker</a><a href={`${import.meta.env.BASE_URL}insights.html`} target="sentient-insights">Insights</a></> : null}<a className="queue-dashboard-link" href={import.meta.env.BASE_URL} target="sentient-dashboard"><ArrowLeft size={14} />{t('dashboard')}</a>
-        </nav>
-        <div className="queue-actions-group queue-actions-account">
-          <QueueSettings isAdmin={Boolean(data?.viewer?.isAdmin)} isDev={effectiveDevAccess} userEmail={user.email} avatarUrl={user?.photoURL || data?.viewer?.avatarUrl} displayLabel={user?.displayName || data?.viewer?.displayName} onManageAccounts={() => { accountSetupDismissedRef.current = false; setAccountSetupOpen(true); }} onStartGuide={() => { setGuideStep(-1); setGuideOpen(true); }} onResetQueue={(data?.viewer?.isAdmin || effectiveDevAccess) ? () => setResetOpen(true) : null} onSignOut={() => { clearSsoCookie(); signOut(auth); }} />
-        </div>
-      </div>
-    </header>
+    </ProductHeader>
     {refreshing ? <div className="queue-refresh-progress" aria-label="Refreshing Queue" /> : null}
     {incomingUpdate ? <div className="queue-live-refresh-notice" role="status" aria-live="polite"><LoaderCircle className="queue-spin" size={16} /><span><b>{t('newDataIncoming')}</b><small>{t('updatingQueue')}</small></span></div> : null}
     {toast ? <div className={`queue-toast is-${toast.type}`} role="status">{toast.type === 'success' ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}<span>{toast.message}</span><button type="button" onClick={() => setToast(null)}><X size={14} /></button></div> : null}
@@ -1904,7 +1897,7 @@ function QueueApp({ user }) {
     </> : null}
     {ticketsOpen && data?.viewer ? <TicketPanel tickets={tickets} loading={ticketsLoading} error={ticketsError} onClose={() => setTicketsOpen(false)} onReview={reviewTicket} onContinueSuggestion={(ticket) => { setCreateSeed({ sourceUrl: ticket.title, reason: ticket.reason }); setTicketsOpen(false); setCreateOpen(true); }} canReview={Boolean(coordinator)} /> : null}
     {pickOpen ? <PickModal requests={pickPool} hotFallback={pickHotFallback} busy={pickBusy} onClose={() => setPickOpen(false)} onAssign={pickRequest} /> : null}
-    {suggestOpen ? <SuggestPostModal onClose={() => setSuggestOpen(false)} onCreated={createSuggestion} /> : null}
+    {suggestOpen && !coordinator && !canSelfAssign && data?.viewer?.operatingRoles?.includes('pd') ? <SuggestPostModal initialUrl={decodeRouteState(new URLSearchParams(window.location.search).get('r'))?.suggest || ''} onClose={() => setSuggestOpen(false)} onCreated={createSuggestion} /> : null}
     {createOpen ? <CreatePostModal tags={data?.tags || []} initial={createSeed} onClose={() => { setCreateOpen(false); setCreateSeed(null); }} onCreated={(request) => { saveQuietly(); setData((current) => current ? { ...current, requests: [request, ...(current.requests || []).filter((task) => task.id !== request.id)], pickRequests: [request, ...(current.pickRequests || []).filter((task) => task.id !== request.id)] } : current); setCreateOpen(false); setCreateSeed(null); notify(t('postCreated')); }} /> : null}
     {multiAssignRequest ? <AssignMultipleAccountsModal key={multiAssignRequest.id} task={multiAssignRequest} accounts={data?.accounts || []} designers={data?.schedulerUsers || data?.designers || []} busy={multiAssignBusy} onClose={() => { if (!multiAssignBusy) setMultiAssignRequest(null); }} onSubmit={(selectedAccounts) => assignToMultipleAccounts(multiAssignRequest.id, selectedAccounts)} /> : null}
     {resetOpen ? <ResetQueueModal onClose={() => setResetOpen(false)} onReset={resetQueue} /> : null}

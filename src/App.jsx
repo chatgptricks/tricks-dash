@@ -1,3 +1,7 @@
+import { useTopicGroups } from './useTopicGroups';
+import ProductHeader from './ProductHeader';
+import ProductHome from './ProductHome';
+import { rankTopicPosts, performanceValue, editorialStates } from './topicGroups';
 import { Fragment, memo, startTransition, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
@@ -268,6 +272,7 @@ const SECTION_ICONS = {
   sentient: { emoji: '🧠', title: 'Sentient' },
   competitors: { emoji: '👀', title: 'Competitors' },
   all: { emoji: '🎛️', title: 'Dashboard' },
+  home: { emoji: '🏠', title: 'Home' },
   admin: { emoji: '👤', title: 'Users' },
 };
 
@@ -852,6 +857,12 @@ function openToolTab(event, url, windowName) {
 }
 
 function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
+  const homeView = window.location.pathname.endsWith('/home.html') || (window.location.pathname === '/' && !window.location.search && window.location.hostname === 'sentientdash.app');
+  const [topicView, setTopicView] = useState(() => { try { return localStorage.getItem('sentient.research.topics') === '1'; } catch { return false; } });
+  const [championMetric, setChampionMetric] = useState('likes');
+  const [separateTopics, setSeparateTopics] = useState(() => { try { return (() => { const value = JSON.parse(localStorage.getItem('sentient.research.separate') || '[]'); return Array.isArray(value) ? value : []; })(); } catch { return []; } });
+  useEffect(() => { try { localStorage.setItem('sentient.research.topics', topicView ? '1' : '0'); } catch {} }, [topicView]);
+  useEffect(() => { try { localStorage.setItem('sentient.research.separate', JSON.stringify(separateTopics)); } catch {} }, [separateTopics]);
   const knownRoleSwitcher = Object.prototype.hasOwnProperty.call(ROLE_SWITCHER_DEFAULTS, String(userEmail || '').trim().toLowerCase());
   const knownDev = String(userEmail || '').trim().toLowerCase() === DEV_EMAIL;
   const [dashboard, setDashboard] = useState({ posts: [], summary: {} });
@@ -1421,6 +1432,24 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
   const leftPaneRef = useRef(null);
   const resultsScrollRef = useRef(null);
   const searchInputRef = useRef(null);
+  const restoredScroll = useRef(false);
+  useEffect(() => {
+    if (homeView || loading || restoredScroll.current || !resultsScrollRef.current) return;
+    restoredScroll.current = true;
+    let frame;
+    try {
+      const saved = JSON.parse(sessionStorage.getItem('sentient.research.scroll') || 'null');
+      if (saved && saved.search === location.search) { setVisibleCount(Math.max(POSTS_PER_BATCH, Math.min(Number(saved.count) || POSTS_PER_BATCH, posts.length))); frame = requestAnimationFrame(() => { if (resultsScrollRef.current) resultsScrollRef.current.scrollTop = saved.top || 0; }); }
+    } catch {}
+    return () => { if (frame) cancelAnimationFrame(frame); };
+  }, [homeView, loading, posts.length]);
+  useEffect(() => {
+    if (homeView) return;
+    const save = () => { try { sessionStorage.setItem('sentient.research.scroll', JSON.stringify({ search: location.search, top: resultsScrollRef.current?.scrollTop || 0, count: visibleCount })); } catch {} };
+    window.addEventListener('pagehide', save);
+    return () => window.removeEventListener('pagehide', save);
+  }, [homeView, visibleCount]);
+
   const [shareCopied, setShareCopied] = useState(false);
   // Only meaningful on narrow viewports, where the six popover triggers
   // collapse behind a single "Filters" button.
@@ -1468,6 +1497,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
     const isEveryAccount =
       inScope.length > 0 && inScope.every((handle) => selectedAccounts.has(handle))
       && selectedAccounts.size === inScope.length;
+    if (homeView) return;
     writeUrlState({
       q: query,
       tab: activeGroup,
@@ -1492,6 +1522,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
       post: isSidebarOpen ? selectedKey : '',
       view: '',
     });
+    try { sessionStorage.setItem('sentient.research.return', '/index.html' + window.location.search); } catch {}
   }, [
     query, activeGroup, selectedAccounts, accountsInScope, activeType, mediaFilter,
     sortBy, minLikes, minComments, dateFrom, dateTo, datePreset, promoOnly, selectedKey,
@@ -1593,6 +1624,9 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
   }, [deferredQuery, activeGroup, selectedAccounts, activeType, mediaFilter, minLikes, minComments, dateFrom, dateTo, sortBy, showHidden, showHotHistory]);
 
   const visible = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount]);
+  const { groups: topics, loading: grouping, error: groupingError } = useTopicGroups(filtered, topicView, separateTopics);
+  const visibleTopics = topics.slice(0, visibleCount);
+  const galleryTotal = topicView ? topics.length : filtered.length;
   const showingFrom = filtered.length ? 1 : 0;
   const showingTo = visible.length;
   const activeFilterCount = [
@@ -1847,37 +1881,12 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
   }, []);
 
   return (
-    <div className="shell">
+    <div className={`shell${homeView ? ' is-home' : ''}`}>
       <div className="backdrop" />
       <main className="app-layout">
         <section ref={leftPaneRef} className="left-pane">
-          <header ref={topbarRef} className="topbar">
-            {/* Left column: who we are, then the single most-used control.
-                The old "DASH EXPLORER" eyebrow sat exactly where the search
-                field now goes and said nothing the wordmark doesn't. */}
-            <div className="topbar-identity">
-              {/* Wordmark and count share row one so the left column is two
-                  rows tall, the same as tools + filters on the right. Three
-                  stacked rows here left the right column short and the header
-                  lopsided. */}
-              <div className="topbar-brandline">
-                <h1><Wordmark /></h1>
-                {!loading && !loadError ? (
-                  <p className="results-count">
-                    <strong>{filtered.length.toLocaleString()}</strong> {t('of')} {posts.length.toLocaleString()} {t('posts')}
-                    <span className="results-count-aside">
-                      {compactFormatter.format(combinedSummary.totalLikes ?? summary['Total likes'] ?? 0)} {t('likes')}
-                      {' · '}
-                      {compactFormatter.format(combinedSummary.averageLikes ?? summary['Average likes'] ?? 0)} {t('avg')}
-                    </span>
-                  </p>
-                ) : <p className="results-count results-count-pending" aria-hidden="true" />}
-              </div>
-
-              {/* Rendered while loading too, just disabled. Hiding it made the
-                  header change shape the moment data landed, which is what
-                  made the load look broken -- the skeleton has to occupy the
-                  same box as the real thing or it isn't a skeleton. */}
+          <ProductHeader current={homeView ? 'home' : 'research'} coordinator={coordinatorAccess} count={queuePendingCount} account={<SettingsMenu email={userEmail} avatarUrl={userPhoto} isAdmin={effectiveIsAdmin} isDev={isDev && !rolePreviewActive} onSignOut={onSignOut} />}>
+            {!homeView ? <>
               <div className="topbar-search">
                 <Search size={18} aria-hidden="true" />
                 <input
@@ -1895,79 +1904,18 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
                   </button>
                 ) : <kbd className="search-kbd">⌘K</kbd>}
               </div>
-            </div>
-
-            {/* Right column: tools on top, filters underneath. */}
-            <div className="topbar-controls">
-              <div className="tool-row">
-                {/* Named targets keep each tool in one reusable tab while
-                    preserving Dashboard filters and the open post. */}
-                <a
-                  className="tool-link tool-link-queue"
-                  href={`${import.meta.env.BASE_URL}queue.html`}
-                  target="sentient-queue"
-                  onClick={(event) => openToolTab(event, `${import.meta.env.BASE_URL}queue.html`, 'sentient-queue')}
-                  title="Open your assigned post queue"
-                >
-                  <ListTodo size={15} />
-                  <span>Queue</span>
-                  {queuePendingCount ? <b className="queue-pending-badge">{queuePendingCount > 99 ? '99+' : queuePendingCount}</b> : null}
-                  <ExternalLink size={12} className="tool-link-out" aria-hidden="true" />
-                </a>
-                {coordinatorAccess ? <a
-                  className="tool-link"
-                  href={`${import.meta.env.BASE_URL}tracker.html`}
-                  target="sentient-tracker"
-                  onClick={(event) => openToolTab(event, `${import.meta.env.BASE_URL}tracker.html`, 'sentient-tracker')}
-                  title={t('Follower growth per account')}
-                >
-                  <TrendingUp size={15} />
-                  <span>{t('Tracker')}</span>
-                  <ExternalLink size={12} className="tool-link-out" aria-hidden="true" />
-                </a> : null}
-                {coordinatorAccess ? <a
-                  className="tool-link"
-                  href={`${import.meta.env.BASE_URL}insights.html`}
-                  target="sentient-insights"
-                  onClick={(event) => openToolTab(event, `${import.meta.env.BASE_URL}insights.html`, 'sentient-insights')}
-                  title={t('Aggregate analysis across all accounts')}
-                >
-                  <BarChart3 size={15} />
-                  <span>{t('Insights')}</span>
-                  <ExternalLink size={12} className="tool-link-out" aria-hidden="true" />
-                </a> : null}
-
-                <span className="tool-divider" aria-hidden="true" />
-
-                <SettingsMenu
-                  email={userEmail}
-                  avatarUrl={userPhoto}
-                  isAdmin={effectiveIsAdmin}
-                  isDev={isDev && !rolePreviewActive}
-                  onSignOut={onSignOut}
-                />
-              </div>
-
-            </div>
-
-            {refreshNotice ? (
-              <p className={`refresh-notice refresh-notice-${refreshNotice.type}`} role="status">
-                {refreshNotice.text}
-              </p>
-            ) : null}
-            {incomingData ? <div className="live-data-notice" role="status" aria-live="polite"><LoaderCircle className="spin" size={16} /><span><b>New data is incoming</b><small>Refreshing dashboard…</small></span></div> : null}
-            {/* Refreshes are deliberately silent once a real catalogue is on
-                screen. A transient background failure used to leave the
-                reconnect banner visible forever even though the cached
-                catalogue remained perfectly usable. The retry continues in
-                the background and atomically swaps in fresh data on success. */}
-          </header>
+              <p className="results-count"><strong>{filtered.length.toLocaleString()}</strong> {t('posts')}</p>
+            </> : null}
+          </ProductHeader>
+          {homeView ? <ProductHome coordinator={coordinatorAccess} email={userEmail} /> : null}
+          {incomingData && !homeView ? <div className="live-data-notice" role="status"><LoaderCircle className="spin" size={16} /><span>New data is incoming</span></div> : null}
 
 
-          {loading ? <DashboardSkeleton /> : null}
-          {loadError ? <section className="dash-state dash-state-error">{loadError}</section> : null}
 
-          {!loading && !loadError ? <>
+          {loading && !homeView ? <DashboardSkeleton /> : null}
+          {loadError && !homeView ? <section className="dash-state dash-state-error">{loadError}</section> : null}
+
+          {!homeView && !loading && !loadError ? <>
           {/* Filters share this row with the group tabs: same height,
               same pill shape. Tabs pick the set, filters narrow it --
               one decision surface instead of two stacked bars. */}
@@ -2202,11 +2150,19 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
               </div>
           </div>
 
+          <div className="research-view-tools" aria-label="Research view">
+            <button type="button" aria-pressed={!topicView} onClick={() => { setTopicView(false); setVisibleCount(POSTS_PER_BATCH); }}>Posts</button>
+            <button type="button" aria-pressed={topicView} onClick={() => { setTopicView(true); setVisibleCount(POSTS_PER_BATCH); }}>Topics</button>
+            {topicView ? <><label>Champion by<select value={championMetric} onChange={(event) => setChampionMetric(event.target.value)}><option value="likes">Most likes</option><option value="comments">Most comments</option><option value="interactions">Likes + comments</option>{posts.some((post) => Number(post.videoViewCount ?? post.views ?? 0) > 0) ? <option value="engagement">Engagement / view</option> : null}</select></label><p>{groupingError ? 'Grouping unavailable; showing individual posts. ' : ''}{topics.length.toLocaleString()} topics · Similar captions grouped automatically. Compare versions to check a match.</p>{separateTopics.length ? <button type="button" onClick={() => setSeparateTopics([])}>Reset separated posts</button> : null}</> : null}
+          </div>
           <section className="panel gallery">
           <div ref={resultsScrollRef} className="results-scroll">
-            {visible.length ? (
+            {grouping ? <p className="home-loading" role="status">Grouping similar posts… You can keep using Research.</p> : visible.length ? (
               <div className="gallery-grid">
-                {visible.map((post, index) => (
+                {(topicView ? visibleTopics : visible.map((post) => ({ id: post.postKey, posts: [post] }))).map((group, index) => {
+                  const ranked = rankTopicPosts(group.posts, championMetric);
+                  const post = ranked[0];
+                  const card = (
                   <PostCard
                     // Keyed by account+shortcode, not shortcode alone: accounts
                     // repost each other, so ~21 shortcodes exist under two
@@ -2221,9 +2177,16 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
                     onReload={reloadPost}
                     onAssign={setAssignmentPost}
                     onQuickAdd={quickAddToPool}
+                    canSuggest={!poolAccess && effectiveOperatingRoles.includes('pd')}
                     canPool={poolAccess}
                   />
-                ))}
+                  );
+                  return topicView ? <div className="topic-group" key={group.id}>
+                    <div className="topic-heading"><b>{ranked.length > 1 ? 'Champion' : 'Original'}</b><span>{ranked.length} {ranked.length === 1 ? 'post' : 'versions'}{ranked.length > 1 ? ` · ${championMetric === 'engagement' && performanceValue(post, championMetric) < 0 ? 'Likes (no view data)' : championMetric}` : ''}</span></div>
+                    {card}
+                    {ranked.length > 1 ? <details><summary>Compare {ranked.length - 1} other versions</summary>{ranked.slice(1).map((variant) => <div className="topic-variant" key={variant.postKey}><button type="button" onClick={() => selectPost(variant.postKey)}>@{variant.account}<small>{variant.likes == null || variant.likes < 0 ? '—' : compactFormatter.format(variant.likes)} likes · {compactFormatter.format(variant.comments || 0)} comments</small></button><button className="topic-separate" type="button" onClick={() => setSeparateTopics((keys) => [...keys, variant.postKey])}>Separate</button></div>)}</details> : null}
+                  </div> : <Fragment key={post.postKey}>{card}</Fragment>;
+                })}
               </div>
             ) : (
               <div className="empty-state">
@@ -2261,9 +2224,9 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
 
           <div className="pagination">
             <div className="pagination-copy">
-              Showing {showingFrom}-{showingTo} of {filtered.length.toLocaleString()}
+              Showing {galleryTotal ? 1 : 0}-{Math.min(visibleCount, galleryTotal)} of {galleryTotal.toLocaleString()} {topicView ? 'topics' : 'posts'}
             </div>
-            {visible.length < filtered.length ? (
+            {visibleCount < galleryTotal ? (
               <button className="ghost-button load-more-button" onClick={() => setVisibleCount((count) => count + POSTS_PER_BATCH)}>
                 Load 60 more
               </button>
@@ -3926,27 +3889,7 @@ export function SettingsPanel({
 
   return (
     <div className="admin-page">
-      <header className="admin-page-header settings-command-header">
-        <a className="settings-command-brand" href={`${import.meta.env.BASE_URL}settings.html`} target="sentient-settings" aria-label="Settings home">
-          <span className="settings-command-mark"><Settings size={19} /></span>
-          <span><small>sentientdash.app</small><strong>{t('Settings')}</strong></span>
-        </a>
-        <nav className="settings-command-nav" aria-label="Sentient tools">
-          <a href={import.meta.env.BASE_URL} target="sentient-dashboard">{t('Dashboard')}</a>
-          <a href={`${import.meta.env.BASE_URL}tracker.html`} target="sentient-tracker">{t('Tracker')}</a>
-          <a href={`${import.meta.env.BASE_URL}insights.html`} target="sentient-insights">{t('Insights')}</a>
-          <a href={`${import.meta.env.BASE_URL}queue.html`} target="sentient-queue">{t('Queue')}</a>
-          <span aria-current="page">{t('Settings')}</span>
-        </nav>
-        <SettingsMenu
-          email={userEmail}
-          avatarUrl={userPhoto}
-          isAdmin={isAdmin}
-          isDev={isDev}
-          onSignOut={onSignOut}
-          showSettingsLink={false}
-        />
-      </header>
+      <ProductHeader current="settings" coordinator account={<SettingsMenu email={userEmail} avatarUrl={userPhoto} isAdmin={isAdmin} isDev={isDev} onSignOut={onSignOut} showSettingsLink={false} />}><h1>{t('Settings')}</h1></ProductHeader>
 
       <div className="admin-page-body">
         <section className="settings-command-intro">
@@ -5681,7 +5624,7 @@ function AssignPostModal({ post, userEmail, isAdmin, accounts, onClose, onAssign
 // than portaled: the header isn't inside an overflow-hidden container, so a
 // plain absolute panel is enough and avoids the fixed-position bookkeeping
 // the account dropdown needs.
-function PostMenu({ post, isPromo, onFlags, onReload, onAssign, onQuickAdd, canPool }) {
+function PostMenu({ post, isPromo, onFlags, onReload, onAssign, onQuickAdd, canPool, canSuggest }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState('');
   const [note, setNote] = useState('');
@@ -5909,7 +5852,7 @@ const PostCard = memo(function PostCard({ post, priority, selected, onSelect, on
         ) : null}
         {post.queueState && post.queueState !== 'cancelled' ? (
           <div className={`queue-source-state state-${post.queueState}`} title={`Queue · ${post.queueState.replace('_', ' ')}`}>
-            <ListTodo size={11} />{post.queueState === 'pool' ? 'In Pool' : 'Assigned'}
+            <ListTodo size={11} />{editorialStates[post.queueState] || post.queueState}
           </div>
         ) : null}
         {post.queueAttribution ? (
@@ -5919,21 +5862,10 @@ const PostCard = memo(function PostCard({ post, priority, selected, onSelect, on
         ) : null}
       </CoverImage>
 
-      <div className="post-actions">
-        <div className="post-actions-left">
-          <button className="action-button" onClick={stopAction} aria-label="Like">
-            <Heart size={18} />
-          </button>
-          <button className="action-button" onClick={stopAction} aria-label="Comment">
-            <MessageCircle size={18} />
-          </button>
-          <button className="action-button" onClick={stopAction} aria-label="Share">
-            <Send size={18} />
-          </button>
-        </div>
-        <button className="action-button" onClick={stopAction} aria-label="Save">
-          <Bookmark size={18} />
-        </button>
+      <div className="post-editorial-actions" onClick={stopAction}>
+        <button type="button" onClick={() => onSelect(post.postKey)}>View details</button>
+        {post.queueRequestId && post.queueState !== 'cancelled' ? <a className="editorial-primary" href={`/queue.html?r=${encodeRouteState({ task: post.queueRequestId })}`}>Open in Queue</a> : canPool ? <button type="button" className="editorial-primary" onClick={() => onAssign(post)}>Send to Pool</button> : canSuggest ? <a className="editorial-primary" href={`/queue.html?r=${encodeRouteState({ suggest: post.permalink })}`}>Suggest post</a> : null}
+        <a href={post.permalink} target="_blank" rel="noreferrer">Original <ExternalLink size={11} /></a>
       </div>
 
       <div className="post-copy">

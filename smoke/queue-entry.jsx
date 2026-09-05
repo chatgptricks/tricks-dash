@@ -215,7 +215,7 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
       visitedGuideSteps.push(document.querySelector('.queue-guide-card h2')?.textContent || '');
     }
     checks['Guided tour includes Upcoming and Dashboard navigation'] = guideSteps.every((title, index) => visitedGuideSteps[index] === title)
-      && Boolean(document.querySelector('.queue-dashboard-link'));
+      && Boolean(document.querySelector('.product-nav a[href*="index.html"]'));
     await click(document.querySelector('.queue-guide-skip'));
     if (document.querySelector('.queue-overlay-backdrop')) await click(document.querySelector('.queue-overlay-backdrop'));
 
