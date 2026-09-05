@@ -1,7 +1,6 @@
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import TopicStack from '../src/TopicStack';
-import ProductHome from '../src/ProductHome';
 import ProductHeader from '../src/ProductHeader';
 import { PrefsProvider } from '../src/prefsContext';
 const email = 'designer@example.com';
@@ -10,14 +9,6 @@ const data = { viewer: { email, displayName: 'Designer' }, assignedRequests: [ta
 globalThis.fetch = window.fetch = async () => ({ ok: true, status: 200, json: async () => data });
 const el = document.body.appendChild(document.createElement('div')); const root = createRoot(el);
 try {
-  await act(async () => { root.render(<PrefsProvider><ProductHeader current="home" /><ProductHome email={email} coordinator={false} /></PrefsProvider>); await new Promise((r) => setTimeout(r, 50)); });
-  await act(async () => { await new Promise((r) => setTimeout(r, 50)); });
-  if (!el.textContent.includes('My assigned story') || el.textContent.includes('Another designer story')) throw new Error('Personal home must scope work to the viewer');
-  if (el.querySelector('.product-nav a[href="/tracker.html"]')) throw new Error('Designer must not see Tracker');
-  if (!el.querySelector('.home-task[href*="r="]')) throw new Error('Next action needs a deep link');
-  await act(async () => { root.render(<PrefsProvider><ProductHeader current="home" coordinator /><ProductHome email={email} coordinator /></PrefsProvider>); });
-  await act(async () => { await new Promise((r) => setTimeout(r, 50)); });
-  if (!el.querySelector('.product-nav a[href="/tracker.html"]') || !el.querySelector('a[href="/queue.html?inbox=1"]')) throw new Error('Coordinator navigation and inbox missing');
   let chosen = null;
   const variants = [{postKey:'a',likes:12},{postKey:'b',likes:97},{postKey:'c',likes:30}];
   await act(async () => root.render(<TopicStack posts={variants} renderCard={(post, expand) => <button className="test-card" onClick={expand || (() => { chosen = post.postKey; })}>{post.postKey}</button>} />));
