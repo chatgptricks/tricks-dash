@@ -5638,6 +5638,12 @@ function PostMenu({ post, isPromo, onFlags, onReload, onAssign, onQuickAdd, canP
     setNote('');
     try {
       const result = await action();
+      if (key === 'separate' && result) {
+        setNote('Post separated from this stack.');
+        setBusy('');
+        setTimeout(() => setOpen(false), 900);
+        return;
+      }
       if (key === 'similar' && result) {
         setNote(result.matchedCount ? `${result.matchedCount} similar posts grouped.` : 'No similar posts found.');
         setBusy('');
@@ -5693,6 +5699,7 @@ function PostMenu({ post, isPromo, onFlags, onReload, onAssign, onQuickAdd, canP
           </button> : null}
           {canPool ? <button type="button" role="menuitem" onClick={(event) => { event.stopPropagation(); setOpen(false); onQuickAdd?.(post); }}><Zap size={13} />Quick add to Pool</button> : null}
           {stackActions ? <button type="button" role="menuitem" onClick={(event) => run(event, 'similar', () => stackActions.findSimilar(post))} disabled={Boolean(busy)}><Search size={13} className={busy === 'similar' ? 'spin' : ''} />{busy === 'similar' ? 'Buscando…' : 'Buscar similares'}</button> : null}
+          {stackActions && Number(post.stackSize) > 1 ? <button type="button" role="menuitem" onClick={(event) => run(event, 'separate', () => stackActions.separate([post.postKey || `${post.account}:${post.shortcode}`]))} disabled={Boolean(busy)}>↗ Separar del stack</button> : null}
           <button
             type="button"
             role="menuitem"
