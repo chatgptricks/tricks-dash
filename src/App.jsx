@@ -1,7 +1,8 @@
+import TopicStack from './TopicStack';
 import { useTopicGroups } from './useTopicGroups';
 import ProductHeader from './ProductHeader';
 import ProductHome from './ProductHome';
-import { rankTopicPosts, performanceValue, editorialStates } from './topicGroups';
+import { editorialStates } from './topicGroups';
 import { Fragment, memo, startTransition, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
@@ -858,10 +859,8 @@ function openToolTab(event, url, windowName) {
 
 function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
   const homeView = window.location.pathname.endsWith('/home.html') || (window.location.pathname === '/' && !window.location.search && window.location.hostname === 'sentientdash.app');
-  const [topicView, setTopicView] = useState(() => { try { return localStorage.getItem('sentient.research.topics') === '1'; } catch { return false; } });
-  const [championMetric, setChampionMetric] = useState('likes');
   const [separateTopics, setSeparateTopics] = useState(() => { try { return (() => { const value = JSON.parse(localStorage.getItem('sentient.research.separate') || '[]'); return Array.isArray(value) ? value : []; })(); } catch { return []; } });
-  useEffect(() => { try { localStorage.setItem('sentient.research.topics', topicView ? '1' : '0'); } catch {} }, [topicView]);
+
   useEffect(() => { try { localStorage.setItem('sentient.research.separate', JSON.stringify(separateTopics)); } catch {} }, [separateTopics]);
   const knownRoleSwitcher = Object.prototype.hasOwnProperty.call(ROLE_SWITCHER_DEFAULTS, String(userEmail || '').trim().toLowerCase());
   const knownDev = String(userEmail || '').trim().toLowerCase() === DEV_EMAIL;
@@ -1624,9 +1623,9 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
   }, [deferredQuery, activeGroup, selectedAccounts, activeType, mediaFilter, minLikes, minComments, dateFrom, dateTo, sortBy, showHidden, showHotHistory]);
 
   const visible = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount]);
-  const { groups: topics, loading: grouping, error: groupingError } = useTopicGroups(filtered, topicView, separateTopics);
+  const { groups: topics, loading: grouping, error: groupingError } = useTopicGroups(filtered, true, separateTopics);
   const visibleTopics = topics.slice(0, visibleCount);
-  const galleryTotal = topicView ? topics.length : filtered.length;
+  const galleryTotal = topics.length;
   const showingFrom = filtered.length ? 1 : 0;
   const showingTo = visible.length;
   const activeFilterCount = [
@@ -2150,19 +2149,11 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
               </div>
           </div>
 
-          <div className="research-view-tools" aria-label="Research view">
-            <button type="button" aria-pressed={!topicView} onClick={() => { setTopicView(false); setVisibleCount(POSTS_PER_BATCH); }}>Posts</button>
-            <button type="button" aria-pressed={topicView} onClick={() => { setTopicView(true); setVisibleCount(POSTS_PER_BATCH); }}>Topics</button>
-            {topicView ? <><label>Champion by<select value={championMetric} onChange={(event) => setChampionMetric(event.target.value)}><option value="likes">Most likes</option><option value="comments">Most comments</option><option value="interactions">Likes + comments</option>{posts.some((post) => Number(post.videoViewCount ?? post.views ?? 0) > 0) ? <option value="engagement">Engagement / view</option> : null}</select></label><p>{groupingError ? 'Grouping unavailable; showing individual posts. ' : ''}{grouping ? 'Grouping' : topics.length.toLocaleString()} topics · Similar captions grouped automatically. Compare versions to check a match.</p>{separateTopics.length ? <button type="button" onClick={() => setSeparateTopics([])}>Reset separated posts</button> : null}</> : null}
-          </div>
           <section className="panel gallery">
           <div ref={resultsScrollRef} className="results-scroll">
             {grouping ? <p className="home-loading" role="status">Grouping similar posts… You can keep using Research.</p> : visible.length ? (
               <div className="gallery-grid">
-                {(topicView ? visibleTopics : visible.map((post) => ({ id: post.postKey, posts: [post] }))).map((group, index) => {
-                  const ranked = rankTopicPosts(group.posts, championMetric);
-                  const post = ranked[0];
-                  const card = (
+                {visibleTopics.map((group, index) => <TopicStack key={group.id} posts={group.posts} renderCard={(post, expand) => (
                   <PostCard
                     // Keyed by account+shortcode, not shortcode alone: accounts
                     // repost each other, so ~21 shortcodes exist under two
@@ -2172,7 +2163,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
                     post={post}
                     priority={index < 6}
                     selected={selected?.postKey === post.postKey}
-                    onSelect={selectPost}
+                    onSelect={expand || selectPost}
                     onFlags={setPostFlags}
                     onReload={reloadPost}
                     onAssign={setAssignmentPost}
@@ -2180,13 +2171,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
                     canSuggest={!poolAccess && effectiveOperatingRoles.includes('pd')}
                     canPool={poolAccess}
                   />
-                  );
-                  return topicView ? <div className="topic-group" key={group.id}>
-                    <div className="topic-heading"><b>{ranked.length > 1 ? 'Champion' : 'Original'}</b><span>{ranked.length} {ranked.length === 1 ? 'post' : 'versions'}{ranked.length > 1 ? ` · ${championMetric === 'engagement' && performanceValue(post, championMetric) < 0 ? 'Likes (no view data)' : championMetric}` : ''}</span></div>
-                    {card}
-                    {ranked.length > 1 ? <details><summary>Compare {ranked.length - 1} other versions</summary>{ranked.slice(1).map((variant) => <div className="topic-variant" key={variant.postKey}><button type="button" onClick={() => selectPost(variant.postKey)}>@{variant.account}<small>{variant.likes == null || variant.likes < 0 ? '—' : compactFormatter.format(variant.likes)} likes · {compactFormatter.format(variant.comments || 0)} comments</small></button><button className="topic-separate" type="button" onClick={() => setSeparateTopics((keys) => [...keys, variant.postKey])}>Separate</button></div>)}</details> : null}
-                  </div> : <Fragment key={post.postKey}>{card}</Fragment>;
-                })}
+                  )} />)}
               </div>
             ) : (
               <div className="empty-state">
@@ -2224,7 +2209,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
 
           <div className="pagination">
             <div className="pagination-copy">
-              {grouping ? 'Comparing similar posts…' : <>Showing {galleryTotal ? 1 : 0}-{Math.min(visibleCount, galleryTotal)} of {galleryTotal.toLocaleString()} {topicView ? 'topics' : 'posts'}</>}
+              {grouping ? 'Comparing similar posts…' : <>Showing {galleryTotal ? 1 : 0}-{Math.min(visibleCount, galleryTotal)} of {galleryTotal.toLocaleString()} cards</>}
             </div>
             {grouping ? null : visibleCount < galleryTotal ? (
               <button className="ghost-button load-more-button" onClick={() => setVisibleCount((count) => count + POSTS_PER_BATCH)}>
