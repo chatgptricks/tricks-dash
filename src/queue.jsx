@@ -820,6 +820,7 @@ function Detail({ task, tags, availableAccounts = [], canCoordinate, canDuplicat
   const [requestReason, setRequestReason] = useState('');
   const [form, setForm] = useState({});
   const [stackPosts, setStackPosts] = useState(null);
+  const [resolvedStackPosts, setResolvedStackPosts] = useState([]);
   useEffect(() => {
     const destinations = task?.recommendedAccounts?.length ? task.recommendedAccounts : task?.post?.account ? [task.post.account] : ['instagram'];
     const saved = Object.fromEntries((task?.finalPermalinks || []).map((item) => [item.account, item.url]));
@@ -827,7 +828,24 @@ function Detail({ task, tags, availableAccounts = [], canCoordinate, canDuplicat
     setPublishedLinks(saved); setReason(''); setEditing(false); setRequestMode(''); setRequestedPP(task?.productionPoints || 1); setMoveDate(scheduleDateForViewer(task?.scheduledDate, task?.scheduledStartMinutes ?? QUEUE_DAY_START, timeZone)); setMoveStart(scheduleTimeForViewer(task?.scheduledDate, task?.scheduledStartMinutes ?? QUEUE_DAY_START, timeZone)); setRequestReason(''); setForm({ productionPoints: task?.productionPoints || 1, priority: isUrgent(task?.priority) ? 'urgent' : 'normal', tags: task?.tags || [], brief: task?.brief || '', notes: task?.notes || '', references: task?.references?.join('\n') || '', recommendedAccounts: task?.recommendedAccounts || [] });
   }, [task?.id, timeZone]);
   useEffect(() => { if (!task) return undefined; const close = (event) => { if (event.key === 'Escape') onClose(); }; document.addEventListener('keydown', close); return () => document.removeEventListener('keydown', close); }, [task, onClose]);
+  useEffect(() => {
+    const account = task?.post?.account;
+    const shortcode = task?.post?.shortcode;
+    if (!account || !shortcode) { setResolvedStackPosts([]); return undefined; }
+    let cancelled = false;
+    apiFetch(`${API_BASE}/api/dashboard/stacks/${encodeURIComponent(account)}/${encodeURIComponent(shortcode)}`)
+      .then((response) => response.ok ? response.json() : null)
+      .then((result) => { if (!cancelled) setResolvedStackPosts(Array.isArray(result?.posts) ? result.posts : []); })
+      .catch(() => { if (!cancelled) setResolvedStackPosts([]); });
+    return () => { cancelled = true; };
+  }, [task?.id, task?.post?.account, task?.post?.shortcode]);
   if (!task) return null;
+  // Queue snapshots can be older than a manual stack edit. Resolve the
+  // membership from Research when the detail opens, so the stack icon never
+  // disappears merely because this Queue request was loaded earlier.
+  if (resolvedStackPosts.length > 1 && Number(task.post?.stackSize || 0) < 2) {
+    task = { ...task, post: { ...task.post, stackSize: resolvedStackPosts.length } };
+  }
   const run = async (callback) => { setBusy(true); try { await callback(); } finally { setBusy(false); } };
   const save = () => run(async () => { const saved = await onEdit({ ...form, productionPoints: Number(form.productionPoints), references: form.references.split('\n').map((item) => item.trim()).filter(Boolean) }); if (saved) setEditing(false); });
   const sendDesignerRequest = () => run(async () => { const move = queueScheduleFromViewer(moveDate, minutesFromTime(moveStart), timeZone); const sent = requestMode === 'pp' ? await onRequestPP(Number(requestedPP), requestReason) : requestMode === 'move' ? await onRequestMove(move.date, move.minutes, requestReason) : await onRequestCancellation(requestReason); if (sent) { setRequestMode(''); setRequestReason(''); } });
@@ -843,6 +861,7 @@ function Detail({ task, tags, availableAccounts = [], canCoordinate, canDuplicat
   const toggleAccount = (account) => setForm((current) => ({ ...current, recommendedAccounts: current.recommendedAccounts.includes(account) ? current.recommendedAccounts.filter((item) => item !== account) : [...current.recommendedAccounts, account] }));
   const openStack = async () => {
     if (!task.post.account || !task.post.shortcode) return;
+    if (resolvedStackPosts.length > 1) { setStackPosts(resolvedStackPosts); return; }
     const response = await apiFetch(`${API_BASE}/api/dashboard/stacks/${encodeURIComponent(task.post.account)}/${encodeURIComponent(task.post.shortcode)}`);
     const result = await response.json();
     if (response.ok && result.posts?.length > 1) setStackPosts(result.posts);
