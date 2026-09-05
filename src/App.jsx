@@ -1248,7 +1248,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
 
   // Custom lists fall back to the archive icon: they're user-made and there's
   // no sensible per-list emoji to pick.
-  useSectionFavicon(SECTION_ICONS[activeGroup] ? activeGroup : 'all');
+  useSectionFavicon(homeView ? 'home' : SECTION_ICONS[activeGroup] ? activeGroup : 'all');
 
   // Claude's first Settings pass lived inside the Dashboard at ?view=admin.
   // Keep old bookmarks useful, but move them to the standalone command center
@@ -1439,13 +1439,13 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
     let frame;
     try {
       const saved = JSON.parse(sessionStorage.getItem('sentient.research.scroll') || 'null');
-      if (saved && saved.search === location.search) { setVisibleCount(Math.max(POSTS_PER_BATCH, Math.min(Number(saved.count) || POSTS_PER_BATCH, posts.length))); frame = requestAnimationFrame(() => { if (resultsScrollRef.current) resultsScrollRef.current.scrollTop = saved.top || 0; }); }
+      if (saved && saved.search === window.location.search) { setVisibleCount(Math.max(POSTS_PER_BATCH, Math.min(Number(saved.count) || POSTS_PER_BATCH, posts.length))); frame = requestAnimationFrame(() => { if (resultsScrollRef.current) resultsScrollRef.current.scrollTop = saved.top || 0; }); }
     } catch {}
     return () => { if (frame) cancelAnimationFrame(frame); };
   }, [homeView, loading, posts.length]);
   useEffect(() => {
     if (homeView) return;
-    const save = () => { try { sessionStorage.setItem('sentient.research.scroll', JSON.stringify({ search: location.search, top: resultsScrollRef.current?.scrollTop || 0, count: visibleCount })); } catch {} };
+    const save = () => { try { sessionStorage.setItem('sentient.research.scroll', JSON.stringify({ search: window.location.search, top: resultsScrollRef.current?.scrollTop || 0, count: visibleCount })); } catch {} };
     window.addEventListener('pagehide', save);
     return () => window.removeEventListener('pagehide', save);
   }, [homeView, visibleCount]);
@@ -2153,7 +2153,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
           <div className="research-view-tools" aria-label="Research view">
             <button type="button" aria-pressed={!topicView} onClick={() => { setTopicView(false); setVisibleCount(POSTS_PER_BATCH); }}>Posts</button>
             <button type="button" aria-pressed={topicView} onClick={() => { setTopicView(true); setVisibleCount(POSTS_PER_BATCH); }}>Topics</button>
-            {topicView ? <><label>Champion by<select value={championMetric} onChange={(event) => setChampionMetric(event.target.value)}><option value="likes">Most likes</option><option value="comments">Most comments</option><option value="interactions">Likes + comments</option>{posts.some((post) => Number(post.videoViewCount ?? post.views ?? 0) > 0) ? <option value="engagement">Engagement / view</option> : null}</select></label><p>{groupingError ? 'Grouping unavailable; showing individual posts. ' : ''}{topics.length.toLocaleString()} topics · Similar captions grouped automatically. Compare versions to check a match.</p>{separateTopics.length ? <button type="button" onClick={() => setSeparateTopics([])}>Reset separated posts</button> : null}</> : null}
+            {topicView ? <><label>Champion by<select value={championMetric} onChange={(event) => setChampionMetric(event.target.value)}><option value="likes">Most likes</option><option value="comments">Most comments</option><option value="interactions">Likes + comments</option>{posts.some((post) => Number(post.videoViewCount ?? post.views ?? 0) > 0) ? <option value="engagement">Engagement / view</option> : null}</select></label><p>{groupingError ? 'Grouping unavailable; showing individual posts. ' : ''}{grouping ? 'Grouping' : topics.length.toLocaleString()} topics · Similar captions grouped automatically. Compare versions to check a match.</p>{separateTopics.length ? <button type="button" onClick={() => setSeparateTopics([])}>Reset separated posts</button> : null}</> : null}
           </div>
           <section className="panel gallery">
           <div ref={resultsScrollRef} className="results-scroll">
@@ -2224,9 +2224,9 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
 
           <div className="pagination">
             <div className="pagination-copy">
-              Showing {galleryTotal ? 1 : 0}-{Math.min(visibleCount, galleryTotal)} of {galleryTotal.toLocaleString()} {topicView ? 'topics' : 'posts'}
+              {grouping ? 'Comparing similar posts…' : <>Showing {galleryTotal ? 1 : 0}-{Math.min(visibleCount, galleryTotal)} of {galleryTotal.toLocaleString()} {topicView ? 'topics' : 'posts'}</>}
             </div>
-            {visibleCount < galleryTotal ? (
+            {grouping ? null : visibleCount < galleryTotal ? (
               <button className="ghost-button load-more-button" onClick={() => setVisibleCount((count) => count + POSTS_PER_BATCH)}>
                 Load 60 more
               </button>

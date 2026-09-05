@@ -1,4 +1,4 @@
-import { productSections, sectionHref, coordinatorFor } from './product-navigation.js';
+import { productSections, sectionHref, coordinatorFor } from './product-navigation.js?v=20260905b';
 const top = document.querySelector('.wrap > .top');
 if (top) {
   const current = location.pathname.includes('tracker') ? 'tracker' : 'insights';
@@ -8,7 +8,7 @@ if (top) {
   for (const id of ['scope', 'shareBtn', 'pdfBtn']) { const item = document.getElementById(id); if (item) toolbar.append(item); }
   const brand = document.createElement('a'); brand.className = 'product-brand'; brand.href = '/home.html'; brand.innerHTML = 'sentient<span>dash</span><small>.app</small>';
   const nav = document.createElement('nav'); nav.className = 'product-nav'; nav.setAttribute('aria-label', 'Sentient tools');
-  for (const item of productSections) { const a = document.createElement('a'); a.href = sectionHref(item); a.textContent = item.label; if (item.restricted) { a.hidden = true; a.style.display = 'none'; } if (current === item.id) a.setAttribute('aria-current', 'page'); nav.append(a); }
+  for (const item of productSections) { const a = document.createElement('a'); a.href = sectionHref(item); a.addEventListener('click', () => { a.href = sectionHref(item); }); a.textContent = item.label; if (item.restricted) { a.hidden = true; a.style.display = 'none'; } if (current === item.id) a.setAttribute('aria-current', 'page'); nav.append(a); }
   const account = document.createElement('div'); account.className = 'product-account'; if (settings) account.append(settings);
   top.className = 'product-header'; top.replaceChildren(brand, nav, account, toolbar);
 }
@@ -27,3 +27,10 @@ const accessTimer = setInterval(async () => {
     document.querySelectorAll('.product-nav a').forEach((link) => { if (/\/(tracker|insights)\.html$/.test(new URL(link.href).pathname)) { link.hidden = !allowed; link.style.display = allowed ? '' : 'none'; } });
   } catch {}
 }, 250);
+
+function translateNavigation() {
+  const spanish = document.documentElement.lang === 'es';
+  document.querySelectorAll('.product-nav a').forEach((link, index) => { const item = productSections[index]; if (item) link.textContent = spanish ? item.es : item.label; });
+}
+translateNavigation();
+new MutationObserver(translateNavigation).observe(document.documentElement, { attributes: true, attributeFilter: ['lang'] });
