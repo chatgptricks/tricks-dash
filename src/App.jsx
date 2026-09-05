@@ -3005,6 +3005,7 @@ export function SettingsPanel({
   const customAlertFileInputRef = useRef(null);
   const [apifyRuns, setApifyRuns] = useState([]);
   const [apifyLoading, setApifyLoading] = useState(false);
+  const [recoveringApifyRun, setRecoveringApifyRun] = useState('');
   const [ocrStatus, setOcrStatus] = useState(null);
   const [ocrStarting, setOcrStarting] = useState(false);
 
@@ -3221,6 +3222,26 @@ export function SettingsPanel({
       setApifyLoading(false);
     }
   }, [password]);
+
+  const recoverDaytradingRun = useCallback(async (run) => {
+    if (!run?.id || recoveringApifyRun) return;
+    setRecoveringApifyRun(run.id);
+    try {
+      const response = await apiFetch(`${API_BASE}/api/admin/apify/import-run/daytrading?run_id=${encodeURIComponent(run.id)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ password }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.detail || 'Could not recover this Apify run.');
+      setNotice(`Recovered ${body.result?.added ?? body.new ?? 0} posts from Apify without a new scrape.`);
+      await Promise.all([loadRoster(), loadApifyRuns()]);
+    } catch (error) {
+      setNotice(error.message || 'Could not recover this Apify run.');
+    } finally {
+      setRecoveringApifyRun('');
+    }
+  }, [loadApifyRuns, loadRoster, password, recoveringApifyRun]);
 
   const catchUpDashboardPosts = useCallback(async () => {
     if (!password || catchingUpPosts) return;
@@ -4473,12 +4494,13 @@ export function SettingsPanel({
                       <div className="settings-row" key={run.id}>
                         <div className="settings-row-account">
                           <strong>{run.status}</strong>
-                          <span>{run.startedAt ? new Date(run.startedAt).toLocaleString() : '—'}</span>
+                          <span>{run.startedAt ? new Date(run.startedAt).toLocaleString() : '—'} · {run.id}</span>
                         </div>
                         <div className="settings-row-controls">
                           <span className="settings-unit">
                             {typeof run.usd === 'number' ? `$${run.usd.toFixed(2)}` : '—'}
                           </span>
+                          {run.status === 'SUCCEEDED' ? <button type="button" className="ghost-button" disabled={Boolean(recoveringApifyRun)} onClick={() => recoverDaytradingRun(run)}>{recoveringApifyRun === run.id ? 'Recovering…' : 'Recover into daytrading'}</button> : null}
                         </div>
                       </div>
                     ))}
