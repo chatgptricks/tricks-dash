@@ -895,6 +895,14 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
   const requestedRolePreview = window.sessionStorage.getItem('sentient.queueRolePreview') || '';
   const activeRolePreview = ACTIVE_ROLE_PREVIEWS.has(requestedRolePreview) ? requestedRolePreview : '';
   const rolePreviewActive = Boolean(activeRolePreview);
+  useEffect(() => {
+    // A role preview starts from the complete catalogue so a previously saved
+    // account/tab filter cannot make the simulated role look empty.
+    if (rolePreviewActive) {
+      setActiveGroup('all');
+      setSelectedAccounts(new Set());
+    }
+  }, [activeRolePreview]);
   // Apply the chosen preview synchronously. `/api/dashboard/me` remains the
   // authoritative permission source, but on a 50k-post dashboard its state
   // update can land several seconds after the cached catalogue paints. The
@@ -2162,9 +2170,9 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
 
           <section className="panel gallery">
           <div ref={resultsScrollRef} className="results-scroll">
-            {grouping ? <p className="home-loading" role="status">Grouping similar posts… You can keep using Research.</p> : visible.length ? (
+            {grouping && !visible.length ? <p className="home-loading" role="status">Grouping similar posts… You can keep using Research.</p> : visible.length ? (
               <div className="gallery-grid">
-                {visibleTopics.map((group, index) => <TopicStack key={group.id} posts={group.posts} onDragPost={setDragPost} onDropPost={(target) => { if (!dragPost || dragPost.postKey === target.postKey) return; setManualTopicGroups((groups) => { const source = dragPost.postKey; const dest = target.postKey; const next = groups.map((keys) => keys.filter((key) => key !== source)); const found = next.findIndex((keys) => keys.includes(dest)); if (found >= 0) next[found] = [...new Set([...next[found], source])]; else next.push([dest, source]); return next.filter((keys) => keys.length > 1); }); setDragPost(null); }} renderCard={(post, expand, dragProps) => (
+                {(grouping ? visible.map((post) => ({ id: post.postKey, posts: [post] })) : visibleTopics).map((group, index) => <TopicStack key={group.id} posts={group.posts} onDragPost={setDragPost} onDropPost={(target) => { if (!dragPost || dragPost.postKey === target.postKey) return; setManualTopicGroups((groups) => { const source = dragPost.postKey; const dest = target.postKey; const next = groups.map((keys) => keys.filter((key) => key !== source)); const found = next.findIndex((keys) => keys.includes(dest)); if (found >= 0) next[found] = [...new Set([...next[found], source])]; else next.push([dest, source]); return next.filter((keys) => keys.length > 1); }); setDragPost(null); }} renderCard={(post, expand, dragProps) => (
                   <PostCard
                     // Keyed by account+shortcode, not shortcode alone: accounts
                     // repost each other, so ~21 shortcodes exist under two
