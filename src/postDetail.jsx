@@ -609,7 +609,17 @@ export function TranscriptDownload({ post }) {
 // this just covers the part that's otherwise identical on both pages.
 export function PostDetailPanel({ post, captionExtra = null }) {
   const { t } = usePrefs();
+  const [copyState, setCopyState] = useState('');
   if (!post) return null;
+  const copyCaption = async () => {
+    try {
+      await navigator.clipboard.writeText(post.caption || '');
+      setCopyState('Copied');
+    } catch {
+      setCopyState('Could not copy');
+    }
+    window.setTimeout(() => setCopyState(''), 1800);
+  };
   return (
     <>
       <section className="panel caption-panel">
@@ -617,9 +627,9 @@ export function PostDetailPanel({ post, captionExtra = null }) {
           <div>
             <p className="section-label">{t('Caption')}</p>
           </div>
-          <button className="ghost-button" onClick={() => navigator.clipboard.writeText(post.caption || '')}>
+          <button className="ghost-button" onClick={copyCaption} aria-live="polite">
             <Copy size={15} />
-            {t('Copy')}
+            {copyState ? t(copyState) : t('Copy')}
           </button>
         </div>
         <p>
