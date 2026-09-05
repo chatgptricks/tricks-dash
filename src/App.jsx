@@ -845,6 +845,12 @@ export function DevRolePreview({ isDev, canSwitchRoles = false, availableRoles =
   return <div className="dev-role-preview"><button type="button" onClick={() => setOpen((value) => !value)} aria-expanded={open}><span>{isDev ? 'DEV' : 'ROLE'}</span>{label}</button>{open ? <div className="dev-role-preview-panel"><strong>{isDev ? 'Role preview' : 'Active role'}</strong><p>{isDev ? 'Only visible to Esteban.' : 'Switch among your assigned roles.'}</p><label>Active role<select value={active} onChange={choose}><option value="">{isDev ? 'Dev · full access' : 'Use my default role'}</option>{options.map((role) => <option key={role} value={role}>{({ sales: 'Sales', pd: 'Post Designer', vc: 'Viral Coordinator', trainee: 'Trainee', admin: 'Admin' })[role]}</option>)}</select></label></div> : null}</div>;
 }
 
+function openToolTab(event, url, windowName) {
+  event.preventDefault();
+  const tab = window.open(url, windowName);
+  if (tab) tab.focus();
+}
+
 function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
   const knownRoleSwitcher = Object.prototype.hasOwnProperty.call(ROLE_SWITCHER_DEFAULTS, String(userEmail || '').trim().toLowerCase());
   const knownDev = String(userEmail || '').trim().toLowerCase() === DEV_EMAIL;
@@ -1900,7 +1906,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
                   className="tool-link tool-link-queue"
                   href={`${import.meta.env.BASE_URL}queue.html`}
                   target="sentient-queue"
-                  rel="noopener noreferrer"
+                  onClick={(event) => openToolTab(event, `${import.meta.env.BASE_URL}queue.html`, 'sentient-queue')}
                   title="Open your assigned post queue"
                 >
                   <ListTodo size={15} />
@@ -1912,7 +1918,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
                   className="tool-link"
                   href={`${import.meta.env.BASE_URL}tracker.html`}
                   target="sentient-tracker"
-                  rel="noopener noreferrer"
+                  onClick={(event) => openToolTab(event, `${import.meta.env.BASE_URL}tracker.html`, 'sentient-tracker')}
                   title={t('Follower growth per account')}
                 >
                   <TrendingUp size={15} />
@@ -1923,7 +1929,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
                   className="tool-link"
                   href={`${import.meta.env.BASE_URL}insights.html`}
                   target="sentient-insights"
-                  rel="noopener noreferrer"
+                  onClick={(event) => openToolTab(event, `${import.meta.env.BASE_URL}insights.html`, 'sentient-insights')}
                   title={t('Aggregate analysis across all accounts')}
                 >
                   <BarChart3 size={15} />
