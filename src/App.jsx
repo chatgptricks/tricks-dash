@@ -1,7 +1,6 @@
 import TopicStack from './TopicStack';
 import { useTopicGroups } from './useTopicGroups';
 import ProductHeader from './ProductHeader';
-import ProductHome from './ProductHome';
 import { editorialStates } from './topicGroups';
 import { Fragment, memo, startTransition, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -858,7 +857,7 @@ function openToolTab(event, url, windowName) {
 }
 
 function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
-  const homeView = window.location.pathname.endsWith('/home.html') || (window.location.pathname === '/' && !window.location.search && window.location.hostname === 'sentientdash.app');
+  const homeView = false;
   const [separateTopics, setSeparateTopics] = useState(() => { try { return (() => { const value = JSON.parse(localStorage.getItem('sentient.research.separate') || '[]'); return Array.isArray(value) ? value : []; })(); } catch { return []; } });
   const [manualTopicGroups, setManualTopicGroups] = useState(() => { try { const v = JSON.parse(localStorage.getItem('sentient.research.manual-groups') || '[]'); return Array.isArray(v) ? v : []; } catch { return []; } });
   const [dragPost, setDragPost] = useState(null);
@@ -1920,15 +1919,14 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
               <p className="results-count"><strong>{filtered.length.toLocaleString()}</strong> {t('posts')}</p>
             </> : null}
           </ProductHeader>
-          {homeView ? <ProductHome coordinator={coordinatorAccess} email={userEmail} /> : null}
           {incomingData && !homeView ? <div className="live-data-notice" role="status"><LoaderCircle className="spin" size={16} /><span>New data is incoming</span></div> : null}
 
 
 
-          {loading && !homeView ? <DashboardSkeleton /> : null}
-          {loadError && !homeView ? <section className="dash-state dash-state-error">{loadError}</section> : null}
+          {loading ? <DashboardSkeleton /> : null}
+          {loadError ? <section className="dash-state dash-state-error">{loadError}</section> : null}
 
-          {!homeView && !loading && !loadError ? <>
+          {!loading && !loadError ? <>
           {/* Filters share this row with the group tabs: same height,
               same pill shape. Tabs pick the set, filters narrow it --
               one decision surface instead of two stacked bars. */}
