@@ -1,5 +1,6 @@
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
+import { CoverImage } from '../src/postDetail';
 import TopicStack from '../src/TopicStack';
 import { PostCard } from '../src/App';
 import { StackActions } from '../src/StackActions';
@@ -57,6 +58,14 @@ try {
   await act(async () => root.render(<Probe rows={[catalogue[2],catalogue[0]]} />));
   if (observed[0].id !== 's' || observed[0].posts.length !== 2) throw new Error('Filtering must preserve membership and order by newest cover');
   console.log('PASS drag confirmation, cancellation and persistent sorted membership');
+  await act(async () => root.render(<CoverImage post={{shortcode:'retry', coverUrl:'https://example.com/cover.jpg'}} />));
+  await act(async () => el.querySelector('img').dispatchEvent(new Event('error')));
+  if (!el.querySelector('.cover-fallback')) throw new Error('Failed source should show fallback');
+  await act(async () => window.dispatchEvent(new Event('online')));
+  if (!el.querySelector('img')) throw new Error('Cover must recover when connection returns');
+  await act(async () => el.querySelector('img').dispatchEvent(new Event('load')));
+  if (!el.querySelector('.cover-image.is-loaded')) throw new Error('Recovered cover must become visible');
+  console.log('PASS cover recovery after transient failure');
   await act(async () => { root.unmount(); });
   console.log('PASS shared stack workflows and role access');
   process.exit(0);

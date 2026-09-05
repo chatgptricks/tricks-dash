@@ -148,6 +148,7 @@ export const HotBadge = memo(function HotBadge({ post, large = false }) {
 export const CoverImage = memo(function CoverImage({ className, post, priority = false, children }) {
   const sources = useMemo(() => coverSources(post), [post]);
   const [sourceIndex, setSourceIndex] = useState(0);
+  const [retry, setRetry] = useState(0);
   // The catalogue can arrive before the cover files do. Keep a tiny piece of
   // state per image so the card has a visible loading affordance until the
   // browser has actually painted the selected source, not merely until its
@@ -156,8 +157,16 @@ export const CoverImage = memo(function CoverImage({ className, post, priority =
   const sourceKey = sources.join('|');
 
   useEffect(() => {
-    setSourceIndex(0);
+    setSourceIndex(0); setRetry(0);
   }, [post.shortcode, sourceKey]);
+
+  useEffect(() => {
+    if (sourceIndex < sources.length || !sources.length || retry >= 3) return undefined;
+    const recover = () => { setRetry((value) => value + 1); setSourceIndex(0); };
+    const timer = window.setTimeout(recover, [2000, 6000, 15000][retry]);
+    window.addEventListener('online', recover, { once: true });
+    return () => { window.clearTimeout(timer); window.removeEventListener('online', recover); };
+  }, [sourceIndex, sourceKey, retry]);
 
   const activeSource = sources[sourceIndex];
   const imageLoaded = Boolean(activeSource) && loadedSource === activeSource;
@@ -170,6 +179,7 @@ export const CoverImage = memo(function CoverImage({ className, post, priority =
           <img
             className={`cover-image${imageLoaded ? ' is-loaded' : ''}`}
             src={activeSource}
+            key={`${activeSource}:${retry}`}
             alt={post.shortcode}
             loading={priority ? 'eager' : 'lazy'}
             decoding="async"
