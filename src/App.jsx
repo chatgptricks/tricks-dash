@@ -553,11 +553,13 @@ function canvaLinkForPost(postDateIso) {
   return key === currentKey ? CURRENT_MONTH_CANVA_URL : null;
 }
 
+const DASHBOARD_TIME_ZONE = 'America/Costa_Rica';
 const dateFormatter = new Intl.DateTimeFormat('en-US', {
   month: 'short',
   day: 'numeric',
   hour: 'numeric',
   minute: '2-digit',
+  timeZone: DASHBOARD_TIME_ZONE,
 });
 
 function formatDate(iso) {
@@ -4697,7 +4699,9 @@ export function SettingsPanel({
                           </div>
                           <div className="settings-user-badge-accounts" title={managedAccounts.length ? `${managedAccounts.length} managed Queue account${managedAccounts.length === 1 ? '' : 's'}` : 'No managed Queue accounts'}>
                             {managedAccounts.slice(0, 7).map(({ handle, account }) => {
-                              const image = account?.avatarUrl || ACCOUNT_PROFILE_IMAGES[handle];
+                              const image = account?.avatarUrl
+                                || (account?.has_avatar ? `${API_BASE}/api/dashboard/avatar/${encodeURIComponent(handle)}` : '')
+                                || ACCOUNT_PROFILE_IMAGES[handle];
                               return <span className="settings-managed-account-avatar" key={handle} title={`@${handle}`} aria-label={`@${handle}`}>
                                 <span>{handle.slice(0, 1).toUpperCase()}</span>
                                 {image ? <img src={settingsUserAvatar(image)} alt="" referrerPolicy="no-referrer" onError={(event) => { event.currentTarget.hidden = true; }} /> : null}
