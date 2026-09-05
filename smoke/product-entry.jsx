@@ -1,6 +1,9 @@
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import TopicStack from '../src/TopicStack';
+import { PostCard } from '../src/App';
+import { StackActions } from '../src/StackActions';
+import { useTopicGroups } from '../src/useTopicGroups';
 import ProductHeader from '../src/ProductHeader';
 import { PrefsProvider } from '../src/prefsContext';
 const email = 'designer@example.com';
@@ -10,17 +13,51 @@ globalThis.fetch = window.fetch = async () => ({ ok: true, status: 200, json: as
 const el = document.body.appendChild(document.createElement('div')); const root = createRoot(el);
 try {
   let chosen = null;
-  const variants = [{postKey:'a',likes:12},{postKey:'b',likes:97},{postKey:'c',likes:30}];
+  const variants = [{postKey:'a',likes:12,timestamp:300},{postKey:'b',likes:97,timestamp:100},{postKey:'c',likes:30,timestamp:200}];
   await act(async () => root.render(<TopicStack posts={variants} renderCard={(post, expand) => <button className="test-card" onClick={expand || (() => { chosen = post.postKey; })}>{post.postKey}</button>} />));
-  if (el.querySelectorAll('.test-card').length !== 1 || el.querySelector('.test-card').textContent !== 'b') throw new Error('Stack must show most liked cover only');
+  if (el.querySelectorAll('.test-card').length !== 1 || el.querySelector('.test-card').textContent !== 'a') throw new Error('Stack must show newest cover only');
   await act(async () => el.querySelector('.test-card').click());
-  if ([...el.querySelectorAll('.post-stack-modal .test-card')].map((x) => x.textContent).join(',') !== 'b,c,a') throw new Error('Expand must expose every version in likes order');
-  await act(async () => el.querySelectorAll('.post-stack-modal .test-card')[1].click());
+  if ([...document.querySelectorAll('.post-stack-modal .test-card')].map((x) => x.textContent).join(',') !== 'b,c,a') throw new Error('Expand must expose every version in likes order');
+  if (document.querySelector('.stack-champion .test-card').textContent !== 'b') throw new Error('Champion must be the most liked, not the cover');
+  await act(async () => document.querySelectorAll('.post-stack-modal .test-card')[1].click());
   if (chosen !== 'c') throw new Error('Expanded version must be selectable');
-  await act(async () => el.querySelector('.post-stack-heading button').click());
+  if (document.querySelector('.post-stack-modal')) throw new Error('Choosing a post must close the modal');
   if (el.querySelectorAll('.test-card').length !== 1) throw new Error('Collapse must restore stack');
   console.log('PASS stack cover, expansion, choosing an alternate and collapse');
+  const sample = { postKey: 'test:one', account: 'test', shortcode: 'one', postDate: '2026-09-05', timestamp: Date.now(), likes: 10, comments: 2, caption: 'Test', headline: 'Test', postType: 'Image', type: 'Image', permalink: 'https://instagram.com/p/one/' };
+  for (const role of ['pd', 'sales', 'trainee', 'vc', 'admin']) {
+    const coordinator = ['vc', 'admin'].includes(role);
+    await act(async () => root.render(<PrefsProvider><ProductHeader current="research" coordinator={coordinator} /><PostCard post={sample} onSelect={() => {}} canPool={coordinator} canSuggest={!coordinator} /></PrefsProvider>));
+    if (!el.querySelector('.post-card')) throw new Error(`${role}: no card rendered`);
+    if (Boolean(el.querySelector('.product-nav a[href="/tracker.html"]')) !== coordinator) throw new Error(`${role}: wrong analytics access`);
+    if (el.querySelector('.product-nav a[href="/home.html"]')) throw new Error('Home must stay removed');
+  }
+  console.log('PASS PD, Sales, Trainee, VC and Admin cards and navigation');
+  let calls = 0; let saved = false;
+  globalThis.fetch = window.fetch = async () => { calls++; return {ok:true, json:async () => ({stackId:'shared',postKeys:['a','b'],stackSize:2})}; };
+  await act(async () => root.render(<StackActions onSaved={() => { saved = true; }}>{variants.slice(0,2).map((post) => <TopicStack key={post.postKey} posts={[post]} renderCard={(p) => <button className="test-card">{p.postKey}</button>} />)}</StackActions>));
+  for (const card of el.querySelectorAll('.test-card')) await act(async () => card.dispatchEvent(new MouseEvent('click', {bubbles:true,shiftKey:true})));
+  await act(async () => el.querySelector('.test-card').dispatchEvent(new MouseEvent('contextmenu', {bubbles:true,cancelable:true,clientX:10,clientY:10})));
+  await act(async () => document.querySelector('[role="menuitem"]').click());
+  if (calls || !document.querySelector('.stack-confirm')) throw new Error('Grouping must wait for confirmation');
+  await act(async () => document.querySelector('.stack-confirm footer button:last-child').click());
+  if (calls !== 1 || !saved) throw new Error('Confirmed group must persist to the server');
+  console.log('PASS Shift selection, contextual grouping and confirmation');
+  await act(async () => root.render(<StackActions onSaved={() => {}}>{variants.slice(0,2).map((post) => <TopicStack key={post.postKey} posts={[post]} renderCard={(p) => <button className="test-card">{p.postKey}</button>} />)}</StackActions>));
+  const shells = el.querySelectorAll('.stack-card-shell');
+  const drag = new Event('dragstart', {bubbles:true}); Object.defineProperty(drag, 'dataTransfer', {value:{setData(){}}});
+  await act(async () => shells[0].dispatchEvent(drag));
+  await act(async () => shells[1].dispatchEvent(new Event('drop', {bubbles:true,cancelable:true})));
+  if (!document.querySelector('.stack-confirm') || calls !== 1) throw new Error('Drop must prompt without saving');
+  await act(async () => document.querySelector('.stack-confirm footer button').click());
+  if (calls !== 1) throw new Error('Cancel must not mutate server');
+  const catalogue = [{postKey:'old',stackId:'s',timestamp:10},{postKey:'new',stackId:'s',timestamp:90},{postKey:'middle',stackId:'m',timestamp:50}];
+  let observed;
+  function Probe({rows}) { observed = useTopicGroups(rows, catalogue).groups; return null; }
+  await act(async () => root.render(<Probe rows={[catalogue[2],catalogue[0]]} />));
+  if (observed[0].id !== 's' || observed[0].posts.length !== 2) throw new Error('Filtering must preserve membership and order by newest cover');
+  console.log('PASS drag confirmation, cancellation and persistent sorted membership');
   await act(async () => { root.unmount(); });
-  console.log('PASS role-based Home, task deep links, personal scope and coordinator inbox');
+  console.log('PASS shared stack workflows and role access');
   process.exit(0);
 } catch (error) { console.error(error.message); process.exit(1); }
