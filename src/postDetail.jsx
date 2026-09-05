@@ -6,7 +6,7 @@
 // fix bugs or add features instead of two copies drifting apart.
 import { createPortal } from 'react-dom';
 import { memo, useEffect, useMemo, useState } from 'react';
-import { Check, Copy, Download, ExternalLink, Eye, Flame, Music2, Video, X } from 'lucide-react';
+import { Check, Copy, Download, ExternalLink, Eye, Flame, Layers, Music2, Video, X } from 'lucide-react';
 import { usePrefs } from './prefsContext';
 import { API_BASE, IG_HANDLE, apiFetch } from './api';
 
@@ -274,6 +274,17 @@ export const SelectedPost = memo(function SelectedPost({ post }) {
           {preview}
         </a>
       ) : preview}
+      {post.openStack ? (
+        <button
+          type="button"
+          className="selected-post-stack-button"
+          onClick={(event) => { event.preventDefault(); event.stopPropagation(); post.openStack(); }}
+          aria-label="Open stack"
+          title="Open stack"
+        >
+          <Layers size={16} />
+        </button>
+      ) : null}
     </article>
   );
 });
