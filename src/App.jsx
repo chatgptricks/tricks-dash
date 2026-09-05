@@ -392,7 +392,7 @@ export function SettingsMenu({ email, avatarUrl, isAdmin, isDev, onSignOut, show
           {(isAdmin || isDev) && showSettingsLink ? (
             <div className="settings-menu-section settings-menu-admin">
               <span>{t('Command center')}</span>
-              <a className="settings-menu-link" href={`${import.meta.env.BASE_URL}settings.html`}>
+              <a className="settings-menu-link" href={`${import.meta.env.BASE_URL}settings.html`} target="sentient-settings">
                 <Settings size={13} />
                 {t('Settings')}
               </a>
@@ -3927,15 +3927,15 @@ export function SettingsPanel({
   return (
     <div className="admin-page">
       <header className="admin-page-header settings-command-header">
-        <a className="settings-command-brand" href={`${import.meta.env.BASE_URL}settings.html`} aria-label="Settings home">
+        <a className="settings-command-brand" href={`${import.meta.env.BASE_URL}settings.html`} target="sentient-settings" aria-label="Settings home">
           <span className="settings-command-mark"><Settings size={19} /></span>
           <span><small>sentientdash.app</small><strong>{t('Settings')}</strong></span>
         </a>
         <nav className="settings-command-nav" aria-label="Sentient tools">
-          <a href={import.meta.env.BASE_URL}>{t('Dashboard')}</a>
-          <a href={`${import.meta.env.BASE_URL}tracker.html`}>{t('Tracker')}</a>
-          <a href={`${import.meta.env.BASE_URL}insights.html`}>{t('Insights')}</a>
-          <a href={`${import.meta.env.BASE_URL}queue.html`}>{t('Queue')}</a>
+          <a href={import.meta.env.BASE_URL} target="sentient-dashboard">{t('Dashboard')}</a>
+          <a href={`${import.meta.env.BASE_URL}tracker.html`} target="sentient-tracker">{t('Tracker')}</a>
+          <a href={`${import.meta.env.BASE_URL}insights.html`} target="sentient-insights">{t('Insights')}</a>
+          <a href={`${import.meta.env.BASE_URL}queue.html`} target="sentient-queue">{t('Queue')}</a>
           <span aria-current="page">{t('Settings')}</span>
         </nav>
         <SettingsMenu
