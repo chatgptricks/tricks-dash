@@ -895,14 +895,6 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
   const requestedRolePreview = window.sessionStorage.getItem('sentient.queueRolePreview') || '';
   const activeRolePreview = ACTIVE_ROLE_PREVIEWS.has(requestedRolePreview) ? requestedRolePreview : '';
   const rolePreviewActive = Boolean(activeRolePreview);
-  useEffect(() => {
-    // A role preview starts from the complete catalogue so a previously saved
-    // account/tab filter cannot make the simulated role look empty.
-    if (rolePreviewActive) {
-      setActiveGroup('all');
-      setSelectedAccounts(new Set());
-    }
-  }, [activeRolePreview]);
   // Apply the chosen preview synchronously. `/api/dashboard/me` remains the
   // authoritative permission source, but on a 50k-post dashboard its state
   // update can land several seconds after the cached catalogue paints. The
@@ -1254,6 +1246,9 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
     [accounts, activeGroup, customLists],
   );
   const [selectedAccounts, setSelectedAccounts] = useState(() => new Set());
+  useEffect(() => {
+    if (rolePreviewActive) { setActiveGroup('all'); setSelectedAccounts(new Set()); }
+  }, [activeRolePreview]);
   const [backgroundTasks, setBackgroundTasks] = useState([]);
 
   // Custom lists fall back to the archive icon: they're user-made and there's
