@@ -278,6 +278,7 @@ export default defineConfig({
     rollupOptions: {
       input: {
         dashboard: resolve(__dirname, 'index.html'),
+        home: resolve(__dirname, 'home.html'),
         queue: resolve(__dirname, 'queue.html'),
         settings: resolve(__dirname, 'settings.html'),
         mobile: resolve(__dirname, 'mobile/index.html'),

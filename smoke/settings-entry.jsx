@@ -56,8 +56,8 @@ const clickTab = async (label) => {
       await import('../src/settings.jsx');
       await new Promise((resolve) => setTimeout(resolve, 300));
     });
-    checks['Standalone Settings renders'] = Boolean(document.querySelector('.settings-command-header'));
-    checks['Global tool navigation renders'] = document.querySelectorAll('.settings-command-nav a').length === 4;
+    checks['Standalone Settings renders'] = Boolean(document.querySelector('.product-header'));
+    checks['Global tool navigation renders'] = document.querySelectorAll('.product-nav a').length === 5;
     checks['Seven logical tabs render'] = document.querySelectorAll('.settings-tab').length === 7;
     checks['Overview command cards render'] = document.querySelectorAll('.settings-overview-card').length === 6;
     checks['Gear remains available'] = Boolean(document.querySelector('.settings-menu-trigger'));

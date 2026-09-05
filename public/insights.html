@@ -222,6 +222,7 @@ tbody tr:hover{background:rgba(var(--edge),.03)}
 :root[data-theme='light'] .settings-menu-signout{color:#9b1c1c}
 @media(max-width:620px){.settings-menu-panel{position:fixed;top:auto;right:8px;bottom:8px;left:8px;width:auto;max-height:70dvh}}
 </style>
+<link rel="stylesheet" href="/product-shell.css?v=20260905">
 </head>
 <body>
 <div id="authGate" class="hidden">
@@ -1506,5 +1507,6 @@ function checkAdminForSettings() {
     .catch(() => { adminChecked = false; });
 }
 </script>
+<script type="module" src="/product-static.js?v=20260905"></script>
 </body>
 </html>

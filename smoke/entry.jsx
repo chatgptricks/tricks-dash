@@ -59,11 +59,10 @@ const el = document.getElementById('root') || document.body.appendChild(document
   const html = el.innerHTML;
   console.log('--- STATE ---', html.includes('dash-skeleton') ? 'SKELETON' : (html.includes('dash-state-error') ? 'ERROR' : 'LOADED'));
   const checks = {
-    'topbar rendered': html.includes('class="topbar"'),
+    'topbar rendered': html.includes('class="product-header"'),
     'search field': html.includes('topbar-search'),
     'results count': html.includes('results-count'),
-    'tracker link new tab': /href="[^"]*tracker\.html"[^>]*target="_blank"/.test(html)
-      || (html.includes('tracker.html') && html.includes('target="_blank"')),
+    'tracker uses shared navigation': Boolean(el.querySelector('.product-nav a[href="/tracker.html"]')),
     'insights link': html.includes('insights.html'),
     'settings menu': html.includes('settings-menu-trigger'),
     'filter triggers': (html.match(/filter-trigger[ "]/g) || []).length >= 5,
@@ -183,7 +182,7 @@ const el = document.getElementById('root') || document.body.appendChild(document
   // CSS is intentionally loaded as `empty` by the esbuild smoke bundle, so
   // computed pixel/flex assertions here would always inspect jsdom defaults.
   // Keep this harness focused on the rendered DOM contract.
-  lay['brandline holds count'] = Boolean(document.querySelector('.topbar-brandline .results-count'));
+  lay['brandline holds count'] = Boolean(document.querySelector('.product-toolbar .results-count'));
   lay['one filter row in DOM'] = document.querySelectorAll('.filter-row').length === 1;
   lay['no duplicate skeleton strip'] = document.querySelectorAll('.dash-skeleton-strip').length === 0;
   Object.assign(checks, lay);
