@@ -6,7 +6,7 @@ if (top) {
   const toolbar = document.createElement('div'); toolbar.className = 'product-toolbar';
   const title = document.createElement('h1'); title.textContent = current === 'tracker' ? 'Tracker' : 'Insights'; toolbar.append(title);
   for (const id of ['scope', 'shareBtn', 'pdfBtn']) { const item = document.getElementById(id); if (item) toolbar.append(item); }
-  const brand = document.createElement('a'); brand.className = 'product-brand'; brand.href = '/home.html'; brand.innerHTML = 'sentient<span>dash</span><small>.app</small>';
+  const brand = document.createElement('a'); brand.className = 'product-brand'; brand.href = '/index.html'; brand.innerHTML = 'sentient<span>dash</span><small>.app</small>';
   const nav = document.createElement('nav'); nav.className = 'product-nav'; nav.setAttribute('aria-label', 'Sentient tools');
   for (const item of productSections) { const a = document.createElement('a'); a.href = sectionHref(item); a.addEventListener('click', () => { a.href = sectionHref(item); }); a.textContent = item.label; if (item.restricted) { a.hidden = true; a.style.display = 'none'; } if (current === item.id) a.setAttribute('aria-current', 'page'); nav.append(a); }
   const account = document.createElement('div'); account.className = 'product-account'; if (settings) account.append(settings);
