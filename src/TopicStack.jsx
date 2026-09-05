@@ -32,7 +32,7 @@ export default function TopicStack({ posts, renderCard, total = posts.length }) 
   return <section className="post-stack" aria-label={`${ranked.length} posts about the same topic`}>
     <>
       <StackCard posts={posts}>{renderCard(newest, () => setExpanded(true))}</StackCard>
-      <button type="button" className="post-stack-trigger" aria-expanded={expanded} onClick={() => setExpanded(true)} aria-label={`Open ${total} posts in this group`}>{total}</button>
+      <button type="button" className="post-stack-trigger" aria-expanded={expanded} onClick={() => setExpanded(true)} aria-label={`Open ${total} posts in this group`}>+{total}</button>
       {expanded ? createPortal(<div className="post-stack-modal" role="dialog" aria-modal="true" aria-label="Posts in this stack" tabIndex={-1} ref={dialog} onClick={() => setExpanded(false)}><div className="post-stack-modal-inner" onClick={(event) => event.stopPropagation()}><div className="post-stack-heading"><span><b>{total} posts</b><small>{posts.length < total ? `${posts.length} match the current filters · ` : ''}Choose a version · click outside to close</small></span></div><div className="post-stack-grid">{ranked.map((post, index) => <div className={index === 0 ? 'stack-champion' : ''} key={postIdentity(post)}>{index === 0 && <span className="stack-champion-label">👑 Champion · Most likes</span>}<StackCard posts={[post]}><div onClick={() => setExpanded(false)}>{renderCard(post)}</div></StackCard></div>)}</div></div></div>, document.body) : null}
     </>
   </section>;
