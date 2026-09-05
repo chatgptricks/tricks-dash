@@ -52,11 +52,11 @@ const click = async (node) => act(async () => { node.dispatchEvent(new window.Mo
     checks['Four primary sections render'] = document.querySelectorAll('.m-bottom-nav button').length === 4;
     checks['Research is the landing view'] = document.querySelector('.m-post-grid') !== null;
 
+    const nav = [...document.querySelectorAll('.m-bottom-nav button')];
     checks['Independent Dashboard renders'] = document.querySelectorAll('.m-post-card').length === 1;
     await click(document.querySelector('.m-search-row > button'));
     checks['Research advanced filters render'] = /Media/.test(document.body.textContent) && /Minimum likes/.test(document.body.textContent) && /Period/.test(document.body.textContent);
     await click(document.querySelector('.m-sheet > header button'));
-    const nav = [...document.querySelectorAll('.m-bottom-nav button')];
     await click(nav[1]);
     checks['Independent Queue renders'] = Boolean(document.querySelector('.m-queue-toolbar')) && Boolean(document.querySelector('.m-task'));
     checks['Queue day map renders'] = Boolean(document.querySelector('.m-day-map')) && Boolean(document.querySelector('.m-day-bar'));
