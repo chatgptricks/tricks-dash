@@ -257,6 +257,7 @@ const ES = {
   'Searching…': 'Buscando…',
   'similar posts grouped.': 'posts similares agrupados.',
   'No similar posts found.': 'No se encontraron posts similares.',
+  'Separate from stack': 'Separar del stack',
   'Likes': 'Likes',
   'Comments': 'Comentarios',
   'Media': 'Medio',
