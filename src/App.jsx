@@ -1,4 +1,5 @@
 import TopicStack from './TopicStack';
+import { StackActions } from './StackActions';
 import { useTopicGroups } from './useTopicGroups';
 import ProductHeader from './ProductHeader';
 import { editorialStates } from './topicGroups';
@@ -457,7 +458,7 @@ function dashboardDataRevision(posts = [], summary = {}) {
   posts.forEach((post) => add([
     post.account, post.shortcode, post.postDate, post.likes, post.comments,
     post.isHot, post.hotRateMultiplier, post.queueState, post.queueRequestId,
-    post.isPromo, post.hidden, post.permalink, post.imagePath,
+    post.isPromo, post.hidden, post.permalink, post.imagePath, post.stackId, post.stackSize,
   ].join('|')));
   return `${posts.length}:${hash >>> 0}`;
 }
@@ -858,12 +859,6 @@ function openToolTab(event, url, windowName) {
 
 function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
   const homeView = false;
-  const [separateTopics, setSeparateTopics] = useState(() => { try { return (() => { const value = JSON.parse(localStorage.getItem('sentient.research.separate') || '[]'); return Array.isArray(value) ? value : []; })(); } catch { return []; } });
-  const [manualTopicGroups, setManualTopicGroups] = useState(() => { try { const v = JSON.parse(localStorage.getItem('sentient.research.manual-groups') || '[]'); return Array.isArray(v) ? v : []; } catch { return []; } });
-  const [dragPost, setDragPost] = useState(null);
-
-  useEffect(() => { try { localStorage.setItem('sentient.research.separate', JSON.stringify(separateTopics)); } catch {} }, [separateTopics]);
-  useEffect(() => { try { localStorage.setItem('sentient.research.manual-groups', JSON.stringify(manualTopicGroups)); } catch {} }, [manualTopicGroups]);
   const knownRoleSwitcher = Object.prototype.hasOwnProperty.call(ROLE_SWITCHER_DEFAULTS, String(userEmail || '').trim().toLowerCase());
   const knownDev = String(userEmail || '').trim().toLowerCase() === DEV_EMAIL;
   const [dashboard, setDashboard] = useState({ posts: [], summary: {} });
@@ -1090,7 +1085,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
     // separate from the live request below: a Render restart must never turn
     // a previously usable dashboard into an empty/error state.
     readDashboardSnapshot().then((snapshot) => {
-      if (!active || !snapshot || !Array.isArray(snapshot.posts) || !Array.isArray(snapshot.accounts)) return;
+      if (!active || !snapshot || !Array.isArray(snapshot.posts) || !Array.isArray(snapshot.accounts) || snapshot.posts.some((post) => !post.stackId)) return;
       setDashboard({ posts: snapshot.posts, summary: snapshot.summary || {} });
       setAccounts(snapshot.accounts);
       setLoading(false);
@@ -1628,17 +1623,9 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
   }, [deferredQuery, activeGroup, selectedAccounts, activeType, mediaFilter, minLikes, minComments, dateFrom, dateTo, sortBy, showHidden, showHotHistory]);
 
   const visible = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount]);
-  const { groups: topics, loading: grouping, error: groupingError } = useTopicGroups(filtered, true, separateTopics);
-  const mergedTopics = useMemo(() => {
-    if (!manualTopicGroups.length) return topics;
-    const byKey = new Map(filtered.map((post) => [post.postKey, post]));
-    const claimed = new Set(); const result = [];
-    manualTopicGroups.forEach((keys, index) => { const posts = keys.map((key) => byKey.get(key)).filter(Boolean); if (posts.length > 1) { posts.forEach((post) => claimed.add(post.postKey)); result.push({ id: `manual:${index}`, posts }); } });
-    topics.forEach((group) => { const posts = group.posts.filter((post) => !claimed.has(post.postKey)); if (posts.length) result.push({ ...group, posts }); });
-    return result;
-  }, [topics, manualTopicGroups, filtered]);
-  const visibleTopics = mergedTopics.slice(0, visibleCount);
-  const galleryTotal = mergedTopics.length;
+  const { groups: topics, loading: grouping } = useTopicGroups(filtered, posts, sortBy);
+  const visibleTopics = topics.slice(0, visibleCount);
+  const galleryTotal = topics.length;
   const showingFrom = filtered.length ? 1 : 0;
   const showingTo = visible.length;
   const activeFilterCount = [
@@ -2164,8 +2151,8 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
           <section className="panel gallery">
           <div ref={resultsScrollRef} className="results-scroll">
             {grouping && !visible.length ? <p className="home-loading" role="status">Grouping similar posts… You can keep using Research.</p> : visible.length ? (
-              <div className="gallery-grid">
-                {(grouping ? visible.map((post) => ({ id: post.postKey, posts: [post] })) : visibleTopics).map((group, index) => <TopicStack key={group.id} posts={group.posts} onDragPost={setDragPost} onDropPost={(target) => { if (!dragPost || dragPost.postKey === target.postKey) return; setManualTopicGroups((groups) => { const source = dragPost.postKey; const dest = target.postKey; const next = groups.map((keys) => keys.filter((key) => key !== source)); const found = next.findIndex((keys) => keys.includes(dest)); if (found >= 0) next[found] = [...new Set([...next[found], source])]; else next.push([dest, source]); return next.filter((keys) => keys.length > 1); }); setDragPost(null); }} renderCard={(post, expand, dragProps) => (
+              <StackActions onSaved={(result) => { const keys = new Set(result.postKeys); setDashboard((current) => ({ ...current, posts: current.posts.map((post) => keys.has(`${post.account}:${post.shortcode}`) ? { ...post, stackId: result.stackId, stackSize: result.stackSize } : post) })); }}><div className="gallery-grid">
+                {visibleTopics.map((group, index) => <TopicStack key={group.id} posts={group.posts} total={group.total} renderCard={(post, expand, dragProps) => (
                   <PostCard
                     // Keyed by account+shortcode, not shortcode alone: accounts
                     // repost each other, so ~21 shortcodes exist under two
@@ -2185,7 +2172,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
                     {...dragProps}
                   />
                   )} />)}
-              </div>
+              </div></StackActions>
             ) : (
               <div className="empty-state">
                 <p>{activeGroup === 'hot' && !showHotHistory && hotHistoryCount
@@ -5771,7 +5758,7 @@ const FreshnessRing = memo(function FreshnessRing({ timestamp }) {
   );
 });
 
-const PostCard = memo(function PostCard({ post, priority, selected, onSelect, onFlags, onReload, onAssign, onQuickAdd, canPool, draggable, onDragStart, onDragOver, onDrop }) {
+export const PostCard = memo(function PostCard({ post, priority, selected, onSelect, onFlags, onReload, onAssign, onQuickAdd, canPool, canSuggest, draggable, onDragStart, onDragOver, onDrop }) {
   const [avatarFailed, setAvatarFailed] = useState(false);
   const handleClick = () => onSelect(post.postKey);
   const handleKeyDown = (event) => {
