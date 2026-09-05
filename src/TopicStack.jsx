@@ -1,14 +1,13 @@
 import './topicStack.css';
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { StackCard, postIdentity, useStackActions } from './StackActions';
+import { StackCard, postIdentity } from './StackActions';
 import { rankTopicPosts } from './topicGroups';
 
 export default function TopicStack({ posts, renderCard, total = posts.length }) {
   const [expanded, setExpanded] = useState(false);
   const ranked = rankTopicPosts(posts, 'likes');
   const newest = [...posts].sort((a, b) => (Number(b.timestamp) || Date.parse(b.postDate) || 0) - (Number(a.timestamp) || Date.parse(a.postDate) || 0) || postIdentity(a).localeCompare(postIdentity(b)))[0];
-  const actions = useStackActions();
   const dialog = useRef(null);
   useEffect(() => {
     if (!expanded) return;
@@ -34,7 +33,7 @@ export default function TopicStack({ posts, renderCard, total = posts.length }) 
     <>
       <StackCard posts={posts}>{renderCard(newest, () => setExpanded(true))}</StackCard>
       <button type="button" className="post-stack-trigger" aria-expanded={expanded} onClick={() => setExpanded(true)} aria-label={`Open ${total} posts in this group`}>{total}</button>
-      {expanded ? createPortal(<div className="post-stack-modal" role="dialog" aria-modal="true" aria-label="Posts in this stack" tabIndex={-1} ref={dialog} onClick={() => setExpanded(false)}><div className="post-stack-modal-inner" onClick={(event) => event.stopPropagation()}><div className="post-stack-heading"><span><b>{total} posts</b><small>{posts.length < total ? `${posts.length} match the current filters · ` : ''}Choose a version</small></span><button type="button" onClick={() => setExpanded(false)}>Close ×</button></div><div className="post-stack-grid">{ranked.map((post, index) => <div className={index === 0 ? 'stack-champion' : ''} key={postIdentity(post)}>{index === 0 && <span className="stack-champion-label">👑 Champion · Most likes</span>}<button type="button" className="stack-separate" onClick={async (event) => { event.stopPropagation(); try { await actions?.separate([postIdentity(post)]); } catch {} }}>Separate</button><StackCard posts={[post]}><div onClick={() => setExpanded(false)}>{renderCard(post)}</div></StackCard></div>)}</div></div></div>, document.body) : null}
+      {expanded ? createPortal(<div className="post-stack-modal" role="dialog" aria-modal="true" aria-label="Posts in this stack" tabIndex={-1} ref={dialog} onClick={() => setExpanded(false)}><div className="post-stack-modal-inner" onClick={(event) => event.stopPropagation()}><div className="post-stack-heading"><span><b>{total} posts</b><small>{posts.length < total ? `${posts.length} match the current filters · ` : ''}Choose a version · click outside to close</small></span></div><div className="post-stack-grid">{ranked.map((post, index) => <div className={index === 0 ? 'stack-champion' : ''} key={postIdentity(post)}>{index === 0 && <span className="stack-champion-label">👑 Champion · Most likes</span>}<StackCard posts={[post]}><div onClick={() => setExpanded(false)}>{renderCard(post)}</div></StackCard></div>)}</div></div></div>, document.body) : null}
     </>
   </section>;
 }
