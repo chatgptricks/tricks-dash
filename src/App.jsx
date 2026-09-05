@@ -1,5 +1,5 @@
 import TopicStack from './TopicStack';
-import { StackActions } from './StackActions';
+import { StackActions, useStackActions } from './StackActions';
 import { useTopicGroups } from './useTopicGroups';
 import ProductHeader from './ProductHeader';
 import { editorialStates } from './topicGroups';
@@ -2151,7 +2151,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
           <section className="panel gallery">
           <div ref={resultsScrollRef} className="results-scroll">
             {grouping && !visible.length ? <p className="home-loading" role="status">Grouping similar posts… You can keep using Research.</p> : visible.length ? (
-              <StackActions onSaved={(result) => { const keys = new Set(result.postKeys); setDashboard((current) => ({ ...current, posts: current.posts.map((post) => keys.has(`${post.account}:${post.shortcode}`) ? { ...post, stackId: result.stackId, stackSize: result.stackSize } : post) })); }}><div className="gallery-grid">
+              <StackActions onSaved={(result) => { const members = new Map((result.members || []).map((member) => [member.postKey, member])); const keys = new Set(result.postKeys || []); setDashboard((current) => ({ ...current, posts: current.posts.map((post) => { const key = `${post.account}:${post.shortcode}`; const member = members.get(key); return member ? { ...post, stackId: member.stackId, stackSize: member.stackSize } : keys.has(key) ? { ...post, stackId: result.stackId, stackSize: result.stackSize } : post; }) })); }}><div className="gallery-grid">
                 {visibleTopics.map((group, index) => <TopicStack key={group.id} posts={group.posts} total={group.total} renderCard={(post, expand, dragProps) => (
                   <PostCard
                     // Keyed by account+shortcode, not shortcode alone: accounts
@@ -5614,6 +5614,7 @@ function PostMenu({ post, isPromo, onFlags, onReload, onAssign, onQuickAdd, canP
   const [busy, setBusy] = useState('');
   const [note, setNote] = useState('');
   const ref = useRef(null);
+  const stackActions = useStackActions();
 
   useEffect(() => {
     if (!open) return undefined;
@@ -5637,6 +5638,12 @@ function PostMenu({ post, isPromo, onFlags, onReload, onAssign, onQuickAdd, canP
     setNote('');
     try {
       const result = await action();
+      if (key === 'similar' && result) {
+        setNote(result.matchedCount ? `${result.matchedCount} similar posts grouped.` : 'No similar posts found.');
+        setBusy('');
+        setTimeout(() => setOpen(false), 1400);
+        return;
+      }
       if (key === 'reload' && result) {
         const before = result.likes_before;
         const after = result.likes;
@@ -5685,6 +5692,7 @@ function PostMenu({ post, isPromo, onFlags, onReload, onAssign, onQuickAdd, canP
             Send to Pool
           </button> : null}
           {canPool ? <button type="button" role="menuitem" onClick={(event) => { event.stopPropagation(); setOpen(false); onQuickAdd?.(post); }}><Zap size={13} />Quick add to Pool</button> : null}
+          {stackActions ? <button type="button" role="menuitem" onClick={(event) => run(event, 'similar', () => stackActions.findSimilar(post))} disabled={Boolean(busy)}><Search size={13} className={busy === 'similar' ? 'spin' : ''} />{busy === 'similar' ? 'Buscando…' : 'Buscar similares'}</button> : null}
           <button
             type="button"
             role="menuitem"
@@ -5822,7 +5830,7 @@ export const PostCard = memo(function PostCard({ post, priority, selected, onSel
         </div>
         <div className="post-header-actions">
           <FreshnessRing timestamp={post.timestamp} />
-          <PostMenu post={post} isPromo={isPromo} onFlags={onFlags} onReload={onReload} onAssign={onAssign} onQuickAdd={onQuickAdd} canPool={canPool} />
+          <PostMenu post={post} isPromo={isPromo} onFlags={onFlags} onReload={onReload} onAssign={onAssign} onQuickAdd={onQuickAdd} canPool={canPool} canSuggest={canSuggest} />
         </div>
       </div>
 
@@ -5865,7 +5873,6 @@ export const PostCard = memo(function PostCard({ post, priority, selected, onSel
         <div className="post-footer">
           <span>{compactFormatter.format(post.comments)} comments</span>
           <span>{formatDate(post.postDate)}</span>
-          <InstagramLink post={post} onClick={stopAction} compact />
         </div>
       </div>
     </article>
