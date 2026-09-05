@@ -5771,7 +5771,7 @@ export const PostCard = memo(function PostCard({ post, priority, selected, onSel
     event.stopPropagation();
   };
   const effects = hotEffects(post);
-  const cardClassName = `post-card${selected ? ' selected' : ''}${effects.className}${post.hidden ? ' post-card-hidden' : ''}`;
+  const cardClassName = `post-card${effects.className}${post.hidden ? ' post-card-hidden' : ''}`;
   // Promo is either detected from the caption hashtag or set explicitly on
   // the post (the card's ... menu writes that flag), so a promo that didn't
   // use the tag can still be marked by hand.
