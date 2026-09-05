@@ -860,8 +860,11 @@ function openToolTab(event, url, windowName) {
 function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
   const homeView = window.location.pathname.endsWith('/home.html') || (window.location.pathname === '/' && !window.location.search && window.location.hostname === 'sentientdash.app');
   const [separateTopics, setSeparateTopics] = useState(() => { try { return (() => { const value = JSON.parse(localStorage.getItem('sentient.research.separate') || '[]'); return Array.isArray(value) ? value : []; })(); } catch { return []; } });
+  const [manualTopicGroups, setManualTopicGroups] = useState(() => { try { const v = JSON.parse(localStorage.getItem('sentient.research.manual-groups') || '[]'); return Array.isArray(v) ? v : []; } catch { return []; } });
+  const [dragPost, setDragPost] = useState(null);
 
   useEffect(() => { try { localStorage.setItem('sentient.research.separate', JSON.stringify(separateTopics)); } catch {} }, [separateTopics]);
+  useEffect(() => { try { localStorage.setItem('sentient.research.manual-groups', JSON.stringify(manualTopicGroups)); } catch {} }, [manualTopicGroups]);
   const knownRoleSwitcher = Object.prototype.hasOwnProperty.call(ROLE_SWITCHER_DEFAULTS, String(userEmail || '').trim().toLowerCase());
   const knownDev = String(userEmail || '').trim().toLowerCase() === DEV_EMAIL;
   const [dashboard, setDashboard] = useState({ posts: [], summary: {} });
@@ -1624,8 +1627,16 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
 
   const visible = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount]);
   const { groups: topics, loading: grouping, error: groupingError } = useTopicGroups(filtered, true, separateTopics);
-  const visibleTopics = topics.slice(0, visibleCount);
-  const galleryTotal = topics.length;
+  const mergedTopics = useMemo(() => {
+    if (!manualTopicGroups.length) return topics;
+    const byKey = new Map(filtered.map((post) => [post.postKey, post]));
+    const claimed = new Set(); const result = [];
+    manualTopicGroups.forEach((keys, index) => { const posts = keys.map((key) => byKey.get(key)).filter(Boolean); if (posts.length > 1) { posts.forEach((post) => claimed.add(post.postKey)); result.push({ id: `manual:${index}`, posts }); } });
+    topics.forEach((group) => { const posts = group.posts.filter((post) => !claimed.has(post.postKey)); if (posts.length) result.push({ ...group, posts }); });
+    return result;
+  }, [topics, manualTopicGroups, filtered]);
+  const visibleTopics = mergedTopics.slice(0, visibleCount);
+  const galleryTotal = mergedTopics.length;
   const showingFrom = filtered.length ? 1 : 0;
   const showingTo = visible.length;
   const activeFilterCount = [
@@ -2153,7 +2164,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
           <div ref={resultsScrollRef} className="results-scroll">
             {grouping ? <p className="home-loading" role="status">Grouping similar posts… You can keep using Research.</p> : visible.length ? (
               <div className="gallery-grid">
-                {visibleTopics.map((group, index) => <TopicStack key={group.id} posts={group.posts} renderCard={(post, expand) => (
+                {visibleTopics.map((group, index) => <TopicStack key={group.id} posts={group.posts} onDragPost={setDragPost} onDropPost={(target) => { if (!dragPost || dragPost.postKey === target.postKey) return; setManualTopicGroups((groups) => { const source = dragPost.postKey; const dest = target.postKey; const next = groups.map((keys) => keys.filter((key) => key !== source)); const found = next.findIndex((keys) => keys.includes(dest)); if (found >= 0) next[found] = [...new Set([...next[found], source])]; else next.push([dest, source]); return next.filter((keys) => keys.length > 1); }); setDragPost(null); }} renderCard={(post, expand, dragProps) => (
                   <PostCard
                     // Keyed by account+shortcode, not shortcode alone: accounts
                     // repost each other, so ~21 shortcodes exist under two
@@ -2170,6 +2181,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
                     onQuickAdd={quickAddToPool}
                     canSuggest={!poolAccess && effectiveOperatingRoles.includes('pd')}
                     canPool={poolAccess}
+                    {...dragProps}
                   />
                   )} />)}
               </div>
@@ -5758,7 +5770,7 @@ const FreshnessRing = memo(function FreshnessRing({ timestamp }) {
   );
 });
 
-const PostCard = memo(function PostCard({ post, priority, selected, onSelect, onFlags, onReload, onAssign, onQuickAdd, canPool }) {
+const PostCard = memo(function PostCard({ post, priority, selected, onSelect, onFlags, onReload, onAssign, onQuickAdd, canPool, draggable, onDragStart, onDragOver, onDrop }) {
   const [avatarFailed, setAvatarFailed] = useState(false);
   const handleClick = () => onSelect(post.postKey);
   const handleKeyDown = (event) => {
@@ -5792,6 +5804,10 @@ const PostCard = memo(function PostCard({ post, priority, selected, onSelect, on
       role="button"
       tabIndex={0}
       aria-pressed={selected}
+      draggable={draggable}
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
     >
       {effects.showBorder ? <span className="hot-border" aria-hidden="true" /> : null}
       <div className="post-header">
