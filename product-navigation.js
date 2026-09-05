@@ -5,6 +5,19 @@ export const productSections = [
   { id: 'tracker', label: 'Tracker', es: 'Tracker', path: 'tracker.html', restricted: true, target: 'sentient-tracker' },
   { id: 'insights', label: 'Insights', es: 'Insights', path: 'insights.html', restricted: true, target: 'sentient-insights' },
 ];
+if (typeof window !== 'undefined') {
+const toolName = /\/queue\.html$/.test(window.location.pathname) ? 'sentient-queue' : /\/tracker\.html$/.test(window.location.pathname) ? 'sentient-tracker' : /\/insights\.html$/.test(window.location.pathname) ? 'sentient-insights' : /\/settings\.html$/.test(window.location.pathname) ? 'sentient-settings' : 'sentient-dashboard';
+window.name = toolName;
+}
+export function openSection(event, section) {
+  if (event.button > 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+  event.preventDefault();
+  if (window.name === section.target) { window.focus(); return; }
+  const tab = window.open('', section.target);
+  if (!tab) return;
+  try { if (tab.location.href === 'about:blank') tab.location.href = sectionHref(section); } catch { tab.location.href = sectionHref(section); }
+  tab.focus();
+}
 function routeContext() {
   try {
     const params = new URLSearchParams(window.location.search); const token = params.get('r');
