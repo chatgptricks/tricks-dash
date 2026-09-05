@@ -843,8 +843,11 @@ function Detail({ task, tags, availableAccounts = [], canCoordinate, canDuplicat
   // Queue snapshots can be older than a manual stack edit. Resolve the
   // membership from Research when the detail opens, so the stack icon never
   // disappears merely because this Queue request was loaded earlier.
-  if (resolvedStackPosts.length > 1 && Number(task.post?.stackSize || 0) < 2) {
-    task = { ...task, post: { ...task.post, stackSize: resolvedStackPosts.length } };
+  if (task.post?.shortcode && !task.isCustom && Number(task.post?.stackSize || 0) < 2) {
+    // Every sourced Queue post gets the same Stack affordance as Research.
+    // Its membership is resolved lazily by openStack(), which keeps Queue
+    // from relying on a stale snapshot to decide whether to show the control.
+    task = { ...task, post: { ...task.post, stackSize: Math.max(2, resolvedStackPosts.length) } };
   }
   const run = async (callback) => { setBusy(true); try { await callback(); } finally { setBusy(false); } };
   const save = () => run(async () => { const saved = await onEdit({ ...form, productionPoints: Number(form.productionPoints), references: form.references.split('\n').map((item) => item.trim()).filter(Boolean) }); if (saved) setEditing(false); });
