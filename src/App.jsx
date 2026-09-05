@@ -5610,6 +5610,7 @@ function AssignPostModal({ post, userEmail, isAdmin, accounts, onClose, onAssign
 // plain absolute panel is enough and avoids the fixed-position bookkeeping
 // the account dropdown needs.
 function PostMenu({ post, isPromo, onFlags, onReload, onAssign, onQuickAdd, canPool, canSuggest }) {
+  const { t } = usePrefs();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState('');
   const [note, setNote] = useState('');
@@ -5645,7 +5646,7 @@ function PostMenu({ post, isPromo, onFlags, onReload, onAssign, onQuickAdd, canP
         return;
       }
       if (key === 'similar' && result) {
-        setNote(result.matchedCount ? `${result.matchedCount} similar posts grouped.` : 'No similar posts found.');
+        setNote(result.matchedCount ? `${result.matchedCount} ${t('similar posts grouped.')}` : t('No similar posts found.'));
         setBusy('');
         setTimeout(() => setOpen(false), 1400);
         return;
@@ -5698,7 +5699,7 @@ function PostMenu({ post, isPromo, onFlags, onReload, onAssign, onQuickAdd, canP
             Send to Pool
           </button> : null}
           {canPool ? <button type="button" role="menuitem" onClick={(event) => { event.stopPropagation(); setOpen(false); onQuickAdd?.(post); }}><Zap size={13} />Quick add to Pool</button> : null}
-          {stackActions ? <button type="button" role="menuitem" onClick={(event) => run(event, 'similar', () => stackActions.findSimilar(post))} disabled={Boolean(busy)}><Search size={13} className={busy === 'similar' ? 'spin' : ''} />{busy === 'similar' ? 'Buscando…' : 'Buscar similares'}</button> : null}
+          {stackActions ? <button type="button" role="menuitem" onClick={(event) => run(event, 'similar', () => stackActions.findSimilar(post))} disabled={Boolean(busy)}><Search size={13} className={busy === 'similar' ? 'spin' : ''} />{busy === 'similar' ? t('Searching…') : t('Find similar')}</button> : null}
           {stackActions && Number(post.stackSize) > 1 ? <button type="button" role="menuitem" onClick={(event) => run(event, 'separate', () => stackActions.separate([post.postKey || `${post.account}:${post.shortcode}`]))} disabled={Boolean(busy)}>↗ Separar del stack</button> : null}
           <button
             type="button"

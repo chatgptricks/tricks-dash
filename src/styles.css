@@ -2235,6 +2235,7 @@ body {
   overflow: hidden;
   font-size: 0;
 }
+.caption-header .caption-copy-button{width:auto;min-width:max-content;padding:0 9px;font-size:11px;gap:6px;position:relative;z-index:2}.caption-header .caption-copy-button span{display:inline}
 
 .caption-panel p {
   min-height: 0;

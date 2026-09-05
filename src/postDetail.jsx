@@ -6,7 +6,7 @@
 // fix bugs or add features instead of two copies drifting apart.
 import { createPortal } from 'react-dom';
 import { memo, useEffect, useMemo, useState } from 'react';
-import { Copy, Download, ExternalLink, Eye, Flame, Music2, Video, X } from 'lucide-react';
+import { Check, Copy, Download, ExternalLink, Eye, Flame, Music2, Video, X } from 'lucide-react';
 import { usePrefs } from './prefsContext';
 import { API_BASE, IG_HANDLE, apiFetch } from './api';
 
@@ -627,9 +627,9 @@ export function PostDetailPanel({ post, captionExtra = null }) {
           <div>
             <p className="section-label">{t('Caption')}</p>
           </div>
-          <button className="ghost-button" onClick={copyCaption} aria-live="polite">
-            <Copy size={15} />
-            {copyState ? t(copyState) : t('Copy')}
+          <button className="ghost-button caption-copy-button" onClick={copyCaption} aria-live="polite" title={copyState ? t(copyState) : t('Copy')}>
+            {copyState === 'Copied' ? <Check size={15} /> : <Copy size={15} />}
+            <span>{copyState ? t(copyState) : t('Copy')}</span>
           </button>
         </div>
         <p>
