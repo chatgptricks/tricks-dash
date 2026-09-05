@@ -999,6 +999,16 @@ img {
   flex: 0 0 auto;
 }
 
+.post-deleted-indicator {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  color: #f09898;
+  background: rgba(135, 38, 38, .22);
+}
+
 /* Harvey-ball "freshness" clock -- conic-gradient draws the filled wedge
    directly, no SVG or per-quarter markup needed. Rendered only while there's
    a ring left to show (see freshnessQuarters in App.jsx); once a post passes

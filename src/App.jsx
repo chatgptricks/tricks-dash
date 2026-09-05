@@ -42,6 +42,7 @@ import {
   SlidersHorizontal,
   Sun,
   TrendingUp,
+  Trash2,
   Users,
   X,
   Video,
@@ -1861,8 +1862,9 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
     // reuse a cached 404/502 for the same cover route and CoverImage starts
     // from its first source again.
     patchPost(post.account, post.shortcode, {
-      likes: data.likes,
-      comments: data.comments ?? post.comments,
+      likes: data.deleted ? post.likes : data.likes,
+      comments: data.deleted ? post.comments : (data.comments ?? post.comments),
+      isDeleted: Boolean(data.deleted),
       coverRefreshToken: Date.now(),
     });
     return { ...data, coverRefreshed: data.cover_refreshed !== false };
@@ -5700,7 +5702,7 @@ function PostMenu({ post, isPromo, onFlags, onReload, onAssign, onQuickAdd, canP
           </button> : null}
           {canPool ? <button type="button" role="menuitem" onClick={(event) => { event.stopPropagation(); setOpen(false); onQuickAdd?.(post); }}><Zap size={13} />Quick add to Pool</button> : null}
           {stackActions ? <button type="button" role="menuitem" onClick={(event) => run(event, 'similar', () => stackActions.findSimilar(post))} disabled={Boolean(busy)}><Search size={13} className={busy === 'similar' ? 'spin' : ''} />{busy === 'similar' ? t('Searching…') : t('Find similar')}</button> : null}
-          {stackActions && Number(post.stackSize) > 1 ? <button type="button" role="menuitem" onClick={(event) => run(event, 'separate', () => stackActions.separate([post.postKey || `${post.account}:${post.shortcode}`]))} disabled={Boolean(busy)}>↗ Separar del stack</button> : null}
+          {stackActions && Number(post.stackSize) > 1 ? <button type="button" role="menuitem" onClick={(event) => run(event, 'separate', () => stackActions.separate([post.postKey || `${post.account}:${post.shortcode}`]))} disabled={Boolean(busy)}>↗ {t('Separate from stack')}</button> : null}
           <button
             type="button"
             role="menuitem"
@@ -5837,6 +5839,7 @@ export const PostCard = memo(function PostCard({ post, priority, selected, onSel
           </div>
         </div>
         <div className="post-header-actions">
+          {post.isDeleted ? <span className="post-deleted-indicator" title="Deleted from Instagram" aria-label="Deleted from Instagram"><Trash2 size={13} /></span> : null}
           <FreshnessRing timestamp={post.timestamp} />
           <PostMenu post={post} isPromo={isPromo} onFlags={onFlags} onReload={onReload} onAssign={onAssign} onQuickAdd={onQuickAdd} canPool={canPool} canSuggest={canSuggest} />
         </div>
