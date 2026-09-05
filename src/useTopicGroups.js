@@ -6,7 +6,13 @@ export function useTopicGroups(posts, enabled, separate) {
     if (!enabled) return;
     let active = true;
     const input = posts.map((post) => ({ postKey: post.postKey || `${post.account}:${post.shortcode}`, caption: post.caption || post.headline || post.title, timestamp: post.timestamp || new Date(post.postDate).getTime() }));
-    const finish = (groups) => { if (active) setResult({ posts, separate, groups }); };
+    const signature = input.map((post) => `${post.postKey}:${post.caption || ''}:${post.timestamp || ''}`).join('|');
+    const cacheKey = `sentient.research.topic-cache.v2:${separate.join(',')}:${signature.length}:${input.length}`;
+    try {
+      const cached = JSON.parse(localStorage.getItem(cacheKey) || 'null');
+      if (cached?.groups && cached.signature === signature) { setResult({ posts, separate, groups: cached.groups }); return () => { active = false; }; }
+    } catch {}
+    const finish = (groups) => { try { localStorage.setItem(cacheKey, JSON.stringify({ signature, groups })); } catch {} if (active) setResult({ posts, separate, groups }); };
     if (typeof Worker === 'undefined') {
       finish(groupTopics(input, { separate }).map((group) => ({ id: group.id, keys: group.posts.map((post) => post.postKey) })));
       return () => { active = false; };
