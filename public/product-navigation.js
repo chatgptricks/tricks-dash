@@ -1,6 +1,5 @@
 // One navigation contract for React and the standalone tools.
 export const productSections = [
-  { id: 'home', label: 'Home', es: 'Inicio', path: 'home.html' },
   { id: 'research', label: 'Research', es: 'Investigar', path: 'index.html', target: 'sentient-dashboard' },
   { id: 'queue', label: 'Queue', es: 'Producción', path: 'queue.html', target: 'sentient-queue' },
   { id: 'tracker', label: 'Tracker', es: 'Tracker', path: 'tracker.html', restricted: true, target: 'sentient-tracker' },

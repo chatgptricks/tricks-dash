@@ -225,7 +225,7 @@ function MobileApp() {
 }
 
 const NAV = [
-  ['home', Home], ['dashboard', LayoutGrid], ['queue', CalendarDays], ['tracker', LineChart], ['insights', BarChart3],
+  ['dashboard', LayoutGrid], ['queue', CalendarDays], ['tracker', LineChart], ['insights', BarChart3],
 ];
 
 function MobileShell({ user, viewer }) {
@@ -234,7 +234,7 @@ function MobileShell({ user, viewer }) {
   const visibleNav = NAV.filter(([key]) => coordinator || !['tracker', 'insights'].includes(key));
   const initialParams = new URLSearchParams(location.search);
   const initial = decodeRouteState(initialParams.get('r'))?.tab || initialParams.get('tab');
-  const safeInitial = visibleNav.some(([key]) => key === initial) || initial === 'settings' ? initial : 'home';
+  const safeInitial = visibleNav.some(([key]) => key === initial) || initial === 'settings' ? initial : 'dashboard';
   const [tab, setTab] = useState(safeInitial);
   const [profileOpen, setProfileOpen] = useState(false);
   const [online, setOnline] = useState(navigator.onLine);
@@ -243,7 +243,7 @@ function MobileShell({ user, viewer }) {
   const navigate = useCallback((next) => {
     if (!visibleNav.some(([key]) => key === next) && next !== 'settings') return;
     setTab(next); setProfileOpen(false); window.scrollTo({ top: 0, behavior: 'instant' });
-    const url = new URL(location.href); url.search = ''; if (next !== 'home') url.searchParams.set('r', encodeRouteState({ tab: next })); history.replaceState(null, '', url);
+    const url = new URL(location.href); url.search = ''; if (next !== 'dashboard') url.searchParams.set('r', encodeRouteState({ tab: next })); history.replaceState(null, '', url);
   }, [visibleNav]);
   useEffect(() => { const on = () => setOnline(true); const off = () => setOnline(false); addEventListener('online', on); addEventListener('offline', off); return () => { removeEventListener('online', on); removeEventListener('offline', off); }; }, []);
   useEffect(() => { const handler = (event) => { event.preventDefault(); setInstallPrompt(event); }; addEventListener('beforeinstallprompt', handler); return () => removeEventListener('beforeinstallprompt', handler); }, []);
@@ -256,13 +256,12 @@ function MobileShell({ user, viewer }) {
   }, []);
   const install = async () => { if (installPrompt) { installPrompt.prompt(); await installPrompt.userChoice; setInstallPrompt(null); } };
   const logout = () => { clearSsoCookie(); signOut(firebaseAuth); };
-  const title = tab === 'home' ? 'Sentient Dash' : t(tab);
+  const title = t(tab);
   return <div className="m-app">
     <header className="m-topbar"><div><span>Sentient Dash</span><h1>{title}</h1></div><button className="m-profile" onClick={() => setProfileOpen(true)} aria-label={t('settings')}><Avatar person={{ email: user.email, displayName: user.displayName, avatarUrl: user.photoURL || viewer.avatar_url }} /></button></header>
     {!online ? <div className="m-connection is-offline"><WifiOff size={14} />{t('offline')}</div> : null}
     {updateReady ? <div className="m-update"><span>{t('updateReady')}</span><button onClick={() => location.reload()}>{t('update')}</button></div> : null}
     <main className="m-content">
-      {tab === 'home' ? <HomeView viewer={viewer} navigate={navigate} /> : null}
       {tab === 'dashboard' ? <DashboardView viewer={viewer} /> : null}
       {tab === 'queue' ? <QueueView viewer={viewer} /> : null}
       {coordinator && tab === 'tracker' ? <TrackerView /> : null}

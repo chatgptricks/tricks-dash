@@ -49,22 +49,21 @@ const click = async (node) => act(async () => { node.dispatchEvent(new window.Mo
   try {
     await act(async () => { await import('../src/mobile/main.jsx'); await new Promise((resolve) => setTimeout(resolve, 300)); });
     checks['Mobile shell renders'] = Boolean(document.querySelector('.m-app'));
-    checks['Five primary sections render'] = document.querySelectorAll('.m-bottom-nav button').length === 5;
-    checks['Role-aware home renders'] = /Team pulse|Pulso del equipo/.test(document.body.textContent);
+    checks['Four primary sections render'] = document.querySelectorAll('.m-bottom-nav button').length === 4;
+    checks['Research is the landing view'] = document.querySelector('.m-post-grid') !== null;
 
-    const nav = [...document.querySelectorAll('.m-bottom-nav button')];
-    await click(nav[1]);
     checks['Independent Dashboard renders'] = document.querySelectorAll('.m-post-card').length === 1;
     await click(document.querySelector('.m-search-row > button'));
     checks['Research advanced filters render'] = /Media/.test(document.body.textContent) && /Minimum likes/.test(document.body.textContent) && /Period/.test(document.body.textContent);
     await click(document.querySelector('.m-sheet > header button'));
-    await click(nav[2]);
+    const nav = [...document.querySelectorAll('.m-bottom-nav button')];
+    await click(nav[1]);
     checks['Independent Queue renders'] = Boolean(document.querySelector('.m-queue-toolbar')) && Boolean(document.querySelector('.m-task'));
     checks['Queue day map renders'] = Boolean(document.querySelector('.m-day-map')) && Boolean(document.querySelector('.m-day-bar'));
-    await click(nav[3]);
+    await click(nav[2]);
     checks['Independent Tracker renders'] = document.querySelectorAll('.m-tracker-row').length === 1 && /100,000/.test(document.body.textContent) && /\+120/.test(document.body.textContent);
     checks['Tracker favorite is first'] = Boolean(document.querySelector('.m-tracker-row:first-child .m-favorite.is-on'));
-    await click(nav[4]);
+    await click(nav[3]);
     checks['Independent Insights renders'] = Boolean(document.querySelector('.m-insight-card'));
 
     await click(document.querySelector('.m-profile'));
