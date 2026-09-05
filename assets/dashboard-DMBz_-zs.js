@@ -1,0 +1,1 @@
+import{R as e,j as t,a as r}from"./urlCodec-5N_0OJrv.js";import{A as o}from"./styles-BevYYBqP.js";import"./search-DMm-geZm.js";import"./traselveloreal-profile-Bqvwz3cQ.js";e.createRoot(document.getElementById("root")).render(t.jsx(r.StrictMode,{children:t.jsx(o,{})}));
