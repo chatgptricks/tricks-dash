@@ -1894,15 +1894,12 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
             {/* Right column: tools on top, filters underneath. */}
             <div className="topbar-controls">
               <div className="tool-row">
-                {/* target=_blank because these are separate apps with their own
-                    auth gate and load: navigating in place threw away the
-                    filters, the scroll position and the open post. And they're
-                    labelled now -- five identical green icons gave you no way
-                    to know where you were about to go. */}
+                {/* Named targets keep each tool in one reusable tab while
+                    preserving Dashboard filters and the open post. */}
                 <a
                   className="tool-link tool-link-queue"
                   href={`${import.meta.env.BASE_URL}queue.html`}
-                  target="_blank"
+                  target="sentient-queue"
                   rel="noopener noreferrer"
                   title="Open your assigned post queue"
                 >
@@ -1914,7 +1911,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
                 {coordinatorAccess ? <a
                   className="tool-link"
                   href={`${import.meta.env.BASE_URL}tracker.html`}
-                  target="_blank"
+                  target="sentient-tracker"
                   rel="noopener noreferrer"
                   title={t('Follower growth per account')}
                 >
@@ -1925,7 +1922,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
                 {coordinatorAccess ? <a
                   className="tool-link"
                   href={`${import.meta.env.BASE_URL}insights.html`}
-                  target="_blank"
+                  target="sentient-insights"
                   rel="noopener noreferrer"
                   title={t('Aggregate analysis across all accounts')}
                 >
