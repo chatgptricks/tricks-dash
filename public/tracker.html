@@ -150,10 +150,13 @@ th:first-child{text-align:left}
 th.sorted{color:var(--accent-text)}
 td{text-align:right;padding:9px 8px;border-bottom:1px solid rgba(var(--edge),.045);white-space:nowrap}
 td:first-child{text-align:left}
-.column-filter-row td{padding:5px 4px 7px;border-bottom:1px solid var(--line);background:rgba(var(--edge),.018)}
-.column-filter-row input{width:100%;min-width:58px;height:27px;padding:0 6px;border:1px solid var(--line);border-radius:6px;background:var(--panel-2);color:var(--text);font:600 10px inherit;outline:none}
-.column-filter-row input:focus{border-color:rgba(var(--accent-rgb),.55);box-shadow:0 0 0 2px rgba(var(--accent-rgb),.1)}
-.column-filter-row input:disabled{opacity:.45;cursor:not-allowed}
+.tracker-toolbar{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin:18px 0 8px}
+.tracker-toolbar input,.tracker-toolbar select{height:38px;padding:0 12px;border:1px solid var(--line);border-radius:9px;background:var(--panel-2);color:var(--text);font:inherit}
+.tracker-toolbar input{flex:1;min-width:180px}
+.tracker-toolbar :focus-visible,.sort-button:focus-visible{outline:2px solid var(--accent-text);outline-offset:3px}
+.tracker-results{font-size:11px;color:var(--muted)}
+.sort-button{border:0;background:none;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit;cursor:pointer;padding:4px 0}
+.tracker-empty{text-align:center!important;padding:32px!important;white-space:normal;color:var(--muted);cursor:default}
 /* Account cell (avatar + handle) shrink-wraps to its own content width --
    without an explicit left align here, shorter rows (no full name shown,
    or a broken avatar) drift toward the column's right edge instead of
@@ -733,33 +736,7 @@ function render(){
 
 /* ---------------- Leaderboard ---------------- */
 let sortKey='followers', sortDir=-1;
-// Overview filters intentionally live in memory: this is a working view, not
-// a preference that should surprise someone returning tomorrow. Every data
-// column gets its own filter instead of one global search, so an operator can
-// combine checks such as "sentient + positive 7d growth + 10K followers".
-let leaderboardFilters = {};
-
-function leaderboardCellText(row, key){
-  if(key === 'rank') return String(row.rank_by_followers ?? '');
-  if(key === 'handle') return `${row.handle || ''} ${row.full_name || ''} ${row.group || ''}`;
-  if(key === 'followers' || key === 'posts_count' || key === 'avg_likes_30d') return String(row[key] ?? '');
-  if(key === 'delta_1d' || key === 'delta_7d' || key === 'delta_30d') return String(row[key]?.delta ?? '');
-  if(key === 'engagement_trend_pct') return String(row.engagement_trend_pct ?? '');
-  if(key === 'captured_at') return row.captured_at ? new Date(row.captured_at).toLocaleDateString() : '';
-  return '';
-}
-
-function leaderboardMatchesFilter(row, key, query){
-  const value = String(query || '').trim().toLowerCase();
-  if(!value) return true;
-  const numeric = Number(leaderboardCellText(row, key));
-  const comparison = value.match(/^(>=|<=|>|<|=)\s*(-?[\d,.]+)$/);
-  if(comparison && Number.isFinite(numeric)){
-    const target = Number(comparison[2].replace(/,/g, ''));
-    return comparison[1] === '>=' ? numeric >= target : comparison[1] === '<=' ? numeric <= target : comparison[1] === '>' ? numeric > target : comparison[1] === '<' ? numeric < target : numeric === target;
-  }
-  return leaderboardCellText(row, key).toLowerCase().includes(value);
-}
+let leaderboardSearch = '', leaderboardGroup = 'all';
 
 function escapeAttribute(value){
   return String(value || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -773,14 +750,19 @@ function trackingSinceNote(){
 
 function renderLeaderboard(){
   destroyCharts();
-  const rows = [...SUMMARY.accounts].filter((row) => Object.entries(leaderboardFilters).every(([key, query]) => leaderboardMatchesFilter(row, key, query)));
+  const query = leaderboardSearch.trim().toLowerCase().replace(/^@/, '');
+  const favorites = new Set(readFavs());
+  const rows = SUMMARY.accounts.filter(row =>
+    `${row.handle || ''} ${row.full_name || ''}`.toLowerCase().includes(query) &&
+    (leaderboardGroup === 'all' || (leaderboardGroup === 'favorites' ? favorites.has(row.handle) : leaderboardGroup === 'sentient' ? row.group === 'sentient' : row.group !== 'sentient')));
+  const leader = rows.filter(row => row.followers != null).reduce((best, row) => !best || row.followers > best.followers ? row : best, null);
   const val = r => {
     if(sortKey==='handle') return r.handle;
-    if(sortKey==='followers') return r.followers ?? -1;
+    if(sortKey==='followers') return r.followers ?? -Infinity;
     if(sortKey==='delta_1d') return r.delta_1d?.delta ?? -Infinity;
     if(sortKey==='delta_7d') return r.delta_7d?.delta ?? -Infinity;
     if(sortKey==='delta_30d') return r.delta_30d?.delta ?? -Infinity;
-    if(sortKey==='posts_count') return r.posts_count ?? -1;
+    if(sortKey==='posts_count') return r.posts_count ?? -Infinity;
     if(sortKey==='avg_likes_30d') return r.avg_likes_30d ?? -Infinity;
     if(sortKey==='engagement_trend_pct') return r.engagement_trend_pct ?? -Infinity;
     if(sortKey==='captured_at') return r.captured_at ? new Date(r.captured_at).getTime() : -Infinity;
@@ -789,6 +771,9 @@ function renderLeaderboard(){
   rows.sort((a,b)=>{
     const va=val(a), vb=val(b);
     if(typeof va==='string') return va.localeCompare(vb)*sortDir*-1;
+    if(va === vb) return a.handle.localeCompare(b.handle);
+    if(va === -Infinity) return 1;
+    if(vb === -Infinity) return -1;
     return (vb-va)*(sortDir<0?1:-1);
   });
 
@@ -810,22 +795,27 @@ function renderLeaderboard(){
 
   $('#app').innerHTML = `
     <div class="kpis">
-      <div class="kpi"><b>Accounts tracked</b><strong>${trackedAll}</strong><em>${withFollowers} with follower data</em></div>
-      <div class="kpi"><b>Leader</b><strong>${rows[0]&&rows[0].followers!=null?'@'+rows[0].handle:'—'}</strong><em>${rows[0]&&rows[0].followers!=null?fmt(rows[0].followers)+' followers':'no data yet'}</em></div>
+      <div class="kpi"><b>Accounts in view</b><strong>${rows.length}</strong><em>${withFollowers} with follower data · ${trackedAll} tracked total</em></div>
+      <div class="kpi"><b>Most followers</b><strong>${leader?'@'+leader.handle:'—'}</strong><em>${leader?fmt(leader.followers)+' followers':'no data yet'}</em></div>
       <div class="kpi"><b>Top 7d grower</b><strong>${(()=>{const g=[...rows].filter(r=>r.delta_7d).sort((a,b)=>b.delta_7d.delta-a.delta_7d.delta)[0]; return g?'@'+g.handle:'—';})()}</strong><em>${(()=>{const g=[...rows].filter(r=>r.delta_7d).sort((a,b)=>b.delta_7d.delta-a.delta_7d.delta)[0]; return g?signed(g.delta_7d.delta)+' in 7d':'not enough history yet';})()}</em></div>
     </div>
 
     <section>
       <div class="section-head">
-        <h2>Leaderboard <span class="tag">all tracked accounts</span></h2>
+        <h2>Leaderboard</h2>
         <button type="button" class="linkbtn refresh-btn" id="refreshAllBtn" title="Re-scrape every account's real follower count from Instagram right now (~$0.002 each)">&#8635; Refresh all</button>
       </div>
-      <p class="sub">Ranked by followers by default -- click any column to re-sort. Use the filter directly below each heading; numeric columns accept a number or comparisons such as <code>>=10000</code>. Click a row to open its growth chart. The &#8635; next to a follower count re-scrapes just that account.</p>
+      <p class="sub">Compare account growth. Select a column to sort or an account to explore its history.</p>
       ${trackingSinceNote()}
+      <div class="tracker-toolbar">
+        <input id="trackerSearch" type="search" value="${escapeAttribute(leaderboardSearch)}" placeholder="Search accounts…" aria-label="Search accounts by name or handle">
+        <select id="trackerGroup" aria-label="Account group">${[['all','All accounts'],['sentient','Ours'],['competitors','Competitors'],['favorites','Favorites']].map(([value,label])=>`<option value="${value}" ${leaderboardGroup===value?'selected':''}>${label}</option>`).join('')}</select>
+        ${leaderboardSearch || leaderboardGroup !== 'all' ? '<button type="button" class="linkbtn" id="clearTrackerFilters">Clear filters</button>' : ''}
+      </div>
+      <div class="tracker-results" role="status">${rows.length} of ${trackedAll} accounts</div>
       <div style="overflow-x:auto;margin-top:12px">
       <table id="tLeaderboard">
-        <thead><tr>${cols.map(([k,l])=>`<th data-k="${k}" class="${sortKey===k?'sorted':''}">${l}</th>`).join('')}</tr></thead>
-        <tbody class="column-filter-row"><tr>${cols.map(([k,l])=>`<td><input data-column-filter="${k}" value="${escapeAttribute(leaderboardFilters[k])}" placeholder="Filter" aria-label="Filter ${l}"></td>`).join('')}</tr></tbody>
+        <thead><tr>${cols.map(([k,l])=>`<th scope="col" class="${sortKey===k?'sorted':''}" ${k!=='rank'?`aria-sort="${sortKey===k?(sortDir<0?'descending':'ascending'):'none'}"`:''}>${k==='rank'?l:`<button type="button" class="sort-button" data-k="${k}">${l}${sortKey===k?(sortDir<0?' ↓':' ↑'):''}</button>`}</th>`).join('')}</tr></thead>
         <tbody>${rows.map((r,i)=>`
           <tr data-handle="${r.handle}">
             <td class="rank-num">${r.rank_by_followers ?? '—'}</td>
@@ -844,25 +834,28 @@ function renderLeaderboard(){
             <td>${r.avg_likes_30d!=null?fmt(r.avg_likes_30d)+' <span class="na">('+ (r.posts_30d||0) +' posts)</span>':'<span class="na">—</span>'}</td>
             <td>${r.engagement_trend_pct!=null?pct(r.engagement_trend_pct):'<span class="na">—</span>'}</td>
             <td>${r.captured_at?`<span class="na" title="${dt(r.captured_at)}">${new Date(r.captured_at).toLocaleDateString()}</span>`:'<span class="na">—</span>'}</td>
-          </tr>`).join('')}</tbody>
+          </tr>`).join('') || '<tr><td colspan="10" class="tracker-empty">No accounts match this view. Try another name or clear the filters.</td></tr>'}</tbody>
       </table>
       </div>
     </section>
   `;
 
-  $('#tLeaderboard').querySelectorAll('th').forEach(th=>th.onclick=()=>{
+  $('#tLeaderboard').querySelectorAll('[data-k]').forEach(th=>th.onclick=()=>{
     const k=th.dataset.k; if(k==='rank') return;
-    sortDir = sortKey===k ? -sortDir : -1; sortKey=k; renderLeaderboard();
+    sortDir = sortKey===k ? -sortDir : k==='handle'?1:-1; sortKey=k; renderLeaderboard();
+    document.querySelector(`[data-k="${k}"]`).focus();
   });
-  $('#tLeaderboard').querySelectorAll('[data-column-filter]').forEach(input=>input.oninput=(event)=>{
-    const key = event.currentTarget.dataset.columnFilter;
-    const value = event.currentTarget.value;
-    if(value) leaderboardFilters[key] = value; else delete leaderboardFilters[key];
+  $('#trackerSearch').oninput = event => {
+    const {value, selectionStart, selectionEnd} = event.currentTarget;
+    leaderboardSearch = value;
     renderLeaderboard();
-    const replacement = document.querySelector(`[data-column-filter="${key}"]`);
-    if(replacement){ replacement.focus(); replacement.setSelectionRange(value.length, value.length); }
-  });
-  $('#tLeaderboard').querySelectorAll('tbody:not(.column-filter-row) tr[data-handle]').forEach(tr=>tr.onclick=()=>{
+    $('#trackerSearch').focus();
+    $('#trackerSearch').setSelectionRange(selectionStart, selectionEnd);
+  };
+  $('#trackerGroup').onchange = event => { leaderboardGroup = event.currentTarget.value; renderLeaderboard(); $('#trackerGroup').focus(); };
+  const clearFilters = $('#clearTrackerFilters');
+  if(clearFilters) clearFilters.onclick = () => { leaderboardSearch = ''; leaderboardGroup = 'all'; renderLeaderboard(); $('#trackerSearch').focus(); };
+  $('#tLeaderboard').querySelectorAll('tbody tr[data-handle]').forEach(tr=>tr.onclick=()=>{
     writeAcc(tr.dataset.handle); render();
   });
   $('#tLeaderboard').querySelectorAll('[data-refresh]').forEach(btn=>btn.onclick=(e)=>{
