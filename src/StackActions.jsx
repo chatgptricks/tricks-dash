@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { API_BASE, apiFetch } from './api';
 const Context = createContext(null);
 export const postIdentity = (post) => post.postKey || `${post.account}:${post.shortcode}`;
+export const useStackActions = () => useContext(Context);
 export function StackActions({ children, onSaved }) {
   const [selected, select] = useState([]);
   const [menu, setMenu] = useState(null);
@@ -12,6 +13,24 @@ export function StackActions({ children, onSaved }) {
   const drag = useRef(null);
   const suppressClick = useRef(false);
   const propose = (keys) => { const unique = [...new Set(keys)]; if (unique.length < 2) return; setError(''); setMenu(null); setPending(unique); };
+  const mutate = async (endpoint, field, value) => {
+    const body = new FormData(); body.set(field, typeof value === 'string' ? value : JSON.stringify(value));
+    const response = await apiFetch(`${API_BASE}/api/dashboard/stacks/${endpoint}`, { method: 'POST', body });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.detail || 'Could not save the stack. Try again.');
+    onSaved(result);
+    return result;
+  };
+  const separate = async (keys) => {
+    setError('');
+    try { const result = await mutate('separate', 'keys', keys); select((current) => current.filter((key) => !keys.includes(key))); return result; }
+    catch (err) { setError(err.message); throw err; }
+  };
+  const findSimilar = async (post) => {
+    setError('');
+    try { return await mutate('find-similar', 'post_key', postIdentity(post)); }
+    catch (err) { setError(err.message); throw err; }
+  };
   useEffect(() => {
     const close = (event) => { if (event.key === 'Escape' && !saving) { setMenu(null); setPending(null); select([]); } };
     window.addEventListener('keydown', close);
@@ -20,14 +39,10 @@ export function StackActions({ children, onSaved }) {
   const confirm = async () => {
     setSaving(true); setError('');
     try {
-      const body = new FormData(); body.set('keys', JSON.stringify(pending));
-      const response = await apiFetch(`${API_BASE}/api/dashboard/stacks/merge`, { method: 'POST', body });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.detail || 'Could not save the group. Try again.');
-      onSaved(result); select([]); setPending(null);
+      await mutate('merge', 'keys', pending); select([]); setPending(null);
     } catch (err) { setError(err.message); } finally { setSaving(false); }
   };
-  return <Context.Provider value={{ selected, select, setMenu, propose, drag, suppressClick }}>
+  return <Context.Provider value={{ selected, select, setMenu, propose, separate, findSimilar, drag, suppressClick }}>
     {children}
     {selected.length > 0 && createPortal(<div className="stack-selection-bar"><span>{selected.length} selected</span><button disabled={selected.length < 2} onClick={() => propose(selected)}>Group</button><button onClick={() => select([])}>Clear</button></div>, document.body)}
     {menu && createPortal(<div className="stack-menu-backdrop" onClick={() => setMenu(null)}><div className="stack-context-menu" role="menu" style={{ left: Math.min(menu.x, window.innerWidth - 230), top: Math.min(menu.y, window.innerHeight - 90) }}><button role="menuitem" disabled={menu.keys.length < 2} onClick={() => propose(menu.keys)}>Group {menu.keys.length} posts</button></div></div>, document.body)}

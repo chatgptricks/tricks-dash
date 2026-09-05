@@ -42,6 +42,7 @@
 .post-stack-modal .post-card,.post-stack-modal .m-post-card{box-shadow:0 18px 45px #0008}
 .post-stack-modal .stack-champion-label{position:absolute;z-index:2;left:8px;top:-16px;border-radius:20px;background:#312816;border:1px solid #d5ad49;padding:5px 9px;white-space:nowrap}
 .post-stack-modal .post-stack-grid{padding-top:18px}
+.stack-separate{position:absolute;z-index:4;right:8px;bottom:8px;border:1px solid var(--product-line,var(--m-line,#454545));border-radius:999px;background:var(--product-bg,var(--m-panel,#202020));color:var(--product-text,var(--m-text,#eee));padding:5px 8px;font:700 10px/1 inherit;cursor:pointer}.stack-separate:hover{color:var(--accent-text,#00ac80)}
 @keyframes stack-lift-in{from{opacity:0;transform:translateY(42px) scale(.88) rotate(-2deg)}to{opacity:1;transform:translateY(0) scale(1) rotate(0)}}
 @keyframes stack-backdrop-in{from{opacity:0}to{opacity:1}}
 @media(prefers-reduced-motion:reduce){.post-stack-modal,.post-stack-modal .post-stack-grid>div{animation:none}}
