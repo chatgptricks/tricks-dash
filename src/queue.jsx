@@ -1,6 +1,7 @@
 import ProductHeader from './ProductHeader';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import ReactDOM from 'react-dom/client';
+import { createPortal } from 'react-dom';
 import { AlertTriangle, Archive, ArrowLeft, Ban, BarChart3, BellRing, CalendarDays, CalendarPlus, Check, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Clock3, Coffee, Download, History, Layers, Lightbulb, Link2, LoaderCircle, LocateFixed, LogOut, Moon, Paperclip, Pencil, Plus, Radio, Send, Settings, Sun, TimerReset, WifiOff, X } from 'lucide-react';
 import { browserPopupRedirectResolver, getRedirectResult, onAuthStateChanged, signOut } from 'firebase/auth';
 import { describeSignInError, firebaseAuth as auth, startGoogleSignIn } from './firebase';
@@ -1148,7 +1149,7 @@ function DraftAccounts({ draft, designers, onAccountsChange }) {
 
 function QueueStackModal({ posts, onClose }) {
   const ranked = [...posts].sort((a, b) => Number(b.likes || 0) - Number(a.likes || 0));
-  return ReactDOM.createPortal(<div className="post-stack-modal" role="dialog" aria-modal="true" aria-label="Posts in this stack" onClick={onClose}><div className="post-stack-modal-inner queue-stack-modal" onClick={(event) => { if (!event.target.closest('.queue-stack-card')) onClose(); else event.stopPropagation(); }}><div className="post-stack-heading"><span><b>{ranked.length} posts</b><small>Posts in this stack</small></span></div><div className="post-stack-grid">{ranked.map((post, index) => <article key={`${post.account}:${post.shortcode}`} className={index === 0 ? 'queue-stack-card stack-champion' : 'queue-stack-card'}>{index === 0 ? <span className="stack-champion-label">👑 Champion · Most likes</span> : null}<SelectedPost post={post} /><p>{post.caption || post.headline || ''}</p>{post.permalink ? <a href={post.permalink} target="_blank" rel="noreferrer">Open original</a> : null}</article>)}</div></div></div>, document.body);
+  return createPortal(<div className="post-stack-modal" role="dialog" aria-modal="true" aria-label="Posts in this stack" onClick={onClose}><div className="post-stack-modal-inner queue-stack-modal" onClick={(event) => { if (!event.target.closest('.queue-stack-card')) onClose(); else event.stopPropagation(); }}><div className="post-stack-heading"><span><b>{ranked.length} posts</b><small>Posts in this stack</small></span></div><div className="post-stack-grid">{ranked.map((post, index) => <article key={`${post.account}:${post.shortcode}`} className={index === 0 ? 'queue-stack-card stack-champion' : 'queue-stack-card'}>{index === 0 ? <span className="stack-champion-label">👑 Champion · Most likes</span> : null}<SelectedPost post={post} /><p>{post.caption || post.headline || ''}</p>{post.permalink ? <a href={post.permalink} target="_blank" rel="noreferrer">Open original</a> : null}</article>)}</div></div></div>, document.body);
 }
 
 function PickModal({ requests, hotFallback = false, busy, onClose, onAssign }) {
