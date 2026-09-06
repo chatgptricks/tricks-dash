@@ -5861,7 +5861,7 @@ const FreshnessRing = memo(function FreshnessRing({ timestamp }) {
   );
 });
 
-export const PostCard = memo(function PostCard({ post, priority, selected, onSelect, onFlags, onReload, onAssign, onQuickAdd, canPool, canSuggest, draggable, onDragStart, onDragOver, onDrop }) {
+export const PostCard = memo(function PostCard({ post, priority, selected, onSelect, onFlags, onReload, onAssign, onQuickAdd, canPool, canSuggest, draggable, onDragStart, onDragOver, onDrop, hideCaption = false }) {
   const [avatarFailed, setAvatarFailed] = useState(false);
   const handleClick = () => onSelect(post.postKey);
   const handleKeyDown = (event) => {
@@ -5963,9 +5963,9 @@ export const PostCard = memo(function PostCard({ post, priority, selected, onSel
 
       <div className="post-copy">
         <div className="post-likes">{formatLikes(post.likes)} likes</div>
-        <p>
+        {!hideCaption ? <p>
           <strong>{post.account || IG_HANDLE}</strong> {post.headline || post.excerpt}
-        </p>
+        </p> : null}
         <div className="post-footer">
           <span>{compactFormatter.format(post.comments)} comments</span>
           <span>{formatDate(post.postDate)}</span>
