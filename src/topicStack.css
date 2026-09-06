@@ -45,3 +45,4 @@
 @media(prefers-reduced-motion:reduce){.post-stack-modal,.post-stack-modal .post-stack-grid>div{animation:none}}
 .post-stack-grid{grid-template-columns:repeat(auto-fit,minmax(240px,300px));justify-content:center;padding:8px}
 @media(max-width:600px){.post-stack-modal{padding:12px}.post-stack-modal-inner{padding:12px;width:100%}.post-stack-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.stack-selection-bar{bottom:85px}.stack-champion-label{font-size:10px}}
+.stack-card-timing{position:relative}.stack-time-mark{position:absolute;right:8px;top:8px;z-index:2;display:inline-flex;align-items:center;gap:3px;padding:3px 5px;border-radius:999px;background:rgba(0,0,0,.72);color:#fff;font-size:11px;line-height:1}.stack-time-mark b{font-weight:650}.stack-time-mark[title]{cursor:help}
