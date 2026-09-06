@@ -74,7 +74,13 @@ export async function publishSsoCookie() {
 // true once the attempt (successful or not) is finished, so callers know
 // they've done everything they can before falling back to the login screen.
 export async function trySsoSignIn() {
-  await authPersistenceReady;
+  // Never leave a standalone page on its blank loading shell if browser
+  // storage (IndexedDB) is stalled or blocked. Firebase will still resolve
+  // the normal auth observer and the page can show sign-in.
+  await Promise.race([
+    authPersistenceReady,
+    new Promise((resolve) => setTimeout(resolve, 3000)),
+  ]);
   if (firebaseAuth.currentUser) return true;
   const token = readCookie(COOKIE_NAME);
   if (!token) return false;
