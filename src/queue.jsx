@@ -822,6 +822,7 @@ function Detail({ task, tags, availableAccounts = [], canCoordinate, canDuplicat
   const [form, setForm] = useState({});
   const [stackPosts, setStackPosts] = useState(null);
   const [resolvedStackPosts, setResolvedStackPosts] = useState([]);
+  const [stackOpening, setStackOpening] = useState(false);
   const visiblePost = queuePost(task);
   useEffect(() => {
     const destinations = task?.recommendedAccounts?.length ? task.recommendedAccounts : task?.post?.account ? [task.post.account] : ['instagram'];
@@ -865,7 +866,9 @@ function Detail({ task, tags, availableAccounts = [], canCoordinate, canDuplicat
   const publishedLinksReady = destinations.every((account) => String(publishedLinks[account] || '').trim());
   const toggleAccount = (account) => setForm((current) => ({ ...current, recommendedAccounts: current.recommendedAccounts.includes(account) ? current.recommendedAccounts.filter((item) => item !== account) : [...current.recommendedAccounts, account] }));
   const openStack = async () => {
+    if (stackOpening) return;
     if (resolvedStackPosts.length > 1) { setStackPosts(resolvedStackPosts); return; }
+    setStackOpening(true);
     const candidates = [visiblePost, task.post, task.publishedPost]
       .filter((post) => post?.account && post?.shortcode)
       .filter((post, index, items) => items.findIndex((item) => item.account === post.account && item.shortcode === post.shortcode) === index);
@@ -873,14 +876,14 @@ function Detail({ task, tags, availableAccounts = [], canCoordinate, canDuplicat
       try {
         const response = await apiFetch(`${API_BASE}/api/dashboard/stacks/${encodeURIComponent(post.account)}/${encodeURIComponent(post.shortcode)}`);
         const result = response.ok ? await response.json() : null;
-        if (result?.posts?.length > 1) { setStackPosts(result.posts); return; }
+        if (result?.posts?.length > 1) { setResolvedStackPosts(result.posts); setStackPosts(result.posts); setStackOpening(false); return; }
       } catch { /* Keep a failed detail lookup out of the browser console. */ }
     }
     // If Queue encountered this post before Research had persisted its
     // membership, run the same user-initiated similar-post action once and
     // immediately open the resulting durable group.
     const post = candidates[0];
-    if (!post) return;
+    if (!post) { setStackOpening(false); return; }
     try {
       const body = new FormData();
       body.set('post_key', `${post.account}:${post.shortcode}`);
@@ -889,9 +892,10 @@ function Detail({ task, tags, availableAccounts = [], canCoordinate, canDuplicat
       if (match?.stackSize > 1) {
         const response = await apiFetch(`${API_BASE}/api/dashboard/stacks/${encodeURIComponent(post.account)}/${encodeURIComponent(post.shortcode)}`);
         const result = response.ok ? await response.json() : null;
-        if (result?.posts?.length > 1) setStackPosts(result.posts);
+        if (result?.posts?.length > 1) { setResolvedStackPosts(result.posts); setStackPosts(result.posts); }
       }
     } catch { /* The stack button remains quiet if no similar post is found. */ }
+    finally { setStackOpening(false); }
   };
   task = { ...task, openStack: task.post?.shortcode && !task.isCustom ? openStack : null };
   if (task.status === 'completed' && isOwner && !traineeNeedsApproval) return <><button className="sidebar-backdrop" type="button" onClick={onClose} aria-label={t('close')} /><aside className="right-rail is-open queue-request-rail queue-close-rail" role="dialog" aria-modal="true" aria-label={t('closeRequest')}><button className="rail-close-button" type="button" onClick={onClose} aria-label={t('close')}><X size={16} /></button><section className="panel detail"><SelectedPost post={queuePost(task)} />{queuePost(task).shortcode ? <SlideDownload post={queuePost(task)} /> : null}<span className="queue-detail-status">{statusCopy(task.status, t)}</span></section><section className="panel caption-panel queue-rail-caption queue-close-panel"><header className="panel-header caption-header"><div><p className="section-label">{t('closeRequest')}</p><h2>{task.post.title || `@${task.post.account}`}</h2><small>{t('publishedLinksHelp')}</small></div>{Number(task.post.stackSize) > 1 ? <button className="ghost-button" onClick={openStack} title="Open stack"><Layers size={15} /></button> : null}</header><div className="scheduler-close-form queue-multi-link-form">{destinations.map((account) => <label key={account}>{t('publishedLinkFor')} @{account}<input value={publishedLinks[account] || ''} onChange={(event) => setPublishedLinks((current) => ({ ...current, [account]: event.target.value }))} placeholder="https://instagram.com/p/..." /></label>)}<div className="queue-close-actions"><button className="scheduler-primary" disabled={busy || !publishedLinksReady} onClick={() => run(() => onAction('close', destinations.map((account) => ({ account, url: publishedLinks[account].trim() }))))}>{t('closeRequest')}</button><button className="scheduler-secondary" disabled={busy} onClick={() => run(() => onAction('start'))}>{t('returnInProgress')}</button></div></div></section><section className="panel stats-panel">{metric(t('assignment'), task.designerEmail ? displayName(task.designerEmail) : '—')}{metric(t('recommendedAccounts'), destinations.map((account) => `@${account}`).join(' · '))}</section></aside>{stackPosts ? <QueueStackModal posts={stackPosts} onClose={() => setStackPosts(null)} /> : null}</>;
