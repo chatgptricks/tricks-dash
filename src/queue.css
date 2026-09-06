@@ -1161,3 +1161,8 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
 .queue-close-actions { display:flex; gap:8px; padding-top:4px; }
 .queue-close-actions .scheduler-primary,.queue-close-actions .scheduler-secondary { flex:1 1 0; width:auto; min-height:38px; margin:0; }
 @media (max-width:640px) { .queue-close-actions { flex-direction:column; }.queue-close-actions .scheduler-primary,.queue-close-actions .scheduler-secondary { width:100%; } }
+
+/* Stack cards have their own height, unlike the fixed-height sidebar. */
+.queue-stack-card .selected-post { height: auto; max-height: none; padding: 0; }
+.queue-stack-card .selected-post-link { height: auto; }
+.queue-stack-card .selected-post-media { width: 100%; height: auto; aspect-ratio: 3 / 4; }
