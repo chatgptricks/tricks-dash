@@ -9,7 +9,7 @@ import { clearSsoCookie, startSsoRefresh, trySsoSignIn } from './sso';
 import { API_BASE, apiFetch } from './api';
 import { PrefsProvider, usePrefs } from './prefsContext';
 import { ACCENT_CHOICES, accentHex } from './prefs';
-import { SelectedPost, SlideDownload, coverUrlForPost } from './postDetail';
+import { CoverImage, SelectedPost, SlideDownload, coverUrlForPost, formatDate, formatLikes, posterTheme } from './postDetail';
 import chatgptricksProfileImage from './assets/chatgptricks-profile.jpg';
 import traselvelorealProfileImage from './assets/traselveloreal-profile.jpg';
 import { QUEUE_DAY_END, QUEUE_DAY_START, minutesPerPPOf, planQueueDrop } from './queuePlanner';
@@ -1153,7 +1153,8 @@ function DraftAccounts({ draft, designers, onAccountsChange }) {
 
 function QueueStackModal({ posts, onClose }) {
   const ranked = [...posts].sort((a, b) => Number(b.likes || 0) - Number(a.likes || 0));
-  return createPortal(<div className="post-stack-modal" role="dialog" aria-modal="true" aria-label="Posts in this stack" onClick={onClose}><div className="post-stack-modal-inner queue-stack-modal" onClick={(event) => { if (!event.target.closest('.queue-stack-card')) onClose(); else event.stopPropagation(); }}><div className="post-stack-heading"><span><b>{ranked.length} posts</b><small>Posts in this stack</small></span></div><div className="post-stack-grid">{ranked.map((post, index) => <article key={`${post.account}:${post.shortcode}`} className={index === 0 ? 'queue-stack-card stack-champion' : 'queue-stack-card'}>{index === 0 ? <span className="stack-champion-label">👑 Champion · Most likes</span> : null}<SelectedPost post={post} /><p>{post.caption || post.headline || ''}</p>{post.permalink ? <a href={post.permalink} target="_blank" rel="noreferrer">Open original</a> : null}</article>)}</div></div></div>, document.body);
+  const compact = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 });
+  return createPortal(<div className="post-stack-modal" role="dialog" aria-modal="true" aria-label="Posts in this stack" onClick={onClose}><div className="post-stack-modal-inner" onClick={(event) => event.stopPropagation()}><div className="post-stack-heading"><span><b>{ranked.length} posts</b><small>Choose a version</small></span></div><div className="post-stack-grid">{ranked.map((post, index) => <div key={`${post.account}:${post.shortcode}`} className={index === 0 ? 'stack-champion' : ''}>{index === 0 ? <span className="stack-champion-label">👑 Champion · Most likes</span> : null}<article className="post-card queue-research-card"><header className="post-header"><div className="post-user"><div className="post-avatar"><img src={`${API_BASE}/api/dashboard/avatar/${encodeURIComponent(post.account || '')}`} alt="" /></div><div className="post-user-copy"><strong>{post.account}</strong><span>{formatDate(post.postDate || post.publishedAt)}</span></div></div></header><CoverImage className={`post-media ${posterTheme(post.type || post.postType)}`} post={post} /><div className="post-editorial-actions">{post.permalink ? <a href={post.permalink} target="_blank" rel="noreferrer">Original <Link2 size={11} /></a> : null}</div><div className="post-copy"><div className="post-likes">{formatLikes(post.likes)} likes</div><div className="post-footer"><span>{compact.format(Number(post.comments) || 0)} comments</span><span>{formatDate(post.postDate || post.publishedAt)}</span></div></div></article></div>)}</div></div></div>, document.body);
 }
 
 function PickModal({ requests, hotFallback = false, busy, onClose, onAssign }) {

@@ -223,7 +223,8 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
 .queue-settings-panel>header { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 10px 6px; }
 .queue-settings-panel>header p { margin:0; }
 .queue-settings-panel>header button { display:grid; place-items:center; width:24px; height:24px; padding:0; border:1px solid var(--q-line); border-radius:6px; background:var(--q-panel-2); color:var(--q-muted); }
-.queue-stack-card{position:relative;padding:12px;border:1px solid var(--q-line);border-radius:14px;background:var(--q-panel);color:var(--q-text)}.queue-stack-card p{margin:10px 0 8px;font-size:12px;line-height:1.4}.queue-stack-card a{color:var(--q-accent);font-size:12px;font-weight:700}
+.queue-research-card{display:grid;grid-template-rows:auto auto auto 1fr;overflow:hidden;border:1px solid rgba(var(--edge),.1);border-radius:24px;background:linear-gradient(180deg,rgba(20,20,20,.98),rgba(10,10,10,.98));color:var(--q-text)}
+.queue-research-card .post-header{display:flex;align-items:center;padding:14px 14px 12px}.queue-research-card .post-user{display:flex;align-items:center;gap:10px;min-width:0}.queue-research-card .post-avatar{width:38px;height:38px;overflow:hidden;border-radius:999px;background:rgba(var(--accent-rgb),.3)}.queue-research-card .post-avatar img{width:100%;height:100%;object-fit:cover}.queue-research-card .post-user-copy strong,.queue-research-card .post-user-copy span{display:block}.queue-research-card .post-user-copy strong{font-size:.92rem}.queue-research-card .post-user-copy span{margin-top:4px;color:var(--q-muted);font-size:.74rem}.queue-research-card .post-media{position:relative;overflow:hidden;aspect-ratio:1/1;background:var(--q-panel-2)}.queue-research-card .cover-image{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}.queue-research-card .post-editorial-actions{display:flex;justify-content:flex-end;padding:9px 12px;border-top:1px solid var(--q-line)}.queue-research-card .post-editorial-actions a{display:inline-flex;align-items:center;gap:4px;color:var(--q-accent);font-size:11px;font-weight:750}.queue-research-card .post-copy{padding:12px 14px 14px}.queue-research-card .post-likes{font-size:.88rem;font-weight:850}.queue-research-card .post-footer{display:flex;justify-content:space-between;gap:8px;margin-top:8px;color:var(--q-muted);font-size:.72rem}
 .queue-settings-section { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:7px 10px; }
 .queue-settings-section>span { color:var(--q-muted); font-size:11px; font-weight:750; }
 .queue-settings-segment { display:flex; padding:2px; border:1px solid var(--q-line); border-radius:7px; background:var(--q-panel-2); }
@@ -1163,6 +1164,3 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
 @media (max-width:640px) { .queue-close-actions { flex-direction:column; }.queue-close-actions .scheduler-primary,.queue-close-actions .scheduler-secondary { width:100%; } }
 
 /* Stack cards have their own height, unlike the fixed-height sidebar. */
-.queue-stack-card .selected-post { height: auto; max-height: none; padding: 0; }
-.queue-stack-card .selected-post-link { height: auto; }
-.queue-stack-card .selected-post-media { width: 100%; height: auto; aspect-ratio: 3 / 4; }
