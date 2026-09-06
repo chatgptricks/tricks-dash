@@ -2155,7 +2155,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
           <div ref={resultsScrollRef} className="results-scroll">
             {grouping && !visible.length ? <p className="home-loading" role="status">Grouping similar posts… You can keep using Research.</p> : visible.length ? (
               <StackActions onSaved={(result) => { const members = new Map((result.members || []).map((member) => [member.postKey, member])); const keys = new Set(result.postKeys || []); setDashboard((current) => ({ ...current, posts: current.posts.map((post) => { const key = `${post.account}:${post.shortcode}`; const member = members.get(key); return member ? { ...post, stackId: member.stackId, stackSize: member.stackSize } : keys.has(key) ? { ...post, stackId: result.stackId, stackSize: result.stackSize } : post; }) })); }}><div className="gallery-grid">
-                {visibleTopics.map((group, index) => <TopicStack key={group.id} posts={group.posts} total={group.total} renderCard={(post, expand, dragProps) => (
+                {visibleTopics.map((group, index) => <TopicStack key={group.id} posts={group.posts} visiblePosts={group.visiblePosts} total={group.total} renderCard={(post, expand, dragProps) => (
                   <PostCard
                     // Keyed by account+shortcode, not shortcode alone: accounts
                     // repost each other, so ~21 shortcodes exist under two

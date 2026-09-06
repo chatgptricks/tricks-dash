@@ -15,7 +15,7 @@ export function useTopicGroups(posts, catalogue = posts, sort = 'newest') {
       if (!full.has(id)) full.set(id, []);
       full.get(id).push(post);
     }
-    const result = [...grouped.values()].map((group) => ({ ...group, posts: full.get(group.id) || group.posts }));
+    const result = [...grouped.values()].map((group) => ({ ...group, visiblePosts: group.posts, posts: full.get(group.id) || group.posts }));
     const newest = (group) => Math.max(...group.posts.map((post) => Number(post.timestamp) || Date.parse(post.postDate) || 0));
     if (sort === 'newest') result.sort((a,b) => newest(b) - newest(a) || a.id.localeCompare(b.id));
     if (sort === 'oldest') result.sort((a,b) => newest(a) - newest(b) || a.id.localeCompare(b.id));
