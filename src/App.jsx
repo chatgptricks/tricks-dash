@@ -21,6 +21,7 @@ import {
   Heart,
   ImagePlus,
   Link2,
+  Layers,
   ListTodo,
   LoaderCircle,
   LogOut,
