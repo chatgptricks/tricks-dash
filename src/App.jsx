@@ -3243,6 +3243,26 @@ export function SettingsPanel({
     }
   }, [loadApifyRuns, loadRoster, password, recoveringApifyRun]);
 
+  const recoverBatchRun = useCallback(async (run) => {
+    if (!run?.id || recoveringApifyRun) return;
+    setRecoveringApifyRun(run.id);
+    try {
+      const response = await apiFetch(`${API_BASE}/api/admin/apify/import-batch-run?run_id=${encodeURIComponent(run.id)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ password }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.detail || 'Could not recover this Apify run.');
+      setNotice(`Recovered ${body.added ?? 0} posts across ${Object.keys(body.accounts || {}).length} accounts without a new scrape.`);
+      await Promise.all([loadRoster(), loadApifyRuns()]);
+    } catch (error) {
+      setNotice(error.message || 'Could not recover this Apify run.');
+    } finally {
+      setRecoveringApifyRun('');
+    }
+  }, [loadApifyRuns, loadRoster, password, recoveringApifyRun]);
+
   const catchUpDashboardPosts = useCallback(async () => {
     if (!password || catchingUpPosts) return;
     setCatchingUpPosts(true);
@@ -4500,7 +4520,7 @@ export function SettingsPanel({
                           <span className="settings-unit">
                             {typeof run.usd === 'number' ? `$${run.usd.toFixed(2)}` : '—'}
                           </span>
-                          {run.status === 'SUCCEEDED' ? <button type="button" className="ghost-button" disabled={Boolean(recoveringApifyRun)} onClick={() => recoverDaytradingRun(run)}>{recoveringApifyRun === run.id ? 'Recovering…' : 'Recover into daytrading'}</button> : null}
+                          {run.status === 'SUCCEEDED' ? <button type="button" className="ghost-button" disabled={Boolean(recoveringApifyRun)} onClick={() => recoverBatchRun(run)}>{recoveringApifyRun === run.id ? 'Recovering…' : 'Recover all accounts'}</button> : null}
                         </div>
                       </div>
                     ))}
