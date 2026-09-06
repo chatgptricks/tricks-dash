@@ -881,6 +881,16 @@ function Detail({ task, tags, availableAccounts = [], canCoordinate, canDuplicat
         if (result?.posts?.length > 1) { setResolvedStackPosts(result.posts); setStackPosts(result.posts); setStackOpening(false); return; }
       } catch { /* Keep a failed detail lookup out of the browser console. */ }
     }
+    // Use Research's own payload as the durable fallback. This also covers a
+    // refreshed Queue tab while a stack-detail deployment is warming up.
+    try {
+      const response = await apiFetch(`${API_BASE}/api/dashboard/posts`);
+      const result = response.ok ? await response.json() : null;
+      const allPosts = Array.isArray(result?.posts) ? result.posts : [];
+      const current = allPosts.find((item) => candidates.some((post) => item.account === post.account && item.shortcode === post.shortcode));
+      const members = current?.stackId ? allPosts.filter((item) => item.stackId === current.stackId) : [];
+      if (members.length > 1) { setResolvedStackPosts(members); setStackPosts(members); setStackOpening(false); return; }
+    } catch { /* Continue to the explicit similarity action below. */ }
     // If Queue encountered this post before Research had persisted its
     // membership, run the same user-initiated similar-post action once and
     // immediately open the resulting durable group.
