@@ -2211,7 +2211,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
 
           <div className="pagination">
             <div className="pagination-copy">
-              {grouping ? 'Comparing similar posts…' : <>Showing {galleryTotal ? 1 : 0}-{Math.min(visibleCount, galleryTotal)} of {galleryTotal.toLocaleString()} cards</>}
+              {grouping ? 'Comparing similar posts…' : <>{filtered.length.toLocaleString()} posts in {galleryTotal.toLocaleString()} stacks · showing {galleryTotal ? 1 : 0}-{Math.min(visibleCount, galleryTotal)}</>}
             </div>
             {grouping ? null : visibleCount < galleryTotal ? (
               <button className="ghost-button load-more-button" onClick={() => setVisibleCount((count) => count + POSTS_PER_BATCH)}>
