@@ -2911,6 +2911,8 @@ export function SettingsPanel({
   const [notice, setNotice] = useState('');
   const [catchingUpPosts, setCatchingUpPosts] = useState(false);
   const [catchUpNotice, setCatchUpNotice] = useState(null);
+  const [regroupingPosts, setRegroupingPosts] = useState(false);
+  const [regroupNotice, setRegroupNotice] = useState(null);
   const settingsTabs = ['overview', 'accounts', 'users', 'usage', 'notifications', 'system', 'reports'];
   const [tab, setTab] = useState(settingsTabs.includes(initialTab) ? initialTab : 'overview');
   const [showAddAccount, setShowAddAccount] = useState(false);
@@ -3698,6 +3700,24 @@ export function SettingsPanel({
     }
   };
 
+  const regroupRecentPosts = async () => {
+    setRegroupingPosts(true);
+    setRegroupNotice(null);
+    try {
+      const response = await apiFetch(`${API_BASE}/api/admin/stacks/regroup-recent`, { method: 'POST' });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.detail || 'Could not group recent posts.');
+      setRegroupNotice({
+        type: 'success',
+        text: `${body.postsProcessed || 0} posts processed · ${body.stacks || 0} stacks · ${body.groupedPosts || 0} grouped posts.`,
+      });
+    } catch (error) {
+      setRegroupNotice({ type: 'error', text: error.message || 'Could not group recent posts.' });
+    } finally {
+      setRegroupingPosts(false);
+    }
+  };
+
   const addUser = async (event) => {
     event.preventDefault();
     if (userWriteInFlight.current || userActionEmail) return;
@@ -4377,6 +4397,29 @@ export function SettingsPanel({
                   {catchUpNotice ? (
                     <p className={catchUpNotice.type === 'error' ? 'settings-notice-error' : 'settings-notice'}>
                       {catchUpNotice.text}
+                    </p>
+                  ) : null}
+                </section>
+
+                <section className="settings-section system-card">
+                  <div className="settings-section-head">
+                    <h3>Group recent posts</h3>
+                    <button
+                      type="button"
+                      className="ghost-button settings-refresh"
+                      onClick={regroupRecentPosts}
+                      disabled={regroupingPosts}
+                    >
+                      <Layers size={14} className={regroupingPosts ? 'spin' : ''} />
+                      <span>{regroupingPosts ? 'Grouping…' : 'Group last 72 hours'}</span>
+                    </button>
+                  </div>
+                  <p className="wizard-hint">
+                    Rebuilds stacks for posts published during the last 72 hours using the time-weighted similarity rules.
+                  </p>
+                  {regroupNotice ? (
+                    <p className={regroupNotice.type === 'error' ? 'settings-notice-error' : 'settings-notice'}>
+                      {regroupNotice.text}
                     </p>
                   ) : null}
                 </section>
