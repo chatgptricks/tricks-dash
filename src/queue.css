@@ -925,6 +925,13 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
 .scheduler-time-block.status-pending { border-style:dashed; opacity:.78; }
 .scheduler-now-global { top:var(--scheduler-head-height); z-index:10; background:#ff6d9b; box-shadow:0 0 0 1px rgba(0,0,0,.35),0 0 10px rgba(255,109,155,.5); }
 .scheduler-now-global b { top:-25px; left:50%; transform:translateX(-50%); padding:3px 6px; border-radius:4px; background:#ff6d9b; color:#1c0710; font-size:8px; font-weight:950; line-height:1; }
+.scheduler-time-zone-labels { display:grid!important; grid-template-rows:repeat(2,minmax(0,1fr)); align-items:center; gap:0; padding:8px 10px!important; text-transform:none!important; }
+.scheduler-time-zone-labels b { position:static!important; width:auto!important; transform:none!important; color:var(--q-text); font-size:13px!important; line-height:1; letter-spacing:0; }
+.scheduler-time-zone-grid { position:relative!important; display:grid!important; grid-template-rows:repeat(2,minmax(0,1fr)); height:var(--scheduler-head-height)!important; }
+.scheduler-time-zone-row { position:relative; min-height:0; }
+.scheduler-time-zone-row + .scheduler-time-zone-row { border-top:1px solid rgba(var(--edge),.08); }
+.scheduler-time-zone-row b { top:50%; transform:translate(-1px,-50%); width:calc(100% / 24); }
+.scheduler-time-zone-row .queue-skeleton-hour { top:50%; transform:translateY(-50%); }
 .scheduler-context-menu { position:fixed; z-index:170; display:grid; min-width:190px; padding:5px; border:1px solid rgba(var(--accent-rgb),.42); border-radius:9px; background:var(--q-panel); box-shadow:0 18px 40px rgba(0,0,0,.5); }
 .scheduler-context-menu button { min-height:31px; padding:0 9px; border:0; border-radius:5px; background:transparent; color:var(--q-text); text-align:left; font-size:11px; font-weight:750; }
 .scheduler-context-menu button:hover { background:rgba(var(--accent-rgb),.13); }
