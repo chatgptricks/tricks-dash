@@ -265,7 +265,7 @@ function MobileShell({ user, viewer }) {
     <main className="m-content">
       {tab === 'dashboard' ? <DashboardView viewer={viewer} /> : null}
       {tab === 'queue' ? <QueueView viewer={viewer} /> : null}
-      {coordinator && tab === 'tracker' ? <TrackerView /> : null}
+      {tab === 'tracker' ? <TrackerView /> : null}
       {coordinator && tab === 'insights' ? <InsightsView /> : null}
       {tab === 'settings' ? <SettingsView viewer={viewer} /> : null}
     </main>
