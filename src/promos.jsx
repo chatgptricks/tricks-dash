@@ -19,7 +19,7 @@ function Badge({ value }) { return <span className={`promo-badge ${value}`}>{val
 function Card({ item, onSelect }) {
   const evidence = item.evidence?.[0]?.text || item.signals?.join(' · ') || 'No evidence excerpt';
   return <article className="promo-card" onClick={() => onSelect(item)}>
-    <div className="promo-cover">{item.cover_image_path || item.cover_source_url ? <img src={item.cover_image_path || item.cover_source_url} alt="" /> : <span>◎</span>}</div>
+    <div className="promo-cover">{item.cover_url || item.cover_source_url ? <img src={item.cover_url ? `${API_BASE}${item.cover_url}` : item.cover_source_url} alt="" /> : <span>◎</span>}</div>
     <div className="promo-card-body"><div className="promo-card-top"><Badge value={item.classification} /><span className="promo-review">{item.review_status}</span></div>
       <h2>{item.client || 'Unknown client'}</h2><p className="promo-product">{item.product || 'Product not specified'}</p>
       <dl><div><dt>Posted by</dt><dd>@{item.account}</dd></div><div><dt>Detected</dt><dd>{item.first_detected_at ? new Date(item.first_detected_at).toLocaleDateString() : '—'}</dd></div></dl>
