@@ -877,7 +877,7 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
 /* Scheduler state language: priority is intentionally quiet; time and state
    are what need to scan instantly in a production day. */
 .scheduler { padding-left:0; padding-right:0; }
-.scheduler-canvas { --scheduler-label-width:236px; --scheduler-day-width:max(1920px,calc(240cqw - 360px)); --scheduler-head-height:58px; }
+.scheduler-canvas { --scheduler-label-width:236px; --scheduler-day-width:max(1920px,calc(240cqw - 360px)); --scheduler-head-height:46px; }
 .scheduler-row>header,.scheduler-time-head>span { min-height:var(--scheduler-head-height); }
 .scheduler-user-copy { display:grid; gap:3px; min-width:0; }
 .scheduler-user-copy small { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -925,7 +925,7 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
 .scheduler-time-block.status-pending { border-style:dashed; opacity:.78; }
 .scheduler-now-global { top:var(--scheduler-head-height); z-index:10; background:#ff6d9b; box-shadow:0 0 0 1px rgba(0,0,0,.35),0 0 10px rgba(255,109,155,.5); }
 .scheduler-now-global b { top:-25px; left:50%; transform:translateX(-50%); padding:3px 6px; border-radius:4px; background:#ff6d9b; color:#1c0710; font-size:8px; font-weight:950; line-height:1; }
-.scheduler-time-zone-labels { display:grid!important; grid-template-rows:repeat(2,minmax(0,1fr)); align-items:center; gap:0; padding:8px 10px!important; text-transform:none!important; }
+.scheduler-time-zone-labels { display:grid!important; grid-template-rows:repeat(2,minmax(0,1fr)); align-items:center; justify-items:end; gap:0; padding:4px 10px!important; text-transform:none!important; }
 .scheduler-time-zone-labels b { position:static!important; width:auto!important; transform:none!important; color:var(--q-text); font-size:13px!important; line-height:1; letter-spacing:0; }
 .scheduler-time-zone-grid { position:relative!important; display:grid!important; grid-template-rows:repeat(2,minmax(0,1fr)); height:var(--scheduler-head-height)!important; }
 .scheduler-time-zone-row { position:relative; min-height:0; }
