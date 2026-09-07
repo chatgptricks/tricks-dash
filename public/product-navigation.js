@@ -6,7 +6,7 @@ export const productSections = [
   { id: 'insights', label: 'Insights', es: 'Insights', path: 'insights.html', restricted: true, target: 'sentient-insights' },
 ];
 if (typeof window !== 'undefined') {
-const toolName = /\/queue\.html$/.test(window.location.pathname) ? 'sentient-queue' : /\/tracker\.html$/.test(window.location.pathname) ? 'sentient-tracker' : /\/insights\.html$/.test(window.location.pathname) ? 'sentient-insights' : /\/settings\.html$/.test(window.location.pathname) ? 'sentient-settings' : 'sentient-dashboard';
+const toolName = /\/queue\.html$/.test(window.location.pathname) ? 'sentient-queue' : /\/tracker\.html$/.test(window.location.pathname) ? 'sentient-tracker' : /\/insights\.html$/.test(window.location.pathname) ? 'sentient-insights' : /\/settings\.html$/.test(window.location.pathname) ? 'sentient-settings' : /\/promos\.html$/.test(window.location.pathname) ? 'sentient-promos' : 'sentient-dashboard';
 window.name = toolName;
 }
 export function openSection(event, section) {
