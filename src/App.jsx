@@ -3274,7 +3274,7 @@ export function SettingsPanel({
       const response = await apiFetch(`${API_BASE}/api/dashboard/posts/catch-up`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ password }),
+        body: new URLSearchParams({ password, lookback_hours: '168' }),
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.detail || 'Post catch-up failed.');
@@ -3284,7 +3284,7 @@ export function SettingsPanel({
       );
       setCatchUpNotice({
         type: 'success',
-        text: added ? `${added} missing post${added === 1 ? '' : 's'} added from the last 24 hours.` : 'No additional regular posts found in the last 24 hours.',
+        text: added ? `${added} missing post${added === 1 ? '' : 's'} added from the last 7 days.` : 'No additional regular posts found in the last 7 days.',
       });
       loadApifyRuns();
     } catch (error) {
@@ -4393,7 +4393,7 @@ export function SettingsPanel({
                     </button>
                   </div>
                   <p className="wizard-hint">
-                    One manual 24-hour recovery pass for regular posts across active accounts. Reels are excluded.
+                    One manual 7-day recovery pass using the normal profile scraper across active accounts. Returned Reels are included; the dedicated Reels scraper is not used.
                   </p>
                   {catchUpNotice ? (
                     <p className={catchUpNotice.type === 'error' ? 'settings-notice-error' : 'settings-notice'}>
