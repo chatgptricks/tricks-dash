@@ -20,13 +20,20 @@ function Login({ error }) {
 
 function Badge({ value }) { return <span className={`promo-badge ${value}`}>{value === 'disclosed' ? 'Disclosed promotion' : value === 'likely' ? 'Likely promotion' : 'Needs review'}</span>; }
 
+function formatPromoDate(value) {
+  if (!value) return 'Date unavailable';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? 'Date unavailable' : new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(date);
+}
+
 function Card({ item, onSelect }) {
   const evidence = item.evidence?.[0]?.text || item.signals?.join(' · ') || 'No evidence excerpt';
+  const client = item.client || 'Unknown client';
   return <article className="promo-card" onClick={() => onSelect(item)}>
     <div className="promo-cover">{item.cover_url || item.cover_source_url ? <img src={item.cover_url ? `${API_BASE}${item.cover_url}` : item.cover_source_url} alt="" /> : <span>◎</span>}</div>
     <div className="promo-card-body"><div className="promo-card-top"><Badge value={item.classification} /><span className="promo-review">{item.review_status}</span></div>
-      <h2>{item.client || 'Unknown client'}</h2><p className="promo-product">{item.product || 'Product not specified'}</p>
-      <dl><div><dt>Posted by</dt><dd>@{item.account}</dd></div><div><dt>Detected</dt><dd>{item.first_detected_at ? new Date(item.first_detected_at).toLocaleDateString() : '—'}</dd></div></dl>
+      <h2 className="promo-opportunity-title"><strong>{client}</strong> <span>is posting on</span> <em>@{item.account}</em></h2><p className="promo-date">{formatPromoDate(item.published_at || item.first_detected_at)}</p><p className="promo-product"><span>Product</span> {item.product || 'Not specified'}</p>
+      <dl><div><dt>Signal</dt><dd>{item.classification === 'disclosed' ? 'Disclosed promotion' : item.classification === 'likely' ? 'Likely promotion' : 'Needs review'}</dd></div><div><dt>Detected</dt><dd>{formatPromoDate(item.first_detected_at)}</dd></div></dl>
       <p className="promo-evidence">“{evidence}”</p><div className="promo-card-foot">{item.cta?.keyword ? `Keyword: ${item.cta.keyword}` : item.promo_code ? `Code: ${item.promo_code}` : item.links?.length ? 'Commercial link found' : 'Open details'}<span>↗</span></div>
     </div></article>;
 }
@@ -34,7 +41,7 @@ function Card({ item, onSelect }) {
 function Detail({ item, onClose, onUpdate }) {
   const [saving, setSaving] = useState(false);
   async function update(payload) { setSaving(true); try { const response = await apiFetch(`${API_BASE}/api/admin/promos/${encodeURIComponent(item.account)}/${encodeURIComponent(item.shortcode)}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); if (response.ok) onUpdate(await response.json()); } finally { setSaving(false); } }
-  return <div className="promo-modal" role="dialog" aria-modal="true"><div className="promo-dialog"><button className="promo-close" onClick={onClose}>×</button><Badge value={item.classification} /><h2>{item.client || 'Unknown client'}</h2><p className="promo-product">{item.product || 'Product not specified'}</p><p className="promo-by">@{item.account} · {item.published_at ? new Date(item.published_at).toLocaleString() : 'date unavailable'}</p><div className="promo-caption">{item.caption || 'Caption unavailable.'}</div><div className="promo-evidence-list">{(item.evidence || []).map((e, index) => <div key={`${e.rule}-${index}`}><strong>{e.rule}</strong><span>{e.text}</span></div>)}</div>{item.cta?.keyword && <p><strong>Automation keyword:</strong> {item.cta.keyword}</p>}{item.links?.map(link => <a key={link.url} href={link.url} target="_blank" rel="noreferrer">{link.url}</a>)}<div className="promo-actions"><button disabled={saving} onClick={() => update({ review_status: 'reviewed' })}>Mark reviewed</button><button disabled={saving} onClick={() => update({ review_status: 'dismissed' })}>Dismiss</button><a className="promo-primary" href={item.permalink} target="_blank" rel="noreferrer">Open post</a></div></div></div>;
+  return <div className="promo-modal" role="dialog" aria-modal="true"><div className="promo-dialog"><button className="promo-close" onClick={onClose}>×</button><Badge value={item.classification} /><h2 className="promo-opportunity-title"><strong>{item.client || 'Unknown client'}</strong> <span>is posting on</span> <em>@{item.account}</em></h2><p className="promo-date">{formatPromoDate(item.published_at)}</p><p className="promo-product"><span>Product</span> {item.product || 'Not specified'}</p><div className="promo-by">@{item.account} · {item.published_at ? new Date(item.published_at).toLocaleString() : 'date unavailable'}</div><div className="promo-caption">{item.caption || 'Caption unavailable.'}</div><div className="promo-evidence-list">{(item.evidence || []).map((e, index) => <div key={`${e.rule}-${index}`}><strong>{e.rule}</strong><span>{e.text}</span></div>)}</div>{item.cta?.keyword && <p><strong>Automation keyword:</strong> {item.cta.keyword}</p>}{item.links?.map(link => <a key={link.url} href={link.url} target="_blank" rel="noreferrer">{link.url}</a>)}<div className="promo-actions"><button disabled={saving} onClick={() => update({ review_status: 'reviewed' })}>Mark reviewed</button><button disabled={saving} onClick={() => update({ review_status: 'dismissed' })}>Dismiss</button><a className="promo-primary" href={item.permalink} target="_blank" rel="noreferrer">Open post</a></div></div></div>;
 }
 
 function PromosApp() {
