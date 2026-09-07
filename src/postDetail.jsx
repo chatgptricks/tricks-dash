@@ -168,7 +168,7 @@ export const CoverImage = memo(function CoverImage({ className, post, priority =
     return () => { window.clearTimeout(timer); window.removeEventListener('online', recover); };
   }, [sourceIndex, sourceKey, retry]);
 
-  const activeSource = sources[sourceIndex];
+  const activeSource = sources[sourceIndex] ? `${sources[sourceIndex]}${sources[sourceIndex].includes('?') ? '&' : '?'}cover_attempt=${retry}` : '';
   const imageLoaded = Boolean(activeSource) && loadedSource === activeSource;
 
   return (
