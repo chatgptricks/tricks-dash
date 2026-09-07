@@ -5,6 +5,7 @@ import { apiFetch, API_BASE } from './api';
 import { firebaseAuth, startGoogleSignIn, describeSignInError } from './firebase';
 import { clearSsoCookie, startSsoRefresh, trySsoSignIn } from './sso';
 import ProductHeader from './ProductHeader';
+import TopicStack from './TopicStack';
 import { SettingsMenu } from './App';
 import { PrefsProvider } from './prefsContext';
 import './styles.css';
@@ -26,11 +27,20 @@ function formatPromoDate(value) {
   return Number.isNaN(date.getTime()) ? 'Date unavailable' : new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(date);
 }
 
+function PromoCover({ item }) {
+  const primary = item.cover_url ? (item.cover_url.startsWith('http') ? item.cover_url : `${API_BASE}${item.cover_url}`) : item.cover_source_url;
+  const fallback = item.cover_url && item.cover_source_url && item.cover_source_url !== primary ? item.cover_source_url : null;
+  const [source, setSource] = useState(primary);
+  const [failed, setFailed] = useState(false);
+  if (!source || failed) return <span>◎</span>;
+  return <img src={source} alt="" loading="lazy" decoding="async" onError={() => { if (fallback && source !== fallback) setSource(fallback); else setFailed(true); }} />;
+}
+
 function Card({ item, onSelect }) {
   const evidence = item.evidence?.[0]?.text || item.signals?.join(' · ') || 'No evidence excerpt';
   const client = item.client || 'Unknown client';
   return <article className="promo-card" onClick={() => onSelect(item)}>
-    <div className="promo-cover">{item.cover_url || item.cover_source_url ? <img src={item.cover_url ? `${API_BASE}${item.cover_url}` : item.cover_source_url} alt="" /> : <span>◎</span>}</div>
+    <div className="promo-cover"><PromoCover item={item} /></div>
     <div className="promo-card-body"><div className="promo-card-top"><Badge value={item.classification} /><span className="promo-review">{item.review_status}</span></div>
       <h2 className="promo-opportunity-title"><strong>{client}</strong> <span>is posting on</span> <em>@{item.account}</em></h2><p className="promo-date">{formatPromoDate(item.published_at || item.first_detected_at)}</p>{item.stack_size > 1 && <p className="promo-stack-context">Promo cluster · {item.stack_size} related posts</p>}<p className="promo-product"><span>Product</span> {item.product || 'Not specified'}</p>
       <dl><div><dt>Signal</dt><dd>{item.classification === 'disclosed' ? 'Disclosed promotion' : item.classification === 'likely' ? 'Likely promotion' : 'Needs review'}</dd></div><div><dt>Detected</dt><dd>{formatPromoDate(item.first_detected_at)}</dd></div></dl>
@@ -57,16 +67,13 @@ function promoGroups(items) {
 
 function PromoResults({ items, onSelect }) {
   const groups = promoGroups(items);
-  const standalone = groups.filter(group => !group.isStack).flatMap(group => group.items);
-  const clusters = groups.filter(group => group.isStack);
-  return <div className="promo-results">
-    {clusters.map(group => {
-      const clients = [...new Set(group.items.map(item => item.client).filter(Boolean))];
-      const title = clients.length === 1 ? `${clients[0]} promotion cluster` : 'Related promotion posts';
-      return <section className="promo-cluster" key={group.key}><header className="promo-cluster-heading"><div><span>Stack detected</span><h2>{title}</h2></div><strong>{group.items.length} promo {group.items.length === 1 ? 'post' : 'posts'} · {group.stackSize} related posts</strong></header><div className="promo-grid">{group.items.map(item => <Card key={`${item.account}:${item.shortcode}`} item={item} onSelect={onSelect} />)}</div></section>;
+  return <section className="promo-grid promo-grid-stacks">
+    {groups.map(group => {
+      const posts = group.items.map(item => ({ ...item, postDate: item.published_at || item.first_detected_at, publishedAt: item.published_at || item.first_detected_at, timestamp: Date.parse(item.published_at || item.first_detected_at || '') || 0 }));
+      if (group.isStack && posts.length > 1) return <div className="promo-result-stack" key={group.key}><TopicStack posts={posts} visiblePosts={posts} total={posts.length} renderCard={post => <Card item={post} onSelect={onSelect} />} /></div>;
+      return <div className="promo-result-single" key={group.key}><Card item={posts[0]} onSelect={onSelect} />{group.isStack && <p className="promo-stack-context">Stack · {group.stackSize} related posts</p>}</div>;
     })}
-    {standalone.length ? <section className="promo-cluster promo-cluster-standalone"><div className="promo-grid">{standalone.map(item => <Card key={`${item.account}:${item.shortcode}`} item={item} onSelect={onSelect} />)}</div></section> : null}
-  </div>;
+  </section>;
 }
 
 function PromosApp() {
