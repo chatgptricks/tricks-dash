@@ -7,6 +7,7 @@ import { clearSsoCookie, startSsoRefresh, trySsoSignIn } from './sso';
 import ProductHeader from './ProductHeader';
 import { SettingsMenu } from './App';
 import { PrefsProvider } from './prefsContext';
+import './styles.css';
 import './promos.css';
 
 const EMPTY = { items: [], next_cursor: null };
