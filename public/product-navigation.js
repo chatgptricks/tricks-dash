@@ -2,7 +2,7 @@
 export const productSections = [
   { id: 'research', label: 'Research', es: 'Investigar', path: 'index.html', target: 'sentient-dashboard' },
   { id: 'queue', label: 'Queue', es: 'Producción', path: 'queue.html', target: 'sentient-queue' },
-  { id: 'tracker', label: 'Tracker', es: 'Tracker', path: 'tracker.html', restricted: true, target: 'sentient-tracker' },
+  { id: 'tracker', label: 'Tracker', es: 'Tracker', path: 'tracker.html', target: 'sentient-tracker' },
   { id: 'insights', label: 'Insights', es: 'Insights', path: 'insights.html', restricted: true, target: 'sentient-insights' },
 ];
 if (typeof window !== 'undefined') {

@@ -232,7 +232,7 @@ const NAV = [
 function MobileShell({ user, viewer }) {
   const { t } = usePrefs();
   const coordinator = Boolean(viewer.is_admin || viewer.is_dev || viewer.operating_roles?.includes('vc'));
-  const visibleNav = NAV.filter(([key]) => coordinator || !['tracker', 'insights'].includes(key));
+  const visibleNav = NAV.filter(([key]) => coordinator || key !== 'insights');
   const initialParams = new URLSearchParams(location.search);
   const initial = decodeRouteState(initialParams.get('r'))?.tab || initialParams.get('tab');
   const safeInitial = visibleNav.some(([key]) => key === initial) || initial === 'settings' ? initial : 'dashboard';
