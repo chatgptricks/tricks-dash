@@ -2878,7 +2878,7 @@ const ACCOUNT_GROUP_OPTIONS = [
   { value: 'competitors', label: 'Competitors' },
 ];
 const SCRAPE_MODE_OPTIONS = [
-  { value: 'posts', label: 'Posts', hint: 'Only regular profile posts' },
+  { value: 'posts', label: 'Posts', hint: 'Profile feed, including Reels returned by the normal scraper' },
   { value: 'reels', label: 'Reels', hint: 'Only the Reels tab' },
   { value: 'both', label: 'Both', hint: 'Posts and Reels' },
 ];
