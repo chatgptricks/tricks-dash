@@ -87,13 +87,18 @@ export async function apiFetch(url, options = {}) {
 // The Research catalogue can contain tens of thousands of posts. Keep each
 // API response bounded while preserving the existing client-side search and
 // filter behavior by assembling the pages in order in the browser.
-export async function fetchDashboardPosts({ signal, pageSize = 2000, onPage } = {}) {
+export async function fetchDashboardPosts({ signal, pageSize = 2000, initialPageSize = 60, onPage } = {}) {
   const size = Math.min(Math.max(Number(pageSize) || 1000, 1), 2000);
+  // The first page is deliberately small so a slow catalogue query can never
+  // leave an old IndexedDB snapshot on screen while the newest posts wait
+  // behind tens of thousands of historical rows. Subsequent pages use the
+  // larger bounded window to assemble the complete client-side catalogue.
+  const firstSize = Math.min(Math.max(Number(initialPageSize) || 60, 1), size);
   const posts = [];
   let offset = 0;
   let summary = {};
   while (true) {
-    const params = new URLSearchParams({ limit: String(size), offset: String(offset) });
+    const params = new URLSearchParams({ limit: String(offset === 0 ? firstSize : size), offset: String(offset) });
     const response = await apiFetch(`${API_BASE}/api/dashboard/posts?${params}`, { signal });
     if (!response.ok) {
       const error = new Error(`HTTP ${response.status}`);
