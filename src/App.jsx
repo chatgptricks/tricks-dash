@@ -3122,7 +3122,14 @@ export function SettingsPanel({
           const queued = Array.isArray(status.queue) ? status.queue : [];
           for (const handle of handles) {
             const serverTask = serverTasks.get(handle);
-            if (!serverTask) continue;
+            // A task that is no longer present in the server-owned queue has
+            // finished (or was recovered while this tab was away). Clear the
+            // local optimistic card instead of leaving a stale progress bar
+            // stuck on the old count after a worker restart.
+            if (!serverTask) {
+              dismissAccountBackfill(handle);
+              continue;
+            }
             if (serverTask.status === 'queued') {
               patchAccountBackfill(handle, {
                 phase: 'waiting',
