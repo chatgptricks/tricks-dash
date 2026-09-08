@@ -1523,6 +1523,12 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
     promoOnly,
     showHidden,
   ].filter(Boolean).length;
+  // The unfiltered All view reports the database total even when the browser
+  // has only fetched the first bounded page. Once a group, account, search, or
+  // other filter is active, the header reports the matching result count.
+  const displayedPostCount = activeGroup === 'all' && activeFilterCount === 0
+    ? (Number(summary['Exported posts']) || posts.length)
+    : filtered.length;
 
   // One chip per active filter, each able to clear just itself.
   //
@@ -1787,7 +1793,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
                   </button>
                 ) : <kbd className="search-kbd">⌘K</kbd>}
               </div>
-              <p className="results-count"><strong>{filtered.length.toLocaleString()}</strong> {t('posts')}</p>
+              <p className="results-count"><strong>{displayedPostCount.toLocaleString()}</strong> {t('posts')}</p>
             </> : null}
           </ProductHeader>
           {incomingData && !homeView ? <div className="live-data-notice" role="status"><LoaderCircle className="spin" size={16} /><span>New data is incoming</span></div> : null}
