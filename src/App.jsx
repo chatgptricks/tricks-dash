@@ -420,7 +420,6 @@ export function SettingsMenu({ email, avatarUrl, isAdmin, isDev, onSignOut, show
 }
 
 
-const PREDICT_URL = 'https://chatgptricks.github.io/cortex/';
 // How long a HOT post keeps showing its badge. Deliberately the SAME window as
 // the HOT tab: a badge that outlived the tab meant a post could look hot in the
 // grid while being absent from the place you go to find hot posts. HOT is a
@@ -1245,7 +1244,6 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
   useEffect(() => {
     if (rolePreviewActive) { setActiveGroup('all'); setSelectedAccounts(new Set()); }
   }, [activeRolePreview]);
-  const [backgroundTasks, setBackgroundTasks] = useState([]);
 
   // Custom lists fall back to the archive icon: they're user-made and there's
   // no sensible per-list emoji to pick.
@@ -1261,142 +1259,6 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
     window.location.replace(`${import.meta.env.BASE_URL}settings.html${params.size ? `?${params}` : ''}`);
   }, [initialUrl, effectiveIsAdmin, isDev, rolePreviewActive]);
 
-  // Kicks off the (slow, Apify-bound) initial history import for a
-  // freshly-created account without blocking the UI -- tracked as a
-  // floating card in BackgroundTaskStack instead of a modal the user has
-  // to wait in front of.
-  const startBackgroundBackfill = useCallback((account, password) => {
-    const id = `${account.handle}-${Date.now()}`;
-    setBackgroundTasks((tasks) => [
-      ...tasks,
-      {
-        id,
-        handle: account.handle,
-        label: account.label,
-        group: account.group,
-        avatarUrl: account.avatarUrl || null,
-        phase: 'importing',
-        startedAt: Date.now(),
-        added: 0,
-        error: null,
-        serverProgress: { phase: 'queued' },
-      },
-    ]);
-
-    // Cache the real profile picture locally so it survives past the CDN
-    // URL's expiry (see /api/dashboard/avatar/{handle}). Runs independently
-    // of the backfill below -- a failure here shouldn't block the import,
-    // and we already have the picture URL from the wizard's own preview
-    // fetch, so this just downloads it once rather than hitting Apify again.
-    if (account.avatarUrl) {
-      (async () => {
-        try {
-          const response = await apiFetch(`${API_BASE}/api/admin/accounts/${encodeURIComponent(account.handle)}/avatar`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({ password, image_url: account.avatarUrl }),
-          });
-          if (response.ok) {
-            await loadDashboard(undefined, { silent: true });
-          }
-        } catch (error) {
-          // Non-critical -- the card just falls back to initials if this fails.
-        }
-      })();
-    }
-
-    (async () => {
-      // The background endpoint, not the synchronous one. A full history
-      // import runs for minutes -- far longer than the proxy in front of the
-      // API will hold an idle connection -- so the blocking call died every
-      // time and left the account at zero posts with no explanation. This
-      // starts the work server-side and polls for the outcome, so closing the
-      // tab or losing the network no longer costs you the import.
-      const finish = (patch) =>
-        setBackgroundTasks((tasks) => tasks.map((task) => (task.id === id ? { ...task, ...patch } : task)));
-
-      try {
-        // 2000 stays the default for the other two modes; the wizard only
-        // sends a number when you explicitly picked a post count.
-        const params = { password, results_limit: String(account.resultsLimit || 2000) };
-        if (account.dateFrom) params.date_from = account.dateFrom;
-        if (account.dateTo) params.date_to = account.dateTo;
-        const response = await apiFetch(`${API_BASE}/api/admin/accounts/backfill-bg/${encodeURIComponent(account.handle)}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams(params),
-        });
-        const started = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          finish({ phase: 'error', error: started.detail || 'Import failed to start.' });
-          return;
-        }
-        // Poll until the worker reports back. Generous ceiling: 2000 posts can
-        // take a good while, and giving up early is what made this look broken.
-        // 4s (rather than 10s) so the phase/counts below feel live rather than
-        // stepping in visible jumps.
-        let attempts = 0;
-        const poll = setInterval(async () => {
-          attempts += 1;
-          try {
-            const statusResponse = await apiFetch(`${API_BASE}/api/admin/accounts/backfill-status`);
-            const status = await statusResponse.json().catch(() => ({}));
-            const serverTask = Array.isArray(status.tasks)
-              ? status.tasks.find((task) => task.handle === account.handle)
-              : null;
-            if (serverTask) {
-              if (serverTask.status === 'queued') {
-                finish({ phase: 'importing', serverProgress: serverTask.progress || { phase: 'queued' }, queuePosition: started.position || 0 });
-                return;
-              }
-              if (serverTask.status === 'running') {
-                finish({ phase: 'importing', serverProgress: serverTask.progress || null });
-                return;
-              }
-              clearInterval(poll);
-              if (serverTask.status === 'error') {
-                finish({ phase: 'error', error: serverTask.error || 'Import failed.' });
-                return;
-              }
-              finish({ phase: 'done', added: serverTask.result?.added ?? 0, serverProgress: null });
-              await loadDashboard(undefined, { silent: true });
-              setTimeout(() => setBackgroundTasks((tasks) => tasks.filter((task) => task.id !== id)), 8000);
-              return;
-            }
-            if (status.running) {
-              finish({ serverProgress: status.progress || null });
-              if (attempts >= 300) { // ~20 minutes
-                clearInterval(poll);
-                finish({ phase: 'unknown' });
-                setTimeout(() => setBackgroundTasks((tasks) => tasks.filter((task) => task.id !== id)), 10000);
-              }
-              return;
-            }
-            clearInterval(poll);
-            if (status.error) {
-              finish({ phase: 'error', error: status.error });
-              return;
-            }
-            finish({ phase: 'done', added: status.result?.added ?? 0, serverProgress: null });
-            await loadDashboard(undefined, { silent: true });
-            setTimeout(() => setBackgroundTasks((tasks) => tasks.filter((task) => task.id !== id)), 8000);
-          } catch {
-            // A dropped poll is not a failed import -- the work is server-side.
-            if (attempts >= 300) {
-              clearInterval(poll);
-              finish({ phase: 'unknown' });
-            }
-          }
-        }, 4000);
-      } catch (error) {
-        finish({ phase: 'error', error: 'Could not reach the server to start the import.' });
-      }
-    })();
-  }, [loadDashboard]);
-
-  const dismissBackgroundTask = useCallback((id) => {
-    setBackgroundTasks((tasks) => tasks.filter((task) => task.id !== id));
-  }, []);
   // Whenever the tab (or the account roster itself) changes, default back
   // to "everything in this tab selected" rather than carrying over a
   // narrower selection from a different tab's account list.
@@ -2308,7 +2170,6 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
         />
       ) : null}
 
-      <BackgroundTaskStack tasks={backgroundTasks} onDismiss={dismissBackgroundTask} />
       <DevRolePreview isDev={isDev} canSwitchRoles={canSwitchRoles} availableRoles={availableRoles} />
     </div>
   );
@@ -2910,9 +2771,8 @@ const WIZARD_STEPS = ['Account', 'Settings', 'Confirm'];
 // (e.g. a wrong password surfaces right here). The slow part -- pulling
 // initial post history from Apify, which can take a minute or more -- is
 // hard to make feel un-stuck inside a blocking form, so as soon as the
-// account is created this modal closes and the import continues as a
-// floating background task (see BackgroundTaskStack) that the rest of the
-// dashboard stays fully interactive around.
+// account is created this modal closes and the persistent queue monitor in
+// Settings keeps the import visible while the dashboard stays interactive.
 // Admin panel: HOT thresholds, pulling older history, and the manual refresh.
 // The password is asked for once when the panel opens and kept only in this
 // component's state -- never written to localStorage, so closing the panel or
@@ -3064,7 +2924,7 @@ export function SettingsPanel({
       handle: account.handle,
       label: account.label || account.handle,
       group: account.group || 'sentient',
-      avatarUrl: account.avatarUrl || '',
+      avatarUrl: account.avatarUrl || account.avatar_url || '',
       phase: 'starting',
       startedAt: Date.now(),
       serverProgress: { phase: 'queued' },
@@ -3574,75 +3434,22 @@ export function SettingsPanel({
         }));
       }
 
-      // Poll until the worker reports back. 2000 posts from an old date can
-      // take a good while -- giving up early is what made this look broken
-      // in the first place. 4s (not 10s) so the phase text below tracks the
-      // real work closely instead of stepping in visible jumps.
-      const pollStartedAt = Date.now();
-      let attempts = 0;
-      const poll = setInterval(async () => {
-        attempts += 1;
-        try {
-          const statusResponse = await apiFetch(`${API_BASE}/api/admin/accounts/backfill-status`);
-          const status = await statusResponse.json().catch(() => ({}));
-          const serverTask = Array.isArray(status.tasks)
-            ? status.tasks.find((task) => task.handle === handle)
-            : null;
-          if (serverTask) {
-            if (serverTask.status === 'queued') {
-              setImportNotice((prev) => ({ ...prev, [handle]: started.position > 1 ? `Queued at position ${started.position}.` : 'Queued — starting next.' }));
-              return;
-            }
-            if (serverTask.status === 'running') {
-              const elapsedSec = Math.round((Date.now() - pollStartedAt) / 1000);
-              const live = describeBackfillProgress(serverTask.progress, elapsedSec);
-              setImportNotice((prev) => ({ ...prev, [handle]: live.text || `Importing… ${elapsedSec}s` }));
-              return;
-            }
-            clearInterval(poll);
-            if (serverTask.status === 'error') {
-              setImportNotice((prev) => ({ ...prev, [handle]: serverTask.error || 'Import failed.' }));
-            } else {
-              const transcriptCount = Number(serverTask.result?.transcripts_updated || 0);
-              setImportNotice((prev) => ({ ...prev, [handle]: `Done — ${serverTask.result?.added ?? 0} new posts${transcriptCount ? `, ${transcriptCount} transcripts` : ''}.` }));
-              await loadRoster();
-              onAccountsChanged?.();
-            }
-            setImporting('');
-            return;
-          }
-          if (status.running) {
-            const elapsedSec = Math.round((Date.now() - pollStartedAt) / 1000);
-            const live = describeBackfillProgress(status.progress, elapsedSec);
-            setImportNotice((prev) => ({ ...prev, [handle]: live.text || `Importing… ${elapsedSec}s` }));
-            if (attempts >= 300) { // ~20 minutes
-              clearInterval(poll);
-              setImportNotice((prev) => ({
-                ...prev,
-                [handle]: 'Still running on the server. New posts will show up on their own.',
-              }));
-              setImporting('');
-            }
-            return;
-          }
-          clearInterval(poll);
-          if (status.error) {
-            setImportNotice((prev) => ({ ...prev, [handle]: status.error }));
-          } else {
-            const transcriptCount = Number(status.result?.transcripts_updated || 0);
-            const transcriptNote = transcriptCount
-              ? ` ${transcriptCount} transcript${transcriptCount === 1 ? '' : 's'} saved.`
-              : '';
-            setImportNotice((prev) => ({ ...prev, [handle]: `Done: ${status.result?.added ?? 0} new posts.${transcriptNote}` }));
-            onAccountsChanged?.();
-            await loadRoster();
-          }
-          setImporting('');
-        } catch {
-          // Transient poll failure -- next tick tries again, importing stays
-          // true so the button shows busy rather than falsely idle.
-        }
-      }, 4000);
+      // The shared persistent queue monitor owns progress for every account.
+      // Do not create a second per-row interval here: it raced the monitor,
+      // survived navigation, and regularly showed stale progress.
+      const account = roster.find((item) => item.handle === handle) || { handle };
+      addAccountBackfill(account);
+      patchAccountBackfill(handle, {
+        phase: started.position > 1 ? 'waiting' : 'importing',
+        serverProgress: { phase: 'queued' },
+        queuePosition: started.position || 0,
+        error: '',
+      });
+      setImportNotice((prev) => ({
+        ...prev,
+        [handle]: started.position > 1 ? `Queued at position ${started.position}.` : 'Queued — progress is shown above.',
+      }));
+      setImporting('');
     } catch (error) {
       setImportNotice((prev) => ({ ...prev, [handle]: 'Network error starting the import.' }));
       setImporting('');
@@ -5567,61 +5374,6 @@ function describeBackfillProgress(progress, elapsedSec) {
     default:
       return { text: null, percent: null };
   }
-}
-
-// Floating, non-blocking progress widget for in-flight account imports.
-// Rendered as a fixed stack in the corner so the rest of the dashboard
-// (tabs, filters, gallery) stays fully usable while an Apify backfill
-// (which can take a minute or more) runs.
-function BackgroundTaskStack({ tasks, onDismiss }) {
-  const [now, setNow] = useState(Date.now());
-  const hasActive = tasks.some((task) => task.phase === 'importing' || task.phase === 'unknown');
-
-  useEffect(() => {
-    if (!hasActive) return undefined;
-    const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, [hasActive]);
-
-  if (!tasks.length) return null;
-
-  return (
-    <div className="bg-task-stack">
-      {tasks.map((task) => {
-        const elapsedSec = Math.max(0, Math.round((now - task.startedAt) / 1000));
-        const initials = (task.label || task.handle || '?').slice(0, 2).toUpperCase();
-        const live = task.phase === 'importing' ? describeBackfillProgress(task.serverProgress, elapsedSec) : null;
-        return (
-          <div key={task.id} className={`bg-task-card bg-task-${task.phase}`}>
-            <div className="bg-task-avatar" aria-hidden="true">
-              {task.avatarUrl ? <img src={task.avatarUrl} alt="" referrerPolicy="no-referrer" /> : initials}
-            </div>
-            <div className="bg-task-body">
-              <div className="bg-task-top">
-                <span className="bg-task-handle">@{task.handle}</span>
-                <button type="button" className="bg-task-dismiss" onClick={() => onDismiss(task.id)} aria-label="Dismiss">
-                  <X size={12} />
-                </button>
-              </div>
-              <p className="bg-task-status">
-                {task.phase === 'importing' ? live?.text || `Importing post history… ${elapsedSec}s` : null}
-                {task.phase === 'unknown' ? 'Still running on the server -- large imports can take a few minutes. Posts will appear on their own.' : null}
-                {task.phase === 'done' ? `Imported ${task.added} post${task.added === 1 ? '' : 's'}` : null}
-                {task.phase === 'error' ? task.error || 'Import failed.' : null}
-              </p>
-              <div className="bg-task-progress">
-                {task.phase === 'importing' && live?.percent != null ? (
-                  <div className="bg-task-progress-fill bg-task-progress-real" style={{ width: `${live.percent}%` }} />
-                ) : (
-                  <div className={`bg-task-progress-fill bg-task-progress-${task.phase}`} />
-                )}
-              </div>
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
 }
 
 // The card menu opens this small assignment composer rather than attempting

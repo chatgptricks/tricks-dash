@@ -30,7 +30,8 @@ try {
     const coordinator = ['vc', 'admin'].includes(role);
     await act(async () => root.render(<PrefsProvider><ProductHeader current="research" coordinator={coordinator} /><PostCard post={sample} onSelect={() => {}} canPool={coordinator} canSuggest={!coordinator} /></PrefsProvider>));
     if (!el.querySelector('.post-card')) throw new Error(`${role}: no card rendered`);
-    if (Boolean(el.querySelector('.product-nav a[href="/tracker.html"]')) !== coordinator) throw new Error(`${role}: wrong analytics access`);
+    if (!el.querySelector('.product-nav a[href="/tracker.html"]')) throw new Error(`${role}: Tracker must be available`);
+    if (Boolean(el.querySelector('.product-nav a[href="/insights.html"]')) !== coordinator) throw new Error(`${role}: wrong Insights access`);
     if (el.querySelector('.product-nav a[href="/home.html"]')) throw new Error('Home must stay removed');
   }
   console.log('PASS PD, Sales, Trainee, VC and Admin cards and navigation');

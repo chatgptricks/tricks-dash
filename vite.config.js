@@ -1,40 +1,12 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { createRequire } from 'node:module';
-import { createReadStream, existsSync, statSync } from 'node:fs';
-import { basename, dirname, extname, join, resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const coverCache = new Map();
 const require = createRequire(import.meta.url);
 const __dirname = dirname(fileURLToPath(import.meta.url));
-
-const imageTypes = new Map([
-  ['.jpg', 'image/jpeg'],
-  ['.jpeg', 'image/jpeg'],
-  ['.png', 'image/png'],
-  ['.webp', 'image/webp'],
-  ['.gif', 'image/gif'],
-]);
-
-const localCoverFallbackDirs = [
-  '/Users/tbnalfaro/Desktop/Codex Projects/10 Predict/Post DB/covers',
-  '/Users/tbnalfaro/Desktop/Codex Projects/10 Predict/Post DB/thumbs',
-  '/Users/tbnalfaro/Desktop/Codex Projects/10 Predict/data/uploads/imported-history',
-];
-function resolveLocalCoverPath(filePath) {
-  if (filePath && existsSync(filePath)) return filePath;
-
-  const fileName = basename(filePath || '');
-  if (!fileName) return '';
-
-  for (const directory of localCoverFallbackDirs) {
-    const candidate = join(directory, fileName);
-    if (existsSync(candidate)) return candidate;
-  }
-
-  return '';
-}
 
 let browserPromise = null;
 let contextPromise = null;
@@ -192,70 +164,6 @@ function serveInstagramCovers() {
   };
 }
 
-function serveLocalCovers() {
-  const middleware = (req, res, next) => {
-    if (!req.url) {
-      next();
-      return;
-    }
-
-    let url;
-    try {
-      url = new URL(req.url, 'http://localhost');
-    } catch {
-      next();
-      return;
-    }
-
-    if (url.pathname !== '/api/local-cover') {
-      next();
-      return;
-    }
-
-    const requestedPath = url.searchParams.get('path') || '';
-    const filePath = resolveLocalCoverPath(requestedPath);
-    const extension = extname(filePath).toLowerCase();
-    const contentType = imageTypes.get(extension);
-
-    if (!filePath || !contentType || !existsSync(filePath)) {
-      res.statusCode = 404;
-      res.setHeader('content-type', 'text/plain; charset=utf-8');
-      res.end('Cover image not found');
-      return;
-    }
-
-    try {
-      const stats = statSync(filePath);
-      if (!stats.isFile()) {
-        res.statusCode = 404;
-        res.setHeader('content-type', 'text/plain; charset=utf-8');
-        res.end('Cover image not found');
-        return;
-      }
-
-      res.statusCode = 200;
-      res.setHeader('content-type', contentType);
-      res.setHeader('content-length', stats.size);
-      res.setHeader('cache-control', 'public, max-age=86400');
-      createReadStream(filePath).pipe(res);
-    } catch {
-      res.statusCode = 500;
-      res.setHeader('content-type', 'text/plain; charset=utf-8');
-      res.end('Cover image unavailable');
-    }
-  };
-
-  return {
-    name: 'serve-local-covers',
-    configureServer(server) {
-      server.middlewares.use(middleware);
-    },
-    configurePreviewServer(server) {
-      server.middlewares.use(middleware);
-    },
-  };
-}
-
 export default defineConfig({
   // Served from the apex of a custom domain (sentientdash.app), so assets
   // live at the root. This was '/tricks-dash/' when the site was hosted at
@@ -265,7 +173,7 @@ export default defineConfig({
   // Lets CI/local validation skip the 61MB static archive; normal production
   // builds retain Vite's default public-directory copy behavior.
   publicDir: process.env.VITE_SKIP_PUBLIC === '1' ? false : 'public',
-  plugins: [react(), serveLocalCovers(), serveInstagramCovers()],
+  plugins: [react(), serveInstagramCovers()],
   server: {
     host: '0.0.0.0',
     port: 4175,

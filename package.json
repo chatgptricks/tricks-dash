@@ -14,16 +14,13 @@
     "smoke:queue": "node smoke/run-queue.mjs",
     "smoke:settings": "node smoke/run-settings.mjs",
     "smoke:mobile": "node smoke/run-mobile.mjs",
-    "smoke:roles": "node smoke/roles.mjs",
-    "generate:data": "node scripts/build-data.mjs",
-    "ocr:covers": "node scripts/ocr-covers.mjs"
+    "smoke:roles": "node smoke/roles.mjs"
   },
   "dependencies": {
     "firebase": "^11.6.0",
     "lucide-react": "^0.542.0",
     "react": "^19.1.1",
-    "react-dom": "^19.1.1",
-    "xlsx": "^0.18.5"
+    "react-dom": "^19.1.1"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^5.0.4",
