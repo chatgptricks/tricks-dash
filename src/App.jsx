@@ -4106,7 +4106,9 @@ export function SettingsPanel({
                         const statusText =
                           task.phase === 'starting' ? 'Starting the import…' :
                           task.phase === 'waiting'
-                            ? task.queuePosition > 1
+                            ? task.serverProgress?.phase === 'retrying'
+                              ? `Temporary issue. Retrying this import (attempt ${task.serverProgress.attempt || 1})…`
+                              : task.queuePosition > 1
                               ? `Queued #${task.queuePosition}. Waiting for the previous account to finish…`
                               : `Waiting for @${task.waitingFor || 'another account'} to finish…`
                             :
@@ -5541,6 +5543,8 @@ function describeBackfillProgress(progress, elapsedSec) {
   switch (phase) {
     case 'queued':
       return { text: 'Queued…', percent: null };
+    case 'retrying':
+      return { text: `Temporary issue. Retrying attempt ${progress.attempt ?? 1}…`, percent: null };
     case 'preparing':
       return { text: 'Preparing the request…', percent: null };
     case 'starting_apify_run':
