@@ -3089,11 +3089,6 @@ export function SettingsPanel({
     });
   }, []);
 
-  const activeAccountBackfillHandles = accountBackfills
-    .filter((task) => ['starting', 'importing', 'waiting'].includes(task.phase))
-    .map((task) => task.handle)
-    .join('|');
-
   // Keep elapsed-time copy fresh without forcing the entire Settings panel to
   // re-render every second when there is no onboarding work in flight.
   useEffect(() => {
@@ -3103,88 +3098,70 @@ export function SettingsPanel({
   }, [accountBackfills]);
 
   // A backfill is a process on the API, not a request held open by the browser.
-  // Polling here lets Settings reconnect after a reload and pick up the exact
-  // phase/count the worker is currently reporting.
+  // Polling here lets Settings reconnect after a reload and pick up every
+  // server-owned queue item, even when this tab did not create the import.
   useEffect(() => {
-    const handles = activeAccountBackfillHandles.split('|').filter(Boolean);
-    if (!unlocked || !handles.length) return undefined;
+    if (!unlocked) return undefined;
     let cancelled = false;
     const poll = async () => {
       try {
         const statusResponse = await apiFetch(`${API_BASE}/api/admin/accounts/backfill-status`);
         const status = await statusResponse.json().catch(() => ({}));
-        if (cancelled) return;
+        if (cancelled || !statusResponse.ok) return;
         // The server owns the queue. Reconcile every local card from its
         // persisted task so a reload, a second account, or a worker restart
-        // never turns a queued import into a false error.
+        // never turns a queued import into a false error. This also hydrates
+        // cards for imports created by another tab or before this tab opened.
         if (Array.isArray(status.tasks)) {
           const serverTasks = new Map(status.tasks.map((task) => [task.handle, task]));
           const queued = Array.isArray(status.queue) ? status.queue : [];
-          for (const handle of handles) {
-            const serverTask = serverTasks.get(handle);
-            // A task that is no longer present in the server-owned queue has
-            // finished (or was recovered while this tab was away). Clear the
-            // local optimistic card instead of leaving a stale progress bar
-            // stuck on the old count after a worker restart.
-            if (!serverTask) {
-              dismissAccountBackfill(handle);
-              continue;
-            }
-            if (serverTask.status === 'queued') {
-              patchAccountBackfill(handle, {
-                phase: 'waiting',
-                serverProgress: serverTask.progress || { phase: 'queued' },
-                waitingFor: status.active?.handle || '',
-                queuePosition: queued.findIndex((item) => item.handle === handle) + 1,
+          const queuePositions = new Map(queued.map((task, index) => [task.handle, index + 1]));
+          const serverActive = status.tasks.filter((task) => task.status === 'queued' || task.status === 'running');
+          setAccountBackfills((current) => {
+            const localByHandle = new Map(current.map((task) => [task.handle, task]));
+            const next = serverActive.map((serverTask) => {
+              const handle = serverTask.handle;
+              const local = localByHandle.get(handle);
+              const account = roster.find((item) => item.handle === handle);
+              const queuedTask = serverTask.status === 'queued';
+              const requestedAt = Date.parse(serverTask.requested_at || '') || Date.now();
+              return {
+                id: local?.id || serverTask.job_id || serverTask.id || handle,
+                handle,
+                label: local?.label || account?.label || handle,
+                group: local?.group || account?.group || 'competitors',
+                avatarUrl: local?.avatarUrl || account?.avatar_url || '',
+                phase: queuedTask ? 'waiting' : 'importing',
+                startedAt: local?.startedAt || (Date.parse(serverTask.started_at || '') || requestedAt),
+                serverProgress: serverTask.progress || { phase: queuedTask ? 'queued' : 'preparing' },
+                queuePosition: queuedTask ? (queuePositions.get(handle) || 0) : 0,
+                waitingFor: queuedTask ? status.active?.handle || '' : '',
+                added: local?.added || 0,
                 error: '',
-              });
-            } else if (serverTask.status === 'running') {
-              patchAccountBackfill(handle, { phase: 'importing', serverProgress: serverTask.progress || null, error: '', waitingFor: '' });
-            } else if (serverTask.status === 'done') {
-              patchAccountBackfill(handle, {
-                phase: 'done',
-                added: serverTask.result?.added ?? 0,
-                serverProgress: serverTask.progress || { phase: 'inserting', done: 1, total: 1 },
-                error: '',
-              });
-              onAccountsChanged?.();
-              await loadRoster();
-            } else if (serverTask.status === 'error') {
-              patchAccountBackfill(handle, { phase: 'error', error: serverTask.error || 'Import could not be completed.', serverProgress: serverTask.progress || null });
-            }
-          }
-          return;
-        }
-        const activeHandle = status.handle || '';
-        for (const handle of handles) {
-          if (status.running) {
-            if (activeHandle === handle) {
-              patchAccountBackfill(handle, { phase: 'importing', serverProgress: status.progress || null, error: '' });
-            } else {
-              patchAccountBackfill(handle, {
-                phase: 'waiting',
-                serverProgress: null,
-                waitingFor: activeHandle,
-                error: '',
-              });
-            }
-            continue;
-          }
-          // The worker keeps the completed handle in its status payload. Do
-          // not turn an unrelated/no-op status response into a false success.
-          if (activeHandle !== handle) continue;
-          if (status.error) {
-            patchAccountBackfill(handle, { phase: 'error', error: status.error, serverProgress: status.progress || null });
-          } else {
-            patchAccountBackfill(handle, {
-              phase: 'done',
-              added: status.result?.added ?? 0,
-              serverProgress: { phase: 'inserting', done: 1, total: 1 },
-              error: '',
+              };
             });
-            onAccountsChanged?.();
-            await loadRoster();
-          }
+            // Preserve the short completion/error acknowledgement for tasks
+            // this tab was already showing, while dropping stale active cards
+            // that disappeared from the server queue after a restart.
+            current.forEach((local) => {
+              const serverTask = serverTasks.get(local.handle);
+              if (serverTask?.status === 'done') {
+                next.push({ ...local, phase: 'done', added: serverTask.result?.added ?? 0, serverProgress: serverTask.progress || { phase: 'inserting', done: 1, total: 1 }, error: '' });
+              } else if (serverTask?.status === 'error') {
+                next.push({ ...local, phase: 'error', error: serverTask.error || 'Import could not be completed.', serverProgress: serverTask.progress || null });
+              } else if (!serverTask && ['done', 'error'].includes(local.phase)) {
+                next.push(local);
+              } else if (!serverTask && local.phase === 'starting' && Date.now() - (local.startedAt || 0) < 15000) {
+                // Give the POST that creates the persistent row a brief race
+                // window before treating a missing server task as finished.
+                next.push(local);
+              }
+            });
+            const deduped = Array.from(new Map(next.map((task) => [task.handle, task])).values());
+            persistSettingsAccountBackfills(deduped);
+            return deduped;
+          });
+          return;
         }
       } catch {
         // A transient status failure should not hide the task or call it done.
@@ -3196,7 +3173,7 @@ export function SettingsPanel({
       cancelled = true;
       clearInterval(timer);
     };
-  }, [unlocked, activeAccountBackfillHandles, patchAccountBackfill, onAccountsChanged, loadRoster]);
+  }, [unlocked, roster]);
 
   // Keep the completed acknowledgement visible briefly so an admin can see
   // that the import actually finished, then remove it from localStorage.
@@ -4098,9 +4075,12 @@ export function SettingsPanel({
                         <h3>Initial history import</h3>
                       </div>
                       <span className="settings-account-backfill-count">
-                        {accountBackfills.filter((task) => ['starting', 'importing', 'waiting'].includes(task.phase)).length
-                          ? 'In progress'
-                          : 'Recent'}
+                        {(() => {
+                          const activeCount = accountBackfills.filter((task) => ['starting', 'importing'].includes(task.phase)).length;
+                          const queuedCount = accountBackfills.filter((task) => task.phase === 'waiting').length;
+                          if (!activeCount && !queuedCount) return 'Recent';
+                          return `${activeCount} importing${queuedCount ? ` · ${queuedCount} queued` : ''}`;
+                        })()}
                       </span>
                     </div>
                     <p className="wizard-hint">
