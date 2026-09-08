@@ -885,6 +885,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
   const reconnectTimer = useRef(null);
   const reconnectAttempt = useRef(0);
   const dashboardLoader = useRef(null);
+  const freshPageShownRef = useRef(false);
   const dashboardRevisionRef = useRef(null);
   const incomingDataTimerRef = useRef(null);
   const requestedRolePreview = window.sessionStorage.getItem('sentient.queueRolePreview') || '';
@@ -1019,6 +1020,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
       if (!silent) {
         setLoading(true);
         setLoadError('');
+        freshPageShownRef.current = false;
       }
       const showFreshPage = !silent;
       const [postsData, accountsResponse] = await Promise.all([
@@ -1027,6 +1029,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
           onPage: showFreshPage
             ? (pageData) => {
               if (signal?.aborted || !Array.isArray(pageData?.posts)) return;
+              freshPageShownRef.current = true;
               setDashboard({ posts: pageData.posts, summary: pageData.summary || {} });
               setLoading(false);
             }
@@ -1098,7 +1101,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
     // separate from the live request below: a Render restart must never turn
     // a previously usable dashboard into an empty/error state.
     readDashboardSnapshot().then((snapshot) => {
-      if (!active || !snapshot || !Array.isArray(snapshot.posts) || !Array.isArray(snapshot.accounts) || snapshot.posts.some((post) => !post.stackId)) return;
+      if (!active || freshPageShownRef.current || !snapshot || !Array.isArray(snapshot.posts) || !Array.isArray(snapshot.accounts) || snapshot.posts.some((post) => !post.stackId)) return;
       setDashboard({ posts: snapshot.posts, summary: snapshot.summary || {} });
       setAccounts(snapshot.accounts);
       setLoading(false);
