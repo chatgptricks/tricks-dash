@@ -887,7 +887,7 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
 /* Scheduler state language: priority is intentionally quiet; time and state
    are what need to scan instantly in a production day. */
 .scheduler { padding-left:0; padding-right:0; }
-.scheduler-canvas { --scheduler-label-width:236px; --scheduler-day-width:max(1920px,calc(240cqw - 360px)); --scheduler-head-height:46px; }
+.scheduler-canvas { --scheduler-label-width:236px; --scheduler-day-width:max(2160px,calc(300cqw - 462px)); --scheduler-head-height:46px; }
 .scheduler-row>header,.scheduler-time-head>span { min-height:var(--scheduler-head-height); }
 .scheduler-user-copy { display:grid; gap:3px; min-width:0; }
 .scheduler-user-copy small { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
