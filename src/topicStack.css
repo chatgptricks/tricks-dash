@@ -4,6 +4,10 @@
 .post-stack:not(.is-expanded)::after{inset:-6px 7px 16px;transform:rotate(1deg)}
 .post-stack>.post-card,.post-stack>.m-post-card{width:100%;position:relative;margin:0}
 .post-stack-trigger{position:absolute;top:8px;right:8px;display:flex;align-items:center;justify-content:center;min-width:30px;height:25px;border:0;border-radius:999px;background:var(--accent-text,var(--m-accent,#00ac80));color:#07150f;font:inherit;font-size:11px;font-weight:850;padding:0 8px;cursor:pointer;z-index:3;box-shadow:0 4px 12px color-mix(in srgb,var(--accent-text,var(--m-accent,#00ac80)) 42%,transparent)}
+/* Research cards have a header above the cover. Anchor the stack count to
+   the cover's top-right so it never sits on top of the card menu. Promo
+   cards have no post header and keep the original top offset. */
+.post-stack:has(.post-card)>.post-stack-trigger{top:72px}
 .post-stack-trigger:hover{filter:brightness(1.12);transform:translateY(-1px)}
 .post-stack-trigger:focus-visible{outline:2px solid var(--accent-text,#00ac80);outline-offset:3px}
 .post-stack-modal{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:32px;overflow-y:auto;background:rgb(0 0 0 / .68)}

@@ -6017,7 +6017,7 @@ export const PostCard = memo(function PostCard({ post, priority, selected, onSel
         </div>
       </div>
 
-      <CoverImage className={`post-media ${posterTheme(post.type)}`} post={post} priority={priority}>
+      <CoverImage className={`post-media ${posterTheme(post.type)}${post.isVideo && post.showsHotBadge ? ' has-video-hot' : ''}`} post={post} priority={priority}>
         {post.isVideo ? (
           <div className="media-badge">
             <Video size={13} />
