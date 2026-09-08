@@ -81,9 +81,9 @@ const LEGACY_REFRESH_PASSWORD = 'sentient2026';
 
 // Account onboarding can outlive the Settings tab (and often the browser
 // refresh that an admin uses to check whether the scrape is done). Keep the
-// small client-side record locally, then reconcile it with the server's
-// backfill-status endpoint while the worker is alive. The actual import data
-// remains server-side; this is only UI state and never contains credentials.
+// small client-side record locally for labels and avatars, then reconcile it
+// with the server-owned persistent queue. The actual import data remains
+// server-side; this is only UI state and never contains credentials.
 const SETTINGS_ACCOUNT_BACKFILLS_KEY = 'sentientdash.settings.accountBackfills.v1';
 
 function readSettingsAccountBackfills() {
@@ -1331,11 +1331,6 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
           finish({ phase: 'error', error: started.detail || 'Import failed to start.' });
           return;
         }
-        if (started.already_running) {
-          finish({ phase: 'error', error: `Another import (@${started.handle}) is still running. Try again once it finishes.` });
-          return;
-        }
-
         // Poll until the worker reports back. Generous ceiling: 2000 posts can
         // take a good while, and giving up early is what made this look broken.
         // 4s (rather than 10s) so the phase/counts below feel live rather than
@@ -1346,6 +1341,28 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
           try {
             const statusResponse = await apiFetch(`${API_BASE}/api/admin/accounts/backfill-status`);
             const status = await statusResponse.json().catch(() => ({}));
+            const serverTask = Array.isArray(status.tasks)
+              ? status.tasks.find((task) => task.handle === account.handle)
+              : null;
+            if (serverTask) {
+              if (serverTask.status === 'queued') {
+                finish({ phase: 'importing', serverProgress: serverTask.progress || { phase: 'queued' }, queuePosition: started.position || 0 });
+                return;
+              }
+              if (serverTask.status === 'running') {
+                finish({ phase: 'importing', serverProgress: serverTask.progress || null });
+                return;
+              }
+              clearInterval(poll);
+              if (serverTask.status === 'error') {
+                finish({ phase: 'error', error: serverTask.error || 'Import failed.' });
+                return;
+              }
+              finish({ phase: 'done', added: serverTask.result?.added ?? 0, serverProgress: null });
+              await loadDashboard(undefined, { silent: true });
+              setTimeout(() => setBackgroundTasks((tasks) => tasks.filter((task) => task.id !== id)), 8000);
+              return;
+            }
             if (status.running) {
               finish({ serverProgress: status.progress || null });
               if (attempts >= 300) { // ~20 minutes
@@ -3097,6 +3114,40 @@ export function SettingsPanel({
         const statusResponse = await apiFetch(`${API_BASE}/api/admin/accounts/backfill-status`);
         const status = await statusResponse.json().catch(() => ({}));
         if (cancelled) return;
+        // The server owns the queue. Reconcile every local card from its
+        // persisted task so a reload, a second account, or a worker restart
+        // never turns a queued import into a false error.
+        if (Array.isArray(status.tasks)) {
+          const serverTasks = new Map(status.tasks.map((task) => [task.handle, task]));
+          const queued = Array.isArray(status.queue) ? status.queue : [];
+          for (const handle of handles) {
+            const serverTask = serverTasks.get(handle);
+            if (!serverTask) continue;
+            if (serverTask.status === 'queued') {
+              patchAccountBackfill(handle, {
+                phase: 'waiting',
+                serverProgress: serverTask.progress || { phase: 'queued' },
+                waitingFor: status.active?.handle || '',
+                queuePosition: queued.findIndex((item) => item.handle === handle) + 1,
+                error: '',
+              });
+            } else if (serverTask.status === 'running') {
+              patchAccountBackfill(handle, { phase: 'importing', serverProgress: serverTask.progress || null, error: '', waitingFor: '' });
+            } else if (serverTask.status === 'done') {
+              patchAccountBackfill(handle, {
+                phase: 'done',
+                added: serverTask.result?.added ?? 0,
+                serverProgress: serverTask.progress || { phase: 'inserting', done: 1, total: 1 },
+                error: '',
+              });
+              onAccountsChanged?.();
+              await loadRoster();
+            } else if (serverTask.status === 'error') {
+              patchAccountBackfill(handle, { phase: 'error', error: serverTask.error || 'Import could not be completed.', serverProgress: serverTask.progress || null });
+            }
+          }
+          return;
+        }
         const activeHandle = status.handle || '';
         for (const handle of handles) {
           if (status.running) {
@@ -3529,13 +3580,11 @@ export function SettingsPanel({
         setImporting('');
         return;
       }
-      if (started.already_running) {
+      if (started.queued) {
         setImportNotice((prev) => ({
           ...prev,
-          [handle]: `Another import (@${started.handle}) is already running. Try again once it finishes.`,
+          [handle]: started.position > 1 ? `Queued at position ${started.position}.` : 'Queued — starting next.',
         }));
-        setImporting('');
-        return;
       }
 
       // Poll until the worker reports back. 2000 posts from an old date can
@@ -3549,6 +3598,32 @@ export function SettingsPanel({
         try {
           const statusResponse = await apiFetch(`${API_BASE}/api/admin/accounts/backfill-status`);
           const status = await statusResponse.json().catch(() => ({}));
+          const serverTask = Array.isArray(status.tasks)
+            ? status.tasks.find((task) => task.handle === handle)
+            : null;
+          if (serverTask) {
+            if (serverTask.status === 'queued') {
+              setImportNotice((prev) => ({ ...prev, [handle]: started.position > 1 ? `Queued at position ${started.position}.` : 'Queued — starting next.' }));
+              return;
+            }
+            if (serverTask.status === 'running') {
+              const elapsedSec = Math.round((Date.now() - pollStartedAt) / 1000);
+              const live = describeBackfillProgress(serverTask.progress, elapsedSec);
+              setImportNotice((prev) => ({ ...prev, [handle]: live.text || `Importing… ${elapsedSec}s` }));
+              return;
+            }
+            clearInterval(poll);
+            if (serverTask.status === 'error') {
+              setImportNotice((prev) => ({ ...prev, [handle]: serverTask.error || 'Import failed.' }));
+            } else {
+              const transcriptCount = Number(serverTask.result?.transcripts_updated || 0);
+              setImportNotice((prev) => ({ ...prev, [handle]: `Done — ${serverTask.result?.added ?? 0} new posts${transcriptCount ? `, ${transcriptCount} transcripts` : ''}.` }));
+              await loadRoster();
+              onAccountsChanged?.();
+            }
+            setImporting('');
+            return;
+          }
           if (status.running) {
             const elapsedSec = Math.round((Date.now() - pollStartedAt) / 1000);
             const live = describeBackfillProgress(status.progress, elapsedSec);
@@ -3922,12 +3997,19 @@ export function SettingsPanel({
         const message = started.detail || 'Could not start the initial history import.';
         patchAccountBackfill(account.handle, { phase: 'error', error: message });
         setNotice(`@${account.handle} was added, but its initial history import could not be started.`);
-      } else if (started.already_running) {
-        const message = `Another import (@${started.handle || 'another account'}) is already running. Try again once it finishes.`;
-        patchAccountBackfill(account.handle, { phase: 'error', error: message });
-        setNotice(`@${account.handle} was added, but its initial history import is waiting for another import to finish.`);
       } else {
-        patchAccountBackfill(account.handle, { phase: 'importing', serverProgress: { phase: 'queued' }, error: '' });
+        const queuedMessage = started.queued
+          ? started.position > 1
+            ? `@${account.handle} was added and queued at position ${started.position}.`
+            : `@${account.handle} was added. Its history import is queued.`
+          : `@${account.handle} was added. Initial history import is starting in the background.`;
+        patchAccountBackfill(account.handle, {
+          phase: started.queued && started.position > 1 ? 'waiting' : 'importing',
+          serverProgress: { phase: 'queued' },
+          queuePosition: started.position || 0,
+          error: '',
+        });
+        setNotice(queuedMessage);
       }
     } catch {
       patchAccountBackfill(account.handle, { phase: 'error', error: 'Network error while starting the initial history import.' });
@@ -4023,7 +4105,11 @@ export function SettingsPanel({
                         const live = task.phase === 'importing' ? describeBackfillProgress(task.serverProgress, elapsedSec) : null;
                         const statusText =
                           task.phase === 'starting' ? 'Starting the import…' :
-                          task.phase === 'waiting' ? `Waiting for @${task.waitingFor || 'another account'} to finish…` :
+                          task.phase === 'waiting'
+                            ? task.queuePosition > 1
+                              ? `Queued #${task.queuePosition}. Waiting for the previous account to finish…`
+                              : `Waiting for @${task.waitingFor || 'another account'} to finish…`
+                            :
                           task.phase === 'done' ? `Imported ${task.added ?? 0} new post${task.added === 1 ? '' : 's'}.` :
                           task.phase === 'error' ? task.error || 'Import could not be started.' :
                           live?.text || `Importing post history… ${elapsedSec}s`;
@@ -4074,7 +4160,7 @@ export function SettingsPanel({
                     </div>
                   </div>
                   <p className="wizard-hint">
-                    Click a row to edit its label, category, HOT threshold, or avatar, or pull more history.
+                    Click a row to edit its label, category, HOT threshold, or avatar, or pull more history. You can add another account while an import is running; the server queues it automatically and processes one account at a time.
                     "Suggested" is the account's average first-hour likes (the same number the HOT check
                     itself compares against), rounded up to the nearest hundred.
                   </p>
