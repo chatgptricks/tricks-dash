@@ -54,7 +54,7 @@ import { describeSignInError, firebaseAuth, startGoogleSignIn } from './firebase
 import { clearSsoCookie, startSsoRefresh, trySsoSignIn } from './sso';
 import { PrefsProvider, usePrefs } from './prefsContext';
 import { ACCENT_CHOICES, accentHex } from './prefs';
-import { API_BASE, IG_HANDLE, apiFetch, fetchDashboardPosts } from './api';
+import { API_BASE, IG_HANDLE, apiFetch } from './api';
 import { mergeUserDrafts, saveUserProfile, userProfileDraft as userDraft } from './userAdmin';
 import { readDashboardSnapshot, writeDashboardSnapshot } from './dashboardCache';
 import { followQueueLive } from './queueLive';
@@ -885,7 +885,6 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
   const reconnectTimer = useRef(null);
   const reconnectAttempt = useRef(0);
   const dashboardLoader = useRef(null);
-  const freshPageShownRef = useRef(false);
   const dashboardRevisionRef = useRef(null);
   const incomingDataTimerRef = useRef(null);
   const requestedRolePreview = window.sessionStorage.getItem('sentient.queueRolePreview') || '';
@@ -1020,28 +1019,18 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
       if (!silent) {
         setLoading(true);
         setLoadError('');
-        freshPageShownRef.current = false;
       }
-      const showFreshPage = !silent;
-      const [postsData, accountsResponse] = await Promise.all([
-        fetchDashboardPosts({
-          signal,
-          onPage: showFreshPage
-            ? (pageData) => {
-              if (signal?.aborted || !Array.isArray(pageData?.posts)) return;
-              freshPageShownRef.current = true;
-              setDashboard({ posts: pageData.posts, summary: pageData.summary || {} });
-              setLoading(false);
-            }
-            : undefined,
-        }),
+      const [postsResponse, accountsResponse] = await Promise.all([
+        apiFetch(`${API_BASE}/api/dashboard/posts`, { signal }),
         apiFetch(`${API_BASE}/api/dashboard/accounts`, { signal }),
       ]);
-      if (accountsResponse.status === 401 || accountsResponse.status === 403) {
+      if (postsResponse.status === 401 || postsResponse.status === 403 || accountsResponse.status === 401 || accountsResponse.status === 403) {
         onUnauthorized();
         return;
       }
+      if (!postsResponse.ok) throw new Error(`HTTP ${postsResponse.status}`);
       if (!accountsResponse.ok) throw new Error(`HTTP ${accountsResponse.status}`);
+      const postsData = await postsResponse.json();
       const accountsData = await accountsResponse.json();
       if (!Array.isArray(postsData.posts) || !Array.isArray(accountsData.accounts)) {
         throw new Error('The shared post database returned an invalid response.');
@@ -1068,10 +1057,6 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
       }
     } catch (error) {
       if (error.name !== 'AbortError') {
-        if (error.status === 401 || error.status === 403) {
-          onUnauthorized();
-          return;
-        }
         // Render can briefly replace the API instance during deploys. Do not
         // discard a loaded dashboard or turn a temporary 502 into a blocking
         // red error screen; keep the current UI and reconnect automatically.
@@ -1101,7 +1086,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
     // separate from the live request below: a Render restart must never turn
     // a previously usable dashboard into an empty/error state.
     readDashboardSnapshot().then((snapshot) => {
-      if (!active || freshPageShownRef.current || !snapshot || !Array.isArray(snapshot.posts) || !Array.isArray(snapshot.accounts) || snapshot.posts.some((post) => !post.stackId)) return;
+      if (!active || !snapshot || !Array.isArray(snapshot.posts) || !Array.isArray(snapshot.accounts) || snapshot.posts.some((post) => !post.stackId)) return;
       setDashboard({ posts: snapshot.posts, summary: snapshot.summary || {} });
       setAccounts(snapshot.accounts);
       setLoading(false);
