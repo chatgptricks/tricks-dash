@@ -1020,8 +1020,18 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
         setLoading(true);
         setLoadError('');
       }
+      const showFreshPage = !silent;
       const [postsData, accountsResponse] = await Promise.all([
-        fetchDashboardPosts({ signal }),
+        fetchDashboardPosts({
+          signal,
+          onPage: showFreshPage
+            ? (pageData) => {
+              if (signal?.aborted || !Array.isArray(pageData?.posts)) return;
+              setDashboard({ posts: pageData.posts, summary: pageData.summary || {} });
+              setLoading(false);
+            }
+            : undefined,
+        }),
         apiFetch(`${API_BASE}/api/dashboard/accounts`, { signal }),
       ]);
       if (accountsResponse.status === 401 || accountsResponse.status === 403) {

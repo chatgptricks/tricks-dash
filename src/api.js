@@ -87,7 +87,7 @@ export async function apiFetch(url, options = {}) {
 // The Research catalogue can contain tens of thousands of posts. Keep each
 // API response bounded while preserving the existing client-side search and
 // filter behavior by assembling the pages in order in the browser.
-export async function fetchDashboardPosts({ signal, pageSize = 2000 } = {}) {
+export async function fetchDashboardPosts({ signal, pageSize = 2000, onPage } = {}) {
   const size = Math.min(Math.max(Number(pageSize) || 1000, 1), 2000);
   const posts = [];
   let offset = 0;
@@ -104,6 +104,12 @@ export async function fetchDashboardPosts({ signal, pageSize = 2000 } = {}) {
     if (!Array.isArray(page.posts)) throw new Error('The shared post database returned an invalid response.');
     posts.push(...page.posts);
     summary = page.summary || summary;
+    // Let the dashboard replace a stale snapshot as soon as the first fresh
+    // page arrives. The complete catalogue is still assembled below, but a
+    // slow tail of historical pages must never make new posts look absent.
+    if (typeof onPage === 'function') {
+      onPage({ ...page, posts: [...posts], summary });
+    }
     const pagination = page.pagination;
     if (!pagination?.hasMore) return { ...page, posts, summary };
     const nextOffset = Number(pagination.nextOffset);
