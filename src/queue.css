@@ -599,9 +599,12 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
 .queue-admin-assignments>header h3 { margin:2px 0 0; color:var(--q-text); font-size:16px; }
 .queue-admin-assignment-table { width:100%; overflow-x:auto; border-top:1px solid var(--q-line); }
 .queue-admin-assignment-head,.queue-admin-assignment-row { display:grid; grid-template-columns:minmax(260px,2.2fr) minmax(150px,1.1fr) minmax(150px,1fr) minmax(130px,.9fr) minmax(100px,.65fr) minmax(120px,.8fr); min-width:1020px; }
+.queue-admin-assignment-table.is-admin .queue-admin-assignment-head,.queue-admin-assignment-table.is-admin .queue-admin-assignment-row { grid-template-columns:minmax(260px,2.2fr) minmax(150px,1.1fr) minmax(150px,1fr) minmax(130px,.9fr) minmax(100px,.65fr) minmax(120px,.8fr) minmax(70px,.4fr); min-width:1090px; }
 .queue-admin-assignment-head { padding:9px 16px; background:rgba(var(--edge),.025); color:var(--q-muted); font-size:9px; font-weight:850; letter-spacing:.07em; text-transform:uppercase; }
-.queue-admin-assignment-row { position:relative; width:100%; align-items:center; padding:9px 16px 9px 42px; border:0; border-top:1px solid rgba(var(--edge),.07); background:var(--q-panel); color:var(--q-text); text-align:left; }
-.queue-admin-select { position:absolute; left:16px; width:15px; height:15px; accent-color:var(--q-accent); cursor:pointer; }
+.queue-admin-assignment-row { position:relative; width:100%; align-items:center; padding:9px 16px; border:0; border-top:1px solid rgba(var(--edge),.07); background:var(--q-panel); color:var(--q-text); text-align:left; }
+.queue-admin-select { width:15px; height:15px; accent-color:var(--q-accent); cursor:pointer; }
+.queue-admin-assignment-select-cell { display:flex; align-items:center; justify-content:center; min-height:46px; color:var(--q-muted); }
+.queue-admin-selection-count { color:var(--q-muted); font-size:10px; font-weight:800; }
 .queue-admin-assignment-row:hover { background:var(--q-panel-2); }
 .queue-admin-assignment-post { display:flex; align-items:center; gap:10px; min-width:0; }
 .queue-admin-assignment-post img,.queue-admin-assignment-empty { display:grid; place-items:center; width:46px; height:46px; flex:0 0 auto; border-radius:7px; object-fit:cover; background:var(--q-panel-2); color:var(--q-muted); }

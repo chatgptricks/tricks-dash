@@ -211,10 +211,10 @@ Object.assign(COPY.es, {
 });
 
 Object.assign(COPY.en, {
-  closeSelected: 'Close selected', closeSelectedCount: 'Close selected requests', batchCloseDone: 'Selected requests closed.', batchCloseSkipped: 'Some selected requests were skipped because they were not ready to close.', selectReadyToClose: 'Select ready to close',
+  closeSelected: 'Close selected', closeSelectedCount: 'Close selected requests', batchCloseDone: 'Selected requests closed.', batchCloseSkipped: 'Some selected requests were skipped because they were not ready to close.', selectReadyToClose: 'Select ready to close', forceClose: 'Force close', selectForceClose: 'Select eligible jobs', selection: 'Select', selected: 'selected', clearSelection: 'Clear selection', selectForForceClose: 'Select for force close',
 });
 Object.assign(COPY.es, {
-  closeSelected: 'Cerrar seleccionados', closeSelectedCount: 'Cerrar requests seleccionados', batchCloseDone: 'Requests seleccionados cerrados.', batchCloseSkipped: 'Algunos requests se omitieron porque todavía no estaban listos para cerrar.', selectReadyToClose: 'Seleccionar listos para cerrar',
+  closeSelected: 'Cerrar seleccionados', closeSelectedCount: 'Cerrar requests seleccionados', batchCloseDone: 'Requests seleccionados cerrados.', batchCloseSkipped: 'Algunos requests se omitieron porque todavía no estaban listos para cerrar.', selectReadyToClose: 'Seleccionar listos para cerrar', forceClose: 'Forzar cierre', selectForceClose: 'Seleccionar jobs elegibles', selection: 'Selección', selected: 'seleccionados', clearSelection: 'Limpiar selección', selectForForceClose: 'Seleccionar para forzar cierre',
 });
 
 Object.assign(COPY.en, {
@@ -723,9 +723,25 @@ function DesignerAssignments({ tasks, closedTasks = [], onOpen, timeZone = QUEUE
 function AdminAssignmentTable({ tasks, onOpen, onBatchClose, headingKey = 'allAssignedPosts', countKey = 'assignedPostsCount' }) {
   const displayName = useQueueDisplayName();
   const { t, language } = useQueuePreferences();
+  const isAdmin = Boolean(onBatchClose);
+  const today = DAY(new Date(), QUEUE_TIME_ZONE);
   const [selectedIds, setSelectedIds] = useState([]);
-  const readyIds = useMemo(() => tasks.filter((task) => task.status === 'completed').map((task) => String(task.id)), [tasks]);
-  useEffect(() => setSelectedIds((current) => current.filter((id) => readyIds.includes(id))), [readyIds]);
+  const [contextMenu, setContextMenu] = useState(null);
+  const orderedTasks = useMemo(() => [...tasks].sort((a, b) => taskRecency(b) - taskRecency(a) || Number(b.id || 0) - Number(a.id || 0)), [tasks]);
+  const selectable = (task) => isAdmin && (task.status === 'completed' || (
+    Boolean(task.designerEmail)
+    && task.scheduledDate
+    && task.scheduledDate < today
+    && ['scheduled', 'in_progress'].includes(task.status)
+  ));
+  const selectableIds = useMemo(() => orderedTasks.filter(selectable).map((task) => String(task.id)), [orderedTasks, isAdmin, today]);
+  useEffect(() => setSelectedIds((current) => current.filter((id) => selectableIds.includes(id))), [selectableIds]);
+  useEffect(() => {
+    const closeMenu = () => setContextMenu(null);
+    window.addEventListener('resize', closeMenu);
+    window.addEventListener('scroll', closeMenu, true);
+    return () => { window.removeEventListener('resize', closeMenu); window.removeEventListener('scroll', closeMenu, true); };
+  }, []);
   const toggleSelected = (event, taskId) => {
     event.stopPropagation();
     const value = String(taskId);
@@ -733,12 +749,26 @@ function AdminAssignmentTable({ tasks, onOpen, onBatchClose, headingKey = 'allAs
   };
   const closeSelected = async () => {
     if (!selectedIds.length || !onBatchClose) return;
+    setContextMenu(null);
     await onBatchClose(selectedIds.map(Number));
     setSelectedIds([]);
   };
-  const selectReady = () => setSelectedIds((current) => current.length === readyIds.length ? [] : readyIds);
-  const row = (task) => <button type="button" role="row" key={task.id} className={`queue-admin-assignment-row state-${task.status} ${priorityClass(task.priority)}${hotClass(task)}${task.isDraft ? ' is-draft' : ''}`} data-context-type="task" data-context-request-id={task.id} data-context-duplicate="true" onClick={() => onOpen(task)}><span className="queue-admin-assignment-post">{task.status === 'completed' ? <input className="queue-admin-select" type="checkbox" checked={selectedIds.includes(String(task.id))} aria-label={`${t('selectReadyToClose')} ${task.post.title || accountMention(task.post.account) || t('post')}`} onClick={(event) => toggleSelected(event, task.id)} onChange={() => {}} /> : null}{cover(task) ? <img src={cover(task)} alt="" /> : <span className="queue-admin-assignment-empty">@</span>}<span><b>{task.post.title || accountMention(task.post.account) || t('post')}</b><small>{task.post.account ? accountMention(task.post.account) : t('accountToSelect')} · {task.brief || task.post.caption || t('post')}</small>{task.recommendedAccounts?.length ? <em>{task.recommendedAccounts.map((account) => `@${account}`).join(' · ')}</em> : null}{isHotTask(task) ? <i className="queue-hot-badge">🔥 {hotText(task)}</i> : null}</span></span><span className="queue-admin-assignment-designer"><b>{task.designerEmail ? displayName(task.designerEmail) : '—'}</b><small>{task.designerEmail || ''}</small></span><span className="queue-admin-assignment-time"><b>{task.scheduledDate ? displayDate(task.scheduledDate, language) : '—'}</b><small>{task.scheduledStartMinutes == null ? '—' : `${time(task.scheduledStartMinutes)} · ${task.durationMinutes} ${t('minutes')}`}</small></span><span className="queue-admin-assignment-priority"><PriorityBadge priority={task.priority} /></span><span className="queue-admin-assignment-pp"><b>{task.productionPoints} PP</b><small>{task.tags?.filter((tag) => tag !== 'hot').slice(0, 2).join(' · ') || t('noTags')}</small></span><span className="queue-admin-assignment-status"><i>{statusCopy(task.status, t, task.isDraft)}</i></span></button>;
-  return <section className="queue-admin-assignments"><header><div><p className="scheduler-eyebrow">{t(headingKey)}</p><h3>{tasks.length} {t(countKey)}</h3></div>{onBatchClose && readyIds.length ? <div className="queue-admin-batch-actions"><button type="button" className="scheduler-secondary" onClick={selectReady}>{t('selectReadyToClose')}</button><button type="button" className="scheduler-primary" disabled={!selectedIds.length} onClick={closeSelected}>{t('closeSelected')} {selectedIds.length ? `(${selectedIds.length})` : ''}</button></div> : null}</header>{tasks.length ? <div className="queue-admin-assignment-table" role="table"><div className="queue-admin-assignment-head" role="row"><span>{t('post')}</span><span>{t('designer')}</span><span>{t('scheduled')}</span><span>{t('priority')}</span><span>{t('productionPoints')}</span><span>{t('status')}</span></div>{tasks.map(row)}</div> : <p className="queue-admin-assignment-empty-state">{t('noAssignedPosts')}</p>}</section>;
+  const selectEligible = () => setSelectedIds((current) => current.length === selectableIds.length ? [] : selectableIds);
+  const row = (task) => {
+    const selected = selectedIds.includes(String(task.id));
+    const canSelect = selectable(task);
+    const openContext = (event) => {
+      event.preventDefault();
+      if (isAdmin && selected && selectedIds.length) {
+        setContextMenu({ x: event.clientX, y: event.clientY });
+      } else {
+        setContextMenu(null);
+        onOpen(task);
+      }
+    };
+    return <button type="button" role="row" key={task.id} className={`queue-admin-assignment-row state-${task.status} ${priorityClass(task.priority)}${hotClass(task)}${task.isDraft ? ' is-draft' : ''}`} data-context-type="task" data-context-request-id={task.id} data-context-duplicate="true" onClick={() => onOpen(task)} onContextMenu={openContext}><span className="queue-admin-assignment-post">{cover(task) ? <img src={cover(task)} alt="" /> : <span className="queue-admin-assignment-empty">@</span>}<span><b>{task.post.title || accountMention(task.post.account) || t('post')}</b><small>{task.post.account ? accountMention(task.post.account) : t('accountToSelect')} · {task.brief || task.post.caption || t('post')}</small>{task.recommendedAccounts?.length ? <em>{task.recommendedAccounts.map((account) => `@${account}`).join(' · ')}</em> : null}{isHotTask(task) ? <i className="queue-hot-badge">🔥 {hotText(task)}</i> : null}</span></span><span className="queue-admin-assignment-designer"><b>{task.designerEmail ? displayName(task.designerEmail) : '—'}</b><small>{task.designerEmail || ''}</small></span><span className="queue-admin-assignment-time"><b>{task.scheduledDate ? displayDate(task.scheduledDate, language) : '—'}</b><small>{task.scheduledStartMinutes == null ? '—' : `${time(task.scheduledStartMinutes)} · ${task.durationMinutes} ${t('minutes')}`}</small></span><span className="queue-admin-assignment-priority"><PriorityBadge priority={task.priority} /></span><span className="queue-admin-assignment-pp"><b>{task.productionPoints} PP</b><small>{task.tags?.filter((tag) => tag !== 'hot').slice(0, 2).join(' · ') || t('noTags')}</small></span><span className="queue-admin-assignment-status"><i>{statusCopy(task.status, t, task.isDraft)}</i></span>{isAdmin ? <span className="queue-admin-assignment-select-cell">{canSelect ? <input className="queue-admin-select" type="checkbox" checked={selected} aria-label={`${t('selectForForceClose')} ${task.post.title || accountMention(task.post.account) || t('post')}`} onClick={(event) => toggleSelected(event, task.id)} onChange={() => {}} /> : <span aria-hidden="true">—</span>}</span> : null}</button>;
+  };
+  return <section className="queue-admin-assignments"><header><div><p className="scheduler-eyebrow">{t(headingKey)}</p><h3>{tasks.length} {t(countKey)}</h3></div>{onBatchClose && selectableIds.length ? <div className="queue-admin-batch-actions"><button type="button" className="scheduler-secondary" onClick={selectEligible}>{t('selectForceClose')}</button>{selectedIds.length ? <span className="queue-admin-selection-count">{selectedIds.length} {t('selected')}</span> : null}</div> : null}</header>{tasks.length ? <div className={`queue-admin-assignment-table${isAdmin ? ' is-admin' : ''}`} role="table"><div className="queue-admin-assignment-head" role="row"><span>{t('post')}</span><span>{t('designer')}</span><span>{t('scheduled')}</span><span>{t('priority')}</span><span>{t('productionPoints')}</span><span>{t('status')}</span>{isAdmin ? <span>{t('selection')}</span> : null}</div>{orderedTasks.map(row)}</div> : <p className="queue-admin-assignment-empty-state">{t('noAssignedPosts')}</p>}{contextMenu ? createPortal(<><button type="button" className="scheduler-context-backdrop" onClick={() => setContextMenu(null)} aria-label={t('close')} /><div className="scheduler-context-menu queue-admin-force-menu" role="menu" style={{ left: Math.min(window.innerWidth - 230, Math.max(8, contextMenu.x)), top: Math.min(window.innerHeight - 100, Math.max(8, contextMenu.y)) }}><button type="button" className="is-danger" onClick={closeSelected}>{t('forceClose')} ({selectedIds.length})</button><button type="button" onClick={() => { setSelectedIds([]); setContextMenu(null); }}>{t('clearSelection')}</button></div></>, document.body) : null}</section>;
 }
 
 /* The Queue shell is intentionally built from the production scheduler's
@@ -767,7 +797,7 @@ function QueueOverviewSkeleton() {
   return <section className="queue-overview-page queue-overview-skeleton" role="status" aria-live="polite"><span className="sr-only">Loading production report</span><header className="queue-overview-header"><div className="queue-skeleton-stack"><span className="queue-skeleton-block queue-skeleton-eyebrow" /><span className="queue-skeleton-block queue-skeleton-title" /></div><span className="queue-skeleton-block queue-skeleton-help" /></header><div className="queue-overview-metrics" aria-hidden="true">{Array.from({ length: 5 }).map((_, index) => <article className="queue-overview-metric" key={index}><span className="queue-skeleton-block queue-skeleton-line is-short" /><strong className="queue-skeleton-block queue-skeleton-number" /><small className="queue-skeleton-block queue-skeleton-line is-xs" /></article>)}</div><section className="queue-overview-designers" aria-hidden="true"><header><div className="queue-skeleton-stack"><span className="queue-skeleton-block queue-skeleton-eyebrow" /><span className="queue-skeleton-block queue-skeleton-title" /></div></header><div className="queue-overview-designer-grid">{Array.from({ length: 6 }).map((_, index) => <article key={index}><div className="queue-skeleton-stack"><span className="queue-skeleton-block queue-skeleton-line" /><span className="queue-skeleton-block queue-skeleton-line is-short" /></div><span className="queue-skeleton-block queue-skeleton-number" /></article>)}</div></section></section>;
 }
 
-function QueueOverview({ report, loading, error, onRetry, onOpen }) {
+function QueueOverview({ report, loading, error, onRetry, onOpen, onBatchClose }) {
   const displayName = useQueueDisplayName();
   const { t } = useQueuePreferences();
   const totals = report?.totals || {};
@@ -776,7 +806,7 @@ function QueueOverview({ report, loading, error, onRetry, onOpen }) {
   if (error) return <section className="queue-overview-page"><header className="queue-overview-header"><div><p className="scheduler-eyebrow">{t('adminOverview')}</p><h2>{t('productionReports')}</h2></div><button type="button" className="scheduler-secondary" onClick={onRetry}>{t('tryAgain')}</button></header><p className="queue-overview-error">{error}</p></section>;
   const designers = report?.designers || [];
   const assignedPosts = report?.assignedPosts || [];
-  return <section className="queue-overview-page"><header className="queue-overview-header"><div><p className="scheduler-eyebrow">{t('adminOverview')}</p><h2>{t('productionReports')}</h2><small>{t('workloadHelp')}</small></div><div className="queue-overview-header-meta"><span>{assignedPosts.length} {t('assignedPostsCount')}</span><span>{designers.length} {t('designer')}</span></div></header><div className="queue-overview-metrics">{metric('pool', t('inPool'))}{metric('scheduled', t('scheduled'))}{metric('in_progress', t('inProgress'))}{metric('completed', t('readyToClose'))}{metric('closed', t('closed'))}</div><section className="queue-overview-designers"><header><div><p className="scheduler-eyebrow">{t('designerWorkload')}</p><h3>{designers.length} {t('allUsers')}</h3></div></header><div className="queue-overview-designer-grid">{designers.map((designer) => <article key={designer.email}><div><b>{displayName(designer.email, designer.displayName)}</b><small>{designer.activeRequests} {t('activeRequests')}</small></div><strong>{designer.productionPoints} PP</strong><span>{designer.closedRequests} {t('closed')}</span></article>)}{!designers.length ? <p className="scheduler-empty">{t('noAssignedPosts')}</p> : null}</div></section><AdminAssignmentTable tasks={assignedPosts} onOpen={onOpen} headingKey="allAssignedPosts" countKey="assignedPostsCount" /></section>;
+  return <section className="queue-overview-page"><header className="queue-overview-header"><div><p className="scheduler-eyebrow">{t('adminOverview')}</p><h2>{t('productionReports')}</h2><small>{t('workloadHelp')}</small></div><div className="queue-overview-header-meta"><span>{assignedPosts.length} {t('assignedPostsCount')}</span><span>{designers.length} {t('designer')}</span></div></header><div className="queue-overview-metrics">{metric('pool', t('inPool'))}{metric('scheduled', t('scheduled'))}{metric('in_progress', t('inProgress'))}{metric('completed', t('readyToClose'))}{metric('closed', t('closed'))}</div><section className="queue-overview-designers"><header><div><p className="scheduler-eyebrow">{t('designerWorkload')}</p><h3>{designers.length} {t('allUsers')}</h3></div></header><div className="queue-overview-designer-grid">{designers.map((designer) => <article key={designer.email}><div><b>{displayName(designer.email, designer.displayName)}</b><small>{designer.activeRequests} {t('activeRequests')}</small></div><strong>{designer.productionPoints} PP</strong><span>{designer.closedRequests} {t('closed')}</span></article>)}{!designers.length ? <p className="scheduler-empty">{t('noAssignedPosts')}</p> : null}</div></section><AdminAssignmentTable tasks={assignedPosts} onOpen={onOpen} onBatchClose={onBatchClose} headingKey="allAssignedPosts" countKey="assignedPostsCount" /></section>;
 }
 
 function TicketPanel({ tickets, loading, error, onClose, onReview, onContinueSuggestion, canReview }) {
@@ -1508,19 +1538,6 @@ function QueueApp({ user }) {
     });
     return [...byId.values()].sort((a, b) => taskRecency(b) - taskRecency(a) || Number(b.id || 0) - Number(a.id || 0));
   }, [coordinator, data, designerScope]);
-  useEffect(() => {
-    if (!coordinator) return undefined;
-    const openUpcomingContext = (event) => {
-      const row = event.target.closest?.('.queue-admin-assignment-row');
-      if (!row) return;
-      const task = upcoming.find((item) => String(item.id) === String(row.dataset.contextRequestId));
-      if (!task) return;
-      event.preventDefault();
-      setOpen(task);
-    };
-    document.addEventListener('contextmenu', openUpcomingContext);
-    return () => document.removeEventListener('contextmenu', openUpcomingContext);
-  }, [coordinator, upcoming]);
   const assigned = useMemo(() => { const ownEmail = String(data?.viewer?.email || '').toLowerCase(); const byId = new Map((data?.assignedRequests || []).filter((task) => String(task.designerEmail || '').toLowerCase() === ownEmail).map((task) => [task.id, task])); (data?.liveDrafts || []).filter((task) => String(task.designerEmail || '').toLowerCase() === ownEmail).forEach((task) => byId.set(task.id, task)); return [...byId.values()].sort((a, b) => taskRecency(b) - taskRecency(a) || Number(b.id || 0) - Number(a.id || 0)); }, [data]);
   const recentClosed = useMemo(() => { const ownEmail = String(data?.viewer?.email || '').toLowerCase(); return (data?.recentClosedRequests || []).filter((task) => String(task.designerEmail || '').toLowerCase() === ownEmail).sort((a, b) => taskRecency(b) - taskRecency(a) || Number(b.id || 0) - Number(a.id || 0)); }, [data]);
   const lateStart = useMemo(() => {
@@ -2019,7 +2036,7 @@ function QueueApp({ user }) {
     {loading && !data ? <QueueSkeleton /> : null}
     {error && !data ? <section className="queue-state queue-error"><p>{error}</p><button type="button" onClick={load}>{t('tryAgain')}</button></section> : null}
     {data ? <>
-      {overviewOpen ? <QueueOverview report={overview} loading={overviewLoading} error={overviewError} onRetry={loadOverview} onOpen={setOpen} /> : null}
+      {overviewOpen ? <QueueOverview report={overview} loading={overviewLoading} error={overviewError} onRetry={loadOverview} onOpen={setOpen} onBatchClose={data?.viewer?.isAdmin ? batchClose : null} /> : null}
       {!overviewOpen ? <>
       <section className="scheduler-toolbar"><div className="scheduler-date-title"><p className="scheduler-eyebrow">{coordinator ? t('coordinatorSchedule') : t('mySchedule')}</p><h2><CalendarDays size={18} aria-hidden="true" />{displayDate(date, language)}</h2><span className={`scheduler-date-status${viewingToday ? ' is-today' : ''}`}>{viewingToday ? t('viewingToday') : t('viewingDate')}</span></div>{coordinator ? <label className="scheduler-designer-filter">{t('assignedView')}<select value={designerScope} onChange={selectDesignerScope}><option value="">{t('allUsers')}</option>{(data.schedulerUsers || data.designers).map((person) => <option key={person.email} value={person.email}>{displayName(person.email, person.displayName)}</option>)}</select></label> : null}<div className="scheduler-date-nav" aria-label={t('jumpToDate')}><button type="button" className="scheduler-date-arrow" aria-label={t('previousDay')} title={t('previousDay')} onClick={() => moveDate(-1)}><ChevronLeft size={17} /></button><label className="scheduler-date-picker" title={t('jumpToDate')}><input type="date" value={date} onChange={selectDate} aria-label={t('jumpToDate')} /></label><button type="button" className={`scheduler-date-today${viewingToday ? ' is-current' : ''}`} onClick={() => setDate(todayDate)} disabled={viewingToday} aria-current={viewingToday ? 'date' : undefined} aria-label={viewingToday ? t('viewingToday') : t('today')} title={viewingToday ? t('viewingToday') : t('today')}><CalendarDays size={14} /></button><button type="button" className="scheduler-date-arrow" aria-label={t('nextDay')} title={t('nextDay')} onClick={() => moveDate(1)}><ChevronRight size={17} /></button></div><button type="button" className={`scheduler-archive-toggle${archive ? ' is-on' : ''}`} onClick={() => setArchive((value) => !value)}><Archive size={14} />{archive ? t('liveQueue') : t('archive')}</button></section>
       {coordinator && !archive ? <section className={`scheduler-pool${poolDropActive ? ' is-drop-target' : ''}`} onDragOver={poolDragOver} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setPoolDropActive(false); }} onDrop={poolDrop} aria-label={t('poolDropHint')}><header><div><p className="scheduler-eyebrow">{t('productionPool')}</p><h2>{pool.length} {t('readyToSchedule')}</h2></div><small>{poolDropActive ? t('poolDropHint') : t('visibleSchedule')}</small></header><div className="scheduler-pool-list">{pool.map((task) => <PoolCard key={task.id} task={task} onOpen={setOpen} canMultiAssign canCancel />)}{!pool.length ? <p className="scheduler-empty">{t('emptyPool')}</p> : null}</div></section> : null}
