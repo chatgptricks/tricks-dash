@@ -87,7 +87,7 @@ export async function apiFetch(url, options = {}) {
 // The Research catalogue can contain tens of thousands of posts. Keep each
 // API response bounded while preserving the existing client-side search and
 // filter behavior by assembling the pages in order in the browser.
-export async function fetchDashboardPosts({ signal, pageSize = 1000 } = {}) {
+export async function fetchDashboardPosts({ signal, pageSize = 2000 } = {}) {
   const size = Math.min(Math.max(Number(pageSize) || 1000, 1), 2000);
   const posts = [];
   let offset = 0;
