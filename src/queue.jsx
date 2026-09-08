@@ -13,7 +13,7 @@ import { SelectedPost, SlideDownload, coverUrlForPost } from './postDetail';
 import { PostCard } from './App';
 import chatgptricksProfileImage from './assets/chatgptricks-profile.jpg';
 import traselvelorealProfileImage from './assets/traselveloreal-profile.jpg';
-import { QUEUE_DAY_END, QUEUE_DAY_START, minutesPerPPOf, planQueueDrop } from './queuePlanner';
+import { QUEUE_BUFFER_MINUTES, QUEUE_DAY_END, QUEUE_DAY_START, minutesPerPPOf, planQueueDrop } from './queuePlanner';
 import { followQueueLive } from './queueLive';
 import { decodeRouteState } from './urlCodec';
 import './styles.css';
@@ -242,11 +242,18 @@ const QueuePreferencesContext = createContext({ language: 'en', t: (key) => key 
 const useQueuePreferences = () => useContext(QueuePreferencesContext);
 const statusCopy = (status, t, isDraft = false) => isDraft ? t('tentative') : ({ pool: t('inPool'), scheduled: t('scheduled'), in_progress: t('inProgress'), completed: t('readyToClose'), closed: t('closed'), cancelled: t('cancelled') }[status] || status);
 const taskRecency = (task) => {
-  const timestamp = task?.closedAt || task?.updatedAt || task?.createdAt;
+  const closed = task?.closedAt ? Date.parse(task.closedAt) : NaN;
+  if (Number.isFinite(closed)) return closed;
+  if (task?.scheduledDate) {
+    const minutes = Math.max(0, Number(task.scheduledStartMinutes ?? 0));
+    const hours = String(Math.floor(minutes / 60)).padStart(2, '0');
+    const remainder = String(minutes % 60).padStart(2, '0');
+    const scheduled = Date.parse(`${task.scheduledDate}T${hours}:${remainder}:00`);
+    if (Number.isFinite(scheduled)) return scheduled;
+  }
+  const timestamp = task?.updatedAt || task?.createdAt;
   const parsed = timestamp ? Date.parse(timestamp) : NaN;
-  if (Number.isFinite(parsed)) return parsed;
-  const scheduled = task?.scheduledDate ? Date.parse(`${task.scheduledDate}T${String(task.scheduledStartMinutes ?? 0).padStart(4, '0')}`) : NaN;
-  return Number.isFinite(scheduled) ? scheduled : Number(task?.id || 0);
+  return Number.isFinite(parsed) ? parsed : Number(task?.id || 0);
 };
 const isUrgent = (priority) => String(priority || '').toLowerCase() === 'urgent';
 const priorityClass = (priority) => isUrgent(priority) ? 'priority-urgent' : 'priority-normal';
@@ -1113,8 +1120,8 @@ function Scheduler({ data, draft, setDraft, onDraftChange, selectedDate, designe
       const rawMinute = ((event.clientX - rect.left) / rect.width) * QUEUE_DAY_END;
       const pointer = Math.max(0, Math.min(QUEUE_DAY_END, Math.round(rawMinute / 10) * 10));
       const others = planningTasks.filter((item) => item.id !== current.task.id && item.designerEmail === current.task.designerEmail && item.scheduledDate === current.task.scheduledDate && !['pool', 'cancelled'].includes(item.status)).map((item) => { const unit = minutesPerPPOf(item); return { start: Number(item.scheduledStartMinutes ?? 0), end: Number(item.scheduledStartMinutes ?? 0) + Math.max(unit, Number(item.durationMinutes || Number(item.productionPoints || 1) * unit)) }; });
-      const previousEnd = Math.max(0, ...others.filter((item) => item.end <= current.baseStart).map((item) => item.end));
-      const nextStart = Math.min(QUEUE_DAY_END, ...others.filter((item) => item.start >= current.baseEnd).map((item) => item.start));
+      const previousEnd = Math.max(0, ...others.filter((item) => item.end <= current.baseStart).map((item) => item.end + QUEUE_BUFFER_MINUTES));
+      const nextStart = Math.min(QUEUE_DAY_END, ...others.filter((item) => item.start >= current.baseEnd).map((item) => item.start - QUEUE_BUFFER_MINUTES));
       const unit = current.minutesPerPP;
       let start = current.baseStart;
       let productionPoints = Math.max(1, Number(current.task.productionPoints || Math.round(current.baseDuration / unit)));
@@ -1499,7 +1506,7 @@ function QueueApp({ user }) {
         && ['scheduled', 'in_progress', 'completed'].includes(task.status)
       ) byId.set(task.id, task);
     });
-    return [...byId.values()].sort((a, b) => `${a.scheduledDate || ''}-${String(a.scheduledStartMinutes ?? 0).padStart(4, '0')}-${a.id}`.localeCompare(`${b.scheduledDate || ''}-${String(b.scheduledStartMinutes ?? 0).padStart(4, '0')}-${b.id}`));
+    return [...byId.values()].sort((a, b) => taskRecency(b) - taskRecency(a) || Number(b.id || 0) - Number(a.id || 0));
   }, [coordinator, data, designerScope]);
   useEffect(() => {
     if (!coordinator) return undefined;
@@ -1784,6 +1791,9 @@ function QueueApp({ user }) {
     const body = value ? new URLSearchParams(actionName === 'close' ? { final_permalinks: JSON.stringify(value) } : {}) : undefined;
     return json(`/api/dashboard/queue/v2/requests/${target.id}/${actionName}`, { method: 'POST', body }).then((result) => {
       patchQueueTask(target.id, optimistic);
+      if (actionName === 'start' && result.scheduledDate) {
+        patchQueueTask(target.id, { scheduledDate: result.scheduledDate, scheduledStartMinutes: result.scheduledStartMinutes });
+      }
       closeDetail();
       if (result.deferred) patchQueueTask(target.id, { status: 'scheduled', actualStartedAt: null, completedAt: null, scheduledDate: result.scheduledDate, scheduledStartMinutes: result.scheduledStartMinutes });
       notify(result.deferred ? `${t('movedAfterActive')} ${result.scheduledDate} · ${time(result.scheduledStartMinutes)}.` : t('requestUpdated'), result.deferred ? 'warning' : 'success');

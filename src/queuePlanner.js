@@ -1,7 +1,7 @@
 export const QUEUE_DAY_START = 0;
 export const QUEUE_DAY_END = 24 * 60;
 export const QUEUE_CALENDAR_END = 24 * 60;
-export const QUEUE_BUFFER_MINUTES = 0;
+export const QUEUE_BUFFER_MINUTES = 10;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const scheduled = (task) => task.status === 'scheduled' && task.designerEmail && task.scheduledDate;
@@ -37,7 +37,7 @@ function nextFreeStart(preferred, duration, occupied) {
   while (true) {
     const conflicts = occupied.filter((item) => intervalsConflict(candidate, duration, item.start, item.duration));
     if (!conflicts.length) return candidate;
-    candidate = Math.max(...conflicts.map((item) => item.start + item.duration));
+    candidate = Math.max(...conflicts.map((item) => item.start + item.duration + QUEUE_BUFFER_MINUTES));
     candidate = Math.ceil(candidate / 10) * 10;
   }
 }
