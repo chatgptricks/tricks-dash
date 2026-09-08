@@ -13,7 +13,7 @@ const pool = { ...base, id: 1, post: post('chatgptricks', 'POOL1'), status: 'poo
 const active = { ...base, id: 2, post: post('chatgptricks', 'ACTIVE1'), status: 'in_progress', designerEmail: 'user03@example.com', scheduledDate: day, scheduledStartMinutes: 540 };
 const scheduled = { ...base, id: 3, post: post('chatgptricks', 'NEXT1'), recommendedAccounts: ['chatgptricks'], status: 'scheduled', designerEmail: 'user03@example.com', scheduledDate: day, scheduledStartMinutes: 570 };
 const payload = {
-  viewer: { email: 'user03@example.com', isAdmin: true, isDev: true, operatingRoles: ['vc', 'pd'] },
+  viewer: { displayName: 'User 03 Current', email: 'user03@example.com', isAdmin: true, isDev: true, operatingRoles: ['vc', 'pd'] },
   date: day,
   requests: [pool, active, scheduled],
   pickRequests: [pool],
@@ -44,6 +44,7 @@ const initialQueueFetch = new Promise((resolve) => { releaseInitialQueueFetch = 
 let submitted = null;
 let drafted = null;
 let started = false;
+let failNextStart = false;
 let createdTimeBlock = false;
 let tickets = [
   { id: 70, type: 'cancellation', status: 'pending', requesterEmail: 'user05@example.com', requestId: 3, reason: 'Client changed direction', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), request: { id: 3, post: { account: 'chatgptricks', shortcode: 'NEXT1' }, designerEmail: 'user05@example.com', status: 'scheduled', productionPoints: 3 } },
@@ -104,6 +105,10 @@ const stubFetch = async (url, options = {}) => {
     return response({ ok: true, submitted: submitted.length, notifications: { sent: 1, failed: 0 } });
   }
   if (value.includes('/api/dashboard/queue/v2/requests/3/start')) {
+    if (failNextStart) {
+      failNextStart = false;
+      return { ok: false, status: 403, json: async () => ({ detail: 'Only the assigned designer can start this request.' }) };
+    }
     started = true;
     return response({ ok: true, deferred: true, scheduledDate: day, scheduledStartMinutes: 600 });
   }
@@ -194,7 +199,7 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     const traineeHeader = [...document.querySelectorAll('.scheduler-row > header')].find((node) => /Trainee/.test(node.textContent || ''));
     const ivanRow = [...document.querySelectorAll('.scheduler-row')].find((node) => /User 05/.test(node.textContent || ''));
     await act(async () => { traineeHeader.dispatchEvent(dragEvent('dragstart')); ivanRow.dispatchEvent(dragEvent('dragover')); ivanRow.dispatchEvent(dragEvent('drop')); });
-    checks['Drag reorder updates VC rows immediately'] = [...document.querySelectorAll('.scheduler-user-copy b')].map((node) => node.textContent.trim()).join('|') === 'User 03|Trainee|User 05';
+    checks['Drag reorder updates VC rows immediately'] = [...document.querySelectorAll('.scheduler-user-copy b')].map((node) => node.textContent.trim()).join('|') === 'User 03 Current|Trainee|User 05';
     transfer.clearData();
     const createPostButton = document.querySelector('.queue-create-button');
     const addTimeButton = document.querySelector('.scheduler-add-time');
@@ -247,7 +252,12 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     const nextBlock = document.querySelector('.scheduler-block.state-scheduled');
     await click(nextBlock);
     checks['Sideview opens'] = Boolean(document.querySelector('.queue-request-rail'));
+    checks['Assignment detail uses the current Settings name'] = document.querySelector('.queue-request-rail').textContent.includes('User 03 Current');
     const start = [...document.querySelectorAll('.queue-detail-actions button')].find((node) => /Start work|Empezar trabajo/.test(node.textContent));
+    failNextStart = true;
+    await click(start);
+    checks['Rejected start preserves the detail and scheduled state'] = Boolean(document.querySelector('.queue-request-rail')) && Boolean(document.querySelector('.scheduler-block.state-scheduled'));
+    checks['Rejected start shows the server reason'] = document.querySelector('.queue-toast')?.textContent.includes('Only the assigned designer');
     await click(start);
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 100)); });
     checks['Start action accepts deferred response'] = started && !document.querySelector('.queue-request-rail');

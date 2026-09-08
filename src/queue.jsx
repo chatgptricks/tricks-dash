@@ -113,29 +113,21 @@ const ACTIVE_ROLE_PREVIEWS = new Set(['sales', 'pd', 'vc', 'trainee', 'admin']);
 const hasActiveRolePreview = () => ACTIVE_ROLE_PREVIEWS.has(window.sessionStorage.getItem('sentient.queueRolePreview') || '');
 let activeQueueDragId = null;
 const ACCOUNT_PROFILE_FALLBACKS = { chatgptricks: chatgptricksProfileImage, traselveloreal: traselvelorealProfileImage };
-const USER_DISPLAY_NAMES = Object.freeze({
-  'user03@example.com': 'User 03',
-  'user06@example.com': 'User 06',
-  'user05@example.com': 'User 05',
-  'user10@example.com': 'User 10',
-  'user13@example.com': 'User 13',
-  'user02@example.com': 'User 02',
-  'user07@example.com': 'User 01',
-  'user01@example.com': 'User 07',
-  'user08@example.com': 'User 08',
-  'user09@example.com': 'User 09',
-  'user11@example.com': 'User 11',
-  'user04@example.com': 'User 04',
-  'user12@example.com': 'Trainee',
-});
 const displayName = (value, preferred = '') => {
   if (String(preferred || '').trim()) return String(preferred).trim();
   const raw = String(value || '').trim();
   const key = raw.toLowerCase();
-  if (USER_DISPLAY_NAMES[key]) return USER_DISPLAY_NAMES[key];
   const local = key.includes('@') ? key.split('@')[0] : key;
   const words = local.replace(/[0-9]+/g, '').replace(/[._-]+/g, ' ').trim().split(/\s+/).filter(Boolean);
   return words.length ? words.map((word) => `${word.slice(0, 1).toUpperCase()}${word.slice(1).toLowerCase()}`).join(' ') : 'User';
+};
+const QueueNamesContext = createContext(null);
+const useQueueDisplayName = () => useContext(QueueNamesContext) || displayName;
+const queueNameResolver = (data) => {
+  const names = new Map([...(data?.designers || []), ...(data?.schedulerUsers || []), ...(data?.viewer ? [data.viewer] : [])]
+    .filter((person) => person.displayName?.trim())
+    .map((person) => [String(person.email || '').trim().toLowerCase(), person.displayName.trim()]));
+  return (email, preferred = '') => displayName(email, names.get(String(email || '').trim().toLowerCase()) || preferred);
 };
 const initialsFor = (value) => displayName(value).split(/\s+/).map((word) => word.slice(0, 1)).join('').slice(0, 2).toUpperCase();
 const userAvatar = (value) => {
@@ -283,6 +275,7 @@ function AuthGate({ notice, setNotice }) {
 /* Queue keeps one compact preferences entry point, now anchored on the
    signed-in person's profile image rather than an anonymous settings gear. */
 function QueueSettings({ isAdmin, isDev, userEmail, avatarUrl, displayLabel, onManageAccounts, onStartGuide, onResetQueue, onSignOut }) {
+  const displayName = useQueueDisplayName();
   const { t, language, setLanguage, theme, setTheme } = useQueuePreferences();
   const { accent, setAccent } = usePrefs();
   const [open, setOpen] = useState(false);
@@ -349,6 +342,7 @@ function TimeBlock({ block, onContextMenu, timeZone = QUEUE_TIME_ZONE }) {
 }
 
 function TimeBlockForm({ form, setForm, busy, onClose, onSubmit, users = [], canChooseUser = false, timeZone = QUEUE_TIME_ZONE }) {
+  const displayName = useQueueDisplayName();
   const { t, language } = useQueuePreferences();
   if (!form) return null;
   const valid = form.durationMinutes >= 10 && form.durationMinutes % 10 === 0 && form.startMinutes + form.durationMinutes <= QUEUE_DAY_END;
@@ -693,6 +687,7 @@ function AssignMultipleAccountsModal({ task, accounts = [], designers = [], busy
 }
 
 function PoolCard({ task, onOpen, canMultiAssign = false, canCancel = false }) {
+  const displayName = useQueueDisplayName();
   const { t } = useQueuePreferences();
   return <article className={`queue-pool-card ${priorityClass(task.priority)}${hotClass(task)}${task.isDraft ? ' is-draft' : ''}`} draggable data-context-type="pool" data-context-title={task.post.title || accountMention(task.post.account) || t('post')} data-context-post-key={task.postKey || task.id} data-context-request-id={task.id} data-context-duplicate="true" data-context-multi-assign={canMultiAssign ? 'true' : 'false'} data-context-cancel={canCancel ? 'true' : 'false'} data-context-account={task.post.account || ''} data-context-shortcode={task.post.shortcode || ''} data-context-permalink={task.post.permalink || ''} onDragStart={(event) => { activeQueueDragId = task.id; event.dataTransfer.setData('queue-task', String(task.id)); }} onDragEnd={() => { activeQueueDragId = null; }}><button type="button" onClick={() => onOpen(task)}>{cover(task) ? <img src={cover(task)} alt="" /> : <span className="queue-pool-empty">@</span>}<span><b>{task.post.title || accountMention(task.post.account) || t('post')}</b><small>{task.post.title && task.post.account ? `${accountMention(task.post.account)} · ` : task.post.account ? `${accountMention(task.post.account)} · ` : `${t('accountToSelect')} · `}{task.productionPoints} PP · {task.durationMinutes} min</small>{task.prc ? <em className="queue-prc">PRC · {task.prc === 'Auto PRC' ? task.prc : displayName(task.prc)}</em> : null}{task.isDraft ? <em>{t('returnToPool')}</em> : null}</span><span className="queue-pool-card-badges"><PriorityBadge priority={task.priority} />{isHotTask(task) ? <i className="queue-hot-badge">🔥 {hotText(task)}</i> : null}</span></button><div>{task.tags?.filter((tag) => tag !== 'hot').map((tag) => <i key={tag}>{tag}</i>)}</div></article>;
 }
@@ -705,6 +700,7 @@ function DesignerAssignments({ tasks, closedTasks = [], onOpen, timeZone = QUEUE
 }
 
 function AdminAssignmentTable({ tasks, onOpen, headingKey = 'allAssignedPosts', countKey = 'assignedPostsCount' }) {
+  const displayName = useQueueDisplayName();
   const { t, language } = useQueuePreferences();
   return <section className="queue-admin-assignments"><header><div><p className="scheduler-eyebrow">{t(headingKey)}</p><h3>{tasks.length} {t(countKey)}</h3></div></header>{tasks.length ? <div className="queue-admin-assignment-table" role="table"><div className="queue-admin-assignment-head" role="row"><span>{t('post')}</span><span>{t('designer')}</span><span>{t('scheduled')}</span><span>{t('priority')}</span><span>{t('productionPoints')}</span><span>{t('status')}</span></div>{tasks.map((task) => <button type="button" role="row" key={task.id} className={`queue-admin-assignment-row state-${task.status} ${priorityClass(task.priority)}${hotClass(task)}${task.isDraft ? ' is-draft' : ''}`} data-context-type="task" data-context-request-id={task.id} data-context-duplicate="true" onClick={() => onOpen(task)}><span className="queue-admin-assignment-post">{cover(task) ? <img src={cover(task)} alt="" /> : <span className="queue-admin-assignment-empty">@</span>}<span><b>{task.post.title || accountMention(task.post.account) || t('post')}</b><small>{task.post.account ? accountMention(task.post.account) : t('accountToSelect')} · {task.brief || task.post.caption || t('post')}</small>{task.recommendedAccounts?.length ? <em>{task.recommendedAccounts.map((account) => `@${account}`).join(' · ')}</em> : null}{isHotTask(task) ? <i className="queue-hot-badge">🔥 {hotText(task)}</i> : null}</span></span><span className="queue-admin-assignment-designer"><b>{task.designerEmail ? displayName(task.designerEmail) : '—'}</b><small>{task.designerEmail || ''}</small></span><span className="queue-admin-assignment-time"><b>{task.scheduledDate ? displayDate(task.scheduledDate, language) : '—'}</b><small>{task.scheduledStartMinutes == null ? '—' : `${time(task.scheduledStartMinutes)} · ${task.durationMinutes} ${t('minutes')}`}</small></span><span className="queue-admin-assignment-priority"><PriorityBadge priority={task.priority} /></span><span className="queue-admin-assignment-pp"><b>{task.productionPoints} PP</b><small>{task.tags?.filter((tag) => tag !== 'hot').slice(0, 2).join(' · ') || t('noTags')}</small></span><span className="queue-admin-assignment-status"><i>{statusCopy(task.status, t, task.isDraft)}</i></span></button>)}</div> : <p className="queue-admin-assignment-empty-state">{t('noAssignedPosts')}</p>}</section>;
 }
@@ -736,6 +732,7 @@ function QueueOverviewSkeleton() {
 }
 
 function QueueOverview({ report, loading, error, onRetry, onOpen }) {
+  const displayName = useQueueDisplayName();
   const { t } = useQueuePreferences();
   const totals = report?.totals || {};
   const metric = (status, label) => <article className={`queue-overview-metric status-${status}`} key={status}><span>{label}</span><strong>{Number(totals[status]?.count || 0)}</strong><small>{Number(totals[status]?.points || 0)} PP</small></article>;
@@ -747,6 +744,7 @@ function QueueOverview({ report, loading, error, onRetry, onOpen }) {
 }
 
 function TicketPanel({ tickets, loading, error, onClose, onReview, onContinueSuggestion, canReview }) {
+  const displayName = useQueueDisplayName();
   const { t, language } = useQueuePreferences();
   const [tab, setTab] = useState('pending');
   const [busy, setBusy] = useState('');
@@ -795,6 +793,7 @@ function AttachmentList({ task, busy, onUpload, onDownload }) {
 }
 
 function HistoryList({ events, loading }) {
+  const displayName = useQueueDisplayName();
   const { t, language } = useQueuePreferences();
   return <section className="queue-detail-section"><h3><History size={13} />{t('history')}</h3>{loading ? <LoaderCircle className="queue-spin" size={16} /> : events?.length ? <ol className="queue-history">{events.map((event, index) => <li key={`${event.createdAt}-${index}`}><span className={`history-dot type-${event.type}`} /><div><b>{event.type.replaceAll('_', ' ')}</b><small>{displayName(event.actorEmail)} · {displayTimestamp(event.createdAt, language)}</small></div></li>)}</ol> : <p className="queue-detail-empty">{t('noHistory')}</p>}</section>;
 }
@@ -811,6 +810,7 @@ function TraineeReviewAction({ task, isTrainee, isOwner, busy, onSend }) {
 }
 
 function Detail({ task, tags, availableAccounts = [], canCoordinate, canDuplicate = false, isOwner, isTrainee, pendingTickets = [], onReviewTicket, notice, history, historyLoading, onClose, onAction, onCancel, onEdit, onNotify, onUpload, onDownload, onRequestPP, onRequestCancellation, onRequestMove, onRequestTraineeReview, onDuplicate, timeZone = QUEUE_TIME_ZONE }) {
+  const displayName = useQueueDisplayName();
   const { t } = useQueuePreferences();
   const [publishedLinks, setPublishedLinks] = useState({});
   const [reason, setReason] = useState('');
@@ -924,6 +924,7 @@ function schedulerUserRole(user, t) {
 }
 
 function Scheduler({ data, draft, setDraft, onDraftChange, selectedDate, designerScope, timeZone = '', onOpen, onError, onCreateTimeBlock, onEditTimeBlock, onDeleteTimeBlock, onReturnToPool, onCancelTask, onDuplicateTask, onSavePreferences, addTimeNonce = 0 }) {
+  const displayName = useQueueDisplayName();
   const { t, language } = useQueuePreferences();
   const coordinator = data.viewer.isAdmin || data.viewer.operatingRoles?.includes('vc');
   const selfPlanner = coordinator || Boolean(data.viewer.canSelfAssign);
@@ -1158,6 +1159,7 @@ function Scheduler({ data, draft, setDraft, onDraftChange, selectedDate, designe
 }
 
 function DraftAccounts({ draft, designers, onAccountsChange }) {
+  const displayName = useQueueDisplayName();
   const { t, language } = useQueuePreferences();
   const toggle = (task, account) => { const selected = task.recommendedAccounts || []; onAccountsChange(task.id, selected.includes(account) ? selected.filter((item) => item !== account) : [...selected, account]); };
   return <section className="scheduler-drafts"><header><div><b>{t('draftsSaved')}</b><small>{t('sharedDrafts')}</small></div></header>{draft.map((task) => { const designer = designers.find((item) => item.email === task.designerEmail); const selected = task.recommendedAccounts || []; return <article key={task.id}><div><b>@{task.post.account} → {displayName(designer?.email)}</b><small>{displayDate(task.scheduledDate, language)} · {time(task.scheduledStartMinutes)} · {task.productionPoints} PP</small></div><fieldset><legend>{t('recommendedAccounts')}</legend>{designer?.accounts?.length ? designer.accounts.map((account) => <label key={account}><input type="checkbox" checked={selected.includes(account)} onChange={() => toggle(task, account)} /><span>@{account}</span></label>) : <small>{t('noRecommendedAccount')}</small>}</fieldset></article>; })}</section>;
@@ -1183,6 +1185,7 @@ function QueueApp({ user }) {
   const { t, language, setLanguage } = useQueuePreferences();
   const initialSnapshotRef = useRef(readQueueSnapshot(user?.email));
   const [data, setData] = useState(() => initialSnapshotRef.current?.data || null);
+  const displayName = useMemo(() => queueNameResolver(data), [data]);
   const [viewer, setViewer] = useState(null);
   const [timeZonePreview, setTimeZonePreview] = useState(readDevTimeZone);
   const [date, setDate] = useState(() => {
@@ -1739,7 +1742,7 @@ function QueueApp({ user }) {
     persistPoolReturn(source);
   };
   const closeDetail = () => { openRef.current = null; setOpen(null); };
-  const action = (actionName, value) => {
+  const action = async (actionName, value) => {
     const target = open;
     if (!target) return;
     saveQuietly();
@@ -1749,13 +1752,13 @@ function QueueApp({ user }) {
       : actionName === 'complete' ? { status: 'completed', completedAt: now }
       : actionName === 'close' ? { status: 'closed', finalPermalink: value?.[0]?.url || '', finalPermalinks: value || [], closedAt: now }
       : {};
-    patchQueueTask(target.id, optimistic);
-    closeDetail();
     const body = value ? new URLSearchParams(actionName === 'close' ? { final_permalinks: JSON.stringify(value) } : {}) : undefined;
-    json(`/api/dashboard/queue/v2/requests/${target.id}/${actionName}`, { method: 'POST', body }).then((result) => {
+    return json(`/api/dashboard/queue/v2/requests/${target.id}/${actionName}`, { method: 'POST', body }).then((result) => {
+      patchQueueTask(target.id, optimistic);
+      closeDetail();
       if (result.deferred) patchQueueTask(target.id, { status: 'scheduled', actualStartedAt: null, completedAt: null, scheduledDate: result.scheduledDate, scheduledStartMinutes: result.scheduledStartMinutes });
       notify(result.deferred ? `${t('movedAfterActive')} ${result.scheduledDate} · ${time(result.scheduledStartMinutes)}.` : t('requestUpdated'), result.deferred ? 'warning' : 'success');
-    }).catch((err) => { patchQueueTask(target.id, target); notify(err.message, 'error'); });
+    }).catch((err) => { notify(err.message, 'error'); });
   };
   const cancel = (reason) => {
     const target = open;
@@ -1944,7 +1947,7 @@ function QueueApp({ user }) {
     if (/^\d{4}-\d{2}-\d{2}$/.test(next)) setDate(next);
   };
 
-  return <main className="queue-page scheduler-page">
+  return <QueueNamesContext.Provider value={displayName}><main className="queue-page scheduler-page">
     <ProductHeader current="queue" coordinator={coordinator} account={<QueueSettings isAdmin={Boolean(data?.viewer?.isAdmin)} isDev={effectiveDevAccess} userEmail={user.email} avatarUrl={user?.photoURL || data?.viewer?.avatarUrl} displayLabel={user?.displayName || data?.viewer?.displayName} onManageAccounts={() => { accountSetupDismissedRef.current = false; setAccountSetupOpen(true); }} onStartGuide={() => { setGuideStep(-1); setGuideOpen(true); }} onResetQueue={(data?.viewer?.isAdmin || effectiveDevAccess) ? () => setResetOpen(true) : null} onSignOut={() => { clearSsoCookie(); signOut(auth); }} />}><h1>{t('productionQueue')}</h1>
         <div className="queue-actions-group queue-actions-primary">
           <span className={`queue-live-status is-${liveStatus}`} title={liveStatus === 'live' ? t('liveConnected') : liveStatus === 'offline' ? t('liveOffline') : t('liveConnecting')}>{liveStatus === 'offline' ? <WifiOff size={12} /> : <Radio size={12} />}<b>{liveStatus === 'live' ? t('liveConnected') : liveStatus === 'offline' ? t('liveOffline') : t('liveConnecting')}</b></span>
@@ -2008,7 +2011,7 @@ function QueueApp({ user }) {
       timeZone={simulatedTimeZone}
     />
     <DevRolePreview isDev={isDev} canSwitchRoles={Boolean(viewer?.can_role_switch || data?.viewer?.canRoleSwitch || ROLE_SWITCHER_DEFAULTS[String(user?.email || '').trim().toLowerCase()])} availableRoles={data?.viewer?.availableOperatingRoles || viewer?.available_operating_roles || ROLE_SWITCHER_DEFAULTS[String(user?.email || '').trim().toLowerCase()] || []} />
-  </main>;
+  </main></QueueNamesContext.Provider>;
 }
 
 function Root() {
