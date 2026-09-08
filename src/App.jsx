@@ -2225,17 +2225,20 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
                 </button>
               </div>
             ) : null}
+            {!grouping && visibleCount < galleryTotal ? (
+              <div className="load-more-end">
+                <button className="ghost-button load-more-button" onClick={() => setVisibleCount((count) => count + POSTS_PER_BATCH)}>
+                  Load 60 more
+                </button>
+              </div>
+            ) : null}
           </div>
 
           <div className="pagination">
             <div className="pagination-copy">
               {grouping ? 'Comparing similar posts…' : <>{filtered.length.toLocaleString()} posts in {galleryTotal.toLocaleString()} stacks · showing {galleryTotal ? 1 : 0}-{Math.min(visibleCount, galleryTotal)}</>}
             </div>
-            {grouping ? null : visibleCount < galleryTotal ? (
-              <button className="ghost-button load-more-button" onClick={() => setVisibleCount((count) => count + POSTS_PER_BATCH)}>
-                Load 60 more
-              </button>
-            ) : <span className="all-loaded">All matching posts loaded</span>}
+            {grouping || visibleCount < galleryTotal ? null : <span className="all-loaded">All matching posts loaded</span>}
           </div>
         </section>
         </> : null}
