@@ -211,6 +211,13 @@ Object.assign(COPY.es, {
 });
 
 Object.assign(COPY.en, {
+  closeSelected: 'Close selected', closeSelectedCount: 'Close selected requests', batchCloseDone: 'Selected requests closed.', batchCloseSkipped: 'Some selected requests were skipped because they were not ready to close.', selectReadyToClose: 'Select ready to close',
+});
+Object.assign(COPY.es, {
+  closeSelected: 'Cerrar seleccionados', closeSelectedCount: 'Cerrar requests seleccionados', batchCloseDone: 'Requests seleccionados cerrados.', batchCloseSkipped: 'Algunos requests se omitieron porque todavía no estaban listos para cerrar.', selectReadyToClose: 'Seleccionar listos para cerrar',
+});
+
+Object.assign(COPY.en, {
   createPost: 'Create Post', createPostTitle: 'Create a Queue post', createPostHelp: 'Start a production request without a dashboard post.', targetAccount: 'Publishing account', accountToSelect: 'Account selected when assigned', chooseAccountLater: 'Choose later (optional)', postTitle: 'Post title', postTitlePlaceholder: 'e.g. AI tools carousel for next week', postType: 'Post type', postTypeImage: 'Image', postTypeCarousel: 'Carousel', postTypeReel: 'Reel', postTypePromo: 'Promo', postTypeStory: 'Story', postTypeOther: 'Other', titleRequired: 'Add a title for this post.', accountRequired: 'Choose a Sentient account.', postCreated: 'Post created in the production pool.', sourceLink: 'Source link', sourceLinkHelp: 'Paste a public Reddit, X, Canva, LinkedIn, Facebook, Instagram, or other source link. Queue will try to bring in its title, description, and thumbnail.', getSourceDetails: 'Get details', gettingSourceDetails: 'Getting details…', sourcePreview: 'Source preview', sourceDetected: 'Details added without replacing fields you already edited.',
 });
 Object.assign(COPY.es, {
@@ -234,6 +241,13 @@ Object.assign(COPY.es, {
 const QueuePreferencesContext = createContext({ language: 'en', t: (key) => key });
 const useQueuePreferences = () => useContext(QueuePreferencesContext);
 const statusCopy = (status, t, isDraft = false) => isDraft ? t('tentative') : ({ pool: t('inPool'), scheduled: t('scheduled'), in_progress: t('inProgress'), completed: t('readyToClose'), closed: t('closed'), cancelled: t('cancelled') }[status] || status);
+const taskRecency = (task) => {
+  const timestamp = task?.closedAt || task?.updatedAt || task?.createdAt;
+  const parsed = timestamp ? Date.parse(timestamp) : NaN;
+  if (Number.isFinite(parsed)) return parsed;
+  const scheduled = task?.scheduledDate ? Date.parse(`${task.scheduledDate}T${String(task.scheduledStartMinutes ?? 0).padStart(4, '0')}`) : NaN;
+  return Number.isFinite(scheduled) ? scheduled : Number(task?.id || 0);
+};
 const isUrgent = (priority) => String(priority || '').toLowerCase() === 'urgent';
 const priorityClass = (priority) => isUrgent(priority) ? 'priority-urgent' : 'priority-normal';
 const priorityCopy = (priority, t) => isUrgent(priority) ? t('priorityUrgent') : '';
@@ -699,10 +713,25 @@ function DesignerAssignments({ tasks, closedTasks = [], onOpen, timeZone = QUEUE
   return <section className="designer-assignments"><header><div><p className="scheduler-eyebrow">{t('myAssignedWork')}</p><h2>{t('upcomingProduction')}</h2></div><small>{tasks.length} {tasks.length === 1 ? t('activeRequest') : t('activeRequests')}</small></header>{tasks.length ? <div className="designer-assignment-table" role="table">{header}{tasks.map(row)}</div> : <div className="designer-assignments-empty"><CalendarDays size={18} /><strong>{t('noActiveAssignments')}</strong><span>{t('emptyAssignments')}</span></div>}{closedTasks.length ? <section className="designer-closed-assignments"><header><div><p className="scheduler-eyebrow">{t('closed')}</p><h3>{closedTasks.length} · last 24h</h3></div><small>Hidden automatically after 24h</small></header><div className="designer-assignment-table" role="table">{header}{closedTasks.map(row)}</div></section> : null}</section>;
 }
 
-function AdminAssignmentTable({ tasks, onOpen, headingKey = 'allAssignedPosts', countKey = 'assignedPostsCount' }) {
+function AdminAssignmentTable({ tasks, onOpen, onBatchClose, headingKey = 'allAssignedPosts', countKey = 'assignedPostsCount' }) {
   const displayName = useQueueDisplayName();
   const { t, language } = useQueuePreferences();
-  return <section className="queue-admin-assignments"><header><div><p className="scheduler-eyebrow">{t(headingKey)}</p><h3>{tasks.length} {t(countKey)}</h3></div></header>{tasks.length ? <div className="queue-admin-assignment-table" role="table"><div className="queue-admin-assignment-head" role="row"><span>{t('post')}</span><span>{t('designer')}</span><span>{t('scheduled')}</span><span>{t('priority')}</span><span>{t('productionPoints')}</span><span>{t('status')}</span></div>{tasks.map((task) => <button type="button" role="row" key={task.id} className={`queue-admin-assignment-row state-${task.status} ${priorityClass(task.priority)}${hotClass(task)}${task.isDraft ? ' is-draft' : ''}`} data-context-type="task" data-context-request-id={task.id} data-context-duplicate="true" onClick={() => onOpen(task)}><span className="queue-admin-assignment-post">{cover(task) ? <img src={cover(task)} alt="" /> : <span className="queue-admin-assignment-empty">@</span>}<span><b>{task.post.title || accountMention(task.post.account) || t('post')}</b><small>{task.post.account ? accountMention(task.post.account) : t('accountToSelect')} · {task.brief || task.post.caption || t('post')}</small>{task.recommendedAccounts?.length ? <em>{task.recommendedAccounts.map((account) => `@${account}`).join(' · ')}</em> : null}{isHotTask(task) ? <i className="queue-hot-badge">🔥 {hotText(task)}</i> : null}</span></span><span className="queue-admin-assignment-designer"><b>{task.designerEmail ? displayName(task.designerEmail) : '—'}</b><small>{task.designerEmail || ''}</small></span><span className="queue-admin-assignment-time"><b>{task.scheduledDate ? displayDate(task.scheduledDate, language) : '—'}</b><small>{task.scheduledStartMinutes == null ? '—' : `${time(task.scheduledStartMinutes)} · ${task.durationMinutes} ${t('minutes')}`}</small></span><span className="queue-admin-assignment-priority"><PriorityBadge priority={task.priority} /></span><span className="queue-admin-assignment-pp"><b>{task.productionPoints} PP</b><small>{task.tags?.filter((tag) => tag !== 'hot').slice(0, 2).join(' · ') || t('noTags')}</small></span><span className="queue-admin-assignment-status"><i>{statusCopy(task.status, t, task.isDraft)}</i></span></button>)}</div> : <p className="queue-admin-assignment-empty-state">{t('noAssignedPosts')}</p>}</section>;
+  const [selectedIds, setSelectedIds] = useState([]);
+  const readyIds = useMemo(() => tasks.filter((task) => task.status === 'completed').map((task) => String(task.id)), [tasks]);
+  useEffect(() => setSelectedIds((current) => current.filter((id) => readyIds.includes(id))), [readyIds]);
+  const toggleSelected = (event, taskId) => {
+    event.stopPropagation();
+    const value = String(taskId);
+    setSelectedIds((current) => current.includes(value) ? current.filter((id) => id !== value) : [...current, value]);
+  };
+  const closeSelected = async () => {
+    if (!selectedIds.length || !onBatchClose) return;
+    await onBatchClose(selectedIds.map(Number));
+    setSelectedIds([]);
+  };
+  const selectReady = () => setSelectedIds((current) => current.length === readyIds.length ? [] : readyIds);
+  const row = (task) => <button type="button" role="row" key={task.id} className={`queue-admin-assignment-row state-${task.status} ${priorityClass(task.priority)}${hotClass(task)}${task.isDraft ? ' is-draft' : ''}`} data-context-type="task" data-context-request-id={task.id} data-context-duplicate="true" onClick={() => onOpen(task)}><span className="queue-admin-assignment-post">{task.status === 'completed' ? <input className="queue-admin-select" type="checkbox" checked={selectedIds.includes(String(task.id))} aria-label={`${t('selectReadyToClose')} ${task.post.title || accountMention(task.post.account) || t('post')}`} onClick={(event) => toggleSelected(event, task.id)} onChange={() => {}} /> : null}{cover(task) ? <img src={cover(task)} alt="" /> : <span className="queue-admin-assignment-empty">@</span>}<span><b>{task.post.title || accountMention(task.post.account) || t('post')}</b><small>{task.post.account ? accountMention(task.post.account) : t('accountToSelect')} · {task.brief || task.post.caption || t('post')}</small>{task.recommendedAccounts?.length ? <em>{task.recommendedAccounts.map((account) => `@${account}`).join(' · ')}</em> : null}{isHotTask(task) ? <i className="queue-hot-badge">🔥 {hotText(task)}</i> : null}</span></span><span className="queue-admin-assignment-designer"><b>{task.designerEmail ? displayName(task.designerEmail) : '—'}</b><small>{task.designerEmail || ''}</small></span><span className="queue-admin-assignment-time"><b>{task.scheduledDate ? displayDate(task.scheduledDate, language) : '—'}</b><small>{task.scheduledStartMinutes == null ? '—' : `${time(task.scheduledStartMinutes)} · ${task.durationMinutes} ${t('minutes')}`}</small></span><span className="queue-admin-assignment-priority"><PriorityBadge priority={task.priority} /></span><span className="queue-admin-assignment-pp"><b>{task.productionPoints} PP</b><small>{task.tags?.filter((tag) => tag !== 'hot').slice(0, 2).join(' · ') || t('noTags')}</small></span><span className="queue-admin-assignment-status"><i>{statusCopy(task.status, t, task.isDraft)}</i></span></button>;
+  return <section className="queue-admin-assignments"><header><div><p className="scheduler-eyebrow">{t(headingKey)}</p><h3>{tasks.length} {t(countKey)}</h3></div>{onBatchClose && readyIds.length ? <div className="queue-admin-batch-actions"><button type="button" className="scheduler-secondary" onClick={selectReady}>{t('selectReadyToClose')}</button><button type="button" className="scheduler-primary" disabled={!selectedIds.length} onClick={closeSelected}>{t('closeSelected')} {selectedIds.length ? `(${selectedIds.length})` : ''}</button></div> : null}</header>{tasks.length ? <div className="queue-admin-assignment-table" role="table"><div className="queue-admin-assignment-head" role="row"><span>{t('post')}</span><span>{t('designer')}</span><span>{t('scheduled')}</span><span>{t('priority')}</span><span>{t('productionPoints')}</span><span>{t('status')}</span></div>{tasks.map(row)}</div> : <p className="queue-admin-assignment-empty-state">{t('noAssignedPosts')}</p>}</section>;
 }
 
 /* The Queue shell is intentionally built from the production scheduler's
@@ -1485,8 +1514,8 @@ function QueueApp({ user }) {
     document.addEventListener('contextmenu', openUpcomingContext);
     return () => document.removeEventListener('contextmenu', openUpcomingContext);
   }, [coordinator, upcoming]);
-  const assigned = useMemo(() => { const byId = new Map((data?.assignedRequests || []).map((task) => [task.id, task])); (data?.liveDrafts || []).filter((task) => task.designerEmail === data?.viewer?.email).forEach((task) => byId.set(task.id, task)); return [...byId.values()].sort((a, b) => `${a.scheduledDate}-${String(a.scheduledStartMinutes).padStart(4, '0')}`.localeCompare(`${b.scheduledDate}-${String(b.scheduledStartMinutes).padStart(4, '0')}`)); }, [data]);
-  const recentClosed = useMemo(() => (data?.recentClosedRequests || []).filter((task) => task.designerEmail === data?.viewer?.email), [data]);
+  const assigned = useMemo(() => { const ownEmail = String(data?.viewer?.email || '').toLowerCase(); const byId = new Map((data?.assignedRequests || []).filter((task) => String(task.designerEmail || '').toLowerCase() === ownEmail).map((task) => [task.id, task])); (data?.liveDrafts || []).filter((task) => String(task.designerEmail || '').toLowerCase() === ownEmail).forEach((task) => byId.set(task.id, task)); return [...byId.values()].sort((a, b) => taskRecency(b) - taskRecency(a) || Number(b.id || 0) - Number(a.id || 0)); }, [data]);
+  const recentClosed = useMemo(() => { const ownEmail = String(data?.viewer?.email || '').toLowerCase(); return (data?.recentClosedRequests || []).filter((task) => String(task.designerEmail || '').toLowerCase() === ownEmail).sort((a, b) => taskRecency(b) - taskRecency(a) || Number(b.id || 0) - Number(a.id || 0)); }, [data]);
   const lateStart = useMemo(() => {
     const now = new Date();
     const today = DAY(now, QUEUE_TIME_ZONE);
@@ -1760,6 +1789,20 @@ function QueueApp({ user }) {
       notify(result.deferred ? `${t('movedAfterActive')} ${result.scheduledDate} · ${time(result.scheduledStartMinutes)}.` : t('requestUpdated'), result.deferred ? 'warning' : 'success');
     }).catch((err) => { notify(err.message, 'error'); });
   };
+  const batchClose = async (requestIds) => {
+    if (!requestIds?.length) return;
+    saveQuietly();
+    const now = new Date().toISOString();
+    requestIds.forEach((requestId) => patchQueueTask(requestId, { status: 'closed', finalPermalink: '', finalPermalinks: [], closedAt: now, updatedAt: now }));
+    try {
+      const result = await json('/api/dashboard/queue/v2/requests/batch-close', { method: 'POST', body: new URLSearchParams({ request_ids: JSON.stringify(requestIds) }) });
+      notify(result.skipped?.length ? t('batchCloseSkipped') : t('batchCloseDone'), result.skipped?.length ? 'warning' : 'success');
+      await loadRef.current?.({ silent: true });
+    } catch (err) {
+      notify(err.message, 'error');
+      await loadRef.current?.({ silent: true }).catch(() => {});
+    }
+  };
   const cancel = (reason) => {
     const target = open;
     if (!target) return;
@@ -1972,7 +2015,7 @@ function QueueApp({ user }) {
       {coordinator && !archive ? <section className={`scheduler-pool${poolDropActive ? ' is-drop-target' : ''}`} onDragOver={poolDragOver} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setPoolDropActive(false); }} onDrop={poolDrop} aria-label={t('poolDropHint')}><header><div><p className="scheduler-eyebrow">{t('productionPool')}</p><h2>{pool.length} {t('readyToSchedule')}</h2></div><small>{poolDropActive ? t('poolDropHint') : t('visibleSchedule')}</small></header><div className="scheduler-pool-list">{pool.map((task) => <PoolCard key={task.id} task={task} onOpen={setOpen} canMultiAssign canCancel />)}{!pool.length ? <p className="scheduler-empty">{t('emptyPool')}</p> : null}</div></section> : null}
       {!coordinator && canSelfAssign && !archive ? <section className="scheduler-pool"><header><div><p className="scheduler-eyebrow">My Pool</p><h2>{selfPool.length} {t('readyToSchedule')}</h2></div><small>Drag your request onto your own schedule.</small></header><div className="scheduler-pool-list">{selfPool.map((task) => <PoolCard key={task.id} task={task} onOpen={setOpen} />)}{!selfPool.length ? <p className="scheduler-empty">Create a post to start your own Pool.</p> : null}</div></section> : null}
       {(coordinator || canSelfAssign) && draft.length ? <div className="scheduler-draft-float"><button type="button" className="scheduler-secondary" onClick={clearDrafts}>{t('clearDrafts')}</button><button type="button" className="scheduler-submit" onClick={submit}><Send size={14} />{t('submit')} {draft.length}</button></div> : null}
-      {archive ? <section className="queue-archive-list"><header><p className="scheduler-eyebrow">{t('archive')}</p><h2>{archived.length} {t('cancelled')}</h2></header>{archived.length ? archived.map((task) => <button type="button" key={task.id} className={`${priorityClass(task.priority)}${hotClass(task)}`} onClick={() => setOpen(task)}><span>{cover(task) ? <img src={cover(task)} alt="" /> : '@'}</span><div><b>@{task.post.account}</b><small>{task.cancellationReason || t('cancelled')}</small>{isHotTask(task) ? <i className="queue-hot-badge">🔥 {hotText(task)}</i> : null}</div><em>{displayTimestamp(task.updatedAt, language)}</em></button>) : <p className="scheduler-empty">{t('noArchived')}</p>}</section> : <>{coordinator && draft.length ? <DraftAccounts draft={draft} designers={data.designers} onAccountsChange={changeDraftAccounts} /> : null}<Scheduler data={data} draft={draft} setDraft={setDraft} onDraftChange={persistDrafts} selectedDate={date} designerScope={designerScope} timeZone={simulatedTimeZone} onOpen={setOpen} onError={(message) => notify(message, 'error')} onCreateTimeBlock={createTimeBlock} onEditTimeBlock={editTimeBlock} onDeleteTimeBlock={deleteTimeBlock} onReturnToPool={returnTaskToPool} onCancelTask={cancelTask} onDuplicateTask={(task) => duplicateRequest(task.id)} onSavePreferences={saveSchedulerPreferences} addTimeNonce={addTimeNonce} />{coordinator ? <AdminAssignmentTable tasks={upcoming} onOpen={setOpen} headingKey="upcomingProduction" countKey="activeRequests" /> : <DesignerAssignments tasks={assigned} closedTasks={recentClosed} timeZone={simulatedTimeZone} onOpen={setOpen} />}</>}
+      {archive ? <section className="queue-archive-list"><header><p className="scheduler-eyebrow">{t('archive')}</p><h2>{archived.length} {t('cancelled')}</h2></header>{archived.length ? archived.map((task) => <button type="button" key={task.id} className={`${priorityClass(task.priority)}${hotClass(task)}`} onClick={() => setOpen(task)}><span>{cover(task) ? <img src={cover(task)} alt="" /> : '@'}</span><div><b>@{task.post.account}</b><small>{task.cancellationReason || t('cancelled')}</small>{isHotTask(task) ? <i className="queue-hot-badge">🔥 {hotText(task)}</i> : null}</div><em>{displayTimestamp(task.updatedAt, language)}</em></button>) : <p className="scheduler-empty">{t('noArchived')}</p>}</section> : <>{coordinator && draft.length ? <DraftAccounts draft={draft} designers={data.designers} onAccountsChange={changeDraftAccounts} /> : null}<Scheduler data={data} draft={draft} setDraft={setDraft} onDraftChange={persistDrafts} selectedDate={date} designerScope={designerScope} timeZone={simulatedTimeZone} onOpen={setOpen} onError={(message) => notify(message, 'error')} onCreateTimeBlock={createTimeBlock} onEditTimeBlock={editTimeBlock} onDeleteTimeBlock={deleteTimeBlock} onReturnToPool={returnTaskToPool} onCancelTask={cancelTask} onDuplicateTask={(task) => duplicateRequest(task.id)} onSavePreferences={saveSchedulerPreferences} addTimeNonce={addTimeNonce} />{coordinator ? <AdminAssignmentTable tasks={upcoming} onOpen={setOpen} onBatchClose={data?.viewer?.isAdmin ? batchClose : null} headingKey="upcomingProduction" countKey="activeRequests" /> : <DesignerAssignments tasks={assigned} closedTasks={recentClosed} timeZone={simulatedTimeZone} onOpen={setOpen} />}</>}
       </> : null}
     </> : null}
     {ticketsOpen && data?.viewer ? <TicketPanel tickets={tickets} loading={ticketsLoading} error={ticketsError} onClose={() => setTicketsOpen(false)} onReview={reviewTicket} onContinueSuggestion={(ticket) => { setCreateSeed({ sourceUrl: ticket.title, reason: ticket.reason }); setTicketsOpen(false); setCreateOpen(true); }} canReview={Boolean(coordinator)} /> : null}
