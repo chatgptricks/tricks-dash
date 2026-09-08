@@ -54,7 +54,7 @@ import { describeSignInError, firebaseAuth, startGoogleSignIn } from './firebase
 import { clearSsoCookie, startSsoRefresh, trySsoSignIn } from './sso';
 import { PrefsProvider, usePrefs } from './prefsContext';
 import { ACCENT_CHOICES, accentHex } from './prefs';
-import { API_BASE, IG_HANDLE, apiFetch } from './api';
+import { API_BASE, IG_HANDLE, apiFetch, fetchDashboardPosts } from './api';
 import { mergeUserDrafts, saveUserProfile, userProfileDraft as userDraft } from './userAdmin';
 import { readDashboardSnapshot, writeDashboardSnapshot } from './dashboardCache';
 import { followQueueLive } from './queueLive';
@@ -1020,17 +1020,15 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
         setLoading(true);
         setLoadError('');
       }
-      const [postsResponse, accountsResponse] = await Promise.all([
-        apiFetch(`${API_BASE}/api/dashboard/posts`, { signal }),
+      const [postsData, accountsResponse] = await Promise.all([
+        fetchDashboardPosts({ signal }),
         apiFetch(`${API_BASE}/api/dashboard/accounts`, { signal }),
       ]);
-      if (postsResponse.status === 401 || postsResponse.status === 403 || accountsResponse.status === 401 || accountsResponse.status === 403) {
+      if (accountsResponse.status === 401 || accountsResponse.status === 403) {
         onUnauthorized();
         return;
       }
-      if (!postsResponse.ok) throw new Error(`HTTP ${postsResponse.status}`);
       if (!accountsResponse.ok) throw new Error(`HTTP ${accountsResponse.status}`);
-      const postsData = await postsResponse.json();
       const accountsData = await accountsResponse.json();
       if (!Array.isArray(postsData.posts) || !Array.isArray(accountsData.accounts)) {
         throw new Error('The shared post database returned an invalid response.');
@@ -1057,6 +1055,10 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
       }
     } catch (error) {
       if (error.name !== 'AbortError') {
+        if (error.status === 401 || error.status === 403) {
+          onUnauthorized();
+          return;
+        }
         // Render can briefly replace the API instance during deploys. Do not
         // discard a loaded dashboard or turn a temporary 502 into a blocking
         // red error screen; keep the current UI and reconnect automatically.

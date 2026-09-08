@@ -6,7 +6,7 @@ import { AlertTriangle, Archive, ArrowLeft, Ban, BarChart3, BellRing, CalendarDa
 import { browserPopupRedirectResolver, getRedirectResult, onAuthStateChanged, signOut } from 'firebase/auth';
 import { describeSignInError, firebaseAuth as auth, startGoogleSignIn } from './firebase';
 import { clearSsoCookie, startSsoRefresh, trySsoSignIn } from './sso';
-import { API_BASE, apiFetch } from './api';
+import { API_BASE, apiFetch, fetchDashboardPosts } from './api';
 import { PrefsProvider, usePrefs } from './prefsContext';
 import { ACCENT_CHOICES, accentHex } from './prefs';
 import { SelectedPost, SlideDownload, coverUrlForPost } from './postDetail';
@@ -950,8 +950,7 @@ function Detail({ task, tags, availableAccounts = [], canCoordinate, canDuplicat
     // Use Research's own payload as the durable fallback. This also covers a
     // refreshed Queue tab while a stack-detail deployment is warming up.
     try {
-      const response = await apiFetch(`${API_BASE}/api/dashboard/posts`);
-      const result = response.ok ? await response.json() : null;
+      const result = await fetchDashboardPosts();
       const allPosts = Array.isArray(result?.posts) ? result.posts : [];
       const current = allPosts.find((item) => candidates.some((post) => item.account === post.account && item.shortcode === post.shortcode));
       const members = current?.stackId ? allPosts.filter((item) => item.stackId === current.stackId) : [];

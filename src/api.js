@@ -83,3 +83,31 @@ export async function apiFetch(url, options = {}) {
   }
   throw lastError || new Error('Request failed.');
 }
+
+// The Research catalogue can contain tens of thousands of posts. Keep each
+// API response bounded while preserving the existing client-side search and
+// filter behavior by assembling the pages in order in the browser.
+export async function fetchDashboardPosts({ signal, pageSize = 1000 } = {}) {
+  const size = Math.min(Math.max(Number(pageSize) || 1000, 1), 2000);
+  const posts = [];
+  let offset = 0;
+  let summary = {};
+  while (true) {
+    const params = new URLSearchParams({ limit: String(size), offset: String(offset) });
+    const response = await apiFetch(`${API_BASE}/api/dashboard/posts?${params}`, { signal });
+    if (!response.ok) {
+      const error = new Error(`HTTP ${response.status}`);
+      error.status = response.status;
+      throw error;
+    }
+    const page = await response.json();
+    if (!Array.isArray(page.posts)) throw new Error('The shared post database returned an invalid response.');
+    posts.push(...page.posts);
+    summary = page.summary || summary;
+    const pagination = page.pagination;
+    if (!pagination?.hasMore) return { ...page, posts, summary };
+    const nextOffset = Number(pagination.nextOffset);
+    if (!Number.isInteger(nextOffset) || nextOffset <= offset) throw new Error('The shared post database returned an invalid page cursor.');
+    offset = nextOffset;
+  }
+}

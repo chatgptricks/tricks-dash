@@ -12,7 +12,7 @@ import {
   Shield, Sparkles, Star, Sun, TimerReset, UserRound, Users, Wifi, WifiOff, X,
 } from 'lucide-react';
 import { browserPopupRedirectResolver, getRedirectResult, onAuthStateChanged, signOut } from 'firebase/auth';
-import { API_BASE, apiFetch } from '../api';
+import { API_BASE, apiFetch, fetchDashboardPosts } from '../api';
 import { authPersistenceReady, describeSignInError, firebaseAuth, startGoogleSignIn } from '../firebase';
 import { followQueueLive } from '../queueLive';
 import { clearSsoCookie, startSsoRefresh, trySsoSignIn } from '../sso';
@@ -333,7 +333,7 @@ function DashboardView({ viewer }) {
   const [payload, setPayload] = useState(null); const [accounts, setAccounts] = useState([]); const [error, setError] = useState('');
   const [search, setSearch] = useState(''); const [group, setGroup] = useState('all'); const [account, setAccount] = useState(''); const [type, setType] = useState(''); const [media, setMedia] = useState('all'); const [period, setPeriod] = useState('all'); const [dateFrom, setDateFrom] = useState(''); const [dateTo, setDateTo] = useState(''); const [minLikes, setMinLikes] = useState(''); const [minComments, setMinComments] = useState(''); const [promoOnly, setPromoOnly] = useState(false); const [showHidden, setShowHidden] = useState(false); const [sort, setSort] = useState('newest');
   const [filtersOpen, setFiltersOpen] = useState(false); const [selected, setSelected] = useState(null);
-  const load = useCallback(() => { setError(''); Promise.all([apiJson('/api/dashboard/posts'), apiJson('/api/dashboard/accounts')]).then(([posts, roster]) => { setPayload(posts); setAccounts(roster.accounts || []); }).catch((err) => setError(err.message)); }, []);
+  const load = useCallback(() => { setError(''); Promise.all([fetchDashboardPosts(), apiJson('/api/dashboard/accounts')]).then(([posts, roster]) => { setPayload(posts); setAccounts(roster.accounts || []); }).catch((err) => setError(err.message)); }, []);
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
     const params = new URLSearchParams(location.search);
