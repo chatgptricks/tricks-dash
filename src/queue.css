@@ -1198,9 +1198,10 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
 .scheduler-source-avatar img[hidden],.scheduler-account-avatar img[hidden] { display:none; }
 .scheduler-block-copy { display:flex; flex-direction:column; gap:3px; min-width:0; height:100%; padding:6px; overflow:hidden; color:inherit; }
 .scheduler-card-heading { display:flex; align-items:center; justify-content:space-between; gap:3px; min-width:0; }
-.scheduler-pp-badge { display:inline-flex; align-items:baseline; gap:3px; flex:0 0 auto; white-space:nowrap; line-height:1; }
-.scheduler-pp-badge strong { font-size:17px; font-weight:800; letter-spacing:-.04em; font-variant-numeric:tabular-nums; }
-.scheduler-pp-badge>span { font-size:9px; font-weight:700; opacity:.75; }
+.scheduler-card-footer { display:grid; gap:2px; min-width:0; margin-top:auto; overflow:hidden; }
+.scheduler-pp-badge { display:inline-flex; align-items:baseline; align-self:flex-start; gap:3px; flex:0 0 auto; white-space:nowrap; line-height:1; opacity:.7; }
+.scheduler-pp-badge strong { font-size:10px; font-weight:750; letter-spacing:0; font-variant-numeric:tabular-nums; }
+.scheduler-pp-badge>span { font-size:7px; font-weight:700; opacity:.8; }
 .scheduler-card-signals { display:flex; align-items:center; justify-content:flex-end; gap:3px; min-width:0; overflow:hidden; }
 .scheduler-card-signals>svg { flex:0 0 auto; }
 .scheduler-card-hot { font-size:11px; line-height:1; }
@@ -1209,7 +1210,7 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
 .scheduler-job-type>span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .scheduler-card-time { font-size:9px; font-weight:500; line-height:1; opacity:.65; font-variant-numeric:tabular-nums; }
 .scheduler-job-title { display:none; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:10px; font-weight:500; line-height:1.2; opacity:.8; }
-.scheduler-account-badges { display:flex; align-items:center; gap:3px; min-width:0; margin-top:auto; }
+.scheduler-account-badges { display:flex; align-items:center; gap:3px; min-width:0; }
 .scheduler-account-badges>i {
   display:flex; align-items:center; gap:3px; min-width:0; max-width:100%;
   padding:1px; border:1px solid currentColor; border-color:color-mix(in srgb,currentColor 22%,transparent);
@@ -1239,7 +1240,8 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
 }
 @container scheduler-job (max-width:99px) {
   .scheduler-block-copy { gap:4px; padding:6px 3px 5px; }
-  .scheduler-pp-badge strong { font-size:14px; }
+  .scheduler-pp-badge strong { font-size:9px; }
+  .scheduler-pp-badge>span { font-size:6px; }
   .scheduler-job-type>svg { display:none; }
   .scheduler-source-chip { left:2px; bottom:3px; max-width:calc(100% - 4px); padding:1px; }
   .scheduler-source-avatar { width:18px; height:18px; }
@@ -1249,8 +1251,8 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
 @container scheduler-job (max-width:64px) {
   .scheduler-card-layout { grid-template-columns:34% minmax(0,1fr); }
   .scheduler-pp-badge { gap:1px; }
-  .scheduler-pp-badge strong { font-size:12px; }
-  .scheduler-pp-badge>span { font-size:7px; }
+  .scheduler-pp-badge strong { font-size:8px; }
+  .scheduler-pp-badge>span { font-size:6px; }
   .scheduler-card-heading { flex-wrap:wrap; gap:4px; }
   .scheduler-card-signals { max-height:12px; }
   .scheduler-job-type>svg { display:block; }

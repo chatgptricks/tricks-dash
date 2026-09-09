@@ -378,7 +378,6 @@ function TaskBlock({ task, editable, onOpen, onResizeStart, onContextMenu, accou
       </span>
       <span className="scheduler-block-copy">
         <span className="scheduler-card-heading">
-          <span className="scheduler-pp-badge"><strong>{task.productionPoints}</strong><span>PP</span></span>
           <span className="scheduler-card-signals">
             {['completed', 'closed'].includes(task.status) ? <CheckCircle2 size={12} aria-label={stateLabel} /> : null}
             {isUrgent(task.priority) ? <AlertTriangle size={11} aria-label={t('priorityUrgent')} /> : isHotTask(task) ? <span className="scheduler-card-hot" title={hotText(task)} aria-label={hotText(task)}>🔥</span> : null}
@@ -390,11 +389,14 @@ function TaskBlock({ task, editable, onOpen, onResizeStart, onContextMenu, accou
         <span className="scheduler-job-type" title={jobType}><TypeIcon size={11} aria-hidden="true" /><span>{jobType}</span></span>
         <small className="scheduler-card-time">{scheduledTime}</small>
         {blockTitle ? <b className="scheduler-job-title">{blockTitle}</b> : null}
-        {destinations.length ? <span className="scheduler-account-badges" aria-label={`${t('recommendedAccounts')}: ${destinations.map((account) => `@${account}`).join(', ')}`} title={destinations.map((account) => `@${account}`).join(' · ')}>
-          {destinations.slice(0, 3).map((account) => <i key={account} title={`@${account}`}><span className="scheduler-account-avatar"><span aria-hidden="true">{account.slice(0, 1).toUpperCase()}</span><img src={accountImage(account)} alt={`@${account}`} loading="lazy" draggable={false} onError={(event) => { event.currentTarget.hidden = true; }} /></span><b>@{account}</b></i>)}
-          {destinations.length > 3 ? <span className="scheduler-destinations-more">+{destinations.length - 3}</span> : null}
-          {destinations.length > 1 ? <span className="scheduler-destinations-compact">+{destinations.length - 1}</span> : null}
-        </span> : null}
+        <span className="scheduler-card-footer">
+          {destinations.length ? <span className="scheduler-account-badges" aria-label={`${t('recommendedAccounts')}: ${destinations.map((account) => `@${account}`).join(', ')}`} title={destinations.map((account) => `@${account}`).join(' · ')}>
+            {destinations.slice(0, 3).map((account) => <i key={account} title={`@${account}`}><span className="scheduler-account-avatar"><span aria-hidden="true">{account.slice(0, 1).toUpperCase()}</span><img src={accountImage(account)} alt={`@${account}`} loading="lazy" draggable={false} onError={(event) => { event.currentTarget.hidden = true; }} /></span><b>@{account}</b></i>)}
+            {destinations.length > 3 ? <span className="scheduler-destinations-more">+{destinations.length - 3}</span> : null}
+            {destinations.length > 1 ? <span className="scheduler-destinations-compact">+{destinations.length - 1}</span> : null}
+          </span> : null}
+          <span className="scheduler-pp-badge"><strong>{task.productionPoints}</strong><span>PP</span></span>
+        </span>
       </span>
     </span>
     {canResize ? <><span className="scheduler-resize-handle scheduler-resize-handle-left" role="separator" aria-label={`${t('resizeBar')} ${t('resizeLeft')}`} onPointerDown={(event) => onResizeStart(event, task, 'left')} /><span className="scheduler-resize-handle scheduler-resize-handle-right" role="separator" aria-label={`${t('resizeBar')} ${t('resizeRight')}`} onPointerDown={(event) => onResizeStart(event, task, 'right')} /></> : null}
