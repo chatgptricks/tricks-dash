@@ -61,8 +61,10 @@ assert.deepEqual(Array.from(filled, (row) => window.trackerDateKey(row.date)), [
   '2026-09-01', '2026-09-02', '2026-09-03', '2026-09-04',
   '2026-09-05', '2026-09-06', '2026-09-07', '2026-09-08',
 ]);
-assert.deepEqual(Array.from(filled.filter((row) => row.missing), (row) => window.trackerDateKey(row.date)), ['2026-09-04', '2026-09-05', '2026-09-07']);
+assert.deepEqual(Array.from(filled.filter((row) => row.estimated), (row) => window.trackerDateKey(row.date)), ['2026-09-04', '2026-09-05', '2026-09-07']);
+assert.equal(filled.find((row) => window.trackerDateKey(row.date) === '2026-09-04').followers, 130, 'bounded gaps interpolate follower totals');
+assert.equal(filled.find((row) => window.trackerDateKey(row.date) === '2026-09-07').followers, 160, 'trailing gaps carry forward the last known total');
 window.document.body.innerHTML = window.renderHistoricalStats(filled);
 assert.equal(window.document.querySelectorAll('.hist-missing').length, 3);
 dom.window.close();
-console.log('PASS Tracker search, groups, favorites, reset, empty state, sorting, missing values, stable leader, focus and calendar gaps');
+console.log('PASS Tracker search, groups, favorites, reset, empty state, sorting, estimated values, stable leader, focus and calendar gaps');

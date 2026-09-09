@@ -77,7 +77,7 @@ import traselveloralProfileImage from './assets/traselveloreal-profile.jpg';
 // (nothing gets this far without a valid, allowlisted Google session), so
 // this is just a fixed value the UI supplies automatically -- there is no
 // password prompt anywhere anymore.
-const LEGACY_REFRESH_PASSWORD = 'sentient2026';
+const LEGACY_REFRESH_PASSWORD = 'authenticated';
 
 // Account onboarding can outlive the Settings tab (and often the browser
 // refresh that an admin uses to check whether the scrape is done). Keep the

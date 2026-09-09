@@ -9,7 +9,7 @@ import { decodeRouteState } from './urlCodec';
 import { clearSsoCookie, startSsoRefresh, trySsoSignIn } from './sso';
 import './styles.css';
 
-const LEGACY_REFRESH_PASSWORD = 'sentient2026';
+const LEGACY_REFRESH_PASSWORD = 'authenticated';
 const ACTIVE_ROLE_PREVIEWS = new Set(['sales', 'pd', 'vc', 'trainee', 'admin']);
 
 function SettingsSignIn({ notice }) {

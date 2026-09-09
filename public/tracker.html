@@ -1,6 +1,7 @@
 <!doctype html>
 <html lang="en">
-<head>
+  <head>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; connect-src 'self' https://cortex-api-db2e.onrender.com https://*.googleapis.com https://*.firebaseio.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://www.gstatic.com;">
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <script src="/mobile-redirect.js?v=20260908-device"></script>
@@ -386,7 +387,7 @@ table.hist-table td{text-align:left;padding:11px 8px;white-space:nowrap}
 </div>
 
 <script>
-const API = 'https://sentientdash-app.onrender.com';
+const API = 'https://cortex-api-db2e.onrender.com';
 /* A missing avatar used to set visibility:hidden, which leaves an invisible
    gap -- the row still reserves the space but shows nothing, so it reads as a
    rendering bug rather than "no picture on file". Swap in the initial instead,
@@ -544,6 +545,17 @@ async function authedPost(path){
   return r.json();
 }
 
+async function waitForTrackerRefresh(job){
+  if(!job?.job_id) return job;
+  for(let attempt=0; attempt<300; attempt+=1){
+    const current = await authedFetch('/api/tracker/refresh-jobs/'+encodeURIComponent(job.job_id));
+    if(current.status === 'done') return current.result || {};
+    if(current.status === 'error') throw new Error(current.error || 'Tracker refresh failed.');
+    await trackerDelay(1000);
+  }
+  throw new Error('Tracker refresh is still running. Reopen this account in a moment.');
+}
+
 /* ---------------- Manual refresh (real-time follower count) ----------------
    The daily 7am snapshot is the canonical reading. Refresh buttons reuse
    today's stored reading, and only trigger Apify when this account has not
@@ -556,7 +568,8 @@ async function refreshAccountNow(handle, btn){
   if(btn){ btn.disabled = true; }
   if(icon){ icon.classList.add('is-spinning'); }
   try{
-    const result = await authedPost('/api/tracker/accounts/'+encodeURIComponent(handle)+'/refresh');
+    const job = await authedPost('/api/tracker/accounts/'+encodeURIComponent(handle)+'/refresh');
+    const result = await waitForTrackerRefresh(job);
     const row = SUMMARY.accounts.find(r=>r.handle===handle);
     if(row){
       row.followers = result.followers;
@@ -582,7 +595,8 @@ async function refreshAccountNow(handle, btn){
 async function refreshAllAccountsNow(btn){
   if(btn){ btn.disabled = true; btn.dataset.label = btn.textContent; btn.textContent = 'Refreshing all…'; }
   try{
-    await authedPost('/api/tracker/snapshot-now');
+    const job = await authedPost('/api/tracker/snapshot-now');
+    await waitForTrackerRefresh(job);
     DETAIL_CACHE = {};
     await loadSummary();
     render();
@@ -746,6 +760,7 @@ let leaderboardSearch = '', leaderboardGroup = 'all';
 function escapeAttribute(value){
   return String(value || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
+function escapeHtml(value){ return escapeAttribute(value).replace(/'/g, '&#39;'); }
 
 function trackingSinceNote(){
   if(!SUMMARY.tracking_since) return `<div class="note">No follower history recorded yet -- the first daily snapshot runs at 7am CST, or use <b>Settings → System</b> to capture one right now. Growth columns fill in day by day from there; there's no way to recover Instagram's past follower counts for an account that just started being tracked.</div>`;
@@ -827,7 +842,7 @@ function renderLeaderboard(){
             <td><div class="acct-cell">
               <img class="acct-avatar" src="${API}/api/dashboard/avatar/${encodeURIComponent(r.handle)}" referrerpolicy="no-referrer" onerror="avFail(this,'${r.handle}')">
               <div class="acct-name"><strong>@${r.handle}${r.verified?' <span title="Verified" style="color:#4aa8ff">✓</span>':''}${r.private?' <span class="na" title="Private account">🔒</span>':''}</strong>
-                <span class="na" style="font-size:10px">${r.full_name && r.full_name.toLowerCase()!==r.handle.toLowerCase() ? r.full_name : ' '}</span>
+                <span class="na" style="font-size:10px">${r.full_name && r.full_name.toLowerCase()!==r.handle.toLowerCase() ? escapeHtml(r.full_name) : ' '}</span>
                 <span class="pill ${r.group==='sentient'?'s':'c'}">${r.group==='sentient'?'ours':'competitor'}</span>
               </div>
             </div></td>
@@ -919,9 +934,36 @@ function historyWindowRows(hist, windowDays){
   const latest = trackerDateKey(recorded[recorded.length-1].date);
   const firstRecorded = trackerDateKey(recorded[0].date);
   const first = windowDays === 'all' ? firstRecorded : shiftTrackerDay(latest, -(Number(windowDays)-1));
-  return calendarDays(first, latest).map(day => byDay.get(day) || {
-    date: `${day}T12:00:00-06:00`,
-    missing: true,
+  const days = calendarDays(first, latest);
+  // A missing read must not make the trend look like it disappeared. For a
+  // gap bounded by two real readings, interpolate the follower count evenly
+  // across the elapsed calendar days. For a trailing gap, carry forward the
+  // most recent known count rather than inventing a growth rate. Every such
+  // row stays explicitly marked as estimated, never as a real snapshot.
+  return days.map((day, index) => {
+    const actual = byDay.get(day);
+    if(actual) return { ...actual, estimated: false };
+    let previousIndex = index - 1;
+    while(previousIndex >= 0 && !byDay.get(days[previousIndex])) previousIndex -= 1;
+    let nextIndex = index + 1;
+    while(nextIndex < days.length && !byDay.get(days[nextIndex])) nextIndex += 1;
+    const previous = previousIndex >= 0 ? byDay.get(days[previousIndex]) : null;
+    const next = nextIndex < days.length ? byDay.get(days[nextIndex]) : null;
+    let followers = previous?.followers ?? null;
+    let estimateMethod = 'last known reading';
+    if(previous?.followers != null && next?.followers != null){
+      const span = nextIndex - previousIndex;
+      followers = Math.round(previous.followers + ((next.followers - previous.followers) * ((index - previousIndex) / span)));
+      estimateMethod = 'interpolated between recorded readings';
+    }
+    return {
+      date: `${day}T12:00:00-06:00`,
+      followers,
+      following_count: previous?.following_count ?? null,
+      posts_count: previous?.posts_count ?? null,
+      estimated: true,
+      estimateMethod,
+    };
   });
 }
 
@@ -946,16 +988,16 @@ function renderHistoricalStats(dayRows){
         <th>Engagement rate</th>
       </tr></thead>
       <tbody>${rows.map((h,i)=>{
-        const missing = Boolean(h.missing);
-        const prev = !missing && rows[i-1] && !rows[i-1].missing ? rows[i-1] : null; // a gap has no valid adjacent-day delta
+        const estimated = Boolean(h.estimated);
+        const prev = rows[i-1] || null;
         const d = new Date(`${trackerDateKey(h.date)}T12:00:00`);
         const dateLabel = d.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
         const dow = d.toLocaleDateString(undefined,{weekday:'short'});
         const rate = rateOf(h), prevRate = prev?rateOf(prev):null;
         const delta = dailyDelta(h, prev);
         const deltaCls = delta==null ? 'flat' : delta>0 ? 'up' : delta<0 ? 'down' : 'flat';
-        return `<tr class="${missing?'hist-missing':''}">
-          <td><span class="hist-date">${dateLabel}</span><span class="hist-dow">${dow}</span>${missing?'<span class="hist-missing-label">No snapshot</span>':''}</td>
+        return `<tr class="${estimated?'hist-missing':''}">
+          <td><span class="hist-date">${dateLabel}</span><span class="hist-dow">${dow}</span>${estimated?`<span class="hist-missing-label" title="${h.estimateMethod}">Estimated</span>`:''}</td>
           <td><span class="hist-daily ${deltaCls}">${delta==null?'—':signed(delta)}</span></td>
           <td class="hist-secondary"><span class="hist-total">${h.followers!=null?fmt(h.followers):'—'}</span></td>
           <td><span class="hist-val">${h.following_count!=null?fmt(h.following_count):'—'}</span>${prev?histPill(h.following_count, prev.following_count, false):''}</td>
@@ -999,7 +1041,7 @@ async function renderDetail(handle){
         <img src="${API}/api/dashboard/avatar/${encodeURIComponent(handle)}" referrerpolicy="no-referrer" onerror="avFail(this,'${handle}')">
         <div>
           <h2><a class="instagram-account-link" href="https://www.instagram.com/${encodeURIComponent(handle)}/" target="_blank" rel="noreferrer" title="Open @${handle} on Instagram">@${handle}</a>${row.verified?' <span title="Verified" style="color:#4aa8ff;font-size:14px">✓</span>':''}${row.private?' <span class="na" title="Private account" style="font-size:13px">🔒</span>':''}</h2>
-          ${row.full_name && row.full_name.toLowerCase()!==handle.toLowerCase() ? `<span>${row.full_name} · </span>` : ''}
+          ${row.full_name && row.full_name.toLowerCase()!==handle.toLowerCase() ? `<span>${escapeHtml(row.full_name)} · </span>` : ''}
           <span class="pill ${row.group==='sentient'?'s':'c'}">${row.group==='sentient'?'ours':'competitor'}</span>
           ${row.rank_by_followers ? ' <span>rank #'+row.rank_by_followers+' by followers</span>' : ''}
         </div>
@@ -1019,13 +1061,13 @@ async function renderDetail(handle){
     </div>
 
     <section>
-      <div class="section-head tracker-history-head"><div><h2>Historical Stats</h2><p class="sub">${historyWindowLabel(selectedWindow)} of daily readings, oldest first. "Followers +/-" is that day's change -- the running total sits beside it for reference. Tracker keeps one follower reading per account per day; missing days remain visible while they wait for a successful capture.</p></div><label class="tracker-history-window"><span>Range</span><select id="historyWindow" aria-label="Follower history range">${[['7','7 days'],['14','14 days'],['30','30 days'],['60','60 days'],['180','180 days'],['365','365 days'],['all','All']].map(([value,label])=>`<option value="${value}" ${selectedWindow===value?'selected':''}>${label}</option>`).join('')}</select></label></div>
+      <div class="section-head tracker-history-head"><div><h2>Historical Stats</h2><p class="sub">${historyWindowLabel(selectedWindow)} of daily readings, oldest first. Missing days show an explicitly marked estimate: interpolation between recorded readings when available, otherwise the last known total. "Followers +/-" uses the displayed daily series.</p></div><label class="tracker-history-window"><span>Range</span><select id="historyWindow" aria-label="Follower history range">${[['7','7 days'],['14','14 days'],['30','30 days'],['60','60 days'],['180','180 days'],['365','365 days'],['all','All']].map(([value,label])=>`<option value="${value}" ${selectedWindow===value?'selected':''}>${label}</option>`).join('')}</select></label></div>
       ${renderHistoricalStats(visibleDayHist)}
     </section>
 
     <section>
       <h2>Follower growth</h2>
-      <p class="sub">${visibleDayHist.length>1?`${historyWindowLabel(selectedWindow)}; one point per calendar day. Missing days are left blank until the daily reading succeeds.`:'Only one snapshot recorded in this period -- choose a larger range as history accumulates.'}</p>
+      <p class="sub">${visibleDayHist.length>1?`${historyWindowLabel(selectedWindow)}; one point per calendar day. Estimated points are based on the closest recorded data and are labelled in the table.`:'Only one snapshot recorded in this period -- choose a larger range as history accumulates.'}</p>
       <div class="chartbox"><canvas id="cFollowers"></canvas></div>
     </section>
 
@@ -1043,9 +1085,11 @@ async function renderDetail(handle){
     CHARTS.push(new Chart($('#cFollowers'),{type:'line',
       data:{labels:visibleDayHist.map(h=>new Date(`${trackerDateKey(h.date)}T12:00:00`).toLocaleDateString()),
         datasets:[{label:'Followers',data:visibleDayHist.map(h=>h.followers ?? null),borderColor:'#f5ff00',
-          backgroundColor:'#f5ff0022',fill:true,tension:.3,spanGaps:false,pointRadius:visibleDayHist.length>1?2:4}]},
+          backgroundColor:'#f5ff0022',fill:true,tension:.3,spanGaps:false,pointRadius:visibleDayHist.length>1?2:4,
+          pointBackgroundColor:visibleDayHist.map(h=>h.estimated ? '#9ca3af' : '#f5ff00'),
+          pointBorderColor:visibleDayHist.map(h=>h.estimated ? '#9ca3af' : '#f5ff00')}]},
       options:{maintainAspectRatio:false,plugins:{legend:{display:false},
-        tooltip:{callbacks:{label:c=>fmt(c.parsed.y)+' followers'}}},
+        tooltip:{callbacks:{label:c=>fmt(c.parsed.y)+' followers'+(visibleDayHist[c.dataIndex]?.estimated ? ' (estimated)' : '')}}},
         scales:{y:{ticks:{callback:v=>fmtAxis(v)}}}}}));
   } else {
     $('#cFollowers').parentElement.innerHTML = '<div class="empty">No snapshots yet.</div>';
@@ -1098,7 +1142,7 @@ provider.setCustomParameters({ prompt: 'select_account' });
 // Single sign-on across *.sentientdash.app -- see src/sso.js for the full
 // writeup. This is a vanilla-JS copy of the same cookie bootstrap since this
 // page is a standalone static file, not part of the Vite React bundle.
-const SSO_API = 'https://sentientdash-app.onrender.com';
+const SSO_API = 'https://cortex-api-db2e.onrender.com';
 const SSO_COOKIE = 'sentient_sso';
 function ssoCookieDomain() { return location.hostname.endsWith('sentientdash.app') ? '.sentientdash.app' : ''; }
 function ssoReadCookie() {
@@ -1118,28 +1162,12 @@ function ssoClearCookie() {
   document.cookie = cookie;
 }
 async function ssoPublishCookie() {
-  const user = auth.currentUser;
-  if (!user) return;
-  try {
-    const idToken = await user.getIdToken();
-    const response = await fetch(SSO_API + '/api/auth/custom-token', { method: 'POST', headers: { Authorization: 'Bearer ' + idToken } });
-    if (!response.ok) return;
-    const body = await response.json();
-    if (body.customToken) ssoWriteCookie(body.customToken, 45 * 60);
-  } catch (err) { /* best-effort */ }
+  // Root-origin Firebase persistence covers all first-party tools. Never
+  // replicate a bearer credential to a JavaScript-readable domain cookie.
 }
 async function ssoTrySignIn() {
-  await authPersistenceReady;
-  if (auth.currentUser) return true;
-  const token = ssoReadCookie();
-  if (!token) return false;
-  try {
-    await signInWithCustomToken(auth, token);
-    return true;
-  } catch (err) {
-    ssoClearCookie();
-    return false;
-  }
+  ssoClearCookie();
+  return false;
 }
 let ssoRefreshTimer = null;
 function ssoStartRefresh() {

@@ -1,6 +1,7 @@
 <!doctype html>
 <html lang="en">
-<head>
+  <head>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; connect-src 'self' https://cortex-api-db2e.onrender.com https://*.googleapis.com https://*.firebaseio.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://www.gstatic.com;">
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <script src="/mobile-redirect.js?v=20260908-device"></script>
@@ -330,13 +331,15 @@ tbody tr:hover{background:rgba(var(--edge),.03)}
 </div>
 
 <script>
-const API = 'https://sentientdash-app.onrender.com';
+const API = 'https://cortex-api-db2e.onrender.com';
 const $ = s => document.querySelector(s);
 const fmt = n => n===null||n===undefined||Number.isNaN(n) ? '—'
   : Math.abs(n)>=1e6 ? (n/1e6).toFixed(1)+'M'
   : Math.abs(n)>=1e3 ? (n/1e3).toFixed(1)+'K' : Math.round(n).toLocaleString('en-US');
 const xf  = n => (n===null||n===undefined||!isFinite(n)) ? '—' : n.toFixed(2)+'×';
 const pct = n => (n===null||n===undefined||!isFinite(n)) ? '—' : n.toFixed(1)+'%';
+const escapeHtml = value => String(value ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+const safeUrl = value => { try { const url = new URL(String(value || '')); return /^https?:$/.test(url.protocol) ? url.href : ''; } catch { return ''; } };
 
 let RAW=[], ACCOUNTS=[], SEL=new Set(), CHARTS=[];
 
@@ -837,7 +840,7 @@ function drawTopics(P){
     $(el).innerHTML=items.map(([w,v])=>{
       const sz=11+Math.round(v.length/max*9);
       const m=med(v);
-      return `<span style="font-size:${sz}px" title="${v.length} posts · median ${xf(m)} its account's normal">${w}<b>${xf(m)}</b></span>`;
+      return `<span style="font-size:${sz}px" title="${v.length} posts · median ${xf(m)} its account's normal">${escapeHtml(w)}<b>${xf(m)}</b></span>`;
     }).join('');
   };
   paint('#wordCloud',top(wordStats,4)); paint('#tagCloud',top(tagStats,3));
@@ -944,16 +947,22 @@ function sectionTop(P){
     <div style="overflow:auto;max-height:460px"><table>
       <thead><tr><th>#</th><th style="text-align:left">Account</th><th style="text-align:left">Cover text</th>
         <th>Date</th><th>Format</th><th>Likes</th><th>Views</th><th>Eng./view</th></tr></thead>
-      <tbody>${rows.map((p,i)=>`<tr style="cursor:pointer" onclick="window.open('${p.u||'#'}','_blank')">
+      <tbody>${rows.map((p,i)=>`<tr class="insight-post-row" style="cursor:pointer" data-url="${escapeHtml(safeUrl(p.u))}">
         <td style="text-align:left;color:var(--muted)">${i+1}</td>
-        <td style="text-align:left"><span style="color:${textColorFor(p.a)}">@${p.a}</span></td>
-        <td style="text-align:left;max-width:340px;overflow:hidden;text-overflow:ellipsis;color:var(--muted-2)">${(p.ocr||'—').slice(0,90)}</td>
+        <td style="text-align:left"><span style="color:${textColorFor(p.a)}">@${escapeHtml(p.a)}</span></td>
+        <td style="text-align:left;max-width:340px;overflow:hidden;text-overflow:ellipsis;color:var(--muted-2)">${escapeHtml((p.ocr||'—').slice(0,90))}</td>
         <td>${new Date(p.ts).toISOString().slice(0,10)}</td>
         <td>${p.pt==='clips'?'Reel':p.t}</td>
         <td>${fmt(p.l)}</td><td>${p.v==null?'—':fmt(p.v)}</td><td>${pct(engPerView(p))}</td></tr>`).join('')}</tbody>
     </table></div>
   </section>`;
 }
+
+document.addEventListener('click', event => {
+  const row = event.target.closest('.insight-post-row[data-url]');
+  const url = row?.dataset.url;
+  if(url) window.open(url, '_blank', 'noopener');
+});
 
 window.__startInsightsBoot = boot;
 </script>
@@ -987,7 +996,7 @@ provider.setCustomParameters({ prompt: 'select_account' });
 // Single sign-on across *.sentientdash.app -- see src/sso.js for the full
 // writeup. This is a vanilla-JS copy of the same cookie bootstrap since this
 // page is a standalone static file, not part of the Vite React bundle.
-const SSO_API = 'https://sentientdash-app.onrender.com';
+const SSO_API = 'https://cortex-api-db2e.onrender.com';
 const SSO_COOKIE = 'sentient_sso';
 function ssoCookieDomain() { return location.hostname.endsWith('sentientdash.app') ? '.sentientdash.app' : ''; }
 function ssoReadCookie() {
@@ -1007,28 +1016,12 @@ function ssoClearCookie() {
   document.cookie = cookie;
 }
 async function ssoPublishCookie() {
-  const user = auth.currentUser;
-  if (!user) return;
-  try {
-    const idToken = await user.getIdToken();
-    const response = await fetch(SSO_API + '/api/auth/custom-token', { method: 'POST', headers: { Authorization: 'Bearer ' + idToken } });
-    if (!response.ok) return;
-    const body = await response.json();
-    if (body.customToken) ssoWriteCookie(body.customToken, 45 * 60);
-  } catch (err) { /* best-effort */ }
+  // Root-origin Firebase persistence covers all first-party tools. Never
+  // replicate a bearer credential to a JavaScript-readable domain cookie.
 }
 async function ssoTrySignIn() {
-  await authPersistenceReady;
-  if (auth.currentUser) return true;
-  const token = ssoReadCookie();
-  if (!token) return false;
-  try {
-    await signInWithCustomToken(auth, token);
-    return true;
-  } catch (err) {
-    ssoClearCookie();
-    return false;
-  }
+  ssoClearCookie();
+  return false;
 }
 let ssoRefreshTimer = null;
 function ssoStartRefresh() {

@@ -19,7 +19,7 @@ import { clearSsoCookie, startSsoRefresh, trySsoSignIn } from '../sso';
 import { decodeRouteState, encodeRouteState } from '../urlCodec';
 import './mobile.css';
 
-const LEGACY_PASSWORD = 'sentient2026';
+const LEGACY_PASSWORD = 'authenticated';
 const DAY = () => {
   const date = new Date();
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;

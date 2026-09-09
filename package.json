@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "test": "npm run test:product && npm run test:queue && npm run test:resilience && npm run test:users && npm run smoke:queue && npm run smoke:settings && npm run smoke:mobile && npm run smoke:roles && node smoke/static-pages.mjs && node smoke/tracker.mjs && node smoke/insights-extras.mjs",
     "test:product": "node scripts/test-topics.mjs && node smoke/run-product.mjs",
     "test:queue": "node scripts/test-queue.mjs",
     "test:resilience": "node scripts/test-retry.mjs && node scripts/test-api-resilience.mjs",
