@@ -637,6 +637,9 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
 .scheduler-time-block.category-promo { border-color:#c992ff; background-color:#49305f; }
 .scheduler-time-block.category-focus { border-color:#ffbd59; background-color:#554323; }
 .scheduler-time-block.category-other { border-color:#9aa4b2; background-color:#323943; }
+.scheduler-time-block.is-editable { cursor:grab; touch-action:none; }
+.scheduler-time-block.is-editable:active { cursor:grabbing; }
+.scheduler-time-block.is-editable:hover .scheduler-resize-handle::after { opacity:.7; }
 .scheduler-context-backdrop { position:fixed; inset:0; z-index:29; padding:0; border:0; background:transparent; }
 .scheduler-time-form { position:fixed; z-index:30; display:grid; gap:12px; width:326px; padding:13px; border:1px solid rgba(var(--accent-rgb),.32); border-radius:11px; background:var(--q-panel); box-shadow:0 24px 70px rgba(var(--shade),.55); }
 .scheduler-time-form>header { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }

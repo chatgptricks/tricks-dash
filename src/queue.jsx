@@ -409,13 +409,13 @@ function TaskBlock({ task, editable, onOpen, onResizeStart, onContextMenu, accou
   </button>;
 }
 
-function TimeBlock({ block, onContextMenu, timeZone = QUEUE_TIME_ZONE }) {
+function TimeBlock({ block, onContextMenu, onMoveStart, onResizeStart, editable = false, timeZone = QUEUE_TIME_ZONE }) {
   const { t } = useQueuePreferences();
   const Icon = ({ meeting: CalendarDays, break: Coffee, promo: TimerReset, focus: Clock3, other: CalendarPlus }[block.category] || CalendarPlus);
   const start = Number(block.scheduledStartMinutes || 0);
   const duration = Math.max(10, Number(block.durationMinutes || 10));
   const displayTime = scheduleTimeForViewer(block.scheduledDate, start, timeZone);
-  return <div className={`scheduler-time-block category-${block.category || 'other'} status-${block.status}`} onContextMenu={(event) => onContextMenu?.(event, block)} style={{ left: `${(start / QUEUE_DAY_END) * 100}%`, width: `${(duration / QUEUE_DAY_END) * 100}%` }} title={`${block.title} · ${displayTime} · ${duration} min · ${block.status === 'pending' ? t('pendingApproval') : t('approved')}`}><Icon size={13} /><span><b>{block.title || t(block.category || 'other')}</b><small>{displayTime} · {duration} min</small></span>{block.status === 'pending' ? <i>{t('pendingApproval')}</i> : null}</div>;
+  return <div className={`scheduler-time-block category-${block.category || 'other'} status-${block.status}${editable ? ' is-editable' : ''}`} onContextMenu={(event) => onContextMenu?.(event, block)} onPointerDown={(event) => { if (editable && event.button === 0 && !event.target.closest('.scheduler-resize-handle')) onMoveStart?.(event, block); }} style={{ left: `${(start / QUEUE_DAY_END) * 100}%`, width: `${(duration / QUEUE_DAY_END) * 100}%` }} title={`${block.title} · ${displayTime} · ${duration} min · ${block.status === 'pending' ? t('pendingApproval') : t('approved')}`}><Icon size={13} /><span><b>{block.title || t(block.category || 'other')}</b><small>{displayTime} · {duration} min</small></span>{block.status === 'pending' ? <i>{t('pendingApproval')}</i> : null}{editable ? <><span className="scheduler-resize-handle scheduler-resize-handle-left" role="separator" aria-label={`${t('resizeBar')} ${t('resizeLeft')}`} onPointerDown={(event) => onResizeStart?.(event, block, 'left')} /><span className="scheduler-resize-handle scheduler-resize-handle-right" role="separator" aria-label={`${t('resizeBar')} ${t('resizeRight')}`} onPointerDown={(event) => onResizeStart?.(event, block, 'right')} /></> : null}</div>;
 }
 
 function TimeBlockForm({ form, setForm, busy, onClose, onSubmit, users = [], canChooseUser = false, timeZone = QUEUE_TIME_ZONE }) {
@@ -1065,10 +1065,12 @@ function Scheduler({ data, draft, setDraft, onDraftChange, selectedDate, designe
   const [resizeState, setResizeState] = useState(null);
   const [timeBlockForm, setTimeBlockForm] = useState(null);
   const [timeBlockBusy, setTimeBlockBusy] = useState(false);
+  const [timeBlockInteraction, setTimeBlockInteraction] = useState(null);
   const [contextMenu, setContextMenu] = useState(null);
   const [isPanning, setIsPanning] = useState(false);
   const scrollRef = useRef(null);
   const resizeRef = useRef(null);
+  const timeBlockInteractionRef = useRef(null);
   const panRef = useRef(null);
   // The clock refreshes every 15 seconds so the Now marker stays accurate.
   // It must never also reset somebody's horizontal exploration of the day.
@@ -1241,6 +1243,21 @@ function Scheduler({ data, draft, setDraft, onDraftChange, selectedDate, designe
     resizeRef.current = nextState;
     setResizeState(nextState);
   };
+  const startTimeBlockInteraction = (event, block, kind, edge = null) => {
+    if (timeBlockBusy || (!coordinator && block.requesterEmail !== data.viewer.email)) return;
+    const track = event.currentTarget.closest('.scheduler-track');
+    if (!track) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const rect = track.getBoundingClientRect();
+    if (!rect.width) return;
+    const pointer = Math.max(0, Math.min(QUEUE_DAY_END, Math.round((((event.clientX - rect.left) / rect.width) * QUEUE_DAY_END) / 10) * 10));
+    const baseStart = Number(block.scheduledStartMinutes ?? 0);
+    const baseDuration = Math.max(10, Number(block.durationMinutes || 10));
+    const next = { kind, edge, block, track, baseStart, baseDuration, baseEnd: baseStart + baseDuration, grabOffset: pointer - baseStart, preview: block };
+    timeBlockInteractionRef.current = next;
+    setTimeBlockInteraction(next);
+  };
   useEffect(() => {
     if (!resizeState) return undefined;
     const onMove = (event) => {
@@ -1287,6 +1304,43 @@ function Scheduler({ data, draft, setDraft, onDraftChange, selectedDate, designe
     window.addEventListener('pointerup', onUp, { once: true });
     return () => { window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); };
   }, [resizeState, planningTasks, data.viewer.email, draft, onDraftChange, setDraft]);
+  useEffect(() => {
+    if (!timeBlockInteraction) return undefined;
+    const onMove = (event) => {
+      const current = timeBlockInteractionRef.current;
+      if (!current?.track) return;
+      const rect = current.track.getBoundingClientRect();
+      if (!rect.width) return;
+      const pointer = Math.max(0, Math.min(QUEUE_DAY_END, Math.round((((event.clientX - rect.left) / rect.width) * QUEUE_DAY_END) / 10) * 10));
+      let start = current.baseStart;
+      let duration = current.baseDuration;
+      if (current.kind === 'move') {
+        start = Math.max(0, Math.min(QUEUE_DAY_END - duration, pointer - current.grabOffset));
+        start = Math.round(start / 10) * 10;
+      } else if (current.edge === 'left') {
+        start = Math.max(0, Math.min(current.baseEnd - 10, pointer));
+        duration = current.baseEnd - start;
+      } else {
+        duration = Math.max(10, Math.min(QUEUE_DAY_END - start, pointer - start));
+      }
+      const preview = { ...current.block, scheduledStartMinutes: start, durationMinutes: duration };
+      const next = { ...current, preview };
+      timeBlockInteractionRef.current = next;
+      setTimeBlockInteraction(next);
+    };
+    const onUp = () => {
+      const current = timeBlockInteractionRef.current;
+      timeBlockInteractionRef.current = null;
+      setTimeBlockInteraction(null);
+      const preview = current?.preview;
+      if (!preview || (preview.scheduledStartMinutes === current.block.scheduledStartMinutes && preview.durationMinutes === current.block.durationMinutes)) return;
+      setTimeBlockBusy(true);
+      Promise.resolve(onEditTimeBlock?.({ ticketId: preview.id, designerEmail: preview.requesterEmail, category: preview.category, title: preview.title, note: preview.note, scheduledDate: preview.scheduledDate, startMinutes: preview.scheduledStartMinutes, durationMinutes: preview.durationMinutes })).finally(() => setTimeBlockBusy(false));
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp, { once: true });
+    return () => { window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); };
+  }, [timeBlockInteraction, onEditTimeBlock]);
   const merged = (designer) => allTasks.filter((task) => {
     if (task.designerEmail !== designer || task.scheduledDate !== selectedDate || ['pool', 'cancelled'].includes(task.status)) return false;
     return true;
@@ -1315,7 +1369,7 @@ function Scheduler({ data, draft, setDraft, onDraftChange, selectedDate, designe
             <header draggable={coordinator} onDragStart={(event) => { event.dataTransfer?.setData('scheduler-user', designer.email); event.dataTransfer.effectAllowed = 'move'; }} onContextMenu={(event) => { if (!coordinator) return; event.preventDefault(); setContextMenu({ x: event.clientX, y: event.clientY, type: 'user', designer }); }}><div className="scheduler-user-identity"><span className="scheduler-user-avatar"><span aria-hidden="true">{initials}</span>{userAvatar(designer.avatarUrl) ? <img src={userAvatar(designer.avatarUrl)} alt="" referrerPolicy="no-referrer" onError={(event) => { event.currentTarget.hidden = true; }} /> : null}</span><span className="scheduler-user-copy"><b className="scheduler-user-name"><span className={`scheduler-user-presence is-${presenceStatus}`} role="img" aria-label={presenceLabel} title={presenceLabel} />{displayName(designer.email, designer.displayName)}</b><small>{role}</small><span className="scheduler-user-accounts" title={accounts}>{designer.accounts?.map((account) => <i key={account}>{accountAvatars[account] ? <img src={accountAvatars[account].startsWith('/api/') ? `${API_BASE}${accountAvatars[account]}` : accountAvatars[account]} alt={`@${account}`} /> : account.slice(0, 1).toUpperCase()}</i>)}</span></span></div></header>
             <div className="scheduler-track" onContextMenu={(event) => openTimeBlockForm(event, designer)} onDragOver={(event) => previewDrop(event, designer.email)} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setDropPreview(null); }} onDrop={(event) => drop(event, designer.email)}>
               {Array.from({ length: 25 }, (_, hour) => <i key={hour} style={{ left: `${hour * (100 / 24)}%` }} />)}
-              {timeBlocks.map((block) => <TimeBlock key={block.id} block={block} timeZone={timeZone} onContextMenu={(event, item) => { if (!coordinator && item.requesterEmail !== data.viewer.email) return; event.preventDefault(); setContextMenu({ x: event.clientX, y: event.clientY, type: 'time', designer, block: item }); }} />)}
+              {timeBlocks.map((block) => { const editableTime = coordinator || block.requesterEmail === data.viewer.email; const renderBlock = timeBlockInteraction?.preview?.id === block.id ? timeBlockInteraction.preview : block; return <TimeBlock key={block.id} block={renderBlock} editable={editableTime} timeZone={timeZone} onMoveStart={(event, item) => startTimeBlockInteraction(event, item, 'move')} onResizeStart={(event, item, edge) => startTimeBlockInteraction(event, item, 'resize', edge)} onContextMenu={(event, item) => { if (!editableTime) return; event.preventDefault(); setContextMenu({ x: event.clientX, y: event.clientY, type: 'time', designer, block: item }); }} />; })}
               {dropPreview?.designer === designer.email ? <span className={`scheduler-drop-preview${previewNextDay ? ' is-next-day' : ''}`} style={{ left: `${previewLeft}%`, width: `${previewWidth}%` }}><b>@{dropPreview.target.post.account}</b><small>{previewNextDay ? `${displayDate(scheduleDateForViewer(dropPreview.target.scheduledDate, dropPreview.target.scheduledStartMinutes, timeZone), language)} · ` : ''}{scheduleTimeForViewer(dropPreview.target.scheduledDate, dropPreview.target.scheduledStartMinutes, timeZone)} · {dropPreview.target.durationMinutes} min</small></span> : null}
               {tasks.map((task) => { const renderTask = resizeState?.preview?.id === task.id ? resizeState.preview : task; return <TaskBlock key={task.id} task={renderTask} timeZone={timeZone} editable={selfPlanner && (coordinator || renderTask.coordinatorEmail === data.viewer.email) && (!renderTask.isDraft || renderTask.draftCoordinatorEmail === data.viewer.email)} accountAvatars={accountAvatars} onResizeStart={startResize} onContextMenu={(event, item) => { if (!coordinator) return; event.preventDefault(); setContextMenu({ x: event.clientX, y: event.clientY, type: 'task', task: item }); }} onOpen={onOpen} />; })}
             </div>
