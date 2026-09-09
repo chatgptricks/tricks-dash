@@ -166,6 +166,12 @@ COPY.es.viewingToday = 'Viendo hoy';
 COPY.es.viewingDate = 'Viendo otro día';
 COPY.es.newDataIncoming = 'Hay datos nuevos entrando';
 COPY.es.updatingQueue = 'Actualizando tu Queue…';
+COPY.en.presenceActive = 'Active';
+COPY.en.presenceIdle = 'Idle';
+COPY.en.presenceOffline = 'Offline';
+COPY.es.presenceActive = 'Activa';
+COPY.es.presenceIdle = 'Inactiva';
+COPY.es.presenceOffline = 'Desconectada';
 
 COPY.en.returnToPool = 'Return to pool';
 COPY.en.poolDropHint = 'Drop a scheduled request here to return it to the pool.';
@@ -241,6 +247,7 @@ Object.assign(COPY.es, {
 const QueuePreferencesContext = createContext({ language: 'en', t: (key) => key });
 const useQueuePreferences = () => useContext(QueuePreferencesContext);
 const statusCopy = (status, t, isDraft = false) => isDraft ? t('tentative') : ({ pool: t('inPool'), scheduled: t('scheduled'), in_progress: t('inProgress'), completed: t('readyToClose'), closed: t('closed'), cancelled: t('cancelled') }[status] || status);
+const presenceCopy = (status, t) => ({ active: t('presenceActive'), idle: t('presenceIdle'), offline: t('presenceOffline') }[status] || t('presenceOffline'));
 const taskRecency = (task) => {
   const closed = task?.closedAt ? Date.parse(task.closedAt) : NaN;
   if (Number.isFinite(closed)) return closed;
@@ -1004,8 +1011,10 @@ function Scheduler({ data, draft, setDraft, onDraftChange, selectedDate, designe
   const [timeBlockForm, setTimeBlockForm] = useState(null);
   const [timeBlockBusy, setTimeBlockBusy] = useState(false);
   const [contextMenu, setContextMenu] = useState(null);
+  const [isPanning, setIsPanning] = useState(false);
   const scrollRef = useRef(null);
   const resizeRef = useRef(null);
+  const panRef = useRef(null);
   useEffect(() => { const timer = window.setInterval(() => setNow(new Date()), 15000); return () => window.clearInterval(timer); }, []);
   const queueToday = selectedDate === DAY(now, QUEUE_TIME_ZONE);
   const queueNowMinutes = currentMinutes(now, QUEUE_TIME_ZONE);
@@ -1059,6 +1068,31 @@ function Scheduler({ data, draft, setDraft, onDraftChange, selectedDate, designe
     const left = Math.max(0, Math.min(maxScroll, target));
     if (typeof scroller.scrollTo === 'function') scroller.scrollTo({ left, behavior: 'smooth' });
     else scroller.scrollLeft = left;
+  };
+  const startPan = (event) => {
+    if (event.button !== 0 || event.target.closest('button,a,input,select,textarea,.scheduler-block,.scheduler-time-block,.scheduler-resize-handle')) return;
+    const scroller = scrollRef.current;
+    if (!scroller) return;
+    panRef.current = { pointerId: event.pointerId, startX: event.clientX, startScroll: scroller.scrollLeft, moved: false };
+    scroller.setPointerCapture?.(event.pointerId);
+  };
+  const movePan = (event) => {
+    const current = panRef.current;
+    const scroller = scrollRef.current;
+    if (!current || !scroller || current.pointerId !== event.pointerId) return;
+    const delta = event.clientX - current.startX;
+    if (!current.moved && Math.abs(delta) < 4) return;
+    current.moved = true;
+    event.preventDefault();
+    scroller.scrollLeft = current.startScroll - delta;
+    setIsPanning(true);
+  };
+  const endPan = (event) => {
+    const current = panRef.current;
+    if (!current || (event?.pointerId != null && current.pointerId !== event.pointerId)) return;
+    scrollRef.current?.releasePointerCapture?.(current.pointerId);
+    panRef.current = null;
+    setIsPanning(false);
   };
   const openTimeBlockForm = (event, designer, block = null) => {
     if ((!coordinator && designer.email !== data.viewer.email) || event.target.closest('.scheduler-block,.scheduler-time-block')) return;
@@ -1198,7 +1232,7 @@ function Scheduler({ data, draft, setDraft, onDraftChange, selectedDate, designe
   const previewWidth = dropPreview ? Math.max(0.8, (dropPreview.target.durationMinutes / QUEUE_DAY_END) * 100) : 0;
   const previewLeft = dropPreview ? (previewNextDay ? Math.max(0, 100 - previewWidth) : (dropPreview.target.scheduledStartMinutes / QUEUE_DAY_END) * 100) : 0;
   return <div className="scheduler-shell">
-    <section className="scheduler" ref={scrollRef}>
+    <section className={`scheduler${isPanning ? ' is-panning' : ''}`} ref={scrollRef} onPointerDown={startPan} onPointerMove={movePan} onPointerUp={endPan} onPointerCancel={endPan}>
       <div className="scheduler-canvas">
         <div className="scheduler-time-head"><span className="scheduler-time-zone-labels" aria-label="Scheduler time zones"><b title="Costa Rica">🇨🇷</b><b title="Colombia">🇨🇴</b></span><div className="scheduler-time-zone-grid"><div className="scheduler-time-zone-row" aria-label="Costa Rica time">{Array.from({ length: 24 }, (_, hour) => <b key={hour} style={{ left: `${hour * (100 / 24)}%` }}>{scheduleTimeForViewer(selectedDate, hour * 60, QUEUE_TIME_ZONE)}</b>)}</div><div className="scheduler-time-zone-row" aria-label="Colombia time">{Array.from({ length: 24 }, (_, hour) => <b key={hour} style={{ left: `${hour * (100 / 24)}%` }}>{scheduleTimeForViewer(selectedDate, hour * 60, 'America/Bogota')}</b>)}</div></div></div>
         {queueToday ? <div className="scheduler-day-overlay"><span className="scheduler-now-global" style={{ left: `${(queueNowMinutes / QUEUE_DAY_END) * 100}%` }} title={time(currentMinutes(now, timeZone))}><b>{t('now')}</b></span></div> : null}
@@ -1208,10 +1242,14 @@ function Scheduler({ data, draft, setDraft, onDraftChange, selectedDate, designe
           const role = schedulerUserRole(designer, t);
           const accounts = designer.accounts?.map((account) => `@${account}`).join(' · ') || t('noAccounts');
           const accountAvatars = designer.accountAvatars || {};
+          const presenceStatus = ['active', 'idle', 'offline'].includes(data.presence?.[String(designer.email).trim().toLowerCase()]?.status)
+            ? data.presence[String(designer.email).trim().toLowerCase()].status
+            : 'offline';
+          const presenceLabel = presenceCopy(presenceStatus, t);
           const tasks = merged(designer.email);
           const timeBlocks = (data.timeBlocks || []).filter((block) => block.requesterEmail === designer.email && block.scheduledDate === selectedDate);
           return <div className={`scheduler-row${queueEligible ? '' : ' is-non-queue-user'}`} key={designer.email} onDragOver={(event) => { if (coordinator && isUserRowDrag(event)) event.preventDefault(); }} onDrop={(event) => { const dragged = event.dataTransfer?.getData('scheduler-user'); if (!coordinator || !dragged || dragged === designer.email) return; event.preventDefault(); const rowOrder = orderedUsers.map((person) => person.email).filter((email) => email !== dragged); rowOrder.splice(Math.max(0, rowOrder.indexOf(designer.email)), 0, dragged); onSavePreferences?.({ hiddenUsers: [...hiddenUsers], rowOrder }); }}>
-            <header draggable={coordinator} onDragStart={(event) => { event.dataTransfer?.setData('scheduler-user', designer.email); event.dataTransfer.effectAllowed = 'move'; }} onContextMenu={(event) => { if (!coordinator) return; event.preventDefault(); setContextMenu({ x: event.clientX, y: event.clientY, type: 'user', designer }); }}><div className="scheduler-user-identity"><span className="scheduler-user-avatar"><span aria-hidden="true">{initials}</span>{userAvatar(designer.avatarUrl) ? <img src={userAvatar(designer.avatarUrl)} alt="" referrerPolicy="no-referrer" onError={(event) => { event.currentTarget.hidden = true; }} /> : null}</span><span className="scheduler-user-copy"><b>{displayName(designer.email, designer.displayName)}</b><small>{role}</small><span className="scheduler-user-accounts" title={accounts}>{designer.accounts?.map((account) => <i key={account}>{accountAvatars[account] ? <img src={accountAvatars[account].startsWith('/api/') ? `${API_BASE}${accountAvatars[account]}` : accountAvatars[account]} alt={`@${account}`} /> : account.slice(0, 1).toUpperCase()}</i>)}</span></span></div></header>
+            <header draggable={coordinator} onDragStart={(event) => { event.dataTransfer?.setData('scheduler-user', designer.email); event.dataTransfer.effectAllowed = 'move'; }} onContextMenu={(event) => { if (!coordinator) return; event.preventDefault(); setContextMenu({ x: event.clientX, y: event.clientY, type: 'user', designer }); }}><div className="scheduler-user-identity"><span className="scheduler-user-avatar"><span aria-hidden="true">{initials}</span>{userAvatar(designer.avatarUrl) ? <img src={userAvatar(designer.avatarUrl)} alt="" referrerPolicy="no-referrer" onError={(event) => { event.currentTarget.hidden = true; }} /> : null}</span><span className="scheduler-user-copy"><b className="scheduler-user-name"><span className={`scheduler-user-presence is-${presenceStatus}`} role="img" aria-label={presenceLabel} title={presenceLabel} />{displayName(designer.email, designer.displayName)}</b><small>{role}</small><span className="scheduler-user-accounts" title={accounts}>{designer.accounts?.map((account) => <i key={account}>{accountAvatars[account] ? <img src={accountAvatars[account].startsWith('/api/') ? `${API_BASE}${accountAvatars[account]}` : accountAvatars[account]} alt={`@${account}`} /> : account.slice(0, 1).toUpperCase()}</i>)}</span></span></div></header>
             <div className="scheduler-track" onContextMenu={(event) => openTimeBlockForm(event, designer)} onDragOver={(event) => previewDrop(event, designer.email)} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setDropPreview(null); }} onDrop={(event) => drop(event, designer.email)}>
               {Array.from({ length: 25 }, (_, hour) => <i key={hour} style={{ left: `${hour * (100 / 24)}%` }} />)}
               {timeBlocks.map((block) => <TimeBlock key={block.id} block={block} timeZone={timeZone} onContextMenu={(event, item) => { if (!coordinator && item.requesterEmail !== data.viewer.email) return; event.preventDefault(); setContextMenu({ x: event.clientX, y: event.clientY, type: 'time', designer, block: item }); }} />)}
@@ -1300,6 +1338,7 @@ function QueueApp({ user }) {
   const [overviewError, setOverviewError] = useState('');
   const [addTimeNonce, setAddTimeNonce] = useState(0);
   const [queueClock, setQueueClock] = useState(() => Date.now());
+  const presenceLastActivityRef = useRef(Date.now());
   const draftRef = useRef(draft);
   const draftSyncingRef = useRef(false);
   const draftHydratedRef = useRef(false);
@@ -1372,6 +1411,38 @@ function QueueApp({ user }) {
     writeQueueSnapshot(user?.email, { version: 1, date, archive: false, savedAt: Date.now(), data });
   }, [data, date, archive, user?.email]);
   useEffect(() => { json('/api/dashboard/me').then(setViewer).catch(() => {}); }, []);
+  useEffect(() => {
+    if (!data?.viewer?.email || import.meta.env.MODE === 'test') return undefined;
+    const markActivity = () => { presenceLastActivityRef.current = Date.now(); };
+    const activityEvents = ['pointerdown', 'keydown', 'touchstart', 'mousemove'];
+    activityEvents.forEach((eventName) => window.addEventListener(eventName, markActivity, { passive: true }));
+    const sendPresence = async () => {
+      const visible = document.visibilityState === 'visible';
+      const elapsed = Date.now() - presenceLastActivityRef.current;
+      const status = !visible ? 'offline' : elapsed > 120_000 ? 'idle' : 'active';
+      try {
+        const result = await json('/api/dashboard/queue/v2/presence', {
+          method: 'POST',
+          body: new URLSearchParams({ status }),
+        });
+        if (result?.presence) setData((current) => current ? { ...current, presence: result.presence } : current);
+      } catch {
+        // Presence is decorative. A transient heartbeat failure must never
+        // interrupt the schedule or turn the Queue into an error state.
+      }
+    };
+    sendPresence();
+    const timer = window.setInterval(sendPresence, 30_000);
+    const onVisibilityChange = () => { if (document.visibilityState === 'visible') sendPresence(); };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('online', sendPresence);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('online', sendPresence);
+      activityEvents.forEach((eventName) => window.removeEventListener(eventName, markActivity));
+    };
+  }, [data?.viewer?.email]);
   useEffect(() => {
     const sync = () => setTimeZonePreview(readDevTimeZone());
     window.addEventListener(TIME_ZONE_PREVIEW_EVENT, sync);

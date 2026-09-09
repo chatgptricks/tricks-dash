@@ -920,6 +920,59 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
 .queue-admin-assignment-row.is-draft { background-image:linear-gradient(90deg,rgba(var(--accent-rgb),.075),transparent 42%); box-shadow:inset 3px 0 rgba(var(--accent-rgb),.68); }
 .queue-admin-assignment-row.is-draft .queue-admin-assignment-status i { border-style:dashed; border-color:rgba(var(--accent-rgb),.52); color:var(--q-accent); }
 
+/* Final scheduler card composition: the cover is the card, while metadata is
+   layered over a readable gradient. This keeps every scheduled block useful
+   at its real timeline width without turning the card into a cramped media
+   column followed by clipped text. */
+.scheduler-block { display:block; padding:0; overflow:hidden; border-width:1px; border-radius:10px; background:#183329; text-align:left; }
+.scheduler-block::after { position:absolute; inset:0; z-index:1; background:linear-gradient(180deg,rgba(4,9,8,.08) 0%,rgba(4,9,8,.08) 35%,rgba(4,9,8,.82) 100%); content:""; pointer-events:none; }
+.scheduler-block .scheduler-cover-frame { position:absolute; inset:0; z-index:0; display:block; width:auto; height:auto; flex:none; border:0; border-radius:inherit; background:#183329; }
+.scheduler-block .scheduler-cover-image { display:block!important; width:100%!important; height:100%!important; border-radius:0!important; object-fit:cover; }
+.scheduler-block .scheduler-cover-fallback { width:100%; height:100%; background:linear-gradient(135deg,rgba(var(--accent-rgb),.36),rgba(6,14,12,.72)); color:rgba(255,255,255,.82); font-size:24px; }
+.scheduler-block .scheduler-source-chip { top:7px; left:7px; z-index:4; width:26px; height:26px; padding:3px; border-color:rgba(255,255,255,.72); border-radius:8px; background:rgba(5,11,10,.78); box-shadow:0 3px 10px rgba(0,0,0,.42); }
+.scheduler-block .scheduler-pp-badge { top:7px; right:7px; bottom:auto; z-index:4; padding:4px 6px; border-radius:6px; background:rgba(5,11,10,.82); font-size:9px; letter-spacing:.02em; }
+.scheduler-block .scheduler-block-copy { position:absolute; right:8px; bottom:31px; left:8px; z-index:3; display:grid; align-content:end; gap:3px; min-width:0; padding:0; color:#fff; text-shadow:0 1px 3px rgba(0,0,0,.58); }
+.scheduler-block .scheduler-block-copy b { display:-webkit-box; overflow:hidden; font-size:11px; line-height:1.15; white-space:normal; -webkit-box-orient:vertical; -webkit-line-clamp:2; }
+.scheduler-block .scheduler-block-copy small { display:block; overflow:hidden; color:rgba(255,255,255,.82); font-size:9px; line-height:1.1; text-overflow:ellipsis; white-space:nowrap; }
+.scheduler-block .scheduler-account-badges { right:7px; bottom:7px; left:7px; z-index:4; display:flex; align-items:center; gap:4px; max-width:none; }
+.scheduler-block .scheduler-account-badges i { display:inline-flex; align-items:center; max-width:calc(50% - 2px); min-height:22px; padding:2px 6px 2px 2px; border-color:rgba(255,255,255,.36); border-radius:999px; background:rgba(5,11,10,.82); box-shadow:0 2px 7px rgba(0,0,0,.4); font-size:8px; }
+.scheduler-block .scheduler-account-avatar { width:18px; height:18px; }
+.scheduler-block .scheduler-account-badges i b { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.scheduler-block .scheduler-ticket-marker,.scheduler-block .scheduler-draft-badge,.scheduler-block .scheduler-priority-mark,.scheduler-block .queue-hot-badge { z-index:5; }
+.scheduler-block .scheduler-ticket-marker { top:40px; left:7px; }
+.scheduler-block .scheduler-priority-mark { top:40px; right:7px; bottom:auto; left:auto; }
+.scheduler-block .queue-hot-badge { top:40px; right:7px; bottom:auto; }
+.scheduler-block .scheduler-draft-badge { top:40px; right:7px; }
+@container (max-width: 150px) {
+  .scheduler-block .scheduler-source-chip { top:6px; left:6px; width:23px; height:23px; padding:2px; }
+  .scheduler-block .scheduler-pp-badge { top:6px; right:6px; padding:3px 4px; font-size:8px; }
+  .scheduler-block .scheduler-block-copy { right:6px; bottom:28px; left:6px; }
+  .scheduler-block .scheduler-block-copy b { font-size:9px; }
+  .scheduler-block .scheduler-block-copy small { font-size:8px; }
+  .scheduler-block .scheduler-account-badges { right:6px; bottom:5px; left:6px; gap:3px; }
+  .scheduler-block .scheduler-account-badges i { min-height:20px; padding:1px; }
+  .scheduler-block .scheduler-account-badges i b { display:none; }
+  .scheduler-block .scheduler-account-avatar { width:17px; height:17px; }
+  .scheduler-block .scheduler-ticket-marker,.scheduler-block .scheduler-priority-mark,.scheduler-block .queue-hot-badge,.scheduler-block .scheduler-draft-badge { display:none; }
+}
+@container (max-width: 90px) {
+  .scheduler-block .scheduler-block-copy { bottom:25px; }
+  .scheduler-block .scheduler-block-copy b { font-size:8px; }
+  .scheduler-block .scheduler-block-copy small { display:none; }
+  .scheduler-block .scheduler-account-badges i { min-height:18px; }
+  .scheduler-block .scheduler-account-avatar { width:15px; height:15px; }
+}
+@container (min-width: 180px) {
+  .scheduler-block .scheduler-account-badges i b { display:block; }
+}
+
+/* Let coordinators sweep across the 24-hour canvas with the primary mouse
+   button. Controls and cards opt out in the React handler so their existing
+   click, drag and resize actions remain untouched. */
+.scheduler { cursor:grab; touch-action:pan-y; }
+.scheduler.is-panning { cursor:grabbing; user-select:none; }
+.scheduler.is-panning .scheduler-block,.scheduler.is-panning .scheduler-time-block { cursor:grabbing; }
+
 /* Manual Queue requests use the same compact working-surface language as the
    scheduler. The form deliberately has no dashboard-post preview because a
    custom request has no source media yet; uploaded files remain available in
@@ -948,6 +1001,11 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
 .scheduler-user-accounts i { display:grid; place-items:center; width:19px; height:19px; margin-left:-4px; overflow:hidden; border:2px solid var(--q-panel); border-radius:50%; background:var(--q-panel-2); color:var(--q-muted); font-size:7px; font-style:normal; font-weight:900; }
 .scheduler-user-accounts i:first-child { margin-left:0; }
 .scheduler-user-accounts img { display:block; width:100%; height:100%; object-fit:cover; }
+.scheduler-user-name { display:flex; align-items:center; gap:6px; min-width:0; }
+.scheduler-user-presence { display:inline-block; width:8px; height:8px; flex:0 0 8px; border:1px solid rgba(255,255,255,.2); border-radius:50%; background:#666; box-shadow:0 0 0 2px rgba(255,255,255,.06); }
+.scheduler-user-presence.is-active { border-color:rgba(72,213,151,.75); background:#48d597; box-shadow:0 0 0 2px rgba(72,213,151,.14),0 0 10px rgba(72,213,151,.42); }
+.scheduler-user-presence.is-idle { border-color:rgba(242,193,78,.75); background:#f2c14e; box-shadow:0 0 0 2px rgba(242,193,78,.14); }
+.scheduler-user-presence.is-offline { border-color:rgba(160,160,160,.34); background:#666; opacity:.72; }
 .scheduler-block.priority-low,.scheduler-block.priority-medium,.scheduler-block.priority-high { border-color:rgba(var(--accent-rgb),.48); background:color-mix(in srgb,var(--q-accent) 22%,var(--q-panel)); color:var(--q-text); box-shadow:none; }
 
 /* Queue urgency is binary. Pool cards deliberately stay neutral; only an
@@ -1282,4 +1340,85 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
   .scheduler-block-copy { width:100%; padding:0; text-align:center; gap:2px; }
   .scheduler-block-copy b { font-size:8px; line-height:1.1; white-space:normal; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; }
   .scheduler-block-copy small { display:none; }
+}
+
+/* The card itself is the usable canvas. On normal timeline widths the cover
+   owns the full block height and the text sits directly beside it; there is
+   no padded media column or dead interior space. */
+.scheduler-block {
+  display:flex !important;
+  align-items:stretch;
+  gap:0 !important;
+  padding:0 !important;
+  overflow:hidden;
+  border-radius:9px;
+}
+.scheduler-block::after { display:none; }
+.scheduler-block .scheduler-cover-frame {
+  position:relative;
+  inset:auto;
+  display:block;
+  width:44%;
+  height:auto;
+  flex:0 0 44%;
+  border:0;
+  border-right:1px solid rgba(255,255,255,.18);
+  border-radius:0;
+}
+.scheduler-block .scheduler-cover-frame::after {
+  position:absolute;
+  inset:0;
+  background:linear-gradient(180deg,rgba(5,9,8,.04),rgba(5,9,8,.2));
+  content:"";
+  pointer-events:none;
+}
+.scheduler-block .scheduler-cover-image { position:absolute; inset:0; display:block!important; width:100%!important; height:100%!important; border-radius:0!important; object-fit:cover; }
+.scheduler-block .scheduler-cover-fallback { width:100%; height:100%; border-radius:0; }
+.scheduler-block .scheduler-source-chip { top:6px; left:6px; width:24px; height:24px; padding:2px; border-radius:7px; }
+.scheduler-block .scheduler-pp-badge { top:6px; right:6px; bottom:auto; padding:3px 5px; border-radius:5px; font-size:8px; }
+.scheduler-block .scheduler-block-copy {
+  position:relative;
+  inset:auto;
+  z-index:3;
+  display:grid;
+  flex:1 1 auto;
+  align-content:start;
+  gap:4px;
+  min-width:0;
+  padding:8px 7px 30px !important;
+  text-shadow:none;
+}
+.scheduler-block .scheduler-block-copy b { display:-webkit-box; font-size:10px; line-height:1.2; -webkit-line-clamp:3; }
+.scheduler-block .scheduler-block-copy small { display:-webkit-box; font-size:8px; line-height:1.2; -webkit-line-clamp:2; white-space:normal; }
+.scheduler-block .scheduler-account-badges { right:6px; bottom:6px; left:calc(44% + 6px); z-index:4; max-width:calc(56% - 12px); }
+.scheduler-block .scheduler-account-badges i { min-height:20px; padding:1px 5px 1px 2px; }
+.scheduler-block .scheduler-account-avatar { width:17px; height:17px; }
+.scheduler-block .scheduler-ticket-marker { top:6px; left:calc(44% + 6px); }
+.scheduler-block .scheduler-priority-mark,.scheduler-block .queue-hot-badge,.scheduler-block .scheduler-draft-badge { top:6px; right:6px; bottom:auto; left:auto; }
+@container (max-width: 150px) {
+  .scheduler-block .scheduler-cover-frame { width:45%; flex-basis:45%; }
+  .scheduler-block .scheduler-source-chip { top:5px; left:5px; width:21px; height:21px; }
+  .scheduler-block .scheduler-pp-badge { top:5px; right:5px; padding:3px 4px; font-size:7px; }
+  .scheduler-block .scheduler-block-copy { padding:7px 5px 26px !important; }
+  .scheduler-block .scheduler-block-copy b { font-size:9px; -webkit-line-clamp:3; }
+  .scheduler-block .scheduler-block-copy small { font-size:7px; -webkit-line-clamp:2; }
+  .scheduler-block .scheduler-account-badges { right:5px; bottom:5px; left:calc(45% + 5px); max-width:calc(55% - 10px); gap:2px; }
+  .scheduler-block .scheduler-account-badges i { min-height:18px; padding:1px; }
+  .scheduler-block .scheduler-account-badges i b { display:none; }
+  .scheduler-block .scheduler-account-avatar { width:15px; height:15px; }
+  .scheduler-block .scheduler-ticket-marker,.scheduler-block .scheduler-priority-mark,.scheduler-block .queue-hot-badge,.scheduler-block .scheduler-draft-badge { display:none; }
+}
+@container (max-width: 90px) {
+  .scheduler-block { display:block !important; }
+  .scheduler-block .scheduler-cover-frame { position:absolute; inset:0; width:auto; height:auto; flex:none; border:0; }
+  .scheduler-block .scheduler-source-chip { top:4px; left:4px; width:19px; height:19px; }
+  .scheduler-block .scheduler-pp-badge { top:4px; right:4px; padding:2px 3px; font-size:7px; }
+  .scheduler-block .scheduler-block-copy { position:absolute; right:5px; bottom:5px; left:5px; padding:0 0 19px !important; color:#fff; text-shadow:0 1px 3px rgba(0,0,0,.7); }
+  .scheduler-block .scheduler-block-copy b { font-size:8px; -webkit-line-clamp:2; }
+  .scheduler-block .scheduler-block-copy small { display:none; }
+  .scheduler-block .scheduler-account-badges { right:4px; bottom:4px; left:4px; max-width:calc(100% - 8px); }
+  .scheduler-block .scheduler-account-avatar { width:15px; height:15px; }
+}
+@container (min-width: 180px) {
+  .scheduler-block .scheduler-account-badges i b { display:block; }
 }
