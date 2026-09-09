@@ -2,7 +2,7 @@ import ProductHeader from './ProductHeader';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import { createPortal } from 'react-dom';
-import { AlertTriangle, Archive, ArrowLeft, Ban, BarChart3, BellRing, CalendarDays, CalendarPlus, Check, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Clock3, Coffee, Download, History, Layers, Lightbulb, Link2, LoaderCircle, LocateFixed, LogOut, Moon, Paperclip, Pencil, Plus, Radio, Send, Settings, Sun, TimerReset, WifiOff, X } from 'lucide-react';
+import { AlertTriangle, Archive, ArrowLeft, Ban, BarChart3, BellRing, CalendarDays, CalendarPlus, Check, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Clock3, Coffee, Download, History, Image as ImageIcon, Layers, Lightbulb, Link2, LoaderCircle, LocateFixed, LogOut, Moon, Paperclip, Pencil, Play, Plus, Radio, Send, Settings, Sun, TimerReset, WifiOff, X } from 'lucide-react';
 import { browserPopupRedirectResolver, getRedirectResult, onAuthStateChanged, signOut } from 'firebase/auth';
 import { describeSignInError, firebaseAuth as auth, startGoogleSignIn } from './firebase';
 import { clearSsoCookie, startSsoRefresh, trySsoSignIn } from './sso';
@@ -166,6 +166,8 @@ COPY.es.viewingToday = 'Viendo hoy';
 COPY.es.viewingDate = 'Viendo otro día';
 COPY.es.newDataIncoming = 'Hay datos nuevos entrando';
 COPY.es.updatingQueue = 'Actualizando tu Queue…';
+COPY.en.postTypeVideo = 'Video';
+COPY.es.postTypeVideo = 'Video';
 COPY.en.presenceActive = 'Active';
 COPY.en.presenceIdle = 'Idle';
 COPY.en.presenceOffline = 'Offline';
@@ -356,11 +358,46 @@ function TaskBlock({ task, editable, onOpen, onResizeStart, onContextMenu, accou
   const accountImage = (account) => { const value = accountAvatars?.[account] || ACCOUNT_PROFILE_FALLBACKS[String(account).toLowerCase()]; return value ? (String(value).startsWith('http') || String(value).startsWith('/') && !String(value).startsWith('/api/') ? String(value) : `${API_BASE}${value}`) : `${API_BASE}/api/dashboard/avatar/${encodeURIComponent(String(account || '').replace(/^@/, ''))}`; };
   const sourceAccount = String(task.post?.account || '').replace(/^@/, '');
   const sourceAvatar = sourceAccount ? accountImage(sourceAccount) : '';
-  const blockTitle = task.post?.title || task.post?.ocrText || task.post?.type || t('post');
+  const blockTitle = task.post?.title || task.post?.ocrText || '';
+  const rawType = String(task.post?.type || 'Image').toLowerCase();
+  const typeKey = ({ image: 'postTypeImage', carousel: 'postTypeCarousel', video: 'postTypeVideo', reel: 'postTypeReel', story: 'postTypeStory', promo: 'postTypePromo', other: 'postTypeOther' })[rawType];
+  const jobType = typeKey ? t(typeKey) : task.post?.type || t('post');
+  const TypeIcon = /video|reel/.test(rawType) ? Play : rawType === 'carousel' ? Layers : ImageIcon;
+  const destinations = task.recommendedAccounts || [];
+  const scheduledTime = scheduleTimeForViewer(task.scheduledDate, left, timeZone);
+  const stateLabel = statusCopy(task.status, t, task.isDraft);
   const coverUrl = cover(task);
   const isPromo = task.tags?.some((tag) => String(tag).toLowerCase() === 'promo') || task.post?.isPromo;
-  return <button type="button" draggable={editable && task.status === 'scheduled'} className={`scheduler-block state-${task.status} ${priorityClass(task.priority)}${hotClass(task)}${task.isDraft ? ' is-draft' : ''}${isPromo ? ' is-promo' : ''}${extra ? ' is-extra' : ''}${pendingTickets.length ? ' has-pending-ticket' : ''}`} style={{ left: `${(left / QUEUE_DAY_END) * 100}%`, width: `${(width / QUEUE_DAY_END) * 100}%` }} onDragStart={(event) => { activeQueueDragId = task.id; event.dataTransfer.setData('queue-task', String(task.id)); }} onDragEnd={() => { activeQueueDragId = null; }} onContextMenu={(event) => onContextMenu?.(event, task)} onClick={(event) => { if (event.target.closest('.scheduler-resize-handle')) return; onOpen(task); }} title={`${accountMention(task.post.account) || task.post.title || t('post')}${isUrgent(task.priority) ? ` · ${priorityCopy(task.priority, t)}` : ''} · ${task.productionPoints} PP · ${statusCopy(task.status, t, task.isDraft)}${pendingTicketLabel ? ` · ${pendingTicketLabel}` : ''}`}>
-    <span className="scheduler-cover-frame">{coverUrl ? <img className="scheduler-cover-image" src={coverUrl} alt="" /> : <span className="scheduler-cover-fallback">{sourceAccount ? `@${sourceAccount.slice(0, 1).toUpperCase()}` : '•'}</span>}{sourceAccount ? <span className="scheduler-source-chip" title={`@${sourceAccount}`} aria-label={`@${sourceAccount}`}><span className="scheduler-source-avatar"><span aria-hidden="true">{sourceAccount.slice(0, 1).toUpperCase()}</span>{sourceAvatar ? <img src={sourceAvatar} alt="" loading="lazy" onError={(event) => { event.currentTarget.hidden = true; }} /> : null}</span></span> : null}<span className="scheduler-pp-badge">{task.productionPoints} PP</span></span><span className="scheduler-block-copy"><b>{blockTitle}</b><small>{task.post?.type || t('post')} · {task.isDraft ? `${t('tentative')} · ` : ''}{scheduleTimeForViewer(task.scheduledDate, task.scheduledStartMinutes ?? QUEUE_DAY_START, timeZone)}</small></span>{isUrgent(task.priority) ? <span className="scheduler-priority-mark priority-urgent">{priorityCopy(task.priority, t)}</span> : null}{pendingTickets.length ? <span className="scheduler-ticket-marker" title={pendingTicketLabel}><ClipboardList size={11} /><b>{pendingTickets.length}</b></span> : null}{isHotTask(task) ? <span className="queue-hot-badge">🔥 {hotText(task)}</span> : null}{task.isDraft ? <span className="scheduler-draft-badge">{t('tentative')}</span> : null}{extra ? <span className="scheduler-extra">{t('extra')}</span> : null}{task.recommendedAccounts?.length ? <span className="scheduler-account-badges">{task.recommendedAccounts.map((account) => <i key={account} title={`@${account}`}><span className="scheduler-account-avatar"><span aria-hidden="true">@{account.slice(0, 1)}</span><img src={accountImage(account)} alt="" loading="lazy" onError={(event) => { event.currentTarget.hidden = true; }} /></span><b>@{account}</b></i>)}</span> : null}{canResize ? <><span className="scheduler-resize-handle scheduler-resize-handle-left" role="separator" aria-label={`${t('resizeBar')} ${t('resizeLeft')}`} onPointerDown={(event) => onResizeStart(event, task, 'left')} /><span className="scheduler-resize-handle scheduler-resize-handle-right" role="separator" aria-label={`${t('resizeBar')} ${t('resizeRight')}`} onPointerDown={(event) => onResizeStart(event, task, 'right')} /></> : null}
+  return <button type="button" draggable={editable && task.status === 'scheduled'} className={`scheduler-block state-${task.status} ${priorityClass(task.priority)}${hotClass(task)}${task.isDraft ? ' is-draft' : ''}${isPromo ? ' is-promo' : ''}${extra ? ' is-extra' : ''}${pendingTickets.length ? ' has-pending-ticket' : ''}`} style={{ left: `${(left / QUEUE_DAY_END) * 100}%`, width: `${(width / QUEUE_DAY_END) * 100}%` }} onDragStart={(event) => { activeQueueDragId = task.id; event.dataTransfer.setData('queue-task', String(task.id)); }} onDragEnd={() => { activeQueueDragId = null; }} onContextMenu={(event) => onContextMenu?.(event, task)} onClick={(event) => { if (event.target.closest('.scheduler-resize-handle')) return; onOpen(task); }} title={`${accountMention(task.post.account) || task.post.title || t('post')}${isUrgent(task.priority) ? ` · ${priorityCopy(task.priority, t)}` : ''} · ${task.productionPoints} PP · ${statusCopy(task.status, t, task.isDraft)}${pendingTicketLabel ? ` · ${pendingTicketLabel}` : ''} · ${jobType} · ${scheduledTime}${destinations.length ? ` → ${destinations.map((account) => `@${account}`).join(', ')}` : ''}`}>
+    <span className="scheduler-card-layout">
+      <span className="scheduler-cover-frame">
+        {coverUrl ? <img className="scheduler-cover-image" src={coverUrl} alt="" draggable={false} /> : <span className="scheduler-cover-fallback"><TypeIcon size={24} /></span>}
+        {sourceAccount ? <span className="scheduler-source-chip" title={`@${sourceAccount}`} aria-label={`@${sourceAccount}`}>
+          <span className="scheduler-source-avatar"><span aria-hidden="true">{sourceAccount.slice(0, 1).toUpperCase()}</span><img src={sourceAvatar} alt="" loading="lazy" draggable={false} onError={(event) => { event.currentTarget.hidden = true; }} /></span>
+        </span> : null}
+      </span>
+      <span className="scheduler-block-copy">
+        <span className="scheduler-card-heading">
+          <span className="scheduler-pp-badge"><strong>{task.productionPoints}</strong><span>PP</span></span>
+          <span className="scheduler-card-signals">
+            {['completed', 'closed'].includes(task.status) ? <CheckCircle2 size={12} aria-label={stateLabel} /> : null}
+            {isUrgent(task.priority) ? <AlertTriangle size={11} aria-label={t('priorityUrgent')} /> : isHotTask(task) ? <span className="scheduler-card-hot" title={hotText(task)} aria-label={hotText(task)}>🔥</span> : null}
+            {pendingTickets.length ? <ClipboardList size={11} aria-label={pendingTicketLabel} /> : null}
+            {task.isDraft ? <Pencil size={11} aria-label={t('tentative')} /> : null}
+            {extra ? <Clock3 size={11} aria-label={t('extra')} /> : null}
+          </span>
+        </span>
+        <span className="scheduler-job-type" title={jobType}><TypeIcon size={11} aria-hidden="true" /><span>{jobType}</span></span>
+        <small className="scheduler-card-time">{scheduledTime}</small>
+        {blockTitle ? <b className="scheduler-job-title">{blockTitle}</b> : null}
+        {destinations.length ? <span className="scheduler-account-badges" aria-label={`${t('recommendedAccounts')}: ${destinations.map((account) => `@${account}`).join(', ')}`} title={destinations.map((account) => `@${account}`).join(' · ')}>
+          {destinations.slice(0, 3).map((account) => <i key={account} title={`@${account}`}><span className="scheduler-account-avatar"><span aria-hidden="true">{account.slice(0, 1).toUpperCase()}</span><img src={accountImage(account)} alt={`@${account}`} loading="lazy" draggable={false} onError={(event) => { event.currentTarget.hidden = true; }} /></span><b>@{account}</b></i>)}
+          {destinations.length > 3 ? <span className="scheduler-destinations-more">+{destinations.length - 3}</span> : null}
+          {destinations.length > 1 ? <span className="scheduler-destinations-compact">+{destinations.length - 1}</span> : null}
+        </span> : null}
+      </span>
+    </span>
+    {canResize ? <><span className="scheduler-resize-handle scheduler-resize-handle-left" role="separator" aria-label={`${t('resizeBar')} ${t('resizeLeft')}`} onPointerDown={(event) => onResizeStart(event, task, 'left')} /><span className="scheduler-resize-handle scheduler-resize-handle-right" role="separator" aria-label={`${t('resizeBar')} ${t('resizeRight')}`} onPointerDown={(event) => onResizeStart(event, task, 'right')} /></> : null}
   </button>;
 }
 
