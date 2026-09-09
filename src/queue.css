@@ -965,6 +965,8 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
 @container (min-width: 180px) {
   .scheduler-block .scheduler-account-badges i b { display:block; }
 }
+.scheduler-block .scheduler-source-avatar,.scheduler-block .scheduler-account-avatar { position:relative; }
+.scheduler-block .scheduler-source-avatar img,.scheduler-block .scheduler-account-avatar img { position:absolute; inset:0; }
 
 /* Let coordinators sweep across the 24-hour canvas with the primary mouse
    button. Controls and cards opt out in the React handler so their existing
@@ -1358,9 +1360,9 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
   position:relative;
   inset:auto;
   display:block;
-  width:44%;
+  width:50%;
   height:auto;
-  flex:0 0 44%;
+  flex:0 0 50%;
   border:0;
   border-right:1px solid rgba(255,255,255,.18);
   border-radius:0;
@@ -1390,19 +1392,19 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
 }
 .scheduler-block .scheduler-block-copy b { display:-webkit-box; font-size:10px; line-height:1.2; -webkit-line-clamp:3; }
 .scheduler-block .scheduler-block-copy small { display:-webkit-box; font-size:8px; line-height:1.2; -webkit-line-clamp:2; white-space:normal; }
-.scheduler-block .scheduler-account-badges { right:6px; bottom:6px; left:calc(44% + 6px); z-index:4; max-width:calc(56% - 12px); }
+.scheduler-block .scheduler-account-badges { right:6px; bottom:6px; left:calc(50% + 6px); z-index:4; max-width:calc(50% - 12px); }
 .scheduler-block .scheduler-account-badges i { min-height:20px; padding:1px 5px 1px 2px; }
 .scheduler-block .scheduler-account-avatar { width:17px; height:17px; }
-.scheduler-block .scheduler-ticket-marker { top:6px; left:calc(44% + 6px); }
+.scheduler-block .scheduler-ticket-marker { top:6px; left:calc(50% + 6px); }
 .scheduler-block .scheduler-priority-mark,.scheduler-block .queue-hot-badge,.scheduler-block .scheduler-draft-badge { top:6px; right:6px; bottom:auto; left:auto; }
 @container (max-width: 150px) {
-  .scheduler-block .scheduler-cover-frame { width:45%; flex-basis:45%; }
+  .scheduler-block .scheduler-cover-frame { width:50%; flex-basis:50%; }
   .scheduler-block .scheduler-source-chip { top:5px; left:5px; width:21px; height:21px; }
   .scheduler-block .scheduler-pp-badge { top:5px; right:5px; padding:3px 4px; font-size:7px; }
   .scheduler-block .scheduler-block-copy { padding:7px 5px 26px !important; }
   .scheduler-block .scheduler-block-copy b { font-size:9px; -webkit-line-clamp:3; }
   .scheduler-block .scheduler-block-copy small { font-size:7px; -webkit-line-clamp:2; }
-  .scheduler-block .scheduler-account-badges { right:5px; bottom:5px; left:calc(45% + 5px); max-width:calc(55% - 10px); gap:2px; }
+  .scheduler-block .scheduler-account-badges { right:5px; bottom:5px; left:calc(50% + 5px); max-width:calc(50% - 10px); gap:2px; }
   .scheduler-block .scheduler-account-badges i { min-height:18px; padding:1px; }
   .scheduler-block .scheduler-account-badges i b { display:none; }
   .scheduler-block .scheduler-account-avatar { width:15px; height:15px; }
