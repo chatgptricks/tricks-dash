@@ -194,7 +194,7 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
   .scheduler-block-copy { width:100%; padding:0 1px 15px; text-align:left; gap:3px; }
   .scheduler-block-copy b { font-size:9px; line-height:1.15; -webkit-line-clamp:2; }
   .scheduler-block-copy small { display:-webkit-box; font-size:8px; line-height:1.1; -webkit-line-clamp:1; }
-  .scheduler-account-badges { display:flex; right:5px; bottom:5px; max-width:calc(100% - 10px); }
+  .scheduler-block .scheduler-account-badges { display:flex; right:5px; bottom:5px; max-width:calc(100% - 10px); }
   .scheduler-account-badges i { width:19px; height:19px; padding:2px; }
   .scheduler-account-badges i b { display:none; }
   .scheduler-account-avatar { width:15px; height:15px; }
@@ -213,7 +213,7 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
   .scheduler-block-copy { width:100%; padding:0 1px 17px; text-align:center; gap:2px; }
   .scheduler-block-copy b { font-size:8px; line-height:1.1; white-space:normal; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; }
   .scheduler-block-copy small { display:none; }
-  .scheduler-account-badges { display:flex; right:4px; bottom:4px; max-width:calc(100% - 8px); }
+  .scheduler-block .scheduler-account-badges { display:flex; right:4px; bottom:4px; max-width:calc(100% - 8px); }
   .scheduler-account-badges i { width:17px; height:17px; padding:1px; }
   .scheduler-account-badges i b { display:none; }
   .scheduler-account-avatar { width:15px; height:15px; }
