@@ -4,6 +4,7 @@ import { JSDOM } from 'jsdom';
 
 const source = fs.readFileSync('public/tracker.html', 'utf8');
 const section = source.split('/* ---------------- Leaderboard ---------------- */')[1].split('/* ---------------- Historical stats table ---------------- */')[0];
+const historySection = source.split('/* ---------------- Historical stats table ---------------- */')[1].split('/* ---------------- Account detail ---------------- */')[0];
 const dom = new JSDOM('<main id="app"></main>', { runScripts: 'outside-only' });
 const { window } = dom;
 window.SUMMARY = { accounts: [
@@ -47,5 +48,21 @@ window.$('#trackerGroup').value = 'sentient';
 window.$('#trackerGroup').dispatchEvent(new window.Event('change'));
 assert.deepEqual(handles(), ['alpha', 'empty']);
 assert.equal(window.$('th[aria-sort="ascending"] button').dataset.k, 'delta_7d');
+window.eval(historySection);
+const history = [
+  { date: '2026-09-01T14:00:00+00:00', followers: 100 },
+  { date: '2026-09-02T14:00:00+00:00', followers: 110 },
+  { date: '2026-09-03T14:00:00+00:00', followers: 120 },
+  { date: '2026-09-06T14:00:00+00:00', followers: 150 },
+  { date: '2026-09-08T14:00:00+00:00', followers: 170 },
+];
+const filled = window.historyWindowRows(history, 'all');
+assert.deepEqual(Array.from(filled, (row) => window.trackerDateKey(row.date)), [
+  '2026-09-01', '2026-09-02', '2026-09-03', '2026-09-04',
+  '2026-09-05', '2026-09-06', '2026-09-07', '2026-09-08',
+]);
+assert.deepEqual(Array.from(filled.filter((row) => row.missing), (row) => window.trackerDateKey(row.date)), ['2026-09-04', '2026-09-05', '2026-09-07']);
+window.document.body.innerHTML = window.renderHistoricalStats(filled);
+assert.equal(window.document.querySelectorAll('.hist-missing').length, 3);
 dom.window.close();
-console.log('PASS Tracker search, groups, favorites, reset, empty state, sorting, missing values, stable leader and focus');
+console.log('PASS Tracker search, groups, favorites, reset, empty state, sorting, missing values, stable leader, focus and calendar gaps');
