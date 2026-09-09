@@ -1,6 +1,15 @@
 import { JSDOM } from 'jsdom';
 import * as esbuild from 'esbuild';
 import path from 'node:path';
+import fs from 'node:fs';
+
+const queueSource = fs.readFileSync('src/queue.jsx', 'utf8');
+const initialPositioningEffect = queueSource.slice(
+  queueSource.indexOf('const initiallyPositionedDateRef'),
+  queueSource.indexOf('const centerNow =')
+);
+if (!initialPositioningEffect.includes('initiallyPositionedDateRef.current === selectedDate')) throw new Error('Scheduler must only auto-position once per selected date.');
+if (initialPositioningEffect.includes('[selectedDate, schedulerUsers.length, queueToday, queueNowMinutes]')) throw new Error('Clock ticks must not retrigger scheduler auto-positioning.');
 
 const queueTestTime = Date.parse('2026-09-04T14:00:00Z');
 class QueueTestDate extends Date {

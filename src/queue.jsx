@@ -1070,6 +1070,11 @@ function Scheduler({ data, draft, setDraft, onDraftChange, selectedDate, designe
   const scrollRef = useRef(null);
   const resizeRef = useRef(null);
   const panRef = useRef(null);
+  // The clock refreshes every 15 seconds so the Now marker stays accurate.
+  // It must never also reset somebody's horizontal exploration of the day.
+  // Remember the date we initially positioned instead; the explicit button
+  // below remains the only way to re-centre after that.
+  const initiallyPositionedDateRef = useRef(null);
   useEffect(() => { const timer = window.setInterval(() => setNow(new Date()), 15000); return () => window.clearInterval(timer); }, []);
   const queueToday = selectedDate === DAY(now, QUEUE_TIME_ZONE);
   const queueNowMinutes = currentMinutes(now, QUEUE_TIME_ZONE);
@@ -1102,16 +1107,19 @@ function Scheduler({ data, draft, setDraft, onDraftChange, selectedDate, designe
   const visibleDesigners = (designerScope ? orderedUsers.filter((designer) => designer.email === designerScope) : orderedUsers)
     .filter((designer) => !hiddenUsers.has(designer.email));
   useEffect(() => {
+    if (initiallyPositionedDateRef.current === selectedDate) return undefined;
     const frame = window.requestAnimationFrame(() => {
       const scroller = scrollRef.current;
       const track = scroller?.querySelector('.scheduler-track');
       if (!scroller || !track) return;
-      const preferred = queueToday ? queueNowMinutes - 180 : 8 * 60;
+      const isToday = selectedDate === DAY(new Date(), QUEUE_TIME_ZONE);
+      const preferred = isToday ? currentMinutes(new Date(), QUEUE_TIME_ZONE) - 180 : 8 * 60;
       const firstMinute = Math.min(16 * 60, Math.max(0, preferred));
       scroller.scrollLeft = (firstMinute / QUEUE_DAY_END) * track.offsetWidth;
+      initiallyPositionedDateRef.current = selectedDate;
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [selectedDate, schedulerUsers.length, queueToday, queueNowMinutes]);
+  }, [selectedDate, schedulerUsers.length]);
   const centerNow = () => {
     const scroller = scrollRef.current;
     const track = scroller?.querySelector('.scheduler-track');
