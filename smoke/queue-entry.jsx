@@ -191,6 +191,18 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
       && nowLineAfter?.style.left === nowLineBefore?.style.left;
     checks['Colombia reads a Costa Rica 09:00 assignment as 10:00'] = [...document.querySelectorAll('.scheduler-block-copy small')].some((node) => /10:00/.test(node.textContent || ''));
     checks['Pool and scheduled blocks render'] = document.querySelectorAll('.queue-pool-card').length === 1 && document.querySelectorAll('.scheduler-block').length === 2;
+    const upcomingSearch = document.querySelector('.queue-admin-search input');
+    checks['Upcoming production search renders'] = Boolean(upcomingSearch) && upcomingSearch.type === 'search' && document.querySelectorAll('.queue-admin-assignment-row').length === 2;
+    const setSearchValue = (value) => {
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+      setter?.call(upcomingSearch, value);
+      upcomingSearch.dispatchEvent(new window.Event('input', { bubbles: true }));
+      upcomingSearch.dispatchEvent(new window.Event('change', { bubbles: true }));
+    };
+    await act(async () => { setSearchValue('scheduled'); });
+    checks['Upcoming production search filters rows'] = document.querySelectorAll('.queue-admin-assignment-row').length === 1;
+    await act(async () => { setSearchValue(''); });
+    checks['Upcoming production search clears'] = document.querySelectorAll('.queue-admin-assignment-row').length === 2;
     checks['Legacy priority renders as regular work'] = document.querySelector('.queue-pool-card')?.classList.contains('priority-normal')
       && !document.querySelector('.queue-pool-card .queue-priority-badge')
       && !/Low|Medium|High/.test(document.querySelector('.queue-pool-card')?.textContent || '');

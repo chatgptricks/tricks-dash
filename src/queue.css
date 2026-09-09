@@ -578,6 +578,13 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
  * this table is the durable overview of every request that has an owner. */
 .queue-admin-assignments { margin-top:2px; border-top:1px solid var(--q-line); background:var(--q-panel); }
 .queue-admin-assignments>header { display:flex; align-items:flex-end; justify-content:space-between; gap:14px; padding:15px 16px 12px; }
+.queue-admin-table-tools { display:flex; align-items:center; justify-content:flex-end; gap:8px; min-width:0; flex-wrap:wrap; }
+.queue-admin-search { display:flex; align-items:center; gap:7px; width:min(300px,100%); min-height:32px; padding:0 9px; border:1px solid var(--q-line); border-radius:7px; background:var(--q-panel-2); color:var(--q-muted); }
+.queue-admin-search:focus-within { border-color:rgba(var(--accent-rgb),.62); color:var(--q-accent); box-shadow:0 0 0 2px rgba(var(--accent-rgb),.1); }
+.queue-admin-search svg { flex:0 0 auto; }
+.queue-admin-search input { width:100%; min-width:0; height:28px; padding:0; border:0; outline:0; background:transparent; color:var(--q-text); font:inherit; font-size:11px; }
+.queue-admin-search input::placeholder { color:var(--q-muted); opacity:.85; }
+.queue-admin-search input::-webkit-search-cancel-button { filter:grayscale(1); cursor:pointer; }
 .queue-admin-batch-actions { display:flex; align-items:center; gap:7px; flex-wrap:wrap; }
 .queue-admin-batch-actions button { min-height:30px; }
 .queue-admin-assignments>header h3 { margin:2px 0 0; color:var(--q-text); font-size:16px; }
@@ -603,6 +610,11 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
 .queue-admin-assignment-row.state-closed .queue-admin-assignment-status i { border-color:rgba(130,130,130,.5); color:#aaa; }
 .queue-admin-assignment-row.state-cancelled .queue-admin-assignment-status i { border-color:rgba(255,107,107,.45); color:#ff9b9b; }
 .queue-admin-assignment-empty-state { margin:0; padding:26px 16px 30px; color:var(--q-muted); font-size:11px; text-align:center; }
+@media(max-width:760px){
+  .queue-admin-assignments>header { align-items:stretch; flex-direction:column; }
+  .queue-admin-table-tools { align-items:stretch; justify-content:stretch; }
+  .queue-admin-search { flex:1 1 100%; width:auto; }
+}
 
 /* Personal calendar holds and approval tickets. */
 .queue-ticket-button { position:relative; display:inline-flex; align-items:center; gap:6px; min-height:29px; padding:0 9px; border:1px solid var(--q-line); border-radius:7px; background:var(--q-panel-2); color:var(--q-muted); font-size:10px; font-weight:800; }

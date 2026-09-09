@@ -2,7 +2,7 @@ import ProductHeader from './ProductHeader';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import { createPortal } from 'react-dom';
-import { AlertTriangle, Archive, ArrowLeft, Ban, BarChart3, BellRing, CalendarDays, CalendarPlus, Check, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Clock3, Coffee, Download, History, Image as ImageIcon, Layers, Lightbulb, Link2, LoaderCircle, LocateFixed, LogOut, Moon, Paperclip, Pencil, Play, Plus, Radio, Send, Settings, Sun, TimerReset, WifiOff, X } from 'lucide-react';
+import { AlertTriangle, Archive, ArrowLeft, Ban, BarChart3, BellRing, CalendarDays, CalendarPlus, Check, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Clock3, Coffee, Download, History, Image as ImageIcon, Layers, Lightbulb, Link2, LoaderCircle, LocateFixed, LogOut, Moon, Paperclip, Pencil, Play, Plus, Radio, Search, Send, Settings, Sun, TimerReset, WifiOff, X } from 'lucide-react';
 import { browserPopupRedirectResolver, getRedirectResult, onAuthStateChanged, signOut } from 'firebase/auth';
 import { describeSignInError, firebaseAuth as auth, startGoogleSignIn } from './firebase';
 import { clearSsoCookie, startSsoRefresh, trySsoSignIn } from './sso';
@@ -223,6 +223,12 @@ Object.assign(COPY.en, {
 });
 Object.assign(COPY.es, {
   closeSelected: 'Cerrar seleccionados', closeSelectedCount: 'Cerrar requests seleccionados', batchCloseDone: 'Requests seleccionados cerrados.', batchCloseSkipped: 'Algunos requests se omitieron porque todavía no estaban listos para cerrar.', selectReadyToClose: 'Seleccionar listos para cerrar', forceClose: 'Forzar cierre', selectForceClose: 'Seleccionar jobs elegibles', selection: 'Selección', selected: 'seleccionados', clearSelection: 'Limpiar selección', selectForForceClose: 'Seleccionar para forzar cierre',
+});
+Object.assign(COPY.en, {
+  searchUpcoming: 'Search upcoming production', searchUpcomingPlaceholder: 'Search posts, accounts, designers, or status…', noSearchResults: 'No upcoming production matches that search.',
+});
+Object.assign(COPY.es, {
+  searchUpcoming: 'Buscar próxima producción', searchUpcomingPlaceholder: 'Busca posts, cuentas, designers o estado…', noSearchResults: 'No hay trabajos que coincidan con esa búsqueda.',
 });
 
 Object.assign(COPY.en, {
@@ -776,8 +782,18 @@ function AdminAssignmentTable({ tasks, onOpen, onBatchClose, headingKey = 'allAs
   const isAdmin = Boolean(onBatchClose);
   const today = DAY(new Date(), QUEUE_TIME_ZONE);
   const [selectedIds, setSelectedIds] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const [contextMenu, setContextMenu] = useState(null);
   const orderedTasks = useMemo(() => [...tasks].sort((a, b) => taskRecency(b) - taskRecency(a) || Number(b.id || 0) - Number(a.id || 0)), [tasks]);
+  const visibleTasks = useMemo(() => {
+    const query = searchQuery.trim().toLocaleLowerCase();
+    if (!query) return orderedTasks;
+    return orderedTasks.filter((task) => [
+      task.post?.title, task.post?.account, task.post?.shortcode, task.post?.permalink,
+      task.post?.caption, task.brief, task.notes, task.status, task.priority,
+      task.designerEmail, displayName(task.designerEmail), ...(task.recommendedAccounts || []), ...(task.tags || []),
+    ].filter(Boolean).join(' ').toLocaleLowerCase().includes(query));
+  }, [orderedTasks, searchQuery, displayName]);
   const selectable = (task) => isAdmin && (task.status === 'completed' || (
     Boolean(task.designerEmail)
     && task.scheduledDate
@@ -818,7 +834,7 @@ function AdminAssignmentTable({ tasks, onOpen, onBatchClose, headingKey = 'allAs
     };
     return <button type="button" role="row" key={task.id} className={`queue-admin-assignment-row state-${task.status} ${priorityClass(task.priority)}${hotClass(task)}${task.isDraft ? ' is-draft' : ''}`} data-context-type="task" data-context-request-id={task.id} data-context-duplicate="true" onClick={() => onOpen(task)} onContextMenu={openContext}><span className="queue-admin-assignment-post">{cover(task) ? <img src={cover(task)} alt="" /> : <span className="queue-admin-assignment-empty">@</span>}<span><b>{task.post.title || accountMention(task.post.account) || t('post')}</b><small>{task.post.account ? accountMention(task.post.account) : t('accountToSelect')} · {task.brief || task.post.caption || t('post')}</small>{task.recommendedAccounts?.length ? <em>{task.recommendedAccounts.map((account) => `@${account}`).join(' · ')}</em> : null}{isHotTask(task) ? <i className="queue-hot-badge">🔥 {hotText(task)}</i> : null}</span></span><span className="queue-admin-assignment-designer"><b>{task.designerEmail ? displayName(task.designerEmail) : '—'}</b><small>{task.designerEmail || ''}</small></span><span className="queue-admin-assignment-time"><b>{task.scheduledDate ? displayDate(task.scheduledDate, language) : '—'}</b><small>{task.scheduledStartMinutes == null ? '—' : `${time(task.scheduledStartMinutes)} · ${task.durationMinutes} ${t('minutes')}`}</small></span><span className="queue-admin-assignment-priority"><PriorityBadge priority={task.priority} /></span><span className="queue-admin-assignment-pp"><b>{task.productionPoints} PP</b><small>{task.tags?.filter((tag) => tag !== 'hot').slice(0, 2).join(' · ') || t('noTags')}</small></span><span className="queue-admin-assignment-status"><i>{statusCopy(task.status, t, task.isDraft)}</i></span>{isAdmin ? <span className="queue-admin-assignment-select-cell">{canSelect ? <input className="queue-admin-select" type="checkbox" checked={selected} aria-label={`${t('selectForForceClose')} ${task.post.title || accountMention(task.post.account) || t('post')}`} onClick={(event) => toggleSelected(event, task.id)} onChange={() => {}} /> : <span aria-hidden="true">—</span>}</span> : null}</button>;
   };
-  return <section className="queue-admin-assignments"><header><div><p className="scheduler-eyebrow">{t(headingKey)}</p><h3>{tasks.length} {t(countKey)}</h3></div>{onBatchClose && selectableIds.length ? <div className="queue-admin-batch-actions"><button type="button" className="scheduler-secondary" onClick={selectEligible}>{t('selectForceClose')}</button>{selectedIds.length ? <span className="queue-admin-selection-count">{selectedIds.length} {t('selected')}</span> : null}</div> : null}</header>{tasks.length ? <div className={`queue-admin-assignment-table${isAdmin ? ' is-admin' : ''}`} role="table"><div className="queue-admin-assignment-head" role="row"><span>{t('post')}</span><span>{t('designer')}</span><span>{t('scheduled')}</span><span>{t('priority')}</span><span>{t('productionPoints')}</span><span>{t('status')}</span>{isAdmin ? <span>{t('selection')}</span> : null}</div>{orderedTasks.map(row)}</div> : <p className="queue-admin-assignment-empty-state">{t('noAssignedPosts')}</p>}{contextMenu ? createPortal(<><button type="button" className="scheduler-context-backdrop" onClick={() => setContextMenu(null)} aria-label={t('close')} /><div className="scheduler-context-menu queue-admin-force-menu" role="menu" style={{ left: Math.min(window.innerWidth - 230, Math.max(8, contextMenu.x)), top: Math.min(window.innerHeight - 100, Math.max(8, contextMenu.y)) }}><button type="button" className="is-danger" onClick={closeSelected}>{t('forceClose')} ({selectedIds.length})</button><button type="button" onClick={() => { setSelectedIds([]); setContextMenu(null); }}>{t('clearSelection')}</button></div></>, document.body) : null}</section>;
+  return <section className="queue-admin-assignments"><header><div><p className="scheduler-eyebrow">{t(headingKey)}</p><h3>{tasks.length} {t(countKey)}</h3></div><div className="queue-admin-table-tools"><label className="queue-admin-search"><Search size={14} aria-hidden="true" /><span className="sr-only">{t('searchUpcoming')}</span><input type="search" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder={t('searchUpcomingPlaceholder')} aria-label={t('searchUpcoming')} /></label>{onBatchClose && selectableIds.length ? <div className="queue-admin-batch-actions"><button type="button" className="scheduler-secondary" onClick={selectEligible}>{t('selectForceClose')}</button>{selectedIds.length ? <span className="queue-admin-selection-count">{selectedIds.length} {t('selected')}</span> : null}</div> : null}</div></header>{tasks.length ? visibleTasks.length ? <div className={`queue-admin-assignment-table${isAdmin ? ' is-admin' : ''}`} role="table"><div className="queue-admin-assignment-head" role="row"><span>{t('post')}</span><span>{t('designer')}</span><span>{t('scheduled')}</span><span>{t('priority')}</span><span>{t('productionPoints')}</span><span>{t('status')}</span>{isAdmin ? <span>{t('selection')}</span> : null}</div>{visibleTasks.map(row)}</div> : <p className="queue-admin-assignment-empty-state">{t('noSearchResults')}</p> : <p className="queue-admin-assignment-empty-state">{t('noAssignedPosts')}</p>}{contextMenu ? createPortal(<><button type="button" className="scheduler-context-backdrop" onClick={() => setContextMenu(null)} aria-label={t('close')} /><div className="scheduler-context-menu queue-admin-force-menu" role="menu" style={{ left: Math.min(window.innerWidth - 230, Math.max(8, contextMenu.x)), top: Math.min(window.innerHeight - 100, Math.max(8, contextMenu.y)) }}><button type="button" className="is-danger" onClick={closeSelected}>{t('forceClose')} ({selectedIds.length})</button><button type="button" onClick={() => { setSelectedIds([]); setContextMenu(null); }}>{t('clearSelection')}</button></div></>, document.body) : null}</section>;
 }
 
 /* The Queue shell is intentionally built from the production scheduler's
