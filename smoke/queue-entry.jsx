@@ -277,9 +277,12 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     const start = [...document.querySelectorAll('.queue-detail-actions button')].find((node) => /Start work|Empezar trabajo/.test(node.textContent));
     failNextStart = true;
     await click(start);
+    checks['Start action asks where to place the work'] = Boolean(document.querySelector('#queue-start-choice-title'));
+    await click(document.querySelector('.queue-create-modal .scheduler-primary'));
     checks['Rejected start preserves the detail and scheduled state'] = Boolean(document.querySelector('.queue-request-rail')) && Boolean(document.querySelector('.scheduler-block.state-scheduled'));
     checks['Rejected start shows the server reason'] = document.querySelector('.queue-toast')?.textContent.includes('Only the assigned designer');
     await click(start);
+    await click(document.querySelector('.queue-create-modal .scheduler-primary'));
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 100)); });
     checks['Start action accepts deferred response'] = started && !document.querySelector('.queue-request-rail');
     checks['Deferred warning is shown'] = /already in progress|Ya hay otro post/.test(document.querySelector('.queue-toast')?.textContent || '');

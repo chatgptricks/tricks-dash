@@ -152,6 +152,20 @@ const COPY = {
 
 COPY.en.traineeRole = 'Trainee';
 COPY.es.traineeRole = 'Trainee';
+Object.assign(COPY.en, {
+  startChoice: 'Start this work',
+  startTimePrompt: 'Choose whether to keep its planned time or move it to Now.',
+  keepScheduledTime: 'Keep scheduled time',
+  moveToNow: 'Move to Now',
+  returnToNotStarted: 'Return to Not Started',
+});
+Object.assign(COPY.es, {
+  startChoice: 'Iniciar este trabajo',
+  startTimePrompt: 'Elige si se conserva su hora programada o se mueve a Ahora.',
+  keepScheduledTime: 'Mantener hora programada',
+  moveToNow: 'Mover a Ahora',
+  returnToNotStarted: 'Devolver a No iniciado',
+});
 COPY.en.previousDay = 'Previous day';
 COPY.en.nextDay = 'Next day';
 COPY.en.jumpToDate = 'Jump to date';
@@ -563,6 +577,16 @@ function ResetQueueModal({ onClose, onReset }) {
       {error ? <p className="queue-create-error" role="alert">{error}</p> : null}
       <footer className="queue-create-actions"><button type="button" className="scheduler-secondary" onClick={onClose} disabled={resetting}>{t('cancel')}</button><button type="submit" className="scheduler-danger" disabled={!canReset || resetting}>{resetting ? <LoaderCircle className="queue-spin" size={14} /> : <TimerReset size={14} />}{t('resetQueueAction')}</button></footer>
     </form>
+  </div>;
+}
+
+function StartTimeChoiceModal({ onClose, onChoose }) {
+  const { t } = useQueuePreferences();
+  return <div className="queue-create-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+    <section className="queue-create-modal" role="dialog" aria-modal="true" aria-labelledby="queue-start-choice-title">
+      <header className="queue-create-head"><div><p className="scheduler-eyebrow">Queue</p><h2 id="queue-start-choice-title">{t('startChoice')}</h2><small>{t('startTimePrompt')}</small></div><button type="button" onClick={onClose} aria-label={t('close')}><X size={16} /></button></header>
+      <footer className="queue-create-actions"><button type="button" className="scheduler-secondary" onClick={() => onChoose(false)}>{t('keepScheduledTime')}</button><button type="button" className="scheduler-primary" onClick={() => onChoose(true)}>{t('moveToNow')}</button></footer>
+    </section>
   </div>;
 }
 
@@ -992,7 +1016,8 @@ function Detail({ task, tags, availableAccounts = [], canCoordinate, canDuplicat
   const canRequestChange = !canCoordinate && isOwner && !task.isDraft && ['scheduled', 'in_progress', 'completed'].includes(task.status);
   const designerRequestActions = canRequestChange ? <div className="queue-designer-ticket-actions">{!requestMode ? <><button type="button" disabled={busy || !['scheduled', 'in_progress'].includes(task.status)} onClick={() => { setRequestedPP(task.productionPoints); setRequestMode('pp'); }}><TimerReset size={13} /><span>{t('requestPPChange')}</span></button><button type="button" disabled={busy || task.status !== 'scheduled'} onClick={() => { setMoveDate(scheduleDateForViewer(task.scheduledDate, task.scheduledStartMinutes ?? QUEUE_DAY_START, timeZone)); setMoveStart(scheduleTimeForViewer(task.scheduledDate, task.scheduledStartMinutes ?? QUEUE_DAY_START, timeZone)); setRequestMode('move'); }}><Clock3 size={13} /><span>{t('requestMove')}</span></button><button type="button" disabled={busy} onClick={() => setRequestMode('cancel')}><Ban size={13} /><span>{t('requestCancellation')}</span></button></> : <div className="queue-designer-ticket-form">{requestMode === 'pp' ? <label>{t('requestedPP')}<input type="number" min="1" value={requestedPP} onChange={(event) => setRequestedPP(event.target.value)} /></label> : requestMode === 'move' ? <><strong>{t('moveRequest')}</strong><small>{t('moveHelp')}</small><label>{t('moveTo')}<input type="date" value={moveDate} onChange={(event) => setMoveDate(event.target.value)} /><input type="time" step="600" value={moveStart} onChange={(event) => setMoveStart(event.target.value)} /></label></> : <strong>{t('requestCancellation')}</strong>}<label>{t('requestReason')}<textarea value={requestReason} onChange={(event) => setRequestReason(event.target.value)} /></label><div><button type="button" className="is-send" disabled={busy || (requestMode === 'pp' && (!requestedPP || Number(requestedPP) === Number(task.productionPoints))) || (requestMode === 'move' && (!moveDate || !moveStart || (moveDate === scheduleDateForViewer(task.scheduledDate, task.scheduledStartMinutes ?? QUEUE_DAY_START, timeZone) && minutesFromTime(moveStart) === queueScheduleClock(task.scheduledDate, task.scheduledStartMinutes ?? QUEUE_DAY_START, timeZone).minutes)))} onClick={sendDesignerRequest}>{busy ? <LoaderCircle className="queue-spin" size={13} /> : <Send size={13} />}<span>{t('sendRequest')}</span></button><button type="button" disabled={busy} onClick={() => { setRequestMode(''); setRequestReason(''); }}><span>{t('cancel')}</span></button></div></div>}</div> : null;
   const coordinatorTicketActions = canCoordinate && pendingTickets.length ? <div className="queue-coordinator-ticket-actions"><strong>{t('ticketInbox')}</strong>{pendingTickets.map((ticket) => <article key={ticket.id}><span>{ticket.type === 'pp_revision' ? t('ppRevision') : ticket.type === 'move' ? t('moveRequest') : ticket.type === 'trainee_review' ? t('traineeReview') : t('cancellationRequest')}</span><small>{ticket.type === 'pp_revision' ? `${task.productionPoints} PP → ${ticket.requestedProductionPoints} PP` : ticket.type === 'move' ? `${ticket.scheduledDate || '—'} · ${time(ticket.scheduledStartMinutes ?? 0)}` : ticket.type === 'trainee_review' ? t('openCanva') : t('requestCancellation')}{ticket.reason ? ` · ${ticket.reason}` : ''}</small><div><button type="button" className="is-approve" disabled={busy} onClick={() => run(() => onReviewTicket(ticket.id, 'approve'))}><Check size={12} />{t('approve')}</button><button type="button" className="is-reject" disabled={busy} onClick={() => run(() => onReviewTicket(ticket.id, 'reject'))}><X size={12} />{t('reject')}</button></div></article>)}</div> : null;
-  const traineeReviewAction = <TraineeReviewAction task={task} isTrainee={isTrainee} isOwner={isOwner} busy={busy} onSend={(canvaLink) => run(() => onRequestTraineeReview(canvaLink))} />;
+  const coordinatorProgressAction = canCoordinate && task.status === 'in_progress' ? <div className="queue-coordinator-ticket-actions"><button type="button" className="scheduler-secondary" disabled={busy} onClick={() => run(() => onAction('not-started'))}><TimerReset size={13} />{t('returnToNotStarted')}</button></div> : null;
+  const traineeReviewAction = <><TraineeReviewAction task={task} isTrainee={isTrainee} isOwner={isOwner} busy={busy} onSend={(canvaLink) => run(() => onRequestTraineeReview(canvaLink))} />{coordinatorProgressAction}</>;
   const traineeNeedsApproval = isTrainee && isOwner && task.status === 'completed' && task.traineeReview?.status !== 'approved';
   const metric = (label, value) => <React.Fragment key={label}><div className="metric"><span>{label}</span><strong>{value || '—'}</strong></div>{label === t('recommendedAccounts') ? <>{designerRequestActions}{coordinatorTicketActions}{traineeReviewAction}</> : null}</React.Fragment>;
   const toggleTag = (tag) => setForm((current) => ({ ...current, tags: current.tags.includes(tag) ? current.tags.filter((item) => item !== tag) : [...current.tags, tag] }));
@@ -1446,6 +1471,7 @@ function QueueApp({ user }) {
   const [multiAssignRequest, setMultiAssignRequest] = useState(null);
   const [multiAssignBusy, setMultiAssignBusy] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
+  const [startPlacementOpen, setStartPlacementOpen] = useState(false);
   const [accountSetupOpen, setAccountSetupOpen] = useState(false);
   const [guideOpen, setGuideOpen] = useState(() => !window.localStorage.getItem('sentient.queueGuide.v1'));
   const [guideStep, setGuideStep] = useState(-1);
@@ -1990,14 +2016,22 @@ function QueueApp({ user }) {
   const action = async (actionName, value) => {
     const target = open;
     if (!target) return;
+    if (actionName === 'start' && value === undefined) {
+      setStartPlacementOpen(true);
+      return;
+    }
     saveQuietly();
     const now = new Date().toISOString();
+    const moveToNow = Boolean(value?.moveToNow);
     const optimistic = actionName === 'start'
-      ? { status: 'in_progress', actualStartedAt: now, completedAt: null, scheduledDate: DAY(new Date(), QUEUE_TIME_ZONE), scheduledStartMinutes: Math.floor(currentMinutes(new Date(), QUEUE_TIME_ZONE) / 10) * 10 }
+      ? { status: 'in_progress', actualStartedAt: now, completedAt: null, ...(moveToNow ? { scheduledDate: DAY(new Date(), QUEUE_TIME_ZONE), scheduledStartMinutes: Math.floor(currentMinutes(new Date(), QUEUE_TIME_ZONE) / 10) * 10 } : {}) }
       : actionName === 'complete' ? { status: 'completed', completedAt: now }
+      : actionName === 'not-started' ? { status: 'scheduled', actualStartedAt: null, completedAt: null }
       : actionName === 'close' ? { status: 'closed', finalPermalink: value?.[0]?.url || '', finalPermalinks: value || [], closedAt: now }
       : {};
-    const body = value ? new URLSearchParams(actionName === 'close' ? { final_permalinks: JSON.stringify(value) } : {}) : undefined;
+    const body = actionName === 'start'
+      ? new URLSearchParams({ move_to_now: String(moveToNow) })
+      : value ? new URLSearchParams(actionName === 'close' ? { final_permalinks: JSON.stringify(value) } : {}) : undefined;
     return json(`/api/dashboard/queue/v2/requests/${target.id}/${actionName}`, { method: 'POST', body }).then((result) => {
       patchQueueTask(target.id, optimistic);
       if (actionName === 'start' && result.scheduledDate) {
@@ -2243,6 +2277,7 @@ function QueueApp({ user }) {
     {createOpen ? <CreatePostModal tags={data?.tags || []} initial={createSeed} onClose={() => { setCreateOpen(false); setCreateSeed(null); }} onCreated={(request) => { saveQuietly(); setData((current) => current ? { ...current, requests: [request, ...(current.requests || []).filter((task) => task.id !== request.id)], pickRequests: [request, ...(current.pickRequests || []).filter((task) => task.id !== request.id)] } : current); setCreateOpen(false); setCreateSeed(null); notify(t('postCreated')); }} /> : null}
     {multiAssignRequest ? <AssignMultipleAccountsModal key={multiAssignRequest.id} task={multiAssignRequest} accounts={data?.accounts || []} designers={data?.schedulerUsers || data?.designers || []} busy={multiAssignBusy} onClose={() => { if (!multiAssignBusy) setMultiAssignRequest(null); }} onSubmit={(selectedAccounts) => assignToMultipleAccounts(multiAssignRequest.id, selectedAccounts)} /> : null}
     {resetOpen ? <ResetQueueModal onClose={() => setResetOpen(false)} onReset={resetQueue} /> : null}
+    {startPlacementOpen ? <StartTimeChoiceModal onClose={() => setStartPlacementOpen(false)} onChoose={(moveToNow) => { setStartPlacementOpen(false); action('start', { moveToNow }); }} /> : null}
     {accountSetupOpen && data ? <AccountSetupModal onboarding={data.accountOnboarding} accounts={data.accounts || []} onClose={() => { accountSetupDismissedRef.current = true; setAccountSetupOpen(false); }} onSave={saveManagedAccounts} onRequest={requestAccountAccess} /> : null}
     {guideOpen ? <QueueGuide coordinator={Boolean(coordinator)} step={guideStep} setStep={setGuideStep} onChooseLanguage={setLanguage} onComplete={finishGuide} /> : null}
     <Detail
