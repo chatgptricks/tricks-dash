@@ -95,8 +95,6 @@ function SettingsApp() {
     try {
       const response = await apiFetch(`${API_BASE}/api/dashboard/refresh`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ password: LEGACY_REFRESH_PASSWORD }),
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.detail || 'Refresh failed.');

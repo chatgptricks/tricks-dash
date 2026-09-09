@@ -1137,21 +1137,15 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
     return () => clearInterval(timer);
   }, [loadDashboard]);
 
-  // Takes the password as an argument now: the Settings panel already holds it
-  // in memory for the session, so it no longer needs a window.prompt.
-  const handleRefresh = useCallback(async (password) => {
-    if (!password) return;
-
+  const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     setRefreshNotice(null);
     try {
       const response = await apiFetch(`${API_BASE}/api/dashboard/refresh`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ password }),
       });
-      if (response.status === 401) {
-        setRefreshNotice({ type: 'error', text: 'Incorrect password.' });
+      if (response.status === 403) {
+        setRefreshNotice({ type: 'error', text: 'Admin or Dev access is required.' });
         return;
       }
       if (!response.ok) {
@@ -2788,10 +2782,8 @@ export function SettingsPanel({
   initialTab, userEmail, userPhoto, isAdmin = false, isDev = false, onSignOut,
 }) {
   const { t } = usePrefs();
-  // Firebase sign-in is the real gate now (only an allowlisted Google account
-  // can reach this component at all), so the old shared-password unlock
-  // screen is skipped entirely -- the fixed legacy value is supplied
-  // automatically for the handful of backend endpoints that still check it.
+  // Firebase roles gate paid operations. The compatibility marker remains
+  // only for older admin endpoints still being migrated, never for refresh.
   const [password, setPassword] = useState(LEGACY_REFRESH_PASSWORD);
   const [unlocked, setUnlocked] = useState(true);
   const [checking, setChecking] = useState(false);
@@ -3171,14 +3163,14 @@ export function SettingsPanel({
   }, [loadApifyRuns, loadRoster, password, recoveringApifyRun]);
 
   const catchUpDashboardPosts = useCallback(async () => {
-    if (!password || catchingUpPosts) return;
+    if (catchingUpPosts) return;
     setCatchingUpPosts(true);
     setCatchUpNotice(null);
     try {
       const response = await apiFetch(`${API_BASE}/api/dashboard/posts/catch-up`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ password, lookback_hours: '168' }),
+        body: new URLSearchParams({ lookback_hours: '168' }),
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.detail || 'Post catch-up failed.');
@@ -3196,7 +3188,7 @@ export function SettingsPanel({
     } finally {
       setCatchingUpPosts(false);
     }
-  }, [catchingUpPosts, loadApifyRuns, password]);
+  }, [catchingUpPosts, loadApifyRuns]);
 
   useEffect(() => {
     const next = {};
@@ -4253,7 +4245,7 @@ export function SettingsPanel({
                     <button
                       type="button"
                       className="ghost-button settings-refresh"
-                      onClick={() => onRefresh(password)}
+                      onClick={onRefresh}
                       disabled={refreshing}
                     >
                       <RefreshCw size={14} className={refreshing ? 'spin' : ''} />
