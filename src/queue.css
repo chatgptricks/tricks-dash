@@ -1187,9 +1187,9 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
 /* Scheduler readability: the timeline blocks carry several independent
    signals (cover, title, media type, account, HOT/priority and ticket state).
    Give each row enough vertical room for those signals instead of stacking
-   them into a 62px strip. Narrow time slots use the extra height for a
-   readable text treatment and hide only the artwork that cannot fit beside
-   the label without overlap. */
+   them into a 62px strip. Narrow time slots switch to a compact vertical
+   card so the cover stays visible instead of being replaced by a wall of
+   text. Secondary badges can still be dropped when there is no room. */
 .scheduler-row,
 .scheduler-track { min-height:128px; }
 .scheduler-block { top:12px; height:104px; padding:7px; gap:8px; border-radius:9px; }
@@ -1207,18 +1207,26 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
 .queue-skeleton-row .scheduler-track { min-height:128px; }
 .queue-skeleton-job { top:12px; height:104px; }
 @container (min-width: 70px) and (max-width: 150px) {
-  .scheduler-block { justify-content:center; padding:8px 6px; }
-  .scheduler-block img,
+  .scheduler-block { flex-direction:column; align-items:stretch; justify-content:flex-start; gap:4px; padding:5px; }
+  .scheduler-block img { display:block; width:100%; height:54px; flex:0 0 54px; border-radius:5px; }
   .scheduler-block .scheduler-account-badges,
   .scheduler-block .queue-hot-badge,
   .scheduler-block .scheduler-priority-mark,
   .scheduler-block .scheduler-draft-badge,
   .scheduler-block .scheduler-ticket-marker { display:none; }
-  .scheduler-block-copy { width:100%; padding:0; text-align:center; }
-  .scheduler-block-copy b { font-size:10px; -webkit-line-clamp:4; }
-  .scheduler-block-copy small { font-size:8px; -webkit-line-clamp:3; }
+  .scheduler-block-copy { width:100%; padding:0; text-align:left; gap:3px; }
+  .scheduler-block-copy b { font-size:9px; line-height:1.15; -webkit-line-clamp:2; }
+  .scheduler-block-copy small { display:-webkit-box; font-size:8px; line-height:1.1; -webkit-line-clamp:1; }
 }
 @container (max-width: 70px) {
-  .scheduler-block-copy b { font-size:10px; line-height:1.15; white-space:normal; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:5; }
+  .scheduler-block { flex-direction:column; align-items:stretch; justify-content:flex-start; gap:3px; padding:4px; }
+  .scheduler-block img { display:block; width:100%; height:42px; flex:0 0 42px; border-radius:4px; }
+  .scheduler-block .scheduler-account-badges,
+  .scheduler-block .queue-hot-badge,
+  .scheduler-block .scheduler-priority-mark,
+  .scheduler-block .scheduler-draft-badge,
+  .scheduler-block .scheduler-ticket-marker { display:none; }
+  .scheduler-block-copy { width:100%; padding:0; text-align:center; gap:2px; }
+  .scheduler-block-copy b { font-size:8px; line-height:1.1; white-space:normal; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; }
   .scheduler-block-copy small { display:none; }
 }
