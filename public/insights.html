@@ -531,7 +531,7 @@ async function boot(){
     // window a shared link was pointing at.
     render();
   }catch(e){
-    $('#app').innerHTML = '<div class="empty">Could not load the data.<br><small>'+e.message+'</small></div>';
+    $('#app').innerHTML = '<div class="empty">Could not load the data.<br><small>'+escapeHtml(e.message || 'Connection failed.')+'</small></div>';
   }
 }
 
@@ -787,8 +787,8 @@ function drawAccounts(P){
   const best=[...rows].filter(r=>r.er!=null).sort((a,b)=>b.er-a.er)[0];
   const wide=[...rows].filter(r=>r.views!=null).sort((a,b)=>b.views-a.views)[0];
   const notes=[];
-  if(best) notes.push(`<b>@${best.h}</b> has the best engagement per view (${pct(best.er)}): of every 100 people who watch, ${best.er.toFixed(1)} react.`);
-  if(wide&&best&&wide.h!==best.h) notes.push(`<b>@${wide.h}</b> reaches more people (${fmt(wide.views)} avg views) but converts at ${pct(wide.er)} — more reach isn't more connection.`);
+  if(best) notes.push(`<b>@${escapeHtml(best.h)}</b> has the best engagement per view (${pct(best.er)}): of every 100 people who watch, ${best.er.toFixed(1)} react.`);
+  if(wide&&best&&wide.h!==best.h) notes.push(`<b>@${escapeHtml(wide.h)}</b> reaches more people (${fmt(wide.views)} avg views) but converts at ${pct(wide.er)} — more reach isn't more connection.`);
   $('#accNote').innerHTML = notes.length?`<div class="note">${notes.join(' ')}</div>`:'';
 }
 
@@ -849,7 +849,7 @@ function drawTopics(P){
   const perf=Object.entries(wordStats).filter(([,v])=>v.length>=6)
     .map(([k,v])=>({k,n:v.length,a:med(v)})).sort((a,b)=>b.a-a.a).slice(0,3);
   const notes=[];
-  if(perf.length) notes.push(`Top-performing words (by median): ${perf.map(p=>`<b>${p.k}</b> (${xf(p.a)}, ${p.n} posts)`).join(', ')}.`);
+  if(perf.length) notes.push(`Top-performing words (by median): ${perf.map(p=>`<b>${escapeHtml(p.k)}</b> (${xf(p.a)}, ${p.n} posts)`).join(', ')}.`);
   const audio=P.filter(p=>p.oa!=null);
   if(audio.length>8){
     const orig=med(audio.filter(p=>p.oa===1).map(idx).filter(x=>x!=null));
@@ -952,7 +952,7 @@ function sectionTop(P){
         <td style="text-align:left"><span style="color:${textColorFor(p.a)}">@${escapeHtml(p.a)}</span></td>
         <td style="text-align:left;max-width:340px;overflow:hidden;text-overflow:ellipsis;color:var(--muted-2)">${escapeHtml((p.ocr||'—').slice(0,90))}</td>
         <td>${new Date(p.ts).toISOString().slice(0,10)}</td>
-        <td>${p.pt==='clips'?'Reel':p.t}</td>
+        <td>${escapeHtml(p.pt==='clips'?'Reel':p.t)}</td>
         <td>${fmt(p.l)}</td><td>${p.v==null?'—':fmt(p.v)}</td><td>${pct(engPerView(p))}</td></tr>`).join('')}</tbody>
     </table></div>
   </section>`;
@@ -974,7 +974,7 @@ window.__startInsightsBoot = boot;
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
 import {
   getAuth, GoogleAuthProvider, getRedirectResult, onAuthStateChanged,
-  signInWithPopup, signInWithRedirect, signInWithCustomToken, signOut,
+  signInWithPopup, signInWithRedirect, signOut,
   setPersistence, browserLocalPersistence,
 } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js';
 
@@ -987,47 +987,18 @@ const firebaseConfig = {
   appId: '1:74046012975:web:02013849972baca1f950da',
 };
 const auth = getAuth(initializeApp(firebaseConfig));
-// Match the Dashboard's persistent Firebase session before checking the SSO
-// cookie so a restored session never races the standalone page's login gate.
+// Firebase persists the session at this origin; a legacy cross-subdomain
+// credential cookie is deliberately cleared below and is never read or minted.
 const authPersistenceReady = setPersistence(auth, browserLocalPersistence).catch(() => null);
 const provider = new GoogleAuthProvider();
 provider.setCustomParameters({ prompt: 'select_account' });
 
-// Single sign-on across *.sentientdash.app -- see src/sso.js for the full
-// writeup. This is a vanilla-JS copy of the same cookie bootstrap since this
-// page is a standalone static file, not part of the Vite React bundle.
-const SSO_API = 'https://cortex-api-db2e.onrender.com';
 const SSO_COOKIE = 'sentient_sso';
-function ssoCookieDomain() { return location.hostname.endsWith('sentientdash.app') ? '.sentientdash.app' : ''; }
-function ssoReadCookie() {
-  const match = document.cookie.match(new RegExp('(?:^|; )' + SSO_COOKIE + '=([^;]*)'));
-  return match ? decodeURIComponent(match[1]) : null;
-}
-function ssoWriteCookie(value, maxAgeSeconds) {
-  const domain = ssoCookieDomain();
-  let cookie = SSO_COOKIE + '=' + encodeURIComponent(value) + '; path=/; max-age=' + maxAgeSeconds + '; secure; samesite=lax';
-  if (domain) cookie += '; domain=' + domain;
-  document.cookie = cookie;
-}
 function ssoClearCookie() {
-  const domain = ssoCookieDomain();
-  let cookie = SSO_COOKIE + '=; path=/; max-age=0; secure; samesite=lax';
-  if (domain) cookie += '; domain=' + domain;
-  document.cookie = cookie;
-}
-async function ssoPublishCookie() {
-  // Root-origin Firebase persistence covers all first-party tools. Never
-  // replicate a bearer credential to a JavaScript-readable domain cookie.
-}
-async function ssoTrySignIn() {
-  ssoClearCookie();
-  return false;
-}
-let ssoRefreshTimer = null;
-function ssoStartRefresh() {
-  ssoPublishCookie();
-  if (ssoRefreshTimer) clearInterval(ssoRefreshTimer);
-  ssoRefreshTimer = setInterval(ssoPublishCookie, 20 * 60 * 1000);
+  document.cookie = SSO_COOKIE + '=; path=/; max-age=0; secure; samesite=lax';
+  if (location.hostname.endsWith('sentientdash.app')) {
+    document.cookie = SSO_COOKIE + '=; path=/; domain=.sentientdash.app; max-age=0; secure; samesite=lax';
+  }
 }
 
 // Popup first (keeps us first-party); full-page redirect when the browser
@@ -1092,14 +1063,6 @@ function showSignInGate() {
   gate.classList.remove('hidden');
 }
 
-// Same-session-everywhere: try the shared cookie (minted by the main
-// dashboard or Queue board) before ever showing the Google gate here. If it
-// turns out there was no cookie (or it didn't work), and Firebase still
-// hasn't produced a signed-in user by the time the check finishes, show the
-// gate ourselves -- onAuthStateChanged won't fire again on its own if the
-// state never actually changed.
-let ssoChecked = false;
-
 async function runSignIn() {
   gateBtn.disabled = true;
   const err = await startSignIn();
@@ -1110,7 +1073,6 @@ async function runSignIn() {
 onAuthStateChanged(auth, async (user) => {
   if (!user) {
     booted = false;
-    if (!ssoChecked) return; // give the silent cookie sign-in a chance first
     showSignInGate();
     return;
   }
@@ -1123,19 +1085,13 @@ onAuthStateChanged(auth, async (user) => {
   window.__signedInEmail = user.email || '';
   setSettingsAvatar(user);
   gate.classList.add('hidden');
-  ssoStartRefresh();
   if (!booted) {
     booted = true;
     window.__startInsightsBoot();
   }
 });
 
-// The observer must exist before a shared-token sign-in begins; otherwise a
-// fast state transition can be missed and leave this static page on its gate.
-ssoTrySignIn().finally(() => {
-  ssoChecked = true;
-  if (!auth.currentUser) showSignInGate();
-});
+ssoClearCookie();
 </script>
 <script>
 

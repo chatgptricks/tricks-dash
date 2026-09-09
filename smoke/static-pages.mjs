@@ -1,6 +1,7 @@
 import { JSDOM, VirtualConsole } from 'jsdom';
 import fs from 'node:fs';
 
+let failed = false;
 for (const [file, esProbe] of [['public/tracker.html', 'Copiar link'], ['public/insights.html', 'Copiar link']]) {
   const vc = new VirtualConsole();
   const errs = [];
@@ -8,20 +9,31 @@ for (const [file, esProbe] of [['public/tracker.html', 'Copiar link'], ['public/
   const dom = new JSDOM(fs.readFileSync(file, 'utf8'), {
     runScripts: 'dangerously', pretendToBeVisual: true, url: 'https://sentientdash.app/' + file.split('/').pop(),
     virtualConsole: vc,
+    beforeParse(window) {
+      window.matchMedia = () => ({ matches: false, addEventListener(){}, removeEventListener(){} });
+      class Chart {
+        static defaults = { font: {} };
+        constructor(){ }
+        destroy(){ }
+      }
+      window.Chart = Chart;
+    },
   });
   const { window } = dom;
-  window.matchMedia = window.matchMedia || (() => ({ matches: false, addEventListener(){}, removeEventListener(){} }));
   await new Promise(r => setTimeout(r, 300));
   const d = window.document;
   const out = {};
   out['theme attr set'] = ['dark','light'].includes(d.documentElement.getAttribute('data-theme'));
   out['ENG/ES present'] = [...d.querySelectorAll('.lang-option')].map(b=>b.textContent).join('/') === 'ENG/ES';
-  const themeBtn = d.getElementById('themeBtn');
-  out['sun in dark'] = /☀/.test(themeBtn?.textContent || '');
-  themeBtn?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  const lightTheme = d.querySelector('[data-theme-choice="light"]');
+  const darkTheme = d.querySelector('[data-theme-choice="dark"]');
+  out['theme controls present'] = Boolean(lightTheme && darkTheme);
+  lightTheme?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
   await new Promise(r => setTimeout(r, 120));
-  out['flips to light'] = d.documentElement.getAttribute('data-theme') === 'light';
-  out['moon in light'] = /🌙/.test(d.getElementById('themeBtn')?.textContent || '');
+  out['sets light theme'] = d.documentElement.getAttribute('data-theme') === 'light';
+  darkTheme?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  await new Promise(r => setTimeout(r, 120));
+  out['sets dark theme'] = d.documentElement.getAttribute('data-theme') === 'dark';
   const es = [...d.querySelectorAll('.lang-option')].find(b => b.dataset.lang === 'es');
   es?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
   await new Promise(r => setTimeout(r, 200));
@@ -44,8 +56,11 @@ for (const [file, esProbe] of [['public/tracker.html', 'Copiar link'], ['public/
   }
   out['no script errors'] = errs.filter(e => !/Chart is not defined/.test(String(e))).length === 0;
   console.log('\n=== ' + file + ' ===');
-  for (const [k, v] of Object.entries(out)) console.log(`${v ? 'PASS' : 'FAIL'}  ${k}`);
+  for (const [k, v] of Object.entries(out)) {
+    console.log(`${v ? 'PASS' : 'FAIL'}  ${k}`);
+    if (!v) failed = true;
+  }
   if (errs.length) errs.slice(0,3).forEach(e => console.log('   err:', String(e).slice(0,160)));
   dom.window.close();
 }
-process.exit(0);
+process.exit(failed ? 1 : 0);

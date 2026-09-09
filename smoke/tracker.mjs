@@ -18,6 +18,7 @@ window.readFavs = () => ['beta'];
 window.fmt = window.signed = window.pct = String;
 window.dt = String;
 window.API = 'https://example.test';
+window.wireAvatarFallbacks = () => {};
 window.refreshAllAccountsNow = window.refreshAccountNow = () => { throw new Error('Filtering must not trigger scraping'); };
 window.eval(section + '\nrenderLeaderboard();');
 const handles = () => [...window.document.querySelectorAll('tr[data-handle]')].map(row => row.dataset.handle);

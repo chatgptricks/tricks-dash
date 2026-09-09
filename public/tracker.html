@@ -398,6 +398,11 @@ function avFail(img, handle){
   span.textContent = (handle || '?').replace(/^@/, '').charAt(0).toUpperCase();
   img.replaceWith(span);
 }
+function wireAvatarFallbacks(root=document){
+  root.querySelectorAll('img[data-avatar-handle]').forEach(img => {
+    img.addEventListener('error', () => avFail(img, img.dataset.avatarHandle), {once:true});
+  });
+}
 const $ = s => document.querySelector(s);
 // Abbreviated form is kept only for the chart y-axis (readability at a
 // glance); every number a person actually reads as "how many followers"
@@ -483,7 +488,7 @@ async function boot(){
     await loadSummary();
     render();
   }catch(e){
-    $('#app').innerHTML = '<div class="empty">Could not load the tracker.<br><small>'+e.message+'</small></div>';
+    $('#app').innerHTML = '<div class="empty">Could not load the tracker.<br><small>'+escapeHtml(e.message || 'Connection failed.')+'</small></div>';
   }
 }
 
@@ -669,13 +674,14 @@ function renderSidebar(){
   const item = (r, draggable) => {
     const d = r.delta_1d ? r.delta_1d.delta : null;
     const cls = d==null ? 'flat' : d>0 ? 'up' : d<0 ? 'down' : 'flat';
-    return `<li class="side-item ${current===r.handle?'active':''}" data-handle="${r.handle}" ${draggable?'draggable="true"':''}>
-      <button class="side-star ${favs.has(r.handle)?'on':''}" data-fav="${r.handle}"
+    const handle = escapeAttribute(r.handle);
+    return `<li class="side-item ${current===r.handle?'active':''}" data-handle="${handle}" ${draggable?'draggable="true"':''}>
+      <button class="side-star ${favs.has(r.handle)?'on':''}" data-fav="${handle}"
               title="${favs.has(r.handle)?'Remove from favourites':'Add to favourites'}" aria-label="Toggle favourite">★</button>
       <img class="side-avatar" src="${API}/api/dashboard/avatar/${encodeURIComponent(r.handle)}"
-           referrerpolicy="no-referrer" onerror="avFail(this,'${r.handle}')">
+           referrerpolicy="no-referrer" data-avatar-handle="${handle}">
       <span class="side-name">
-        <strong>@${r.handle}</strong>
+        <strong>@${escapeHtml(r.handle)}</strong>
         <em>${r.followers!=null?fmt(r.followers):'—'}</em>
       </span>
       <span class="side-delta ${cls}">${d==null?'':signed(d)}</span>
@@ -693,6 +699,7 @@ function renderSidebar(){
         <ul ${label==='Favourites'?'id="favList"':''}>${rows.map(r=>item(r, label==='Favourites')).join('')}</ul>
       </div>`).join('')}
   `;
+  wireAvatarFallbacks($('#sidebar'));
 
   $('#sideAll').onclick = () => { writeAcc(''); render(); };
   $('#sidebar').querySelectorAll('[data-fav]').forEach(b => b.onclick = e => {
@@ -837,16 +844,16 @@ function renderLeaderboard(){
       <table id="tLeaderboard">
         <thead><tr>${cols.map(([k,l])=>`<th scope="col" class="${sortKey===k?'sorted':''}" ${k!=='rank'?`aria-sort="${sortKey===k?(sortDir<0?'descending':'ascending'):'none'}"`:''}>${k==='rank'?l:`<button type="button" class="sort-button" data-k="${k}">${l}${sortKey===k?(sortDir<0?' ↓':' ↑'):''}</button>`}</th>`).join('')}</tr></thead>
         <tbody>${rows.map((r,i)=>`
-          <tr data-handle="${r.handle}">
+          <tr data-handle="${escapeAttribute(r.handle)}">
             <td class="rank-num">${r.rank_by_followers ?? '—'}</td>
             <td><div class="acct-cell">
-              <img class="acct-avatar" src="${API}/api/dashboard/avatar/${encodeURIComponent(r.handle)}" referrerpolicy="no-referrer" onerror="avFail(this,'${r.handle}')">
-              <div class="acct-name"><strong>@${r.handle}${r.verified?' <span title="Verified" style="color:#4aa8ff">✓</span>':''}${r.private?' <span class="na" title="Private account">🔒</span>':''}</strong>
+              <img class="acct-avatar" src="${API}/api/dashboard/avatar/${encodeURIComponent(r.handle)}" referrerpolicy="no-referrer" data-avatar-handle="${escapeAttribute(r.handle)}">
+              <div class="acct-name"><strong>@${escapeHtml(r.handle)}${r.verified?' <span title="Verified" style="color:#4aa8ff">✓</span>':''}${r.private?' <span class="na" title="Private account">🔒</span>':''}</strong>
                 <span class="na" style="font-size:10px">${r.full_name && r.full_name.toLowerCase()!==r.handle.toLowerCase() ? escapeHtml(r.full_name) : ' '}</span>
                 <span class="pill ${r.group==='sentient'?'s':'c'}">${r.group==='sentient'?'ours':'competitor'}</span>
               </div>
             </div></td>
-            <td><span class="followers-cell">${r.followers!=null?fmt(r.followers):'<span class="na">—</span>'}<button type="button" class="row-refresh-btn" data-refresh="${r.handle}" title="Refresh @${r.handle}&#39;s real follower count now"><span class="refresh-icon">&#8635;</span></button></span></td>
+            <td><span class="followers-cell">${r.followers!=null?fmt(r.followers):'<span class="na">—</span>'}<button type="button" class="row-refresh-btn" data-refresh="${escapeAttribute(r.handle)}" title="Refresh @${escapeAttribute(r.handle)}&#39;s real follower count now"><span class="refresh-icon">&#8635;</span></button></span></td>
             <td>${deltaCell(r.delta_1d)}</td>
             <td>${deltaCell(r.delta_7d)}</td>
             <td>${deltaCell(r.delta_30d)}</td>
@@ -859,6 +866,7 @@ function renderLeaderboard(){
       </div>
     </section>
   `;
+  wireAvatarFallbacks($('#app'));
 
   $('#tLeaderboard').querySelectorAll('[data-k]').forEach(th=>th.onclick=()=>{
     const k=th.dataset.k; if(k==='rank') return;
@@ -1013,13 +1021,13 @@ function renderHistoricalStats(dayRows){
 /* ---------------- Account detail ---------------- */
 async function renderDetail(handle){
   destroyCharts();
-  $('#app').innerHTML = '<div class="loading">Loading @'+handle+'…</div>';
+  $('#app').innerHTML = '<div class="loading">Loading @'+escapeHtml(handle)+'…</div>';
   let detail;
   try{
     detail = DETAIL_CACHE[handle] || await authedFetch('/api/tracker/accounts/'+encodeURIComponent(handle));
     DETAIL_CACHE[handle] = detail;
   }catch(e){
-    $('#app').innerHTML = '<div class="empty">Could not load @'+handle+'.<br><small>'+e.message+'</small></div>';
+    $('#app').innerHTML = '<div class="empty">Could not load @'+escapeHtml(handle)+'.<br><small>'+escapeHtml(e.message || 'Connection failed.')+'</small></div>';
     return;
   }
 
@@ -1038,9 +1046,9 @@ async function renderDetail(handle){
     <button class="linkbtn" id="backBtn" style="margin-bottom:14px">← All accounts</button>
     <div class="detail-head">
       <div class="detail-head-id">
-        <img src="${API}/api/dashboard/avatar/${encodeURIComponent(handle)}" referrerpolicy="no-referrer" onerror="avFail(this,'${handle}')">
+        <img src="${API}/api/dashboard/avatar/${encodeURIComponent(handle)}" referrerpolicy="no-referrer" data-avatar-handle="${escapeAttribute(handle)}">
         <div>
-          <h2><a class="instagram-account-link" href="https://www.instagram.com/${encodeURIComponent(handle)}/" target="_blank" rel="noreferrer" title="Open @${handle} on Instagram">@${handle}</a>${row.verified?' <span title="Verified" style="color:#4aa8ff;font-size:14px">✓</span>':''}${row.private?' <span class="na" title="Private account" style="font-size:13px">🔒</span>':''}</h2>
+          <h2><a class="instagram-account-link" href="https://www.instagram.com/${encodeURIComponent(handle)}/" target="_blank" rel="noreferrer" title="Open @${escapeAttribute(handle)} on Instagram">@${escapeHtml(handle)}</a>${row.verified?' <span title="Verified" style="color:#4aa8ff;font-size:14px">✓</span>':''}${row.private?' <span class="na" title="Private account" style="font-size:13px">🔒</span>':''}</h2>
           ${row.full_name && row.full_name.toLowerCase()!==handle.toLowerCase() ? `<span>${escapeHtml(row.full_name)} · </span>` : ''}
           <span class="pill ${row.group==='sentient'?'s':'c'}">${row.group==='sentient'?'ours':'competitor'}</span>
           ${row.rank_by_followers ? ' <span>rank #'+row.rank_by_followers+' by followers</span>' : ''}
@@ -1077,6 +1085,7 @@ async function renderDetail(handle){
       <div class="chartbox"><canvas id="cEngagement"></canvas></div>
     </section>
   `;
+  wireAvatarFallbacks($('#app'));
   $('#backBtn').onclick = () => { writeAcc(''); render(); };
   $('#detailRefreshBtn').onclick = (e) => refreshAccountNow(handle, e.currentTarget);
   $('#historyWindow').onchange = (event) => { window.__trackerHistoryWindow = event.currentTarget.value; renderDetail(handle); };
@@ -1119,7 +1128,7 @@ window.__startInsightsBoot = boot;
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
 import {
   getAuth, GoogleAuthProvider, getRedirectResult, onAuthStateChanged,
-  signInWithPopup, signInWithRedirect, signInWithCustomToken, signOut,
+  signInWithPopup, signInWithRedirect, signOut,
   setPersistence, browserLocalPersistence,
 } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js';
 
@@ -1132,48 +1141,18 @@ const firebaseConfig = {
   appId: '1:74046012975:web:02013849972baca1f950da',
 };
 const auth = getAuth(initializeApp(firebaseConfig));
-// Explicitly match the Dashboard's local Firebase persistence before trying
-// the shared SSO cookie. Without this, a restored session can race the static
-// page's login gate and make Tracker look signed out while it is still loading.
+// Firebase persists the session at this origin; a legacy cross-subdomain
+// credential cookie is deliberately cleared below and is never read or minted.
 const authPersistenceReady = setPersistence(auth, browserLocalPersistence).catch(() => null);
 const provider = new GoogleAuthProvider();
 provider.setCustomParameters({ prompt: 'select_account' });
 
-// Single sign-on across *.sentientdash.app -- see src/sso.js for the full
-// writeup. This is a vanilla-JS copy of the same cookie bootstrap since this
-// page is a standalone static file, not part of the Vite React bundle.
-const SSO_API = 'https://cortex-api-db2e.onrender.com';
 const SSO_COOKIE = 'sentient_sso';
-function ssoCookieDomain() { return location.hostname.endsWith('sentientdash.app') ? '.sentientdash.app' : ''; }
-function ssoReadCookie() {
-  const match = document.cookie.match(new RegExp('(?:^|; )' + SSO_COOKIE + '=([^;]*)'));
-  return match ? decodeURIComponent(match[1]) : null;
-}
-function ssoWriteCookie(value, maxAgeSeconds) {
-  const domain = ssoCookieDomain();
-  let cookie = SSO_COOKIE + '=' + encodeURIComponent(value) + '; path=/; max-age=' + maxAgeSeconds + '; secure; samesite=lax';
-  if (domain) cookie += '; domain=' + domain;
-  document.cookie = cookie;
-}
 function ssoClearCookie() {
-  const domain = ssoCookieDomain();
-  let cookie = SSO_COOKIE + '=; path=/; max-age=0; secure; samesite=lax';
-  if (domain) cookie += '; domain=' + domain;
-  document.cookie = cookie;
-}
-async function ssoPublishCookie() {
-  // Root-origin Firebase persistence covers all first-party tools. Never
-  // replicate a bearer credential to a JavaScript-readable domain cookie.
-}
-async function ssoTrySignIn() {
-  ssoClearCookie();
-  return false;
-}
-let ssoRefreshTimer = null;
-function ssoStartRefresh() {
-  ssoPublishCookie();
-  if (ssoRefreshTimer) clearInterval(ssoRefreshTimer);
-  ssoRefreshTimer = setInterval(ssoPublishCookie, 20 * 60 * 1000);
+  document.cookie = SSO_COOKIE + '=; path=/; max-age=0; secure; samesite=lax';
+  if (location.hostname.endsWith('sentientdash.app')) {
+    document.cookie = SSO_COOKIE + '=; path=/; domain=.sentientdash.app; max-age=0; secure; samesite=lax';
+  }
 }
 
 // Popup first (keeps us first-party); full-page redirect when the browser
@@ -1238,14 +1217,6 @@ function showSignInGate() {
   gate.classList.remove('hidden');
 }
 
-// Same-session-everywhere: try the shared cookie (minted by the main
-// dashboard or Queue board) before ever showing the Google gate here. If it
-// turns out there was no cookie (or it didn't work), and Firebase still
-// hasn't produced a signed-in user by the time the check finishes, show the
-// gate ourselves -- onAuthStateChanged won't fire again on its own if the
-// state never actually changed.
-let ssoChecked = false;
-
 async function runSignIn() {
   gateBtn.disabled = true;
   const err = await startSignIn();
@@ -1256,7 +1227,6 @@ async function runSignIn() {
 onAuthStateChanged(auth, async (user) => {
   if (!user) {
     booted = false;
-    if (!ssoChecked) return; // give the silent cookie sign-in a chance first
     showSignInGate();
     return;
   }
@@ -1269,20 +1239,13 @@ onAuthStateChanged(auth, async (user) => {
   window.__signedInEmail = user.email || '';
   setSettingsAvatar(user);
   gate.classList.add('hidden');
-  ssoStartRefresh();
   if (!booted) {
     booted = true;
     window.__startInsightsBoot();
   }
 });
 
-// Register the Firebase observer first. A custom-token sign-in can complete
-// very quickly; observing before starting it guarantees the app receives that
-// state transition and starts the Tracker instead of leaving the page gated.
-ssoTrySignIn().finally(() => {
-  ssoChecked = true;
-  if (!auth.currentUser) showSignInGate();
-});
+ssoClearCookie();
 </script>
 <script>
 /* --- language + theme -------------------------------------------------
