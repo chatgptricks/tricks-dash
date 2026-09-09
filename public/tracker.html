@@ -562,9 +562,9 @@ async function waitForTrackerRefresh(job){
 }
 
 /* ---------------- Manual refresh (real-time follower count) ----------------
-   The daily 7am snapshot is the canonical reading. Refresh buttons reuse
-   today's stored reading, and only trigger Apify when this account has not
-   been captured yet today. */
+   The daily 7am snapshot remains the canonical scheduled reading. A manual
+   refresh deliberately asks Instagram again and upserts today's one row, so
+   the number visibly updates without creating duplicate same-day history. */
 async function refreshAccountNow(handle, btn){
   // Spins just the &#8635; glyph, not the whole element -- the leaderboard's
   // button IS the glyph, but the detail page's button also has a "Refresh"
@@ -577,7 +577,7 @@ async function refreshAccountNow(handle, btn){
     const result = await waitForTrackerRefresh(job);
     const row = SUMMARY.accounts.find(r=>r.handle===handle);
     if(row){
-      row.followers = result.followers;
+      row.followers = result.followers ?? result.followers_count;
       row.posts_count = result.posts_count;
       row.captured_at = result.captured_at;
       row.full_name = result.full_name;
