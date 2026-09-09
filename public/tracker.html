@@ -579,7 +579,7 @@ async function refreshAccountNow(handle, btn){
     if(row){
       row.followers = result.followers ?? result.followers_count;
       row.posts_count = result.posts_count;
-      row.captured_at = result.captured_at;
+      row.captured_at = result.captured_at || row.captured_at;
       row.full_name = result.full_name;
       row.verified = result.verified;
       row.private = result.private;
