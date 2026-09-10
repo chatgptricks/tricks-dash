@@ -3154,7 +3154,10 @@ export function SettingsPanel({
   const loadApifyRuns = useCallback(async () => {
     setApifyLoading(true);
     try {
-      const response = await apiFetch(`${API_BASE}/api/admin/apify/runs?limit=10`);
+      // Recovery must inspect the full recent operational window, not merely
+      // the ten most recent (often metadata-only) runs. Completed datasets
+      // are already paid for and deduplicated on import.
+      const response = await apiFetch(`${API_BASE}/api/admin/apify/runs?limit=100`);
       const body = await response.json().catch(() => ({}));
       if (Array.isArray(body.runs)) setApifyRuns(body.runs);
     } catch (error) {
