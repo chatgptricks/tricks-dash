@@ -540,6 +540,7 @@ const CANVA_DESIGNS = {
     b: 'https://www.canva.com/design/editor/shell?designId=DAHOH7gL4d4&extension=VZpv8IRJuS3uPCQ4rUJP_A&mode=edit',
   },
   '2026-07': { url: 'https://www.canva.com/design/editor/shell?designId=DAHQk6XX7lQ&extension=xT3deI8-L3lHlS-EeYqdrg&mode=edit' },
+  '2026-08': { url: 'https://www.canva.com/design/DAHT503FCWI/GOaN4oSQ15OpH2w7W482DA/edit' },
 };
 
 // A standing permalink that always points at whichever design is currently
