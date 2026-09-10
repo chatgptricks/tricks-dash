@@ -34,11 +34,13 @@ const ACCOUNTS = [
 const stubFetch = async (url) => {
   const u = String(url);
   let body = {};
-  if (u.includes('/api/dashboard/posts')) body = { posts: POSTS, summary: {}, ranges: {} };
+  if (u.includes('/api/dashboard/posts/manifest')) body = { revision: 'desktop-smoke', rawTotal: POSTS.length, sources: [{ source: 'canonical', total: POSTS.length }, { source: 'dashboard', total: 0 }] };
+  else if (u.includes('/api/dashboard/posts/page')) body = { source: 'canonical', offset: 0, total: POSTS.length, revision: 'desktop-smoke', posts: POSTS };
+  else if (u.includes('/api/dashboard/posts')) body = { posts: POSTS, summary: {}, ranges: {} };
   else if (u.includes('/api/dashboard/accounts')) body = { accounts: ACCOUNTS };
   else if (u.includes('/api/dashboard/lists')) body = { lists: [] };
   else if (u.includes('/api/admin/me')) body = { role: 'admin', email: 'user03@example.com' };
-  return { ok: true, status: 200, json: async () => body, text: async () => JSON.stringify(body) };
+  return { ok: true, status: 200, headers: { get: (key) => String(key).toLowerCase() === 'etag' && u.includes('/manifest') ? '"desktop-smoke"' : null }, json: async () => body, text: async () => JSON.stringify(body) };
 };
 globalThis.fetch = stubFetch;
 window.fetch = stubFetch;

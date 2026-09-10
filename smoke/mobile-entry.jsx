@@ -16,10 +16,12 @@ const queue = {
 };
 const tracker = { tracking_since: day, accounts: [{ handle: 'chatgptricks', label: 'ChatGPTricks', followers: 100000, delta_1d: { delta: 120 }, delta_7d: { delta: 1200 }, avg_likes_30d: 2200 }] };
 const post = { account: 'chatgptricks', shortcode: 'ONE', caption: 'Useful AI workflow', ocrText: 'A better prompt', type: 'Carousel', coverUrl: '', permalink: 'https://instagram.com/p/ONE/', likes: 4200, comments: 32, postDate: `${day}T12:00:00`, group: 'sentient', isHot: true, hotMultiplier: 3.4 };
-const ok = (body) => ({ ok: true, status: 200, json: async () => body, text: async () => JSON.stringify(body), blob: async () => new Blob(['x']) });
+const ok = (body, headers = {}) => ({ ok: true, status: 200, headers: { get: (key) => headers[String(key).toLowerCase()] || null }, json: async () => body, text: async () => JSON.stringify(body), blob: async () => new Blob(['x']) });
 const fetchStub = async (url) => {
   const value = String(url);
   if (value.includes('/api/dashboard/me')) return ok({ email: 'user03@example.com', is_admin: true, is_dev: true, operating_role: 'vc', operating_roles: ['vc', 'pd'] });
+  if (value.includes('/api/dashboard/posts/manifest')) return ok({ revision: 'mobile-smoke', rawTotal: 1, sources: [{ source: 'canonical', total: 1 }, { source: 'dashboard', total: 0 }] }, { etag: '"mobile-smoke"' });
+  if (value.includes('/api/dashboard/posts/page')) return ok({ source: 'canonical', offset: 0, total: 1, revision: 'mobile-smoke', posts: [post] });
   if (value.includes('/api/dashboard/posts')) return ok({ posts: [post], summary: {} });
   if (value.includes('/api/dashboard/accounts')) return ok({ accounts: [{ handle: 'chatgptricks', label: 'ChatGPTricks', group: 'sentient' }] });
   if (value.includes('/api/dashboard/queue/v2/admin-report')) return ok({ totals: {}, designers: [], assignedPosts: [task] });

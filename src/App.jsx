@@ -57,6 +57,7 @@ import { ACCENT_CHOICES, accentHex } from './prefs';
 import { API_BASE, IG_HANDLE, apiFetch } from './api';
 import { mergeUserDrafts, saveUserProfile, userProfileDraft as userDraft } from './userAdmin';
 import { readDashboardSnapshot, writeDashboardSnapshot } from './dashboardCache';
+import { DashboardCatalogueError, loadCompleteDashboardCatalogue } from './dashboardCatalogue';
 import { followQueueLive } from './queueLive';
 import { decodeRouteState, encodeRouteState } from './urlCodec';
 import {
@@ -1024,15 +1025,14 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
         setLoading(true);
         setLoadError('');
       }
-      const headers = dashboardEtagRef.current ? { 'If-None-Match': dashboardEtagRef.current } : undefined;
-      const [postsResponse, accountsResponse] = await Promise.all([
-        apiFetch(`${API_BASE}/api/dashboard/posts`, { signal, headers }),
+      const [catalogue, accountsResponse] = await Promise.all([
+        loadCompleteDashboardCatalogue({ signal, etag: dashboardEtagRef.current }),
         apiFetch(`${API_BASE}/api/dashboard/accounts`, { signal }),
       ]);
       // A manual refresh, reconnect, or tab return can start another request
       // while this one is in flight. Only the newest response owns the UI.
       if (!isCurrentRequest()) return;
-      if (postsResponse.status === 401 || postsResponse.status === 403 || accountsResponse.status === 401 || accountsResponse.status === 403) {
+      if (accountsResponse.status === 401 || accountsResponse.status === 403) {
         onUnauthorized();
         return;
       }
@@ -1045,7 +1045,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
       // The server has confirmed that the catalog has not changed. Keep the
       // current cards, selection and scroll intact while still accepting the
       // lightweight accounts roster response.
-      if (postsResponse.status === 304) {
+      if (catalogue.notModified) {
         setAccounts(accountsData.accounts);
         loaded = true;
         reconnectAttempt.current = 0;
@@ -1056,23 +1056,27 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
         }
         return;
       }
-      if (!postsResponse.ok) throw new Error(`HTTP ${postsResponse.status}`);
-      const postsData = await postsResponse.json();
       if (!isCurrentRequest()) return;
-      if (!Array.isArray(postsData.posts)) {
+      if (!Array.isArray(catalogue.posts)) {
         throw new Error('The shared post database returned an invalid response.');
       }
-      const nextEtag = postsResponse.headers.get('ETag');
+      const nextEtag = catalogue.etag;
       if (nextEtag) dashboardEtagRef.current = nextEtag;
-      const nextRevision = dashboardDataRevision(postsData.posts, postsData.summary || {});
+      const nextRevision = dashboardDataRevision(catalogue.posts, catalogue.summary || {});
       const hasIncomingData = silent && dashboardRevisionRef.current !== null && dashboardRevisionRef.current !== nextRevision;
       if (hasIncomingData) {
         window.clearTimeout(incomingDataTimerRef.current);
         setIncomingData(true);
       }
-      setDashboard({ posts: postsData.posts, summary: postsData.summary || {} });
+      setDashboard({ posts: catalogue.posts, summary: catalogue.summary || {} });
       setAccounts(accountsData.accounts);
-      writeDashboardSnapshot({ posts: postsData.posts, summary: postsData.summary || {}, accounts: accountsData.accounts }).catch(() => {});
+      writeDashboardSnapshot({
+        posts: catalogue.posts,
+        summary: catalogue.summary || {},
+        accounts: accountsData.accounts,
+        catalogueComplete: true,
+        catalogueRevision: catalogue.revision,
+      }).catch(() => {});
       loaded = true;
       reconnectAttempt.current = 0;
       setConnectionNotice('');
@@ -1086,6 +1090,10 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
       }
     } catch (error) {
       if (isCurrentRequest() && error.name !== 'AbortError') {
+        if (error instanceof DashboardCatalogueError && (error.status === 401 || error.status === 403)) {
+          onUnauthorized();
+          return;
+        }
         // Render can briefly replace the API instance during deploys. Do not
         // discard a loaded dashboard or turn a temporary 502 into a blocking
         // red error screen; keep the current UI and reconnect automatically.
@@ -1115,7 +1123,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
     // separate from the live request below: a Render restart must never turn
     // a previously usable dashboard into an empty/error state.
     readDashboardSnapshot().then((snapshot) => {
-      if (!active || !snapshot || !Array.isArray(snapshot.posts) || !Array.isArray(snapshot.accounts) || snapshot.posts.some((post) => !post.stackId)) return;
+      if (!active || !snapshot?.catalogueComplete || !Array.isArray(snapshot.posts) || !Array.isArray(snapshot.accounts) || snapshot.posts.some((post) => !post.stackId)) return;
       setDashboard({ posts: snapshot.posts, summary: snapshot.summary || {} });
       setAccounts(snapshot.accounts);
       setLoading(false);
