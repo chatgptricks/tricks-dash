@@ -866,8 +866,6 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
   const [dashboard, setDashboard] = useState({ posts: [], summary: {} });
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [catalogueSyncing, setCatalogueSyncing] = useState(false);
-  const [catalogueProgress, setCatalogueProgress] = useState(0);
   const [loadError, setLoadError] = useState('');
   const [connectionNotice, setConnectionNotice] = useState('');
   const [refreshing, setRefreshing] = useState(false);
@@ -1032,13 +1030,10 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
       setDashboard({ posts: preview.posts, summary: preview.summary || {} });
       setAccounts(accountsData.accounts);
       setLoading(false);
-      setCatalogueSyncing(true);
     };
     try {
       if (!silent) {
         setLoading(true);
-        setCatalogueSyncing(false);
-        setCatalogueProgress(0);
         setLoadError('');
       }
       const [catalogue, resolvedAccounts] = await Promise.all([
@@ -1048,9 +1043,6 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
           onPreview: silent ? undefined : (nextPreview) => {
             preview = nextPreview;
             revealPreview();
-          },
-          onProgress: silent ? undefined : ({ received }) => {
-            if (isCurrentRequest()) setCatalogueProgress(received);
           },
         }),
         apiFetch(`${API_BASE}/api/dashboard/accounts`, { signal }).then(async (accountsResponse) => {
@@ -1100,8 +1092,6 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
       }
       setDashboard({ posts: catalogue.posts, summary: catalogue.summary || {} });
       setAccounts(resolvedAccounts.accounts);
-      setCatalogueSyncing(false);
-      setCatalogueProgress(0);
       writeDashboardSnapshot({
         posts: catalogue.posts,
         summary: catalogue.summary || {},
@@ -1132,7 +1122,6 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
         setLoadError('');
         if (previewed) {
           setLoading(false);
-          setCatalogueSyncing(false);
         }
         setConnectionNotice('Reconnecting to the shared Post DB…');
         reconnectAttempt.current += 1;
@@ -1155,17 +1144,33 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
 
   useEffect(() => {
     let active = true;
-    // Render the last successful catalogue immediately. This is intentionally
-    // separate from the live request below: a Render restart must never turn
-    // a previously usable dashboard into an empty/error state.
-    readDashboardSnapshot().then((snapshot) => {
-      if (!active || !snapshot?.catalogueComplete || !Array.isArray(snapshot.posts) || !Array.isArray(snapshot.accounts) || snapshot.posts.some((post) => !post.stackId)) return;
-      setDashboard({ posts: snapshot.posts, summary: snapshot.summary || {} });
-      setAccounts(snapshot.accounts);
-      setLoading(false);
-    }).catch(() => {});
     const controller = new AbortController();
-    loadDashboard(controller.signal);
+    // Start from the last verified full catalogue. Its revision is also an
+    // ETag, so a normal refresh asks the server only for the tiny manifest and
+    // roster instead of re-downloading the entire historical library. This
+    // keeps Research usable immediately and avoids a conspicuous full-library
+    // loading state every time someone reloads the page.
+    (async () => {
+      let hasCachedCatalogue = false;
+      try {
+        const snapshot = await readDashboardSnapshot();
+        const isCompleteSnapshot = snapshot?.catalogueComplete
+          && Array.isArray(snapshot.posts)
+          && Array.isArray(snapshot.accounts)
+          && !snapshot.posts.some((post) => !post.stackId);
+        if (active && isCompleteSnapshot) {
+          setDashboard({ posts: snapshot.posts, summary: snapshot.summary || {} });
+          setAccounts(snapshot.accounts);
+          setLoading(false);
+          if (snapshot.catalogueRevision) dashboardEtagRef.current = `"${snapshot.catalogueRevision}"`;
+          hasCachedCatalogue = Boolean(snapshot.catalogueRevision);
+        }
+      } catch {
+        // IndexedDB is an acceleration path only. A blocked/private browser
+        // must still be able to open the live catalogue normally.
+      }
+      if (active) loadDashboard(controller.signal, { silent: hasCachedCatalogue });
+    })();
     return () => { active = false; controller.abort(); };
   }, [loadDashboard]);
 
@@ -1866,7 +1871,6 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
             </> : null}
           </ProductHeader>
           {incomingData && !homeView ? <div className="live-data-notice" role="status"><LoaderCircle className="spin" size={16} /><span>New data is incoming</span></div> : null}
-          {catalogueSyncing && !loading && !homeView ? <div className="live-data-notice" role="status"><LoaderCircle className="spin" size={16} /><span>Showing the latest posts — loading the full library{catalogueProgress ? ` (${catalogueProgress.toLocaleString()} synced)` : ''}.</span></div> : null}
           {connectionNotice ? <div className="connection-notice" role="status"><LoaderCircle size={15} /><span>{connectionNotice}</span><button type="button" onClick={() => dashboardLoader.current?.(undefined, { silent: true })}>Retry now</button></div> : null}
 
 
