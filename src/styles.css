@@ -265,6 +265,45 @@ img {
   gap: 14px;
 }
 
+/* A cached Research library is useful while the live revision is checked, but
+   it must not look actionable or be mistaken for the finished catalogue. */
+.research-dashboard {
+  position: relative;
+}
+
+.research-dashboard-loading > :not(.research-dashboard-loading-overlay) {
+  filter: blur(7px);
+  opacity: 0.48;
+  pointer-events: none;
+  user-select: none;
+}
+
+.research-dashboard-loading-overlay {
+  position: absolute;
+  z-index: 4;
+  top: 22px;
+  left: 50%;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 13px;
+  border: 1px solid rgba(var(--edge), 0.16);
+  border-radius: 999px;
+  background: rgba(var(--surface-rgb, 18, 20, 23), 0.9);
+  box-shadow: 0 10px 32px rgba(var(--shade), 0.28);
+  color: var(--text-strong);
+  font-size: 12px;
+  font-weight: 700;
+  transform: translateX(-50%);
+}
+
+.results-count-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 /* Use the exact controls' containers while loading. This makes loading a
    paused version of the dashboard instead of an unrelated blank canvas. */
 .dash-skeleton-tabs { pointer-events:none; }

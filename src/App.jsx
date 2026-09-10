@@ -1021,16 +1021,6 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
     dashboardRequestVersionRef.current = requestVersion;
     const isCurrentRequest = () => requestVersion === dashboardRequestVersionRef.current && !signal?.aborted;
     let loaded = false;
-    let previewed = false;
-    let preview = null;
-    let accountsData = null;
-    const revealPreview = () => {
-      if (!preview || !accountsData || !isCurrentRequest()) return;
-      previewed = true;
-      setDashboard({ posts: preview.posts, summary: preview.summary || {} });
-      setAccounts(accountsData.accounts);
-      setLoading(false);
-    };
     try {
       if (!silent) {
         setLoading(true);
@@ -1040,10 +1030,6 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
         loadCompleteDashboardCatalogue({
           signal,
           etag: dashboardEtagRef.current,
-          onPreview: silent ? undefined : (nextPreview) => {
-            preview = nextPreview;
-            revealPreview();
-          },
         }),
         apiFetch(`${API_BASE}/api/dashboard/accounts`, { signal }).then(async (accountsResponse) => {
           if (accountsResponse.status === 401 || accountsResponse.status === 403) {
@@ -1055,8 +1041,6 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
           if (!Array.isArray(nextAccounts.accounts)) {
             throw new Error('The shared account roster returned an invalid response.');
           }
-          accountsData = nextAccounts;
-          revealPreview();
           return nextAccounts;
         }),
       ]);
@@ -1120,9 +1104,6 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
         // discard a loaded dashboard or turn a temporary 502 into a blocking
         // red error screen; keep the current UI and reconnect automatically.
         setLoadError('');
-        if (previewed) {
-          setLoading(false);
-        }
         setConnectionNotice('Reconnecting to the shared Post DB…');
         reconnectAttempt.current += 1;
         if (!reconnectTimer.current) {
@@ -1136,7 +1117,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
       // If the first request fails, keep the structural skeleton in place
       // until the automatic retry succeeds rather than replacing it with an
       // alarming database-error page.
-      if (isCurrentRequest() && (loaded || previewed)) setLoading(false);
+      if (isCurrentRequest() && loaded) setLoading(false);
     }
   }, [loadAccess, onUnauthorized]);
 
@@ -1148,10 +1129,11 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
     // Start from the last verified full catalogue. Its revision is also an
     // ETag, so a normal refresh asks the server only for the tiny manifest and
     // roster instead of re-downloading the entire historical library. This
-    // keeps Research usable immediately and avoids a conspicuous full-library
-    // loading state every time someone reloads the page.
+    // keeps a last-known-complete Research view available. The first live
+    // verification deliberately stays in Loading until it confirms that same
+    // full revision; never replace the library with a misleading 500-card
+    // preview during a reload.
     (async () => {
-      let hasCachedCatalogue = false;
       try {
         const snapshot = await readDashboardSnapshot();
         const isCompleteSnapshot = snapshot?.catalogueComplete
@@ -1161,15 +1143,13 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
         if (active && isCompleteSnapshot) {
           setDashboard({ posts: snapshot.posts, summary: snapshot.summary || {} });
           setAccounts(snapshot.accounts);
-          setLoading(false);
           if (snapshot.catalogueRevision) dashboardEtagRef.current = `"${snapshot.catalogueRevision}"`;
-          hasCachedCatalogue = Boolean(snapshot.catalogueRevision);
         }
       } catch {
         // IndexedDB is an acceleration path only. A blocked/private browser
         // must still be able to open the live catalogue normally.
       }
-      if (active) loadDashboard(controller.signal, { silent: hasCachedCatalogue });
+      if (active) loadDashboard(controller.signal);
     })();
     return () => { active = false; controller.abort(); };
   }, [loadDashboard]);
@@ -1867,7 +1847,9 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
                   </button>
                 ) : <kbd className="search-kbd">⌘K</kbd>}
               </div>
-              <p className="results-count"><strong>{displayedPostCount.toLocaleString()}</strong> {t('posts')}</p>
+              <p className={loading ? 'results-count results-count-loading' : 'results-count'}>
+                {loading ? <><LoaderCircle className="spin" size={14} /><strong>Loading</strong></> : <><strong>{displayedPostCount.toLocaleString()}</strong> {t('posts')}</>}
+              </p>
             </> : null}
           </ProductHeader>
           {incomingData && !homeView ? <div className="live-data-notice" role="status"><LoaderCircle className="spin" size={16} /><span>New data is incoming</span></div> : null}
@@ -1875,10 +1857,11 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
 
 
 
-          {loading ? <DashboardSkeleton /> : null}
+          {loading && !posts.length ? <DashboardSkeleton /> : null}
           {loadError ? <section className="dash-state dash-state-error">{loadError}</section> : null}
 
-          {!loading && !loadError ? <>
+          {!loadError && (!loading || posts.length > 0) ? <div className={loading ? 'research-dashboard research-dashboard-loading' : 'research-dashboard'} aria-busy={loading}>
+          {loading ? <div className="research-dashboard-loading-overlay" role="status"><LoaderCircle className="spin" size={17} /><span>Loading complete library…</span></div> : null}
           {/* Filters share this row with the group tabs: same height,
               same pill shape. Tabs pick the set, filters narrow it --
               one decision surface instead of two stacked bars. */}
@@ -2186,7 +2169,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
             {grouping || visibleStackCount < galleryTotal ? null : <span className="all-loaded">All matching stacks loaded</span>}
           </div>
         </section>
-        </> : null}
+        </div> : null}
         </section>
 
         {isSidebarOpen ? <button
