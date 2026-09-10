@@ -304,6 +304,9 @@ const ES = {
   'Signing in…': 'Iniciando sesión…',
   'Sign-in failed. Try again.': 'Falló el inicio de sesión. Probá de nuevo.',
   'Loading the post library': 'Cargando la librería de posts',
+  'Loading the shared post database': 'Cargando la base de datos compartida de posts',
+  'Your complete Research library will appear here as soon as it is ready.': 'Tu librería completa de Research aparecerá aquí apenas esté lista.',
+  'No need to reload this window — new posts continue to arrive automatically.': 'No necesitás recargar esta ventana: los posts nuevos siguen llegando automáticamente.',
 
   // settings menu (shared shape across Dashboard/Queue/Tracker/Insights)
   'Accent color': 'Color de acento',

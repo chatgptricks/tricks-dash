@@ -1822,11 +1822,15 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
       setIsSidebarOpen(true);
     });
   }, []);
+  // Research only becomes interactive after a single, complete catalogue
+  // revision has been verified. A full-screen state prevents the cached cards
+  // from being mistaken for a live, actionable result while that happens.
+  const databaseLoading = loading && !homeView;
 
   return (
-    <div className={`shell${homeView ? ' is-home' : ''}`}>
+    <div className={`shell${homeView ? ' is-home' : ''}${databaseLoading ? ' is-dashboard-loading' : ''}`}>
       <div className="backdrop" />
-      <main className="app-layout">
+      <main className="app-layout" aria-busy={databaseLoading || undefined}>
         <section ref={leftPaneRef} className="left-pane">
           <ProductHeader current={homeView ? 'home' : 'research'} coordinator={coordinatorAccess} count={queuePendingCount} account={<SettingsMenu email={userEmail} avatarUrl={userPhoto} isAdmin={effectiveIsAdmin} isDev={isDev && !rolePreviewActive} onSignOut={onSignOut} />}>
             {!homeView ? <>
@@ -1857,11 +1861,10 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
 
 
 
-          {loading && !posts.length ? <DashboardSkeleton /> : null}
+          {loading && !posts.length ? <DashboardSkeleton label={t('Loading the post library')} /> : null}
           {loadError ? <section className="dash-state dash-state-error">{loadError}</section> : null}
 
-          {!loadError && (!loading || posts.length > 0) ? <div className={loading ? 'research-dashboard research-dashboard-loading' : 'research-dashboard'} aria-busy={loading}>
-          {loading ? <div className="research-dashboard-loading-overlay" role="status"><LoaderCircle className="spin" size={17} /><span>Loading complete library…</span></div> : null}
+          {!loadError && (!loading || posts.length > 0) ? <div className="research-dashboard" aria-busy={databaseLoading}>
           {/* Filters share this row with the group tabs: same height,
               same pill shape. Tabs pick the set, filters narrow it --
               one decision surface instead of two stacked bars. */}
@@ -2212,6 +2215,19 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
         </aside> : null}
       </main>
 
+      {databaseLoading ? (
+        <section className="database-loading-overlay" role="status" aria-live="polite">
+          <div className="database-loading-card">
+            <span className="database-loading-icon" aria-hidden="true"><LoaderCircle className="spin" size={28} /></span>
+            <div className="database-loading-copy">
+              <h2>{t('Loading the shared post database')}</h2>
+              <p>{t('Your complete Research library will appear here as soon as it is ready.')}</p>
+              <small>{t('No need to reload this window — new posts continue to arrive automatically.')}</small>
+            </div>
+          </div>
+        </section>
+      ) : null}
+
       {listEditor ? (
         <ListEditor
           draft={listEditor}
@@ -2305,10 +2321,10 @@ function Wordmark() {
 // posts, and a bare "Loading..." on an empty page reads as broken. Mirroring
 // the filter strip and card grid also means the page doesn't visibly jump
 // when the data lands.
-function DashboardSkeleton() {
+function DashboardSkeleton({ label = 'Loading the post library' }) {
   return (
     <section className="dash-skeleton" role="status" aria-live="polite">
-      <span className="sr-only">Loading the post library</span>
+      <span className="sr-only">{label}</span>
       {/* This is the same tabs + filters row that appears once the catalogue
           arrives. Keeping it in the document during the request prevents the
           grid from jumping down when controls mount. */}

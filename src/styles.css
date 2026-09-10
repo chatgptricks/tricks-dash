@@ -265,37 +265,105 @@ img {
   gap: 14px;
 }
 
-/* A cached Research library is useful while the live revision is checked, but
-   it must not look actionable or be mistaken for the finished catalogue. */
+/* Research owns the remaining vertical space in the fixed desktop shell. The
+   full-library loading state wraps the tabs and gallery, so it must preserve
+   that flex contract or the gallery loses its scrollable height. */
 .research-dashboard {
   position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
 }
 
-.research-dashboard-loading > :not(.research-dashboard-loading-overlay) {
-  filter: blur(7px);
-  opacity: 0.48;
+.left-pane > .research-dashboard {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.research-dashboard > .gallery {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* The whole product is visibly paused while the server assembles a complete
+   catalogue revision. Keeping the existing page behind it gives continuity,
+   while the overlay makes it impossible to mistake old/cache data for ready
+   results or to trigger controls midway through the load. */
+.shell.is-dashboard-loading > :not(.database-loading-overlay) {
+  filter: blur(9px);
+  opacity: 0.38;
   pointer-events: none;
   user-select: none;
 }
 
-.research-dashboard-loading-overlay {
-  position: absolute;
-  z-index: 4;
-  top: 22px;
-  left: 50%;
-  display: inline-flex;
-  align-items: center;
+.database-loading-overlay {
+  position: fixed;
+  z-index: 100;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(var(--surface-0-rgb), 0.26);
+}
+
+.database-loading-card {
+  display: grid;
+  justify-items: center;
+  width: min(440px, 100%);
+  gap: 18px;
+  padding: 28px 30px;
+  border: 1px solid rgba(var(--edge), 0.18);
+  border-radius: 18px;
+  background: rgba(var(--surface-1-rgb), 0.95);
+  box-shadow: 0 28px 84px rgba(var(--shade), 0.46);
+  text-align: center;
+}
+
+.database-loading-icon {
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  border: 1px solid rgba(var(--accent-rgb), 0.34);
+  border-radius: 50%;
+  background: rgba(var(--accent-rgb), 0.12);
+  color: var(--accent-text);
+  box-shadow: 0 0 0 9px rgba(var(--accent-rgb), 0.05);
+}
+
+.database-loading-icon .spin {
+  animation-duration: 1.25s;
+}
+
+.database-loading-copy {
+  display: grid;
   gap: 8px;
-  min-height: 34px;
-  padding: 0 13px;
-  border: 1px solid rgba(var(--edge), 0.16);
-  border-radius: 999px;
-  background: rgba(var(--surface-rgb, 18, 20, 23), 0.9);
-  box-shadow: 0 10px 32px rgba(var(--shade), 0.28);
+}
+
+.database-loading-copy h2,
+.database-loading-copy p,
+.database-loading-copy small {
+  margin: 0;
+}
+
+.database-loading-copy h2 {
   color: var(--text-strong);
-  font-size: 12px;
-  font-weight: 700;
-  transform: translateX(-50%);
+  font-size: 18px;
+  letter-spacing: -0.02em;
+}
+
+.database-loading-copy p {
+  color: rgba(var(--ink), 0.68);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.database-loading-copy small {
+  padding-top: 4px;
+  color: rgba(var(--ink), 0.46);
+  font-size: 11px;
+  line-height: 1.45;
 }
 
 .results-count-loading {
@@ -396,7 +464,7 @@ img {
   /* Deliberately high contrast: the former .04 → .09 wash technically
      animated but disappeared into the dark dashboard surface. */
   background-size: 250% 100%;
-  animation: skeleton-shimmer 950ms linear infinite;
+  animation: skeleton-shimmer 3.2s ease-in-out infinite;
   will-change: background-position;
 }
 
