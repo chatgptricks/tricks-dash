@@ -890,6 +890,10 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
   const incomingDataTimerRef = useRef(null);
   const dashboardRequestVersionRef = useRef(0);
   const dashboardEtagRef = useRef('');
+  // A known-complete snapshot plus its source watermarks lets normal reloads
+  // fetch only new IDs instead of downloading the historical library again.
+  const dashboardPostsRef = useRef([]);
+  const dashboardSourcesRef = useRef([]);
   const requestedRolePreview = window.sessionStorage.getItem('sentient.queueRolePreview') || '';
   const activeRolePreview = ACTIVE_ROLE_PREVIEWS.has(requestedRolePreview) ? requestedRolePreview : '';
   const rolePreviewActive = Boolean(activeRolePreview);
@@ -1030,6 +1034,9 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
         loadCompleteDashboardCatalogue({
           signal,
           etag: dashboardEtagRef.current,
+          cachedCatalogue: dashboardPostsRef.current.length && dashboardSourcesRef.current.length
+            ? { posts: dashboardPostsRef.current, sources: dashboardSourcesRef.current }
+            : null,
         }),
         apiFetch(`${API_BASE}/api/dashboard/accounts`, { signal }).then(async (accountsResponse) => {
           if (accountsResponse.status === 401 || accountsResponse.status === 403) {
@@ -1074,6 +1081,8 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
         window.clearTimeout(incomingDataTimerRef.current);
         setIncomingData(true);
       }
+      dashboardPostsRef.current = catalogue.posts;
+      dashboardSourcesRef.current = Array.isArray(catalogue.sources) ? catalogue.sources : [];
       setDashboard({ posts: catalogue.posts, summary: catalogue.summary || {} });
       setAccounts(resolvedAccounts.accounts);
       writeDashboardSnapshot({
@@ -1082,6 +1091,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
         accounts: resolvedAccounts.accounts,
         catalogueComplete: true,
         catalogueRevision: catalogue.revision,
+        catalogueSources: dashboardSourcesRef.current,
       }).catch(() => {});
       loaded = true;
       reconnectAttempt.current = 0;
@@ -1138,9 +1148,11 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
         const snapshot = await readDashboardSnapshot();
         const isCompleteSnapshot = snapshot?.catalogueComplete
           && Array.isArray(snapshot.posts)
-          && Array.isArray(snapshot.accounts)
-          && !snapshot.posts.some((post) => !post.stackId);
+          && snapshot.posts.length > 0
+          && Array.isArray(snapshot.accounts);
         if (active && isCompleteSnapshot) {
+          dashboardPostsRef.current = snapshot.posts;
+          dashboardSourcesRef.current = Array.isArray(snapshot.catalogueSources) ? snapshot.catalogueSources : [];
           setDashboard({ posts: snapshot.posts, summary: snapshot.summary || {} });
           setAccounts(snapshot.accounts);
           if (snapshot.catalogueRevision) dashboardEtagRef.current = `"${snapshot.catalogueRevision}"`;
@@ -2223,6 +2235,9 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
               <h2>{t('Loading the shared post database')}</h2>
               <p>{t('Your complete Research library will appear here as soon as it is ready.')}</p>
               <small>{t('No need to reload this window — new posts continue to arrive automatically.')}</small>
+            </div>
+            <div className="database-loading-progress" role="progressbar" aria-label={t('Loading complete post library')} aria-valuetext={t('Synchronizing every post')}>
+              <span />
             </div>
           </div>
         </section>

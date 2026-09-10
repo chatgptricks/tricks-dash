@@ -25,6 +25,24 @@ function dedupePosts(posts) {
   });
 }
 
+function postIdentity(post, index) {
+  const account = String(post?.account || '').trim().toLowerCase();
+  const shortcode = String(post?.shortcode || '').trim();
+  return shortcode ? `${account}:${shortcode}` : `${account}:row:${post?.rank ?? index}`;
+}
+
+function normaliseSources(sources) {
+  if (!Array.isArray(sources)) return null;
+  const result = new Map();
+  for (const entry of sources) {
+    const source = String(entry?.source || '');
+    const upperBound = Number(entry?.upperBound);
+    if (!source || !Number.isSafeInteger(upperBound) || upperBound < 0) return null;
+    result.set(source, upperBound);
+  }
+  return result;
+}
+
 async function jsonOrError(response) {
   if (!response.ok) {
     let message = `HTTP ${response.status}`;
@@ -60,7 +78,7 @@ function catalogueSummary(posts) {
   };
 }
 
-async function fetchCompleteRevision(manifest, signal, onProgress) {
+async function fetchRevision(manifest, signal, onProgress, startingBounds = new Map()) {
   const sources = manifest.sources.map((entry) => {
     const source = String(entry?.source || '');
     const upperBound = Math.max(0, Number(entry?.upperBound) || 0);
@@ -74,7 +92,7 @@ async function fetchCompleteRevision(manifest, signal, onProgress) {
 
   const loadSource = async ({ source, upperBound }) => {
     const rows = [];
-    let cursor = 0;
+    let cursor = Math.min(upperBound, Math.max(0, startingBounds.get(source) || 0));
     while (cursor < upperBound) {
       const params = new URLSearchParams({
         source,
@@ -112,18 +130,49 @@ async function fetchCompleteRevision(manifest, signal, onProgress) {
     summary: catalogueSummary(posts),
     rawTotal: rawPosts.length,
     revision: manifest.revision,
+    sources: manifest.sources,
   };
 }
 
-export async function loadCompleteDashboardCatalogue({ signal, etag = '', onProgress } = {}) {
-  // A write can happen between page requests. Restart once from a newly read
-  // manifest; returning a plausible but incomplete mix is never acceptable.
+function mergeCompleteCatalogue(cachedPosts, newerPosts) {
+  const replacements = new Map(newerPosts.map((post, index) => [postIdentity(post, index), post]));
+  const retained = cachedPosts.map((post, index) => replacements.get(postIdentity(post, index)) || post);
+  const existing = new Set(retained.map(postIdentity));
+  for (const post of newerPosts) {
+    const key = postIdentity(post);
+    if (!existing.has(key)) retained.push(post);
+  }
+  return dedupePosts(retained);
+}
+
+export async function loadCompleteDashboardCatalogue({ signal, etag = '', onProgress, cachedCatalogue = null } = {}) {
+  // A persisted full library remains complete after an ID-bounded delta is
+  // merged in. Normal reloads should not pull all historical posts again just
+  // because the scheduler inserted one newer row.
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const manifestResult = await fetchManifest(signal, attempt === 0 ? etag : '');
     if (manifestResult.notModified) return manifestResult;
     try {
-      const catalogue = await fetchCompleteRevision(manifestResult.manifest, signal, onProgress);
-      return { ...catalogue, etag: manifestResult.etag };
+      const cachedSources = normaliseSources(cachedCatalogue?.sources);
+      const canDelta = Array.isArray(cachedCatalogue?.posts)
+        && cachedCatalogue.posts.length > 0
+        && cachedSources
+        && manifestResult.manifest.sources.every((source) => cachedSources.has(String(source?.source || '')));
+      const catalogue = await fetchRevision(
+        manifestResult.manifest,
+        signal,
+        onProgress,
+        canDelta ? cachedSources : new Map(),
+      );
+      if (!canDelta) return { ...catalogue, etag: manifestResult.etag };
+      const posts = mergeCompleteCatalogue(cachedCatalogue.posts, catalogue.posts);
+      return {
+        ...catalogue,
+        posts,
+        summary: catalogueSummary(posts),
+        etag: manifestResult.etag,
+        delta: true,
+      };
     } catch (error) {
       if (!(error instanceof DashboardCatalogueError) || error.status !== 409 || attempt === 1) throw error;
     }
