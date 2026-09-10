@@ -661,15 +661,14 @@ function realShortcode(shortcode) {
   return shortcode && !String(shortcode).startsWith('post-') ? shortcode : null;
 }
 
-function normalizePost(post) {
+function normalizePost(post, now = Date.now()) {
   const caption = String(post.caption || '');
   const postType = typeLabel(String(post.type || 'Image'));
-  const headline = extractHeadline(caption);
   const timestamp = post.postDate ? new Date(post.postDate).getTime() : Number.NaN;
   const isVideo = post.video === 'Yes' || postType === 'Video';
   const shortcode = realShortcode(post.shortcode);
   const permalink = post.permalink || (shortcode ? `https://www.instagram.com/${isVideo ? 'reel' : 'p'}/${shortcode}/` : '');
-  const ageDays = Number.isFinite(timestamp) ? (Date.now() - timestamp) / 86400000 : Infinity;
+  const ageDays = Number.isFinite(timestamp) ? (now - timestamp) / 86400000 : Infinity;
   // A post keeps its HOT flag forever once it earns it (permanent record); the
   // badge only shows while it's still inside the active refresh window.
   const isHot = Boolean(post.isHot);
@@ -690,27 +689,16 @@ function normalizePost(post) {
     // keys, selection, the sidebar lookup -- uses this instead.
     postKey: `${post.account || ''}:${shortcode || post.rank || ''}`,
     caption,
-    headline,
+    // Most cards use the backend excerpt, and only a few visible cards need a
+    // rendered headline. Splitting every caption into words here made opening
+    // a 68k-post library needlessly CPU-bound.
+    headline: post.headline || '',
     permalink,
     isVideo,
     postType,
     isHot,
     showsHotBadge,
     isHotRecent,
-    searchText: [
-      caption,
-      post.excerpt,
-      post.ocrText,
-      post.shortcode,
-      post.permalink,
-      post.type,
-      postType,
-      post.musicSong,
-      post.musicArtist,
-    ]
-      .map(normalizeSearchValue)
-      .filter(Boolean)
-      .join(' '),
     timestamp,
   };
 }
@@ -732,11 +720,34 @@ function parseSearchQuery(query) {
   return { include, exclude };
 }
 
-function matchesSearch(post, query) {
-  const { include, exclude } = parseSearchQuery(query);
+function searchablePostText(post) {
+  // Do this only after the user actually enters a search. Precomputing an
+  // additional lowercased copy of every caption/OCR field doubled the largest
+  // in-browser data structure and delayed every normal reload.
+  if (typeof post.searchText === 'string') return post.searchText;
+  const searchText = [
+    post.caption,
+    post.excerpt,
+    post.ocrText,
+    post.shortcode,
+    post.permalink,
+    post.type,
+    post.postType,
+    post.musicSong,
+    post.musicArtist,
+  ]
+    .map(normalizeSearchValue)
+    .filter(Boolean)
+    .join(' ');
+  post.searchText = searchText;
+  return searchText;
+}
+
+function matchesSearch(post, { include, exclude }) {
   if (!include.length && !exclude.length) return true;
-  for (const term of include) if (!post.searchText.includes(term)) return false;
-  for (const term of exclude) if (post.searchText.includes(term)) return false;
+  const searchText = searchablePostText(post);
+  for (const term of include) if (!searchText.includes(term)) return false;
+  for (const term of exclude) if (searchText.includes(term)) return false;
   return true;
 }
 
@@ -918,7 +929,10 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
   // own Queue pool, but should not inherit Tracker, Insights, or other VC
   // coordination controls. Role preview keeps its deliberately strict model.
   const poolAccess = coordinatorAccess || (!rolePreviewActive && canSelfAssign);
-  const posts = useMemo(() => dashboard.posts.map(normalizePost), [dashboard.posts]);
+  const posts = useMemo(() => {
+    const now = Date.now();
+    return dashboard.posts.map((post) => normalizePost(post, now));
+  }, [dashboard.posts]);
   const summary = dashboard.summary;
   const ranges = useMemo(() => calculateRanges(posts), [posts]);
   const datePresets = useMemo(() => buildDatePresets(ranges), [ranges]);
@@ -1293,6 +1307,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
   const initialUrl = useRef(readUrlState()).current;
   const [query, setQuery] = useState(initialUrl.q);
   const deferredQuery = useDeferredValue(query);
+  const searchTerms = useMemo(() => parseSearchQuery(deferredQuery), [deferredQuery]);
   const [activeGroup, setActiveGroup] = useState(initialUrl.tab);
   const groupScopedPosts = useMemo(
     () => (activeGroup === 'all' ? posts : posts.filter((post) => post.group === activeGroup)),
@@ -1545,7 +1560,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
       if (post.comments < minComments) continue;
       if (minDate && (!Number.isFinite(post.timestamp) || post.timestamp < minDate)) continue;
       if (maxDate && (!Number.isFinite(post.timestamp) || post.timestamp > maxDate)) continue;
-      if (!matchesSearch(post, deferredQuery)) continue;
+      if (!matchesSearch(post, searchTerms)) continue;
       output.push(post);
     }
 
@@ -1578,7 +1593,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
     });
 
     return output;
-  }, [posts, activeGroup, effectiveAccounts, activeType, mediaFilter, minLikes, minComments, dateFrom, dateTo, deferredQuery, sortBy, showHidden, promoOnly, activeList, showHotHistory]);
+  }, [posts, activeGroup, effectiveAccounts, activeType, mediaFilter, minLikes, minComments, dateFrom, dateTo, searchTerms, sortBy, showHidden, promoOnly, activeList, showHotHistory]);
 
   // Leaving the HOT tab collapses history again, so coming back always
   // opens on "what's hot now" rather than a stale expanded state.
