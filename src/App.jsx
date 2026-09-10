@@ -1154,7 +1154,14 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
     // preview during a reload.
     (async () => {
       try {
-        const snapshot = await readDashboardSnapshot();
+        // A browser can retain an interrupted IndexedDB transaction from an
+        // older dashboard build. Cache access is an acceleration, never a
+        // prerequisite for the live library: fall through to the API quickly
+        // instead of leaving the entire page on Loading indefinitely.
+        const snapshot = await Promise.race([
+          readDashboardSnapshot(),
+          new Promise((resolve) => window.setTimeout(() => resolve(null), 2_000)),
+        ]);
         const isCompleteSnapshot = snapshot?.catalogueComplete
           && Array.isArray(snapshot.posts)
           && snapshot.posts.length > 0
