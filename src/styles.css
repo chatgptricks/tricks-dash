@@ -208,6 +208,19 @@ img {
   animation: refresh-spin 1.1s linear infinite;
 }
 
+.connection-notice button {
+  min-height: 26px;
+  margin-left: auto;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
 .live-data-notice {
   display: inline-flex;
   align-items: center;

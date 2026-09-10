@@ -468,6 +468,7 @@ function TaskBlock({ task, editable, onOpen, onResizeStart, onContextMenu, accou
         </span>
       </span>
     </span>
+    <span className="scheduler-effective-meta" aria-hidden="true"><b>{accountMention(task.post.account) || blockTitle || t('post')}</b><small>{scheduledTime} · {task.productionPoints} PP · {stateLabel}</small></span>
     {canResize ? <><span className="scheduler-resize-handle scheduler-resize-handle-left" role="separator" aria-label={`${t('resizeBar')} ${t('resizeLeft')}`} onPointerDown={(event) => onResizeStart(event, task, 'left')} /><span className="scheduler-resize-handle scheduler-resize-handle-right" role="separator" aria-label={`${t('resizeBar')} ${t('resizeRight')}`} onPointerDown={(event) => onResizeStart(event, task, 'right')} /></> : null}
   </button>;
 }
@@ -478,7 +479,7 @@ function TimeBlock({ block, onContextMenu, onMoveStart, onResizeStart, editable 
   const start = Number(block.scheduledStartMinutes || 0);
   const duration = Math.max(10, Number(block.durationMinutes || 10));
   const displayTime = scheduleTimeForViewer(block.scheduledDate, start, timeZone);
-  return <div className={`scheduler-time-block category-${block.category || 'other'} status-${block.status}${editable ? ' is-editable' : ''}`} onContextMenu={(event) => onContextMenu?.(event, block)} onPointerDown={(event) => { if (editable && event.button === 0 && !event.target.closest('.scheduler-resize-handle')) onMoveStart?.(event, block); }} style={{ left: `${((start - timeline.start) / timeline.duration) * 100}%`, width: `${(duration / timeline.duration) * 100}%` }} title={`${block.title} · ${displayTime} · ${duration} min · ${block.status === 'pending' ? t('pendingApproval') : t('approved')}`}><Icon size={13} /><span><b>{block.title || t(block.category || 'other')}</b><small>{displayTime} · {duration} min</small></span>{block.status === 'pending' ? <i>{t('pendingApproval')}</i> : null}{editable ? <><span className="scheduler-resize-handle scheduler-resize-handle-left" role="separator" aria-label={`${t('resizeBar')} ${t('resizeLeft')}`} onPointerDown={(event) => onResizeStart?.(event, block, 'left')} /><span className="scheduler-resize-handle scheduler-resize-handle-right" role="separator" aria-label={`${t('resizeBar')} ${t('resizeRight')}`} onPointerDown={(event) => onResizeStart?.(event, block, 'right')} /></> : null}</div>;
+  return <div className={`scheduler-time-block category-${block.category || 'other'} status-${block.status}${editable ? ' is-editable' : ''}`} onContextMenu={(event) => onContextMenu?.(event, block)} onPointerDown={(event) => { if (editable && event.button === 0 && !event.target.closest('.scheduler-resize-handle')) onMoveStart?.(event, block); }} style={{ left: `${((start - timeline.start) / timeline.duration) * 100}%`, width: `${(duration / timeline.duration) * 100}%` }} title={`${block.title} · ${displayTime} · ${duration} min · ${block.status === 'pending' ? t('pendingApproval') : t('approved')}`}><Icon size={13} /><span><b>{block.title || t(block.category || 'other')}</b><small>{displayTime} · {duration} min</small></span><span className="scheduler-effective-meta" aria-hidden="true"><b>{block.title || t(block.category || 'other')}</b><small>{displayTime} · {duration} min</small></span>{block.status === 'pending' ? <i>{t('pendingApproval')}</i> : null}{editable ? <><span className="scheduler-resize-handle scheduler-resize-handle-left" role="separator" aria-label={`${t('resizeBar')} ${t('resizeLeft')}`} onPointerDown={(event) => onResizeStart?.(event, block, 'left')} /><span className="scheduler-resize-handle scheduler-resize-handle-right" role="separator" aria-label={`${t('resizeBar')} ${t('resizeRight')}`} onPointerDown={(event) => onResizeStart?.(event, block, 'right')} /></> : null}</div>;
 }
 
 function TimeBlockForm({ form, setForm, busy, onClose, onSubmit, users = [], canChooseUser = false, timeZone = QUEUE_TIME_ZONE }) {
@@ -1193,9 +1194,14 @@ function Scheduler({ data, draft, setDraft, onDraftChange, selectedDate, designe
       ...(data.timeBlocks || []).filter((block) => visibleEmails.has(block.requesterEmail) && block.scheduledDate === selectedDate).map((block) => ({ start: Number(block.scheduledStartMinutes ?? 0), duration: Math.max(10, Number(block.durationMinutes || 10)) })),
     ].map(({ start, duration }) => ({ start: Math.max(0, start), end: Math.min(QUEUE_DAY_END, start + duration) })).filter((interval) => interval.end > interval.start);
     if (!intervals.length) return { start: 0, end: QUEUE_DAY_END, duration: QUEUE_DAY_END, hasWork: false };
-    const start = Math.min(...intervals.map((interval) => interval.start));
-    const end = Math.max(...intervals.map((interval) => interval.end));
-    return { start, end, duration: Math.max(10, end - start), hasWork: true };
+    // Keep a deliberate, rounded margin around the first and last block. The
+    // former exact-bound calculation pinned cards to the edges and made the
+    // compact view look visually misaligned with the time ruler.
+    const first = Math.min(...intervals.map((interval) => interval.start));
+    const last = Math.max(...intervals.map((interval) => interval.end));
+    const start = Math.max(0, Math.floor((first - 30) / 30) * 30);
+    const end = Math.min(QUEUE_DAY_END, Math.ceil((last + 30) / 30) * 30);
+    return { start, end, duration: Math.max(60, end - start), hasWork: true };
   }, [allTasks, data.timeBlocks, selectedDate, visibleDesigners]);
   const timeline = showAll && effectiveTimeline.hasWork ? effectiveTimeline : { start: 0, end: QUEUE_DAY_END, duration: QUEUE_DAY_END, hasWork: false };
   const minuteAtPointer = (event, rect) => Math.max(0, Math.min(QUEUE_DAY_END, Math.round((timeline.start + ((event.clientX - rect.left) / rect.width) * timeline.duration) / 10) * 10));
@@ -1222,6 +1228,22 @@ function Scheduler({ data, draft, setDraft, onDraftChange, selectedDate, designe
     const track = scroller?.querySelector('.scheduler-track');
     if (!scroller || !track) return;
     const minute = queueToday ? queueNowMinutes : 12 * 60;
+    // "Show all" is intentionally the effective work range, not the whole
+    // day. If Now sits outside it, restore the normal timeline before
+    // centering so the control always has a visible, correctly aligned target.
+    if (showAll && effectiveTimeline.hasWork && (minute < timeline.start || minute > timeline.end)) {
+      setShowAll(false);
+      window.requestAnimationFrame(() => {
+        const fullTrack = scrollRef.current?.querySelector('.scheduler-track');
+        const fullScroller = scrollRef.current;
+        if (!fullTrack || !fullScroller) return;
+        const target = fullTrack.offsetLeft + (minute / QUEUE_DAY_END) * fullTrack.offsetWidth - fullScroller.clientWidth / 2;
+        const left = Math.max(0, Math.min(Math.max(0, fullScroller.scrollWidth - fullScroller.clientWidth), target));
+        if (typeof fullScroller.scrollTo === 'function') fullScroller.scrollTo({ left, behavior: 'smooth' });
+        else fullScroller.scrollLeft = left;
+      });
+      return;
+    }
     const trackStart = track.offsetLeft;
     const target = trackStart + ((minute - timeline.start) / timeline.duration) * track.offsetWidth - scroller.clientWidth / 2;
     const maxScroll = Math.max(0, scroller.scrollWidth - scroller.clientWidth);

@@ -258,7 +258,9 @@ const TYPE_LABELS = {
   Video: 'Video',
   Image: 'Image',
 };
-const POSTS_PER_BATCH = 60;
+// The gallery renders one card per topic stack, not one card per post. Keep
+// the page size named after the unit users actually see.
+const STACKS_PER_BATCH = 60;
 // Posts carrying this hashtag are paid placements. `\B` before the # and a
 // word boundary after it so "#aitoolsentientlabs" doesn't match, while
 // "...tool. #AIToolSentient" does regardless of case.
@@ -703,9 +705,6 @@ function normalizePost(post) {
       postType,
       post.musicSong,
       post.musicArtist,
-      // Kept out of all visual components; Reels transcripts participate in
-      // the normal search index only when Apify actually returned one.
-      post.transcript,
     ]
       .map(normalizeSearchValue)
       .filter(Boolean)
@@ -887,6 +886,8 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
   const dashboardLoader = useRef(null);
   const dashboardRevisionRef = useRef(null);
   const incomingDataTimerRef = useRef(null);
+  const dashboardRequestVersionRef = useRef(0);
+  const dashboardEtagRef = useRef('');
   const requestedRolePreview = window.sessionStorage.getItem('sentient.queueRolePreview') || '';
   const activeRolePreview = ACTIVE_ROLE_PREVIEWS.has(requestedRolePreview) ? requestedRolePreview : '';
   const rolePreviewActive = Boolean(activeRolePreview);
@@ -1014,27 +1015,55 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
   }, [effectiveIsAdmin, effectiveOperatingRoles, refreshQueueSummary]);
 
   const loadDashboard = useCallback(async (signal, { silent = false } = {}) => {
+    const requestVersion = dashboardRequestVersionRef.current + 1;
+    dashboardRequestVersionRef.current = requestVersion;
+    const isCurrentRequest = () => requestVersion === dashboardRequestVersionRef.current && !signal?.aborted;
     let loaded = false;
     try {
       if (!silent) {
         setLoading(true);
         setLoadError('');
       }
+      const headers = dashboardEtagRef.current ? { 'If-None-Match': dashboardEtagRef.current } : undefined;
       const [postsResponse, accountsResponse] = await Promise.all([
-        apiFetch(`${API_BASE}/api/dashboard/posts`, { signal }),
+        apiFetch(`${API_BASE}/api/dashboard/posts`, { signal, headers }),
         apiFetch(`${API_BASE}/api/dashboard/accounts`, { signal }),
       ]);
+      // A manual refresh, reconnect, or tab return can start another request
+      // while this one is in flight. Only the newest response owns the UI.
+      if (!isCurrentRequest()) return;
       if (postsResponse.status === 401 || postsResponse.status === 403 || accountsResponse.status === 401 || accountsResponse.status === 403) {
         onUnauthorized();
         return;
       }
-      if (!postsResponse.ok) throw new Error(`HTTP ${postsResponse.status}`);
       if (!accountsResponse.ok) throw new Error(`HTTP ${accountsResponse.status}`);
-      const postsData = await postsResponse.json();
       const accountsData = await accountsResponse.json();
-      if (!Array.isArray(postsData.posts) || !Array.isArray(accountsData.accounts)) {
+      if (!isCurrentRequest()) return;
+      if (!Array.isArray(accountsData.accounts)) {
         throw new Error('The shared post database returned an invalid response.');
       }
+      // The server has confirmed that the catalog has not changed. Keep the
+      // current cards, selection and scroll intact while still accepting the
+      // lightweight accounts roster response.
+      if (postsResponse.status === 304) {
+        setAccounts(accountsData.accounts);
+        loaded = true;
+        reconnectAttempt.current = 0;
+        setConnectionNotice('');
+        if (reconnectTimer.current) {
+          window.clearTimeout(reconnectTimer.current);
+          reconnectTimer.current = null;
+        }
+        return;
+      }
+      if (!postsResponse.ok) throw new Error(`HTTP ${postsResponse.status}`);
+      const postsData = await postsResponse.json();
+      if (!isCurrentRequest()) return;
+      if (!Array.isArray(postsData.posts)) {
+        throw new Error('The shared post database returned an invalid response.');
+      }
+      const nextEtag = postsResponse.headers.get('ETag');
+      if (nextEtag) dashboardEtagRef.current = nextEtag;
       const nextRevision = dashboardDataRevision(postsData.posts, postsData.summary || {});
       const hasIncomingData = silent && dashboardRevisionRef.current !== null && dashboardRevisionRef.current !== nextRevision;
       if (hasIncomingData) {
@@ -1056,7 +1085,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
         incomingDataTimerRef.current = window.setTimeout(() => setIncomingData(false), 900);
       }
     } catch (error) {
-      if (error.name !== 'AbortError') {
+      if (isCurrentRequest() && error.name !== 'AbortError') {
         // Render can briefly replace the API instance during deploys. Do not
         // discard a loaded dashboard or turn a temporary 502 into a blocking
         // red error screen; keep the current UI and reconnect automatically.
@@ -1074,7 +1103,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
       // If the first request fails, keep the structural skeleton in place
       // until the automatic retry succeeds rather than replacing it with an
       // alarming database-error page.
-      if (!signal?.aborted && loaded) setLoading(false);
+      if (isCurrentRequest() && loaded) setLoading(false);
     }
   }, [loadAccess, onUnauthorized]);
 
@@ -1125,16 +1154,21 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
     };
   }, [connectionNotice]);
 
-  // Both accounts now refresh themselves automatically on the backend
-  // (every 30 min during the active window). Poll quietly in the background
-  // so an already-open tab picks up new likes/HOT status without a manual
-  // reload, without disturbing the loading/error UI on each tick.
+  // Both accounts refresh themselves automatically on the backend. Poll only
+  // while this tab is visible, then make one quiet conditional check when the
+  // user returns. Background tabs should not rebuild or parse a 50k-post feed.
   useEffect(() => {
-    const timer = setInterval(() => {
+    const refreshVisibleCatalog = () => {
+      if (document.visibilityState === 'hidden') return;
       const controller = new AbortController();
       loadDashboard(controller.signal, { silent: true });
-    }, AUTO_POLL_MS);
-    return () => clearInterval(timer);
+    };
+    const timer = setInterval(refreshVisibleCatalog, AUTO_POLL_MS);
+    document.addEventListener('visibilitychange', refreshVisibleCatalog);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', refreshVisibleCatalog);
+    };
   }, [loadDashboard]);
 
   const handleRefresh = useCallback(async () => {
@@ -1172,7 +1206,9 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
         type: 'success',
         text: parts.length ? `${parts.join(', ')}.` : 'Already up to date.',
       });
-      if (added > 0 || updated > 0) await loadDashboard();
+      // Refresh always invalidates the server projection, including engagement
+      // changes that are not represented by the summary counters.
+      await loadDashboard(undefined, { silent: true });
     } catch (error) {
       setRefreshNotice({ type: 'error', text: 'Refresh failed. Try again in a moment.' });
     } finally {
@@ -1290,7 +1326,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
   const [dateFrom, setDateFrom] = useState(initialUrl.from);
   const [dateTo, setDateTo] = useState(initialUrl.to);
   const [datePreset, setDatePreset] = useState(initialUrl.range);
-  const [visibleCount, setVisibleCount] = useState(POSTS_PER_BATCH);
+  const [visibleStackCount, setVisibleStackCount] = useState(STACKS_PER_BATCH);
   const [selectedKey, setSelectedKey] = useState(initialUrl.post);
   const [isSidebarOpen, setIsSidebarOpen] = useState(Boolean(initialUrl.post));
   const [showHidden, setShowHidden] = useState(false);
@@ -1313,16 +1349,16 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
     let frame;
     try {
       const saved = JSON.parse(sessionStorage.getItem('sentient.research.scroll') || 'null');
-      if (saved && saved.search === window.location.search) { setVisibleCount(Math.max(POSTS_PER_BATCH, Math.min(Number(saved.count) || POSTS_PER_BATCH, posts.length))); frame = requestAnimationFrame(() => { if (resultsScrollRef.current) resultsScrollRef.current.scrollTop = saved.top || 0; }); }
+      if (saved && saved.search === window.location.search) { setVisibleStackCount(Math.max(STACKS_PER_BATCH, Number(saved.count) || STACKS_PER_BATCH)); frame = requestAnimationFrame(() => { if (resultsScrollRef.current) resultsScrollRef.current.scrollTop = saved.top || 0; }); }
     } catch {}
     return () => { if (frame) cancelAnimationFrame(frame); };
   }, [homeView, loading, posts.length]);
   useEffect(() => {
     if (homeView) return;
-    const save = () => { try { sessionStorage.setItem('sentient.research.scroll', JSON.stringify({ search: window.location.search, top: resultsScrollRef.current?.scrollTop || 0, count: visibleCount })); } catch {} };
+    const save = () => { try { sessionStorage.setItem('sentient.research.scroll', JSON.stringify({ search: window.location.search, top: resultsScrollRef.current?.scrollTop || 0, count: visibleStackCount })); } catch {} };
     window.addEventListener('pagehide', save);
     return () => window.removeEventListener('pagehide', save);
-  }, [homeView, visibleCount]);
+  }, [homeView, visibleStackCount]);
 
   const [shareCopied, setShareCopied] = useState(false);
   // Only meaningful on narrow viewports, where the six popover triggers
@@ -1494,15 +1530,12 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
   }, [activeGroup, showHotHistory]);
 
   useEffect(() => {
-    setVisibleCount(POSTS_PER_BATCH);
+    setVisibleStackCount(STACKS_PER_BATCH);
   }, [deferredQuery, activeGroup, selectedAccounts, activeType, mediaFilter, minLikes, minComments, dateFrom, dateTo, sortBy, showHidden, showHotHistory]);
 
-  const visible = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount]);
   const { groups: topics, loading: grouping } = useTopicGroups(filtered, posts, sortBy);
-  const visibleTopics = topics.slice(0, visibleCount);
+  const visibleTopics = topics.slice(0, visibleStackCount);
   const galleryTotal = topics.length;
-  const showingFrom = filtered.length ? 1 : 0;
-  const showingTo = visible.length;
   const activeFilterCount = [
     Boolean(query.trim()),
     selectedAccounts.size < accountsInScope.length,
@@ -1631,7 +1664,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
       setDatePreset('all');
       setPromoOnly(false);
       setShowHidden(false);
-      setVisibleCount(POSTS_PER_BATCH);
+      setVisibleStackCount(STACKS_PER_BATCH);
     });
   }, [accountsInScope]);
 
@@ -1789,6 +1822,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
             </> : null}
           </ProductHeader>
           {incomingData && !homeView ? <div className="live-data-notice" role="status"><LoaderCircle className="spin" size={16} /><span>New data is incoming</span></div> : null}
+          {connectionNotice ? <div className="connection-notice" role="status"><LoaderCircle size={15} /><span>{connectionNotice}</span><button type="button" onClick={() => dashboardLoader.current?.(undefined, { silent: true })}>Retry now</button></div> : null}
 
 
 
@@ -2032,7 +2066,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
 
           <section className="panel gallery">
           <div ref={resultsScrollRef} className="results-scroll">
-            {grouping && !visible.length ? <p className="home-loading" role="status">Grouping similar posts… You can keep using Research.</p> : visible.length ? (
+            {grouping && !filtered.length ? <p className="home-loading" role="status">Grouping similar posts… You can keep using Research.</p> : filtered.length ? (
               <StackActions onSaved={(result) => { const members = new Map((result.members || []).map((member) => [member.postKey, member])); const keys = new Set(result.postKeys || []); setDashboard((current) => ({ ...current, posts: current.posts.map((post) => { const key = `${post.account}:${post.shortcode}`; const member = members.get(key); return member ? { ...post, stackId: member.stackId, stackSize: member.stackSize } : keys.has(key) ? { ...post, stackId: result.stackId, stackSize: result.stackSize } : post; }) })); }}><div className="gallery-grid">
                 {visibleTopics.map((group, index) => <TopicStack key={group.id} posts={group.posts} visiblePosts={group.visiblePosts} total={group.total} renderCard={(post, expand, dragProps) => (
                   <PostCard
@@ -2087,10 +2121,10 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
                 </button>
               </div>
             ) : null}
-            {!grouping && visibleCount < galleryTotal ? (
+            {!grouping && visibleStackCount < galleryTotal ? (
               <div className="load-more-end">
-                <button className="ghost-button load-more-button" onClick={() => setVisibleCount((count) => count + POSTS_PER_BATCH)}>
-                  Load 60 more
+                <button className="ghost-button load-more-button" onClick={() => setVisibleStackCount((count) => count + STACKS_PER_BATCH)}>
+                  Load {STACKS_PER_BATCH} more stacks
                 </button>
               </div>
             ) : null}
@@ -2098,9 +2132,9 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
 
           <div className="pagination">
             <div className="pagination-copy">
-              {grouping ? 'Comparing similar posts…' : <>{filtered.length.toLocaleString()} posts in {galleryTotal.toLocaleString()} stacks · showing {galleryTotal ? 1 : 0}-{Math.min(visibleCount, galleryTotal)}</>}
+              {grouping ? 'Comparing similar posts…' : <>{filtered.length.toLocaleString()} posts in {galleryTotal.toLocaleString()} stacks · showing {galleryTotal ? 1 : 0}-{Math.min(visibleStackCount, galleryTotal)} stacks</>}
             </div>
-            {grouping || visibleCount < galleryTotal ? null : <span className="all-loaded">All matching posts loaded</span>}
+            {grouping || visibleStackCount < galleryTotal ? null : <span className="all-loaded">All matching stacks loaded</span>}
           </div>
         </section>
         </> : null}

@@ -188,8 +188,8 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     const showAllControl = document.querySelector('.scheduler-show-all');
     checks['Show all scheduler control renders'] = Boolean(showAllControl) && /Show all|Mostrar todo/.test(showAllControl?.textContent || '');
     await click(showAllControl);
-    checks['Show all fits the effective schedule and hides card details'] = Boolean(document.querySelector('.scheduler.is-effective-view'))
-      && Boolean(document.querySelector('.scheduler-block .scheduler-card-layout'));
+    checks['Show all fits the effective schedule with compact block information'] = Boolean(document.querySelector('.scheduler.is-effective-view'))
+      && Boolean(document.querySelector('.scheduler-block .scheduler-effective-meta'));
     await click(document.querySelector('.scheduler-show-all'));
     await click(document.querySelector('.dev-role-preview > button'));
     const timeZonePreview = document.querySelector('.dev-timezone-preview');
