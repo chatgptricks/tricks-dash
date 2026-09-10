@@ -2,7 +2,7 @@ import ProductHeader from './ProductHeader';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import { createPortal } from 'react-dom';
-import { AlertTriangle, Archive, ArrowLeft, Ban, BarChart3, BellRing, CalendarDays, CalendarPlus, Check, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Clock3, Coffee, Download, History, Image as ImageIcon, Layers, Lightbulb, Link2, LoaderCircle, LocateFixed, LogOut, Moon, Paperclip, Pencil, Play, Plus, Radio, Search, Send, Settings, Sun, TimerReset, WifiOff, X } from 'lucide-react';
+import { AlertTriangle, Archive, ArrowLeft, Ban, BarChart3, BellRing, CalendarDays, CalendarPlus, Check, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Clock3, Coffee, Download, History, Image as ImageIcon, Layers, Lightbulb, Link2, LoaderCircle, LocateFixed, LogOut, Maximize2, Moon, Paperclip, Pencil, Play, Plus, Radio, Search, Send, Settings, Sun, TimerReset, WifiOff, X } from 'lucide-react';
 import { browserPopupRedirectResolver, getRedirectResult, onAuthStateChanged, signOut } from 'firebase/auth';
 import { describeSignInError, firebaseAuth as auth, startGoogleSignIn } from './firebase';
 import { clearSsoCookie, startSsoRefresh, trySsoSignIn } from './sso';
@@ -44,6 +44,11 @@ const DAY = (value = new Date(), timeZone = '') => {
 };
 const shiftDay = (date, amount) => { const value = new Date(`${date}T12:00:00`); value.setDate(value.getDate() + amount); return DAY(value, QUEUE_TIME_ZONE); };
 const time = (minutes) => { const normalized = ((minutes % 1440) + 1440) % 1440; return `${String(Math.floor(normalized / 60)).padStart(2, '0')}:${String(normalized % 60).padStart(2, '0')}`; };
+const schedulerTaskDuration = (task) => {
+  const planned = Number(task?.durationMinutes || 10);
+  if (['completed', 'closed'].includes(task?.status) && task?.actualStartedAt && task?.completedAt) return Math.min(planned, Math.max(10, Math.round((new Date(task.completedAt) - new Date(task.actualStartedAt)) / 60000)));
+  return planned;
+};
 const minutesFromTime = (value) => { const [hour, minute] = String(value || '00:00').split(':').map(Number); return Math.max(0, Math.min(1430, hour * 60 + minute)); };
 const currentMinutes = (value = new Date(), timeZone = '') => {
   const parts = zonedParts(value, timeZone);
@@ -158,6 +163,8 @@ Object.assign(COPY.en, {
   keepScheduledTime: 'Keep scheduled time',
   moveToNow: 'Move to Now',
   returnToNotStarted: 'Return to Not Started',
+  showAll: 'Show all',
+  showFullDay: 'Show full day',
 });
 Object.assign(COPY.es, {
   startChoice: 'Iniciar este trabajo',
@@ -165,6 +172,8 @@ Object.assign(COPY.es, {
   keepScheduledTime: 'Mantener hora programada',
   moveToNow: 'Mover a Ahora',
   returnToNotStarted: 'Devolver a No iniciado',
+  showAll: 'Mostrar todo',
+  showFullDay: 'Mostrar día completo',
 });
 COPY.en.previousDay = 'Previous day';
 COPY.en.nextDay = 'Next day';
@@ -365,14 +374,12 @@ function PriorityBadge({ priority }) {
   return isUrgent(priority) ? <span className="queue-priority-badge priority-urgent">{t('priorityUrgent')}</span> : null;
 }
 
-function TaskBlock({ task, editable, onOpen, onResizeStart, onContextMenu, accountAvatars = {}, timeZone = QUEUE_TIME_ZONE }) {
+function TaskBlock({ task, editable, onOpen, onResizeStart, onContextMenu, accountAvatars = {}, timeZone = QUEUE_TIME_ZONE, timeline = { start: 0, duration: QUEUE_DAY_END } }) {
   const { t } = useQueuePreferences();
   const pendingTickets = Array.isArray(task.pendingTickets) ? task.pendingTickets : [];
   const pendingTicketLabel = pendingTickets.map((ticket) => ticket.type === 'pp_revision' ? t('ppRevision') : ticket.type === 'move' ? t('moveRequest') : t('cancellationRequest')).join(' · ');
   const left = task.scheduledStartMinutes ?? QUEUE_DAY_START;
-  const planned = task.durationMinutes || 10;
-  let width = planned;
-  if (['completed', 'closed'].includes(task.status) && task.actualStartedAt && task.completedAt) width = Math.min(planned, Math.max(10, Math.round((new Date(task.completedAt) - new Date(task.actualStartedAt)) / 60000)));
+  const width = schedulerTaskDuration(task);
   const extra = (task.scheduledStartMinutes ?? 0) + width > QUEUE_DAY_END;
   const canResize = editable && task.status === 'scheduled';
   const accountImage = (account) => { const value = accountAvatars?.[account] || ACCOUNT_PROFILE_FALLBACKS[String(account).toLowerCase()]; return value ? (String(value).startsWith('http') || String(value).startsWith('/') && !String(value).startsWith('/api/') ? String(value) : `${API_BASE}${value}`) : `${API_BASE}/api/dashboard/avatar/${encodeURIComponent(String(account || '').replace(/^@/, ''))}`; };
@@ -388,7 +395,7 @@ function TaskBlock({ task, editable, onOpen, onResizeStart, onContextMenu, accou
   const stateLabel = statusCopy(task.status, t, task.isDraft);
   const coverUrl = cover(task);
   const isPromo = task.tags?.some((tag) => String(tag).toLowerCase() === 'promo') || task.post?.isPromo;
-  return <button type="button" draggable={editable && task.status === 'scheduled'} className={`scheduler-block state-${task.status} ${priorityClass(task.priority)}${hotClass(task)}${task.isDraft ? ' is-draft' : ''}${isPromo ? ' is-promo' : ''}${extra ? ' is-extra' : ''}${pendingTickets.length ? ' has-pending-ticket' : ''}`} style={{ left: `${(left / QUEUE_DAY_END) * 100}%`, width: `${(width / QUEUE_DAY_END) * 100}%` }} onDragStart={(event) => { activeQueueDragId = task.id; event.dataTransfer.setData('queue-task', String(task.id)); }} onDragEnd={() => { activeQueueDragId = null; }} onContextMenu={(event) => onContextMenu?.(event, task)} onClick={(event) => { if (event.target.closest('.scheduler-resize-handle')) return; onOpen(task); }} title={`${accountMention(task.post.account) || task.post.title || t('post')}${isUrgent(task.priority) ? ` · ${priorityCopy(task.priority, t)}` : ''} · ${task.productionPoints} PP · ${statusCopy(task.status, t, task.isDraft)}${pendingTicketLabel ? ` · ${pendingTicketLabel}` : ''} · ${jobType} · ${scheduledTime}${destinations.length ? ` → ${destinations.map((account) => `@${account}`).join(', ')}` : ''}`}>
+  return <button type="button" draggable={editable && task.status === 'scheduled'} className={`scheduler-block state-${task.status} ${priorityClass(task.priority)}${hotClass(task)}${task.isDraft ? ' is-draft' : ''}${isPromo ? ' is-promo' : ''}${extra ? ' is-extra' : ''}${pendingTickets.length ? ' has-pending-ticket' : ''}`} style={{ left: `${((left - timeline.start) / timeline.duration) * 100}%`, width: `${(width / timeline.duration) * 100}%` }} onDragStart={(event) => { activeQueueDragId = task.id; event.dataTransfer.setData('queue-task', String(task.id)); }} onDragEnd={() => { activeQueueDragId = null; }} onContextMenu={(event) => onContextMenu?.(event, task)} onClick={(event) => { if (event.target.closest('.scheduler-resize-handle')) return; onOpen(task); }} title={`${accountMention(task.post.account) || task.post.title || t('post')}${isUrgent(task.priority) ? ` · ${priorityCopy(task.priority, t)}` : ''} · ${task.productionPoints} PP · ${statusCopy(task.status, t, task.isDraft)}${pendingTicketLabel ? ` · ${pendingTicketLabel}` : ''} · ${jobType} · ${scheduledTime}${destinations.length ? ` → ${destinations.map((account) => `@${account}`).join(', ')}` : ''}`}>
     <span className="scheduler-card-layout">
       <span className="scheduler-cover-frame">
         {coverUrl ? <img className="scheduler-cover-image" src={coverUrl} alt="" draggable={false} /> : <span className="scheduler-cover-fallback"><TypeIcon size={24} /></span>}
@@ -423,13 +430,13 @@ function TaskBlock({ task, editable, onOpen, onResizeStart, onContextMenu, accou
   </button>;
 }
 
-function TimeBlock({ block, onContextMenu, onMoveStart, onResizeStart, editable = false, timeZone = QUEUE_TIME_ZONE }) {
+function TimeBlock({ block, onContextMenu, onMoveStart, onResizeStart, editable = false, timeZone = QUEUE_TIME_ZONE, timeline = { start: 0, duration: QUEUE_DAY_END } }) {
   const { t } = useQueuePreferences();
   const Icon = ({ meeting: CalendarDays, break: Coffee, promo: TimerReset, focus: Clock3, other: CalendarPlus }[block.category] || CalendarPlus);
   const start = Number(block.scheduledStartMinutes || 0);
   const duration = Math.max(10, Number(block.durationMinutes || 10));
   const displayTime = scheduleTimeForViewer(block.scheduledDate, start, timeZone);
-  return <div className={`scheduler-time-block category-${block.category || 'other'} status-${block.status}${editable ? ' is-editable' : ''}`} onContextMenu={(event) => onContextMenu?.(event, block)} onPointerDown={(event) => { if (editable && event.button === 0 && !event.target.closest('.scheduler-resize-handle')) onMoveStart?.(event, block); }} style={{ left: `${(start / QUEUE_DAY_END) * 100}%`, width: `${(duration / QUEUE_DAY_END) * 100}%` }} title={`${block.title} · ${displayTime} · ${duration} min · ${block.status === 'pending' ? t('pendingApproval') : t('approved')}`}><Icon size={13} /><span><b>{block.title || t(block.category || 'other')}</b><small>{displayTime} · {duration} min</small></span>{block.status === 'pending' ? <i>{t('pendingApproval')}</i> : null}{editable ? <><span className="scheduler-resize-handle scheduler-resize-handle-left" role="separator" aria-label={`${t('resizeBar')} ${t('resizeLeft')}`} onPointerDown={(event) => onResizeStart?.(event, block, 'left')} /><span className="scheduler-resize-handle scheduler-resize-handle-right" role="separator" aria-label={`${t('resizeBar')} ${t('resizeRight')}`} onPointerDown={(event) => onResizeStart?.(event, block, 'right')} /></> : null}</div>;
+  return <div className={`scheduler-time-block category-${block.category || 'other'} status-${block.status}${editable ? ' is-editable' : ''}`} onContextMenu={(event) => onContextMenu?.(event, block)} onPointerDown={(event) => { if (editable && event.button === 0 && !event.target.closest('.scheduler-resize-handle')) onMoveStart?.(event, block); }} style={{ left: `${((start - timeline.start) / timeline.duration) * 100}%`, width: `${(duration / timeline.duration) * 100}%` }} title={`${block.title} · ${displayTime} · ${duration} min · ${block.status === 'pending' ? t('pendingApproval') : t('approved')}`}><Icon size={13} /><span><b>{block.title || t(block.category || 'other')}</b><small>{displayTime} · {duration} min</small></span>{block.status === 'pending' ? <i>{t('pendingApproval')}</i> : null}{editable ? <><span className="scheduler-resize-handle scheduler-resize-handle-left" role="separator" aria-label={`${t('resizeBar')} ${t('resizeLeft')}`} onPointerDown={(event) => onResizeStart?.(event, block, 'left')} /><span className="scheduler-resize-handle scheduler-resize-handle-right" role="separator" aria-label={`${t('resizeBar')} ${t('resizeRight')}`} onPointerDown={(event) => onResizeStart?.(event, block, 'right')} /></> : null}</div>;
 }
 
 function TimeBlockForm({ form, setForm, busy, onClose, onSubmit, users = [], canChooseUser = false, timeZone = QUEUE_TIME_ZONE }) {
@@ -1093,6 +1100,7 @@ function Scheduler({ data, draft, setDraft, onDraftChange, selectedDate, designe
   const [timeBlockInteraction, setTimeBlockInteraction] = useState(null);
   const [contextMenu, setContextMenu] = useState(null);
   const [isPanning, setIsPanning] = useState(false);
+  const [showAll, setShowAll] = useState(false);
   const scrollRef = useRef(null);
   const resizeRef = useRef(null);
   const timeBlockInteractionRef = useRef(null);
@@ -1133,6 +1141,22 @@ function Scheduler({ data, draft, setDraft, onDraftChange, selectedDate, designe
   // filter and made Hide appear to do nothing.
   const visibleDesigners = (designerScope ? orderedUsers.filter((designer) => designer.email === designerScope) : orderedUsers)
     .filter((designer) => !hiddenUsers.has(designer.email));
+  const effectiveTimeline = useMemo(() => {
+    const visibleEmails = new Set(visibleDesigners.map((designer) => designer.email));
+    const intervals = [
+      ...allTasks.filter((task) => visibleEmails.has(task.designerEmail) && task.scheduledDate === selectedDate && !['pool', 'cancelled'].includes(task.status)).map((task) => ({ start: Number(task.scheduledStartMinutes ?? 0), duration: schedulerTaskDuration(task) })),
+      ...(data.timeBlocks || []).filter((block) => visibleEmails.has(block.requesterEmail) && block.scheduledDate === selectedDate).map((block) => ({ start: Number(block.scheduledStartMinutes ?? 0), duration: Math.max(10, Number(block.durationMinutes || 10)) })),
+    ].map(({ start, duration }) => ({ start: Math.max(0, start), end: Math.min(QUEUE_DAY_END, start + duration) })).filter((interval) => interval.end > interval.start);
+    if (!intervals.length) return { start: 0, end: QUEUE_DAY_END, duration: QUEUE_DAY_END, hasWork: false };
+    const start = Math.min(...intervals.map((interval) => interval.start));
+    const end = Math.max(...intervals.map((interval) => interval.end));
+    return { start, end, duration: Math.max(10, end - start), hasWork: true };
+  }, [allTasks, data.timeBlocks, selectedDate, visibleDesigners]);
+  const timeline = showAll && effectiveTimeline.hasWork ? effectiveTimeline : { start: 0, end: QUEUE_DAY_END, duration: QUEUE_DAY_END, hasWork: false };
+  const minuteAtPointer = (event, rect) => Math.max(0, Math.min(QUEUE_DAY_END, Math.round((timeline.start + ((event.clientX - rect.left) / rect.width) * timeline.duration) / 10) * 10));
+  const timelineMarkers = showAll && effectiveTimeline.hasWork
+    ? [...new Set([timeline.start, timeline.end, ...Array.from({ length: Math.max(0, Math.floor(timeline.end / 60) - Math.ceil(timeline.start / 60) + 1) }, (_, index) => (Math.ceil(timeline.start / 60) + index) * 60).filter((minute) => minute > timeline.start && minute < timeline.end)])].sort((a, b) => a - b)
+    : Array.from({ length: 25 }, (_, hour) => hour * 60);
   useEffect(() => {
     if (initiallyPositionedDateRef.current === selectedDate) return undefined;
     const frame = window.requestAnimationFrame(() => {
@@ -1142,18 +1166,18 @@ function Scheduler({ data, draft, setDraft, onDraftChange, selectedDate, designe
       const isToday = selectedDate === DAY(new Date(), QUEUE_TIME_ZONE);
       const preferred = isToday ? currentMinutes(new Date(), QUEUE_TIME_ZONE) - 180 : 8 * 60;
       const firstMinute = Math.min(16 * 60, Math.max(0, preferred));
-      scroller.scrollLeft = (firstMinute / QUEUE_DAY_END) * track.offsetWidth;
+      scroller.scrollLeft = ((firstMinute - timeline.start) / timeline.duration) * track.offsetWidth;
       initiallyPositionedDateRef.current = selectedDate;
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [selectedDate, schedulerUsers.length]);
+  }, [selectedDate, schedulerUsers.length, timeline.start, timeline.duration]);
   const centerNow = () => {
     const scroller = scrollRef.current;
     const track = scroller?.querySelector('.scheduler-track');
     if (!scroller || !track) return;
     const minute = queueToday ? queueNowMinutes : 12 * 60;
     const trackStart = track.offsetLeft;
-    const target = trackStart + (minute / QUEUE_DAY_END) * track.offsetWidth - scroller.clientWidth / 2;
+    const target = trackStart + ((minute - timeline.start) / timeline.duration) * track.offsetWidth - scroller.clientWidth / 2;
     const maxScroll = Math.max(0, scroller.scrollWidth - scroller.clientWidth);
     const left = Math.max(0, Math.min(maxScroll, target));
     if (typeof scroller.scrollTo === 'function') scroller.scrollTo({ left, behavior: 'smooth' });
@@ -1188,7 +1212,7 @@ function Scheduler({ data, draft, setDraft, onDraftChange, selectedDate, designe
     if ((!coordinator && designer.email !== data.viewer.email) || event.target.closest('.scheduler-block,.scheduler-time-block')) return;
     event.preventDefault();
     const rect = event.currentTarget.getBoundingClientRect();
-    const startMinutes = Math.min(1430, Math.max(0, Math.round((((event.clientX - rect.left) / rect.width) * QUEUE_DAY_END) / 10) * 10));
+    const startMinutes = Math.min(1430, minuteAtPointer(event, rect));
     const panelWidth = 326;
     const panelHeight = 390;
     setTimeBlockForm({ ticketId: block?.id, designerEmail: block?.requesterEmail || designer.email, category: block?.category || 'meeting', title: block?.title || '', note: block?.note || '', scheduledDate: block?.scheduledDate || selectedDate, startMinutes: block?.scheduledStartMinutes ?? startMinutes, durationMinutes: block?.durationMinutes || 30, x: Math.max(12, Math.min(window.innerWidth - panelWidth - 12, event.clientX)), y: Math.max(12, Math.min(window.innerHeight - panelHeight - 12, event.clientY)) });
@@ -1219,7 +1243,7 @@ function Scheduler({ data, draft, setDraft, onDraftChange, selectedDate, designe
     const targetUser = schedulerUsers.find((user) => user.email === designer);
     if (!targetUser?.isQueueDesigner) return { ok: false, error: 'Only Post Designers can receive Queue work.' };
     const rect = event.currentTarget.getBoundingClientRect();
-    const pointer = Math.min(1430, Math.max(0, Math.round((((event.clientX - rect.left) / rect.width) * QUEUE_DAY_END) / 10) * 10));
+    const pointer = Math.min(1430, minuteAtPointer(event, rect));
     const targetNow = Math.min(1430, Math.ceil(queueNowMinutes / 10) * 10);
     if (selectedDate < DAY(now, QUEUE_TIME_ZONE) || (selectedDate === DAY(now, QUEUE_TIME_ZONE) && pointer < targetNow)) return { ok: false, error: 'Queue work cannot be scheduled before the current Queue time.' };
     const result = planQueueDrop({
@@ -1276,7 +1300,7 @@ function Scheduler({ data, draft, setDraft, onDraftChange, selectedDate, designe
     event.stopPropagation();
     const rect = track.getBoundingClientRect();
     if (!rect.width) return;
-    const pointer = Math.max(0, Math.min(QUEUE_DAY_END, Math.round((((event.clientX - rect.left) / rect.width) * QUEUE_DAY_END) / 10) * 10));
+    const pointer = minuteAtPointer(event, rect);
     const baseStart = Number(block.scheduledStartMinutes ?? 0);
     const baseDuration = Math.max(10, Number(block.durationMinutes || 10));
     const next = { kind, edge, block, track, baseStart, baseDuration, baseEnd: baseStart + baseDuration, grabOffset: pointer - baseStart, preview: block };
@@ -1290,8 +1314,7 @@ function Scheduler({ data, draft, setDraft, onDraftChange, selectedDate, designe
       if (!current?.track) return;
       const rect = current.track.getBoundingClientRect();
       if (!rect.width) return;
-      const rawMinute = ((event.clientX - rect.left) / rect.width) * QUEUE_DAY_END;
-      const pointer = Math.max(0, Math.min(QUEUE_DAY_END, Math.round(rawMinute / 10) * 10));
+      const pointer = minuteAtPointer(event, rect);
       const others = planningTasks.filter((item) => item.id !== current.task.id && item.designerEmail === current.task.designerEmail && item.scheduledDate === current.task.scheduledDate && !['pool', 'cancelled'].includes(item.status)).map((item) => { const unit = minutesPerPPOf(item); return { start: Number(item.scheduledStartMinutes ?? 0), end: Number(item.scheduledStartMinutes ?? 0) + Math.max(unit, Number(item.durationMinutes || Number(item.productionPoints || 1) * unit)) }; });
       const previousEnd = Math.max(0, ...others.filter((item) => item.end <= current.baseStart).map((item) => item.end + QUEUE_BUFFER_MINUTES));
       const nextStart = Math.min(QUEUE_DAY_END, ...others.filter((item) => item.start >= current.baseEnd).map((item) => item.start - QUEUE_BUFFER_MINUTES));
@@ -1336,7 +1359,7 @@ function Scheduler({ data, draft, setDraft, onDraftChange, selectedDate, designe
       if (!current?.track) return;
       const rect = current.track.getBoundingClientRect();
       if (!rect.width) return;
-      const pointer = Math.max(0, Math.min(QUEUE_DAY_END, Math.round((((event.clientX - rect.left) / rect.width) * QUEUE_DAY_END) / 10) * 10));
+      const pointer = minuteAtPointer(event, rect);
       let start = current.baseStart;
       let duration = current.baseDuration;
       if (current.kind === 'move') {
@@ -1371,13 +1394,13 @@ function Scheduler({ data, draft, setDraft, onDraftChange, selectedDate, designe
     return true;
   });
   const previewNextDay = dropPreview && dropPreview.target.scheduledDate !== selectedDate;
-  const previewWidth = dropPreview ? Math.max(0.8, (dropPreview.target.durationMinutes / QUEUE_DAY_END) * 100) : 0;
-  const previewLeft = dropPreview ? (previewNextDay ? Math.max(0, 100 - previewWidth) : (dropPreview.target.scheduledStartMinutes / QUEUE_DAY_END) * 100) : 0;
+  const previewWidth = dropPreview ? Math.max(0.8, (dropPreview.target.durationMinutes / timeline.duration) * 100) : 0;
+  const previewLeft = dropPreview ? (previewNextDay ? Math.max(0, 100 - previewWidth) : ((dropPreview.target.scheduledStartMinutes - timeline.start) / timeline.duration) * 100) : 0;
   return <div className="scheduler-shell">
-    <section className={`scheduler${isPanning ? ' is-panning' : ''}`} ref={scrollRef} onPointerDown={startPan} onPointerMove={movePan} onPointerUp={endPan} onPointerCancel={endPan}>
+    <section className={`scheduler${isPanning ? ' is-panning' : ''}${showAll && effectiveTimeline.hasWork ? ' is-effective-view' : ''}`} ref={scrollRef} onPointerDown={startPan} onPointerMove={movePan} onPointerUp={endPan} onPointerCancel={endPan}>
       <div className="scheduler-canvas">
-        <div className="scheduler-time-head"><span className="scheduler-time-zone-labels" aria-label="Scheduler time zones"><b title="Costa Rica">🇨🇷</b><b title="Colombia">🇨🇴</b></span><div className="scheduler-time-zone-grid"><div className="scheduler-time-zone-row" aria-label="Costa Rica time">{Array.from({ length: 24 }, (_, hour) => <b key={hour} style={{ left: `${hour * (100 / 24)}%` }}>{scheduleTimeForViewer(selectedDate, hour * 60, QUEUE_TIME_ZONE)}</b>)}</div><div className="scheduler-time-zone-row" aria-label="Colombia time">{Array.from({ length: 24 }, (_, hour) => <b key={hour} style={{ left: `${hour * (100 / 24)}%` }}>{scheduleTimeForViewer(selectedDate, hour * 60, 'America/Bogota')}</b>)}</div></div></div>
-        {queueToday ? <div className="scheduler-day-overlay"><span className="scheduler-now-global" style={{ left: `${(queueNowMinutes / QUEUE_DAY_END) * 100}%` }} title={time(currentMinutes(now, timeZone))}><b>{t('now')}</b></span></div> : null}
+        <div className="scheduler-time-head"><span className="scheduler-time-zone-labels" aria-label="Scheduler time zones"><b title="Costa Rica">🇨🇷</b><b title="Colombia">🇨🇴</b></span><div className="scheduler-time-zone-grid"><div className="scheduler-time-zone-row" aria-label="Costa Rica time">{timelineMarkers.map((minute) => <b key={minute} style={{ left: `${((minute - timeline.start) / timeline.duration) * 100}%` }}>{scheduleTimeForViewer(selectedDate, minute, QUEUE_TIME_ZONE)}</b>)}</div><div className="scheduler-time-zone-row" aria-label="Colombia time">{timelineMarkers.map((minute) => <b key={minute} style={{ left: `${((minute - timeline.start) / timeline.duration) * 100}%` }}>{scheduleTimeForViewer(selectedDate, minute, 'America/Bogota')}</b>)}</div></div></div>
+        {queueToday && queueNowMinutes >= timeline.start && queueNowMinutes <= timeline.end ? <div className="scheduler-day-overlay"><span className="scheduler-now-global" style={{ left: `${((queueNowMinutes - timeline.start) / timeline.duration) * 100}%` }} title={time(currentMinutes(now, timeZone))}><b>{t('now')}</b></span></div> : null}
         {visibleDesigners.map((designer) => {
           const queueEligible = designer.isQueueDesigner !== false;
           const initials = displayName(designer.email, designer.displayName).split(/\s+/).map((word) => word.slice(0, 1)).join('').slice(0, 2).toUpperCase();
@@ -1393,16 +1416,16 @@ function Scheduler({ data, draft, setDraft, onDraftChange, selectedDate, designe
           return <div className={`scheduler-row${queueEligible ? '' : ' is-non-queue-user'}`} key={designer.email} onDragOver={(event) => { if (coordinator && isUserRowDrag(event)) event.preventDefault(); }} onDrop={(event) => { const dragged = event.dataTransfer?.getData('scheduler-user'); if (!coordinator || !dragged || dragged === designer.email) return; event.preventDefault(); const rowOrder = orderedUsers.map((person) => person.email).filter((email) => email !== dragged); rowOrder.splice(Math.max(0, rowOrder.indexOf(designer.email)), 0, dragged); onSavePreferences?.({ hiddenUsers: [...hiddenUsers], rowOrder }); }}>
             <header draggable={coordinator} onDragStart={(event) => { event.dataTransfer?.setData('scheduler-user', designer.email); event.dataTransfer.effectAllowed = 'move'; }} onContextMenu={(event) => { if (!coordinator) return; event.preventDefault(); setContextMenu({ x: event.clientX, y: event.clientY, type: 'user', designer }); }}><div className="scheduler-user-identity"><span className="scheduler-user-avatar"><span aria-hidden="true">{initials}</span>{userAvatar(designer.avatarUrl) ? <img src={userAvatar(designer.avatarUrl)} alt="" referrerPolicy="no-referrer" onError={(event) => { event.currentTarget.hidden = true; }} /> : null}</span><span className="scheduler-user-copy"><b className="scheduler-user-name"><span className={`scheduler-user-presence is-${presenceStatus}`} role="img" aria-label={presenceLabel} title={presenceLabel} />{displayName(designer.email, designer.displayName)}</b><small>{role}</small><span className="scheduler-user-accounts" title={accounts}>{designer.accounts?.map((account) => <i key={account}>{accountAvatars[account] ? <img src={accountAvatars[account].startsWith('/api/') ? `${API_BASE}${accountAvatars[account]}` : accountAvatars[account]} alt={`@${account}`} /> : account.slice(0, 1).toUpperCase()}</i>)}</span></span></div></header>
             <div className="scheduler-track" onContextMenu={(event) => openTimeBlockForm(event, designer)} onDragOver={(event) => previewDrop(event, designer.email)} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setDropPreview(null); }} onDrop={(event) => drop(event, designer.email)}>
-              {Array.from({ length: 25 }, (_, hour) => <i key={hour} style={{ left: `${hour * (100 / 24)}%` }} />)}
-              {timeBlocks.map((block) => { const editableTime = coordinator || block.requesterEmail === data.viewer.email; const renderBlock = timeBlockInteraction?.preview?.id === block.id ? timeBlockInteraction.preview : block; return <TimeBlock key={block.id} block={renderBlock} editable={editableTime} timeZone={timeZone} onMoveStart={(event, item) => startTimeBlockInteraction(event, item, 'move')} onResizeStart={(event, item, edge) => startTimeBlockInteraction(event, item, 'resize', edge)} onContextMenu={(event, item) => { if (!editableTime) return; event.preventDefault(); setContextMenu({ x: event.clientX, y: event.clientY, type: 'time', designer, block: item }); }} />; })}
+              {timelineMarkers.map((minute) => <i key={minute} style={{ left: `${((minute - timeline.start) / timeline.duration) * 100}%` }} />)}
+              {timeBlocks.map((block) => { const editableTime = coordinator || block.requesterEmail === data.viewer.email; const renderBlock = timeBlockInteraction?.preview?.id === block.id ? timeBlockInteraction.preview : block; return <TimeBlock key={block.id} block={renderBlock} timeline={timeline} editable={editableTime} timeZone={timeZone} onMoveStart={(event, item) => startTimeBlockInteraction(event, item, 'move')} onResizeStart={(event, item, edge) => startTimeBlockInteraction(event, item, 'resize', edge)} onContextMenu={(event, item) => { if (!editableTime) return; event.preventDefault(); setContextMenu({ x: event.clientX, y: event.clientY, type: 'time', designer, block: item }); }} />; })}
               {dropPreview?.designer === designer.email ? <span className={`scheduler-drop-preview${previewNextDay ? ' is-next-day' : ''}`} style={{ left: `${previewLeft}%`, width: `${previewWidth}%` }}><b>@{dropPreview.target.post.account}</b><small>{previewNextDay ? `${displayDate(scheduleDateForViewer(dropPreview.target.scheduledDate, dropPreview.target.scheduledStartMinutes, timeZone), language)} · ` : ''}{scheduleTimeForViewer(dropPreview.target.scheduledDate, dropPreview.target.scheduledStartMinutes, timeZone)} · {dropPreview.target.durationMinutes} min</small></span> : null}
-              {tasks.map((task) => { const renderTask = resizeState?.preview?.id === task.id ? resizeState.preview : task; return <TaskBlock key={task.id} task={renderTask} timeZone={timeZone} editable={selfPlanner && (coordinator || renderTask.coordinatorEmail === data.viewer.email) && (!renderTask.isDraft || renderTask.draftCoordinatorEmail === data.viewer.email)} accountAvatars={accountAvatars} onResizeStart={startResize} onContextMenu={(event, item) => { if (!coordinator) return; event.preventDefault(); setContextMenu({ x: event.clientX, y: event.clientY, type: 'task', task: item }); }} onOpen={onOpen} />; })}
+              {tasks.map((task) => { const renderTask = resizeState?.preview?.id === task.id ? resizeState.preview : task; return <TaskBlock key={task.id} task={renderTask} timeline={timeline} timeZone={timeZone} editable={selfPlanner && (coordinator || renderTask.coordinatorEmail === data.viewer.email) && (!renderTask.isDraft || renderTask.draftCoordinatorEmail === data.viewer.email)} accountAvatars={accountAvatars} onResizeStart={startResize} onContextMenu={(event, item) => { if (!coordinator) return; event.preventDefault(); setContextMenu({ x: event.clientX, y: event.clientY, type: 'task', task: item }); }} onOpen={onOpen} />; })}
             </div>
           </div>;
         })}
       </div>
     </section>
-    <button type="button" className="scheduler-center-now" onClick={centerNow} title={t('centerNow')} aria-label={t('centerNow')}><LocateFixed size={15} /><span>{t('centerNow')}</span></button>
+    <div className="scheduler-view-controls"><button type="button" className={`scheduler-show-all${showAll && effectiveTimeline.hasWork ? ' is-active' : ''}`} onClick={() => setShowAll((value) => !value)} title={showAll ? t('showFullDay') : t('showAll')} aria-label={showAll ? t('showFullDay') : t('showAll')} aria-pressed={showAll && effectiveTimeline.hasWork}><Maximize2 size={14} /><span>{showAll && effectiveTimeline.hasWork ? t('showFullDay') : t('showAll')}</span></button><button type="button" className="scheduler-center-now" onClick={centerNow} title={t('centerNow')} aria-label={t('centerNow')}><LocateFixed size={15} /><span>{t('centerNow')}</span></button></div>
     {contextMenu ? <><button type="button" className="scheduler-context-backdrop" onClick={() => setContextMenu(null)} aria-label={t('close')} /><div className="scheduler-context-menu" style={{ left: Math.min(window.innerWidth - 210, contextMenu.x), top: Math.min(window.innerHeight - 180, contextMenu.y) }}>{contextMenu.type === 'user' ? <button type="button" onClick={() => { onSavePreferences?.({ hiddenUsers: [...hiddenUsers, contextMenu.designer.email], rowOrder: preferences.rowOrder || [] }); setContextMenu(null); }}>Hide {displayName(contextMenu.designer.email, contextMenu.designer.displayName)}</button> : null}{contextMenu.type === 'task' ? <><button type="button" onClick={() => { onOpen(contextMenu.task); setContextMenu(null); }}>Open post</button><button type="button" onClick={() => { onDuplicateTask?.(contextMenu.task); setContextMenu(null); }}>{t('duplicateRequest')}</button><button type="button" onClick={() => { onReturnToPool?.(contextMenu.task); setContextMenu(null); }}>Return to Pool</button><button type="button" className="is-danger" onClick={() => { onCancelTask?.(contextMenu.task); setContextMenu(null); }}>Cancel post</button></> : null}{contextMenu.type === 'time' ? <><button type="button" onClick={(event) => { setContextMenu(null); openTimeBlockForm(event, contextMenu.designer, contextMenu.block); }}>Edit personal time</button><button type="button" className="is-danger" onClick={() => { onDeleteTimeBlock?.(contextMenu.block); setContextMenu(null); }}>Delete personal time</button></> : null}</div></> : null}
     <TimeBlockForm form={timeBlockForm} setForm={setTimeBlockForm} busy={timeBlockBusy} onClose={() => setTimeBlockForm(null)} onSubmit={submitTimeBlock} users={schedulerUsers} canChooseUser={coordinator} timeZone={timeZone} />
   </div>;

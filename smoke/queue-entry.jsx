@@ -178,6 +178,12 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     const nowLineBefore = document.querySelector('.scheduler-now-global');
     checks['Now renders once above the calendar'] = document.querySelectorAll('.scheduler-now-global > b').length === 1 && /Now|Ahora/.test(nowLineBefore?.textContent || '');
     checks['Center Now control renders'] = Boolean(document.querySelector('.scheduler-center-now'));
+    const showAllControl = document.querySelector('.scheduler-show-all');
+    checks['Show all scheduler control renders'] = Boolean(showAllControl) && /Show all|Mostrar todo/.test(showAllControl?.textContent || '');
+    await click(showAllControl);
+    checks['Show all fits the effective schedule and hides card details'] = Boolean(document.querySelector('.scheduler.is-effective-view'))
+      && Boolean(document.querySelector('.scheduler-block .scheduler-card-layout'));
+    await click(document.querySelector('.scheduler-show-all'));
     await click(document.querySelector('.dev-role-preview > button'));
     const timeZonePreview = document.querySelector('.dev-timezone-preview');
     checks['Dev time-zone simulator renders'] = Boolean(timeZonePreview) && timeZonePreview.options.length === 2;
