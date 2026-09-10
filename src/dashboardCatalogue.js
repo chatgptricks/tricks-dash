@@ -1,7 +1,6 @@
 import { API_BASE, apiFetch } from './api';
 
-const PAGE_SIZE = 1_000;
-const MAX_CONCURRENT_PAGES = 4;
+const PAGE_SIZE = 2_000;
 
 export class DashboardCatalogueError extends Error {
   constructor(message, status = 0) {
@@ -80,13 +79,15 @@ async function fetchCompleteRevision(manifest, signal, onProgress) {
         throw new DashboardCatalogueError('The post catalogue changed while loading.', 409);
       }
       const nextCursor = Number(body?.nextCursor);
-      if (!Number.isSafeInteger(nextCursor) || nextCursor <= cursor || nextCursor > upperBound) {
+      const done = body?.done === true;
+      if (!Number.isSafeInteger(nextCursor) || nextCursor < cursor || nextCursor > upperBound || (!done && nextCursor <= cursor)) {
         throw new DashboardCatalogueError('The post catalogue changed while loading.', 409);
       }
       rows.push(...body.posts);
       received += body.posts.length;
       onProgress?.({ received, total: null });
       cursor = nextCursor;
+      if (done) break;
     }
     return rows;
   };
