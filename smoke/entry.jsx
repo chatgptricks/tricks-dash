@@ -34,8 +34,8 @@ const ACCOUNTS = [
 const stubFetch = async (url) => {
   const u = String(url);
   let body = {};
-  if (u.includes('/api/dashboard/posts/manifest')) body = { revision: 'desktop-smoke', rawTotal: POSTS.length, sources: [{ source: 'canonical', total: POSTS.length }, { source: 'dashboard', total: 0 }] };
-  else if (u.includes('/api/dashboard/posts/page')) body = { source: 'canonical', offset: 0, total: POSTS.length, revision: 'desktop-smoke', posts: POSTS };
+  if (u.includes('/api/dashboard/posts/manifest')) body = { revision: 'desktop-smoke', sources: [{ source: 'canonical', upperBound: POSTS.length }, { source: 'dashboard', upperBound: 0 }] };
+  else if (u.includes('/api/dashboard/posts/page')) body = { source: 'canonical', afterId: 0, nextCursor: POSTS.length, done: true, upperBound: POSTS.length, revision: 'desktop-smoke', posts: POSTS };
   else if (u.includes('/api/dashboard/posts')) body = { posts: POSTS, summary: {}, ranges: {} };
   else if (u.includes('/api/dashboard/accounts')) body = { accounts: ACCOUNTS };
   else if (u.includes('/api/dashboard/lists')) body = { lists: [] };

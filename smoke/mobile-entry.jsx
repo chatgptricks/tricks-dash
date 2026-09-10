@@ -20,8 +20,8 @@ const ok = (body, headers = {}) => ({ ok: true, status: 200, headers: { get: (ke
 const fetchStub = async (url) => {
   const value = String(url);
   if (value.includes('/api/dashboard/me')) return ok({ email: 'user03@example.com', is_admin: true, is_dev: true, operating_role: 'vc', operating_roles: ['vc', 'pd'] });
-  if (value.includes('/api/dashboard/posts/manifest')) return ok({ revision: 'mobile-smoke', rawTotal: 1, sources: [{ source: 'canonical', total: 1 }, { source: 'dashboard', total: 0 }] }, { etag: '"mobile-smoke"' });
-  if (value.includes('/api/dashboard/posts/page')) return ok({ source: 'canonical', offset: 0, total: 1, revision: 'mobile-smoke', posts: [post] });
+  if (value.includes('/api/dashboard/posts/manifest')) return ok({ revision: 'mobile-smoke', sources: [{ source: 'canonical', upperBound: 1 }, { source: 'dashboard', upperBound: 0 }] }, { etag: '"mobile-smoke"' });
+  if (value.includes('/api/dashboard/posts/page')) return ok({ source: 'canonical', afterId: 0, nextCursor: 1, done: true, upperBound: 1, revision: 'mobile-smoke', posts: [post] });
   if (value.includes('/api/dashboard/posts')) return ok({ posts: [post], summary: {} });
   if (value.includes('/api/dashboard/accounts')) return ok({ accounts: [{ handle: 'chatgptricks', label: 'ChatGPTricks', group: 'sentient' }] });
   if (value.includes('/api/dashboard/queue/v2/admin-report')) return ok({ totals: {}, designers: [], assignedPosts: [task] });

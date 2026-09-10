@@ -52,28 +52,25 @@ async function fetchManifest(signal, etag = '') {
 }
 
 async function fetchCompleteRevision(manifest, signal, onProgress) {
-  const jobs = [];
-  for (const entry of manifest.sources) {
+  const sources = manifest.sources.map((entry) => {
     const source = String(entry?.source || '');
-    const total = Math.max(0, Number(entry?.total) || 0);
-    if (!source) throw new DashboardCatalogueError('The post catalogue named an invalid source.');
-    for (let offset = 0; offset < total; offset += PAGE_SIZE) jobs.push({ source, offset, total });
-  }
-
-  const pages = new Array(jobs.length);
-  let next = 0;
+    const upperBound = Math.max(0, Number(entry?.upperBound) || 0);
+    if (!source || !Number.isSafeInteger(upperBound)) {
+      throw new DashboardCatalogueError('The post catalogue named an invalid source.');
+    }
+    return { source, upperBound };
+  });
   let received = 0;
-  const totalRows = Math.max(0, Number(manifest.rawTotal) || jobs.reduce((sum, job) => sum + Math.min(PAGE_SIZE, job.total - job.offset), 0));
-  onProgress?.({ received, total: totalRows });
+  onProgress?.({ received, total: null });
 
-  const worker = async () => {
-    while (next < jobs.length) {
-      const index = next;
-      next += 1;
-      const job = jobs[index];
+  const loadSource = async ({ source, upperBound }) => {
+    const rows = [];
+    let cursor = 0;
+    while (cursor < upperBound) {
       const params = new URLSearchParams({
-        source: job.source,
-        offset: String(job.offset),
+        source,
+        after_id: String(cursor),
+        until_id: String(upperBound),
         limit: String(PAGE_SIZE),
         revision: manifest.revision,
       });
@@ -82,24 +79,22 @@ async function fetchCompleteRevision(manifest, signal, onProgress) {
       if (body?.revision !== manifest.revision || !Array.isArray(body?.posts)) {
         throw new DashboardCatalogueError('The post catalogue changed while loading.', 409);
       }
-      // A shrinking source while the revision is supposedly stable would make
-      // a partial result look complete. Treat it as a changed catalogue and
-      // retry from a fresh manifest instead.
-      const expected = Math.min(PAGE_SIZE, Math.max(0, job.total - job.offset));
-      if (body.posts.length !== expected) {
+      const nextCursor = Number(body?.nextCursor);
+      if (!Number.isSafeInteger(nextCursor) || nextCursor <= cursor || nextCursor > upperBound) {
         throw new DashboardCatalogueError('The post catalogue changed while loading.', 409);
       }
-      pages[index] = body.posts;
+      rows.push(...body.posts);
       received += body.posts.length;
-      onProgress?.({ received, total: totalRows });
+      onProgress?.({ received, total: null });
+      cursor = nextCursor;
     }
+    return rows;
   };
 
-  await Promise.all(Array.from({ length: Math.min(MAX_CONCURRENT_PAGES, Math.max(1, jobs.length)) }, worker));
-  const rawPosts = pages.flat();
-  if (rawPosts.length !== totalRows) {
-    throw new DashboardCatalogueError('The complete post catalogue could not be verified.', 409);
-  }
+  // Each source advances one stable primary-key cursor. This avoids a burst
+  // of COUNT/MAX scans and still guarantees that every row below its captured
+  // high-water mark is loaded. Sources can safely progress in parallel.
+  const rawPosts = (await Promise.all(sources.map(loadSource))).flat();
   const posts = dedupePosts(rawPosts);
   const knownLikes = posts.map((post) => Number(post?.likes)).filter((likes) => Number.isFinite(likes));
   const totalLikes = knownLikes.reduce((sum, likes) => sum + likes, 0);
@@ -110,7 +105,7 @@ async function fetchCompleteRevision(manifest, signal, onProgress) {
       'Total likes': totalLikes,
       'Average likes': knownLikes.length ? Math.round(totalLikes / knownLikes.length) : 0,
     },
-    rawTotal: totalRows,
+    rawTotal: rawPosts.length,
     revision: manifest.revision,
   };
 }
