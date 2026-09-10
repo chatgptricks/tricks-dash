@@ -3248,20 +3248,16 @@ export function SettingsPanel({
     setCatchingUpPosts(true);
     setCatchUpNotice(null);
     try {
-      const response = await apiFetch(`${API_BASE}/api/dashboard/posts/catch-up`, {
+      const response = await apiFetch(`${API_BASE}/api/dashboard/posts/catch-up/full`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ lookback_hours: '168' }),
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.detail || 'Post catch-up failed.');
-      const added = Object.values(body.results || {}).reduce(
-        (total, result) => total + (result?.new_posts?.added ?? 0),
-        0,
-      );
       setCatchUpNotice({
         type: 'success',
-        text: added ? `${added} missing post${added === 1 ? '' : 's'} added from the last 7 days.` : 'No additional regular posts found in the last 7 days.',
+        text: body.status === 'done'
+          ? `The full-library recovery already completed${body.result?.added ? ` (${body.result.added} posts added).` : '.'}`
+          : 'Full-library recovery is queued and will continue in the worker even if you close or reload this page.',
       });
       loadApifyRuns();
     } catch (error) {
@@ -4357,7 +4353,7 @@ export function SettingsPanel({
                     </button>
                   </div>
                   <p className="wizard-hint">
-                    One manual 7-day recovery pass using the normal profile scraper across active accounts. Returned Reels are included; the dedicated Reels scraper is not used.
+                    Queues a durable seven-day full-library recovery across active accounts, including the dedicated Reels source. It keeps running even when this page is closed or refreshed.
                   </p>
                   {catchUpNotice ? (
                     <p className={catchUpNotice.type === 'error' ? 'settings-notice-error' : 'settings-notice'}>
