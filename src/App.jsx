@@ -1172,15 +1172,12 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
         // older dashboard build. Cache access is an acceleration, never a
         // prerequisite for the live library: fall through to the API quickly
         // instead of leaving the entire page on Loading indefinitely.
-        const snapshot = await Promise.race([
-          readDashboardSnapshot(),
-          new Promise((resolve) => window.setTimeout(() => resolve(null), 5_000)),
-        ]);
+        const restore = readDashboardSnapshot().then((snapshot) => {
         const isCompleteSnapshot = snapshot?.catalogueComplete
           && Array.isArray(snapshot.posts)
           && snapshot.posts.length > 0
           && Array.isArray(snapshot.accounts);
-        if (active && isCompleteSnapshot) {
+        if (active && isCompleteSnapshot && !dashboardPostsRef.current.length) {
           dashboardPostsRef.current = snapshot.posts;
           dashboardSourcesRef.current = Array.isArray(snapshot.catalogueSources) ? snapshot.catalogueSources : [];
           setDashboard({ posts: snapshot.posts, summary: snapshot.summary || {} });
@@ -1188,6 +1185,13 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
           setLoading(false);
           if (snapshot.catalogueRevision) dashboardEtagRef.current = `"${snapshot.catalogueRevision}"`;
         }
+        });
+        // A slow cache read remains useful after the network fallback starts.
+        // Never discard a complete snapshot merely because it took >5 seconds.
+        await Promise.race([
+          restore,
+          new Promise((resolve) => window.setTimeout(resolve, 5_000)),
+        ]);
       } catch {
         // IndexedDB is an acceleration path only. A blocked/private browser
         // must still be able to open the live catalogue normally.
