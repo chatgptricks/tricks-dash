@@ -3152,10 +3152,9 @@ export function SettingsPanel({
   }, []);
 
   const loadApifyRuns = useCallback(async () => {
-    if (!password) return;
     setApifyLoading(true);
     try {
-      const response = await apiFetch(`${API_BASE}/api/admin/apify/runs?password=${encodeURIComponent(password)}&limit=10`);
+      const response = await apiFetch(`${API_BASE}/api/admin/apify/runs?limit=10`);
       const body = await response.json().catch(() => ({}));
       if (Array.isArray(body.runs)) setApifyRuns(body.runs);
     } catch (error) {
@@ -3163,7 +3162,7 @@ export function SettingsPanel({
     } finally {
       setApifyLoading(false);
     }
-  }, [password]);
+  }, []);
 
   const recoverDaytradingRun = useCallback(async (run) => {
     if (!run?.id || recoveringApifyRun) return;
@@ -3171,8 +3170,6 @@ export function SettingsPanel({
     try {
       const response = await apiFetch(`${API_BASE}/api/admin/apify/import-run/daytrading?run_id=${encodeURIComponent(run.id)}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ password }),
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.detail || 'Could not recover this Apify run.');
@@ -3183,7 +3180,7 @@ export function SettingsPanel({
     } finally {
       setRecoveringApifyRun('');
     }
-  }, [loadApifyRuns, loadRoster, password, recoveringApifyRun]);
+  }, [loadApifyRuns, loadRoster, recoveringApifyRun]);
 
   const recoverBatchRun = useCallback(async (run) => {
     if (!run?.id || recoveringApifyRun) return;
@@ -3191,8 +3188,6 @@ export function SettingsPanel({
     try {
       const response = await apiFetch(`${API_BASE}/api/admin/apify/import-batch-run?run_id=${encodeURIComponent(run.id)}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ password }),
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.detail || 'Could not recover this Apify run.');
@@ -3203,7 +3198,7 @@ export function SettingsPanel({
     } finally {
       setRecoveringApifyRun('');
     }
-  }, [loadApifyRuns, loadRoster, password, recoveringApifyRun]);
+  }, [loadApifyRuns, loadRoster, recoveringApifyRun]);
 
   const catchUpDashboardPosts = useCallback(async () => {
     if (catchingUpPosts) return;
