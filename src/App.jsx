@@ -905,6 +905,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
   // fetch only new IDs instead of downloading the historical library again.
   const dashboardPostsRef = useRef([]);
   const dashboardSourcesRef = useRef([]);
+  const dashboardFlightRef = useRef(null);
   const requestedRolePreview = window.sessionStorage.getItem('sentient.queueRolePreview') || '';
   const activeRolePreview = ACTIVE_ROLE_PREVIEWS.has(requestedRolePreview) ? requestedRolePreview : '';
   const rolePreviewActive = Boolean(activeRolePreview);
@@ -1035,6 +1036,10 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
   }, [effectiveIsAdmin, effectiveOperatingRoles, refreshQueueSummary]);
 
   const loadDashboard = useCallback(async (signal, { silent = false } = {}) => {
+    // Returning to a tab must not supersede the full catalogue already loading.
+    if (dashboardFlightRef.current && !dashboardFlightRef.current.signal?.aborted) return;
+    const flight = { signal };
+    dashboardFlightRef.current = flight;
     const requestVersion = dashboardRequestVersionRef.current + 1;
     dashboardRequestVersionRef.current = requestVersion;
     const isCurrentRequest = () => requestVersion === dashboardRequestVersionRef.current && !signal?.aborted;
@@ -1097,22 +1102,16 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
       }
       dashboardPostsRef.current = catalogue.posts;
       dashboardSourcesRef.current = Array.isArray(catalogue.sources) ? catalogue.sources : [];
-      // Do not reveal the complete library until its reload-safe snapshot is
-      // committed. Previously the UI painted first and a page refresh during
-      // IndexedDB's very large structured clone restarted the entire library.
-      try {
-        await writeDashboardSnapshot({
+      // The complete response is ready to use. Persistence must never hold
+      // the loading screen open when browser storage is slow or unavailable.
+      void writeDashboardSnapshot({
           posts: catalogue.posts,
           summary: catalogue.summary || {},
           accounts: resolvedAccounts.accounts,
           catalogueComplete: true,
           catalogueRevision: catalogue.revision,
           catalogueSources: dashboardSourcesRef.current,
-        });
-      } catch {
-        // Storage can be disabled by private browsing or browser policy. The
-        // verified live catalogue remains usable; a later retry can cache it.
-      }
+        }).catch(() => {});
       if (!isCurrentRequest()) return;
       setDashboard({ posts: catalogue.posts, summary: catalogue.summary || {} });
       setAccounts(resolvedAccounts.accounts);
@@ -1147,6 +1146,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
         }
       }
     } finally {
+      if (dashboardFlightRef.current === flight) dashboardFlightRef.current = null;
       // If the first request fails, keep the structural skeleton in place
       // until the automatic retry succeeds rather than replacing it with an
       // alarming database-error page.
@@ -1185,13 +1185,14 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
           dashboardSourcesRef.current = Array.isArray(snapshot.catalogueSources) ? snapshot.catalogueSources : [];
           setDashboard({ posts: snapshot.posts, summary: snapshot.summary || {} });
           setAccounts(snapshot.accounts);
+          setLoading(false);
           if (snapshot.catalogueRevision) dashboardEtagRef.current = `"${snapshot.catalogueRevision}"`;
         }
       } catch {
         // IndexedDB is an acceleration path only. A blocked/private browser
         // must still be able to open the live catalogue normally.
       }
-      if (active) loadDashboard(controller.signal);
+      if (active) loadDashboard(controller.signal, { silent: dashboardPostsRef.current.length > 0 });
     })();
     return () => { active = false; controller.abort(); };
   }, [loadDashboard]);
