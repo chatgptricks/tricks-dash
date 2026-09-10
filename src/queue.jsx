@@ -77,7 +77,49 @@ const displayDate = (value, language) => new Date(`${value}T12:00:00`).toLocaleD
 // Queue work remains scheduled at explicit local dates/times. The dev-only
 // simulator can override the reference clock without changing that data.
 const displayTimestamp = (value, language) => new Date(value).toLocaleString(locale(language), { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-const DRAFT_KEY = 'sentient.queueDrafts.v2';
+// Schedule drafts can contain assignment and publishing scope. They must never
+// be shared between people who happen to use the same browser profile.
+const QUEUE_DRAFT_KEY_PREFIX = 'sentient.queueDrafts.v3:';
+const QUEUE_DRAFT_STORAGE_VERSION = 1;
+const queueUserEmail = (value) => String(value || '').trim().toLowerCase();
+const queueDraftKey = (email) => {
+  const ownerEmail = queueUserEmail(email);
+  return ownerEmail ? `${QUEUE_DRAFT_KEY_PREFIX}${ownerEmail}` : '';
+};
+const readQueueDrafts = (email) => {
+  const ownerEmail = queueUserEmail(email);
+  const key = queueDraftKey(ownerEmail);
+  if (!ownerEmail || !key) return [];
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(key) || 'null');
+    // Do not migrate the former browser-wide array. It has no trustworthy
+    // owner, so recovering it could publish someone else's schedule.
+    if (saved?.version !== QUEUE_DRAFT_STORAGE_VERSION || saved.ownerEmail !== ownerEmail || !Array.isArray(saved.drafts)) return [];
+    return saved.drafts;
+  } catch {
+    return [];
+  }
+};
+const writeQueueDrafts = (email, drafts) => {
+  const ownerEmail = queueUserEmail(email);
+  const key = queueDraftKey(ownerEmail);
+  if (!ownerEmail || !key) return;
+  try {
+    if (drafts.length) {
+      window.localStorage.setItem(key, JSON.stringify({
+        version: QUEUE_DRAFT_STORAGE_VERSION,
+        ownerEmail,
+        savedAt: Date.now(),
+        drafts,
+      }));
+    } else {
+      window.localStorage.removeItem(key);
+    }
+  } catch {
+    // Draft recovery is a convenience. An unavailable browser store must not
+    // stop a coordinator from working with the live Queue draft.
+  }
+};
 const DESIGNER_SCOPE_KEY_PREFIX = 'sentient.queueDesignerScope.v1:';
 const designerScopeKey = (email) => `${DESIGNER_SCOPE_KEY_PREFIX}${String(email || '').trim().toLowerCase()}`;
 const readDesignerScope = (email) => {
@@ -145,12 +187,12 @@ const userAvatar = (value) => {
 const COPY = {
   en: {
     productionQueue: 'Production Queue', dashboard: 'Dashboard', admin: 'Admin', coordinatorSchedule: 'Coordinator schedule', mySchedule: 'My production schedule', today: 'Today', submit: 'Submit', change: 'change', changes: 'changes', productionPool: 'Production pool', readyToSchedule: 'ready to schedule', visibleSchedule: 'The window shows 8 hours. Scroll to explore the full 24-hour day.', emptyPool: 'No requests are waiting in the pool.', myAssignedWork: 'My assigned work', upcomingProduction: 'Upcoming production', activeRequest: 'active request', activeRequests: 'active requests', noActiveAssignments: 'No active assignments', emptyAssignments: 'When a coordinator schedules work for you, it will appear here.', post: 'Post', postType: 'Post type', scheduled: 'Scheduled', deadline: 'Deadline', scope: 'Scope', status: 'Status', noTags: 'No tags', designer: 'Designer', now: 'Now', centerNow: 'Center Now', loadingSchedule: 'Loading schedule…', tryAgain: 'Try again', queueAccess: 'Queue is available to every dashboard user.', rolePreview: 'Role preview', onlyEsteban: 'Only visible to User 03.', activeRole: 'Active role', devFullAccess: 'Dev · full access', postDesigner: 'Post Designer', viralCoordinator: 'Viral Coordinator', salesRole: 'Sales', productionReports: 'Production reports', adminWorkspace: 'Admin workspace', loadingReport: 'Loading report…', inPool: 'In pool', inProgress: 'In progress', readyToClose: 'Ready to close', closed: 'Closed', cancelled: 'Cancelled', designerWorkload: 'Designer workload', workloadHelp: 'Active work, delivery health and actual production time.', allAssignedPosts: 'All assigned posts', assignedPostsCount: 'assigned posts', noAssignedPosts: 'No assigned posts yet.', openSettings: 'Open dashboard settings', startWork: 'Start work', markComplete: 'Mark complete', publishedLink: 'Published Instagram link', closeRequest: 'Close request', returnInProgress: 'Return to in progress', openPublished: 'Open published post', cancellationReason: 'Cancellation reason (optional)', cancelRequest: 'Cancel request', brief: 'Brief', notes: 'Notes', references: 'References', minutes: 'minutes', sourcePost: 'Source post', assignment: 'Assignment', recommendedAccounts: 'Recommended accounts', editRequest: 'Edit request', saveChanges: 'Save changes', cancel: 'Cancel', productionPoints: 'Production points', tags: 'Tags', referenceLinks: 'Reference links', oneLinkPerLine: 'One link per line', signIn: 'Sign in with Google', signingIn: 'Signing in…', signInHelp: 'Sign in with Google to open your production schedule.', allDesigners: 'All designers', allUsers: 'All users', noAccounts: 'No accounts yet', noRecommendedAccount: 'No recommended account', unsavedDrafts: 'Draft schedule changes are saved in this browser.', clearDrafts: 'Discard drafts', archive: 'Archive', liveQueue: 'Live Queue', noArchived: 'No cancelled requests.', extra: 'NEXT DAY', overdue: 'OVERDUE', atRisk: 'AT RISK', attachments: 'Files & references', uploadFiles: 'Upload files', noFiles: 'No files attached.', history: 'Activity history', noHistory: 'No activity yet.', resendSlack: 'Resend Slack DM', slackSent: 'Slack DM sent.', slackFailed: 'Slack DM failed. Check the user Slack ID and try again.', requestUpdated: 'Request updated.', scheduleSubmitted: 'Schedule submitted.', deliveryHealth: 'Delivery health', onTime: 'On-time rate', averageTime: 'Average actual time', completedJobs: 'Closed jobs', draftsSaved: 'Drafts saved', movedJobs: 'reflowed jobs', close: 'Close', filesUploaded: 'Files uploaded.', deadlineError: 'This request cannot fit before its deadline.', invalidDay: 'Requests can be scheduled on any day.', assignedView: 'Scheduler view', uploadFailed: 'Some files could not be uploaded.', sourceCaption: 'Source caption', cancelledReason: 'Cancellation reason', draftWarning: 'You have unsubmitted Queue changes.', movedAfterActive: 'Another post is already in progress. This request was moved after it and remains scheduled.', notQueueParticipant: 'Not a Queue participant',
-    priority: 'Priority', priorityUrgent: 'Urgent', markUrgent: 'Mark as urgent', priorityMix: 'Priority mix', tentative: 'Pending submit', tentativeBy: 'Temporary placement by', liveConnected: 'Live', liveConnecting: 'Connecting', liveOffline: 'Reconnecting', sharedDrafts: 'Temporary changes are shared live with assigned designers.', draftSyncFailed: 'The temporary placement could not be shared. Your change remains visible locally.', resizeBar: 'Resize production block', resizeLeft: 'from the left', resizeRight: 'from the right', adminOverview: 'Overview', userManagement: 'User Management', managedAccounts: 'Managed Sentient accounts', chooseSentientAccount: 'Choose Sentient account', assignAccount: 'Assign', removeAccount: 'Remove account', usersCount: 'users', loadingUsers: 'Loading users…', noUsers: 'No users available.', accountUpdateFailed: 'Could not update account ownership.',
+    priority: 'Priority', priorityUrgent: 'Urgent', markUrgent: 'Mark as urgent', priorityMix: 'Priority mix', tentative: 'Pending submit', tentativeBy: 'Temporary placement by', liveConnected: 'Live', liveConnecting: 'Connecting', liveOffline: 'Reconnecting', sharedDrafts: 'Temporary changes are shared live with assigned designers.', draftSyncFailed: 'The temporary placement could not be shared. Your change remains visible locally.', scheduleRefreshFailed: 'The change was saved, but Queue could not refresh the full schedule. Reconnect to verify every affected block.', resizeBar: 'Resize production block', resizeLeft: 'from the left', resizeRight: 'from the right', adminOverview: 'Overview', userManagement: 'User Management', managedAccounts: 'Managed Sentient accounts', chooseSentientAccount: 'Choose Sentient account', assignAccount: 'Assign', removeAccount: 'Remove account', usersCount: 'users', loadingUsers: 'Loading users…', noUsers: 'No users available.', accountUpdateFailed: 'Could not update account ownership.',
     settings: 'Settings', accentColor: 'Accent color', customColor: 'Custom color', custom: 'Custom', theme: 'Theme', language: 'Language', signOut: 'Sign out', darkTheme: 'Dark', lightTheme: 'Light', signedInAs: 'Signed in as', adminSettings: 'Admin',
   },
   es: {
     productionQueue: 'Cola de producción', dashboard: 'Dashboard', admin: 'Admin', coordinatorSchedule: 'Agenda de coordinación', mySchedule: 'Mi agenda de producción', today: 'Hoy', submit: 'Enviar', change: 'cambio', changes: 'cambios', productionPool: 'Pool de producción', readyToSchedule: 'listos para programar', visibleSchedule: 'La ventana muestra 8 horas. Desplázate para explorar las 24 horas del día.', emptyPool: 'No hay requests esperando en el pool.', myAssignedWork: 'Mi trabajo asignado', upcomingProduction: 'Próxima producción', activeRequest: 'request activo', activeRequests: 'requests activos', noActiveAssignments: 'No tienes asignaciones activas', emptyAssignments: 'Cuando un coordinador programe trabajo para ti, aparecerá aquí.', post: 'Post', scheduled: 'Programado', deadline: 'Deadline', scope: 'Alcance', status: 'Estado', noTags: 'Sin tags', designer: 'Designer', now: 'Ahora', centerNow: 'Centrar ahora', loadingSchedule: 'Cargando agenda…', tryAgain: 'Intentar de nuevo', queueAccess: 'Queue está disponible para todos los usuarios del dashboard.', rolePreview: 'Vista de rol', onlyEsteban: 'Visible solo para User 03.', activeRole: 'Rol activo', devFullAccess: 'Dev · acceso completo', postDesigner: 'Post Designer', viralCoordinator: 'Viral Coordinator', salesRole: 'Sales', productionReports: 'Reportes de producción', adminWorkspace: 'Espacio Admin', loadingReport: 'Cargando reporte…', inPool: 'En pool', inProgress: 'En progreso', readyToClose: 'Listo para cerrar', closed: 'Cerrado', cancelled: 'Cancelado', designerWorkload: 'Carga por designer', workloadHelp: 'Trabajo activo, salud de entrega y tiempo real de producción.', allAssignedPosts: 'Todos los posts asignados', assignedPostsCount: 'posts asignados', noAssignedPosts: 'Todavía no hay posts asignados.', openSettings: 'Abrir Settings del dashboard', startWork: 'Empezar trabajo', markComplete: 'Marcar como completado', publishedLink: 'Link publicado de Instagram', closeRequest: 'Cerrar request', returnInProgress: 'Volver a en progreso', openPublished: 'Abrir post publicado', cancellationReason: 'Motivo de cancelación (opcional)', cancelRequest: 'Cancelar request', brief: 'Brief', notes: 'Notas', references: 'Referencias', minutes: 'minutos', sourcePost: 'Post original', assignment: 'Asignación', recommendedAccounts: 'Cuentas recomendadas', editRequest: 'Editar request', saveChanges: 'Guardar cambios', cancel: 'Cancelar', productionPoints: 'Puntos de producción', tags: 'Tags', referenceLinks: 'Links de referencia', oneLinkPerLine: 'Un link por línea', signIn: 'Iniciar sesión', signingIn: 'Iniciando sesión…', signInHelp: 'Inicia sesión con Google para abrir tu agenda de producción.', allDesigners: 'Todos los designers', allUsers: 'Todos los usuarios', noAccounts: 'Sin cuentas todavía', noRecommendedAccount: 'Sin cuenta recomendada', unsavedDrafts: 'Los cambios del scheduler se guardan en este navegador.', clearDrafts: 'Descartar cambios', archive: 'Archivo', liveQueue: 'Queue activo', noArchived: 'No hay requests cancelados.', extra: 'DÍA SIGUIENTE', overdue: 'VENCIDO', atRisk: 'EN RIESGO', attachments: 'Archivos y referencias', uploadFiles: 'Subir archivos', noFiles: 'No hay archivos adjuntos.', history: 'Historial de actividad', noHistory: 'Todavía no hay actividad.', resendSlack: 'Reenviar DM de Slack', slackSent: 'DM de Slack enviado.', slackFailed: 'Falló el DM de Slack. Revisa el Slack ID del usuario e intenta de nuevo.', requestUpdated: 'Request actualizado.', scheduleSubmitted: 'Scheduler enviado.', deliveryHealth: 'Salud de entrega', onTime: 'Entregas a tiempo', averageTime: 'Tiempo real promedio', completedJobs: 'Trabajos cerrados', draftsSaved: 'Cambios guardados', movedJobs: 'trabajos reacomodados', close: 'Cerrar', filesUploaded: 'Archivos subidos.', deadlineError: 'Este request no cabe antes de su deadline.', invalidDay: 'Los requests pueden programarse en cualquier día.', assignedView: 'Vista del scheduler', uploadFailed: 'Algunos archivos no pudieron subirse.', sourceCaption: 'Caption original', cancelledReason: 'Motivo de cancelación', draftWarning: 'Tienes cambios de Queue sin enviar.', movedAfterActive: 'Ya hay otro post en progreso. Este request se movió después y permanece programado.', notQueueParticipant: 'No participa en Queue',
-    priority: 'Prioridad', priorityUrgent: 'Urgente', markUrgent: 'Marcar como urgente', priorityMix: 'Niveles de prioridad', tentative: 'Pendiente de enviar', tentativeBy: 'Ubicación temporal por', liveConnected: 'En vivo', liveConnecting: 'Conectando', liveOffline: 'Reconectando', sharedDrafts: 'Los cambios temporales se comparten en vivo con los designers asignados.', draftSyncFailed: 'No se pudo compartir la ubicación temporal. Tu cambio sigue visible localmente.', resizeBar: 'Redimensionar bloque de producción', resizeLeft: 'desde la izquierda', resizeRight: 'desde la derecha', adminOverview: 'Resumen', userManagement: 'Gestión de usuarios', managedAccounts: 'Cuentas Sentient administradas', chooseSentientAccount: 'Elegir cuenta de Sentient', assignAccount: 'Asignar', removeAccount: 'Quitar cuenta', usersCount: 'usuarios', loadingUsers: 'Cargando usuarios…', noUsers: 'No hay usuarios disponibles.', accountUpdateFailed: 'No se pudo actualizar la cuenta.',
+    priority: 'Prioridad', priorityUrgent: 'Urgente', markUrgent: 'Marcar como urgente', priorityMix: 'Niveles de prioridad', tentative: 'Pendiente de enviar', tentativeBy: 'Ubicación temporal por', liveConnected: 'En vivo', liveConnecting: 'Conectando', liveOffline: 'Reconectando', sharedDrafts: 'Los cambios temporales se comparten en vivo con los designers asignados.', draftSyncFailed: 'No se pudo compartir la ubicación temporal. Tu cambio sigue visible localmente.', scheduleRefreshFailed: 'El cambio se guardó, pero Queue no pudo actualizar toda la agenda. Reconéctate para verificar los bloques afectados.', resizeBar: 'Redimensionar bloque de producción', resizeLeft: 'desde la izquierda', resizeRight: 'desde la derecha', adminOverview: 'Resumen', userManagement: 'Gestión de usuarios', managedAccounts: 'Cuentas Sentient administradas', chooseSentientAccount: 'Elegir cuenta de Sentient', assignAccount: 'Asignar', removeAccount: 'Quitar cuenta', usersCount: 'usuarios', loadingUsers: 'Cargando usuarios…', noUsers: 'No hay usuarios disponibles.', accountUpdateFailed: 'No se pudo actualizar la cuenta.',
     settings: 'Ajustes', accentColor: 'Color de acento', customColor: 'Color personalizado', custom: 'Personalizado', theme: 'Tema', language: 'Idioma', signOut: 'Cerrar sesión', darkTheme: 'Oscuro', lightTheme: 'Claro', signedInAs: 'Sesión iniciada como', adminSettings: 'Admin',
   },
 };
@@ -1087,10 +1129,13 @@ function schedulerUserRole(user, t) {
   return '';
 }
 
-function Scheduler({ data, draft, setDraft, onDraftChange, selectedDate, designerScope, timeZone = '', onOpen, onError, onCreateTimeBlock, onEditTimeBlock, onDeleteTimeBlock, onReturnToPool, onCancelTask, onDuplicateTask, onSavePreferences, addTimeNonce = 0 }) {
+function Scheduler({ data, draft, setDraft, onDraftChange, selectedDate, designerScope, timeZone = '', canCoordinate = false, onOpen, onError, onCreateTimeBlock, onEditTimeBlock, onDeleteTimeBlock, onReturnToPool, onCancelTask, onDuplicateTask, onSavePreferences, addTimeNonce = 0 }) {
   const displayName = useQueueDisplayName();
   const { t, language } = useQueuePreferences();
-  const coordinator = data.viewer.isAdmin || data.viewer.operatingRoles?.includes('vc');
+  // QueueApp owns the effective capability (including Dev access and role
+  // previews). Recomputing it here made normal Dev users see the coordinator
+  // shell but lose scheduler controls inside it.
+  const coordinator = Boolean(canCoordinate);
   const selfPlanner = coordinator || Boolean(data.viewer.canSelfAssign);
   const [now, setNow] = useState(() => new Date());
   const [dropPreview, setDropPreview] = useState(null);
@@ -1457,6 +1502,7 @@ function PickModal({ requests, hotFallback = false, busy, onClose, onAssign }) {
 
 function QueueApp({ user }) {
   const { t, language, setLanguage } = useQueuePreferences();
+  const authenticatedDraftOwner = queueUserEmail(user?.email);
   const initialSnapshotRef = useRef(readQueueSnapshot(user?.email));
   const [data, setData] = useState(() => initialSnapshotRef.current?.data || null);
   const displayName = useMemo(() => queueNameResolver(data), [data]);
@@ -1478,7 +1524,7 @@ function QueueApp({ user }) {
   const [detailNotice, setDetailNotice] = useState(null);
   const [history, setHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
-  const [draft, setDraft] = useState(() => { try { return JSON.parse(window.localStorage.getItem(DRAFT_KEY) || '[]'); } catch { return []; } });
+  const [draft, setDraft] = useState(() => readQueueDrafts(user?.email));
   const [liveStatus, setLiveStatus] = useState('connecting');
   const [archive, setArchive] = useState(false);
   const [poolDropActive, setPoolDropActive] = useState(false);
@@ -1507,6 +1553,13 @@ function QueueApp({ user }) {
   const [queueClock, setQueueClock] = useState(() => Date.now());
   const presenceLastActivityRef = useRef(Date.now());
   const draftRef = useRef(draft);
+  // Keep the current auth owner synchronous with render so an old network
+  // response cannot repopulate a newly signed-in person's Queue in between
+  // effects.
+  const authenticatedDraftOwnerRef = useRef(authenticatedDraftOwner);
+  authenticatedDraftOwnerRef.current = authenticatedDraftOwner;
+  const draftOwnerRef = useRef(authenticatedDraftOwner);
+  const queueViewerEmailRef = useRef('');
   const draftSyncingRef = useRef(false);
   const draftHydratedRef = useRef(false);
   const draftSaveVersionRef = useRef(0);
@@ -1535,26 +1588,66 @@ function QueueApp({ user }) {
 
   const notify = useCallback((message, type = 'success') => { setToast({ message, type }); window.setTimeout(() => setToast(null), 6000); }, []);
   const saveQuietly = useCallback(() => { quietMutationUntilRef.current = Date.now() + 8000; }, []);
-  const applyDraft = useCallback((next) => { draftRef.current = next; setDraft(next); if (next.length) window.localStorage.setItem(DRAFT_KEY, JSON.stringify(next)); else window.localStorage.removeItem(DRAFT_KEY); }, []);
+  const setDraftInMemory = useCallback((next) => {
+    const safeDrafts = Array.isArray(next) ? next : [];
+    draftRef.current = safeDrafts;
+    setDraft(safeDrafts);
+  }, []);
+  const applyDraft = useCallback((next) => {
+    const safeDrafts = Array.isArray(next) ? next : [];
+    setDraftInMemory(safeDrafts);
+    writeQueueDrafts(authenticatedDraftOwner, safeDrafts);
+  }, [authenticatedDraftOwner, setDraftInMemory]);
+  useEffect(() => {
+    if (draftOwnerRef.current === authenticatedDraftOwner) return;
+    // Firebase can replace the identity without a full page reload. Invalidate
+    // in-flight responses and hydrate only that user's own local envelope.
+    draftOwnerRef.current = authenticatedDraftOwner;
+    queueViewerEmailRef.current = '';
+    draftHydratedRef.current = false;
+    draftSyncingRef.current = false;
+    draftSaveVersionRef.current += 1;
+    draftSavePromiseRef.current = Promise.resolve();
+    loadedOnceRef.current = false;
+    setDraftInMemory(readQueueDrafts(authenticatedDraftOwner));
+    setData(null);
+    setOpen(null);
+    setLoading(true);
+  }, [authenticatedDraftOwner, setDraftInMemory]);
   const load = useCallback(async ({ silent = false } = {}) => {
     const showLoader = !silent && !loadedOnceRef.current;
     if (showLoader) setLoading(true);
     else if (loadedOnceRef.current) setRefreshing(true);
     try {
       const next = await json(`/api/dashboard/queue/v2?date=${date}&archive=${archive ? 'true' : 'false'}`);
+      if (authenticatedDraftOwnerRef.current !== authenticatedDraftOwner) return null;
       setData(schedulerPreferencesRef.current ? { ...next, schedulerPreferences: schedulerPreferencesRef.current } : next);
+      const viewerEmail = queueUserEmail(next.viewer?.email);
+      queueViewerEmailRef.current = viewerEmail;
       if (!next.accountOnboarding?.completed && guideCompletedRef.current && !accountSetupDismissedRef.current) setAccountSetupOpen(true);
       loadedOnceRef.current = true;
       liveRevisionRef.current = Math.max(liveRevisionRef.current, Number(next.liveRevision) || 0);
-      const ownDrafts = (next.liveDrafts || []).filter((task) => task.draftCoordinatorEmail === next.viewer.email);
-      if (!draftSyncingRef.current) {
-        if (!draftHydratedRef.current && draftRef.current.length && !ownDrafts.length && (next.viewer.isAdmin || next.viewer.operatingRoles?.includes('vc'))) {
-          window.setTimeout(() => persistDraftsRef.current?.(draftRef.current), 0);
+      const ownsThisSession = Boolean(authenticatedDraftOwner && authenticatedDraftOwnerRef.current === authenticatedDraftOwner && authenticatedDraftOwner === viewerEmail && draftOwnerRef.current === authenticatedDraftOwner);
+      const ownDrafts = ownsThisSession
+        ? (next.liveDrafts || []).filter((task) => queueUserEmail(task.draftCoordinatorEmail) === viewerEmail)
+        : [];
+      if (!ownsThisSession) {
+        // Do not display, recover, or upload an envelope when Firebase and the
+        // Queue API identify different people. The next verified session can
+        // still recover its own scoped browser draft.
+        draftHydratedRef.current = false;
+        setDraftInMemory([]);
+      } else if (!draftSyncingRef.current) {
+        const localDrafts = draftRef.current;
+        if (!draftHydratedRef.current && localDrafts.length && !ownDrafts.length && (next.viewer.isAdmin || next.viewer.isDev || next.viewer.operatingRoles?.includes('vc'))) {
+          window.setTimeout(() => {
+            if (draftOwnerRef.current === authenticatedDraftOwner && authenticatedDraftOwnerRef.current === authenticatedDraftOwner && queueViewerEmailRef.current === authenticatedDraftOwner) persistDraftsRef.current?.(localDrafts);
+          }, 0);
         } else {
           applyDraft(ownDrafts);
         }
+        draftHydratedRef.current = true;
       }
-      draftHydratedRef.current = true;
       if (openRef.current?.id) {
         const byId = new Map([...(next.requests || []), ...(next.planningRequests || []), ...(next.assignedRequests || []), ...(next.liveDrafts || [])].map((task) => [task.id, task]));
         const refreshed = byId.get(openRef.current.id);
@@ -1570,7 +1663,7 @@ function QueueApp({ user }) {
       if (showLoader) setLoading(false);
       setRefreshing(false);
     }
-  }, [date, archive, applyDraft]);
+  }, [date, archive, applyDraft, authenticatedDraftOwner, setDraftInMemory]);
   loadRef.current = load;
   useEffect(() => { load().catch(() => {}); }, [load]);
   useEffect(() => {
@@ -1623,6 +1716,13 @@ function QueueApp({ user }) {
   useEffect(() => { if (!open?.id) { setHistory([]); return; } setDetailNotice(null); setHistoryLoading(true); json(`/api/dashboard/queue/v2/requests/${open.id}/history`).then((result) => setHistory(result.events || [])).catch(() => setHistory([])).finally(() => setHistoryLoading(false)); }, [open?.id]);
 
   const persistDrafts = useCallback((nextDraft) => {
+    const ownerEmail = draftOwnerRef.current;
+    if (!ownerEmail || ownerEmail !== authenticatedDraftOwner || queueViewerEmailRef.current !== ownerEmail) {
+      // Never turn a browser-local draft into a shared Queue mutation until
+      // the authenticated Firebase identity and Queue viewer agree.
+      notify(t('draftSyncFailed'), 'error');
+      return Promise.resolve(null);
+    }
     saveQuietly();
     const optimistic = nextDraft.map((task) => ({ ...task, isDraft: true }));
     applyDraft(optimistic);
@@ -1638,18 +1738,19 @@ function QueueApp({ user }) {
     }));
     draftSavePromiseRef.current = request;
     request.then((result) => {
-      if (version !== draftSaveVersionRef.current) return;
-      applyDraft(result.drafts || []);
+      if (version !== draftSaveVersionRef.current || draftOwnerRef.current !== ownerEmail || queueViewerEmailRef.current !== ownerEmail) return;
+      const ownDrafts = (result.drafts || []).filter((task) => queueUserEmail(task.draftCoordinatorEmail) === ownerEmail);
+      applyDraft(ownDrafts);
       liveRevisionRef.current = Math.max(liveRevisionRef.current, Number(result.liveRevision) || 0);
       setData((current) => current ? {
         ...current,
-        liveDrafts: [...(current.liveDrafts || []).filter((task) => task.draftCoordinatorEmail !== current.viewer.email), ...(result.drafts || [])],
+        liveDrafts: [...(current.liveDrafts || []).filter((task) => queueUserEmail(task.draftCoordinatorEmail) !== ownerEmail), ...ownDrafts],
       } : current);
     }).catch(() => {
-      if (version !== draftSaveVersionRef.current) return;
+      if (version !== draftSaveVersionRef.current || draftOwnerRef.current !== ownerEmail) return;
       notify(t('draftSyncFailed'), 'error');
     }).finally(() => {
-      if (version !== draftSaveVersionRef.current) return;
+      if (version !== draftSaveVersionRef.current || draftOwnerRef.current !== ownerEmail) return;
       draftSyncingRef.current = false;
       if (deferredLiveRefreshRef.current) {
         deferredLiveRefreshRef.current = false;
@@ -1657,7 +1758,7 @@ function QueueApp({ user }) {
       }
     });
     return request;
-  }, [applyDraft, notify, saveQuietly, t]);
+  }, [applyDraft, authenticatedDraftOwner, notify, saveQuietly, t]);
   persistDraftsRef.current = persistDrafts;
 
   const loadTickets = useCallback(async ({ silent = false } = {}) => {
@@ -1673,6 +1774,20 @@ function QueueApp({ user }) {
     }
   }, []);
   useEffect(() => { if (data?.viewer?.email && new URLSearchParams(window.location.search).get('inbox') === '1') loadTickets(); }, [data?.viewer?.email, loadTickets]);
+  // Schedule mutations can reflow several tasks. The mutation response is not
+  // a complete timeline, so always replace the local projection with the
+  // server's canonical schedule before declaring it settled.
+  const reconcileSchedule = useCallback(async ({ refreshTickets = false } = {}) => {
+    try {
+      const reload = loadRef.current;
+      if (!reload) return false;
+      await reload({ silent: true });
+      if (refreshTickets || ticketsOpenRef.current) await loadTickets({ silent: true });
+      return true;
+    } catch {
+      return false;
+    }
+  }, [loadTickets]);
   const loadOverview = useCallback(async () => {
     setOverviewLoading(true);
     setOverviewError('');
@@ -1949,22 +2064,37 @@ function QueueApp({ user }) {
       return null;
     } finally { setPickBusy(false); }
   };
-  const submit = () => {
+  const submit = async () => {
     saveQuietly();
     const pendingDrafts = [...draftRef.current];
     const changes = pendingDrafts.map((task) => ({ id: task.id, status: task.status, designerEmail: task.designerEmail, scheduledDate: task.scheduledDate, scheduledStartMinutes: task.scheduledStartMinutes, productionPoints: task.productionPoints, recommendedAccounts: task.recommendedAccounts || [] }));
-    pendingDrafts.forEach((task) => {
-      if (task.status === 'pool') showReturnedInPool(task);
-      else showScheduledLocally(task, task);
-    });
-    applyDraft([]);
-    draftSavePromiseRef.current.catch(() => {}).then(() => json('/api/dashboard/queue/v2/submit', { method: 'POST', body: new URLSearchParams({ changes: JSON.stringify(changes) }) })).then((result) => {
-      (result.adjustments || []).forEach((adjustment) => patchQueueTask(adjustment.id, adjustment));
+    try {
+      // A draft write and Submit are sequenced so the server never restores an
+      // older temporary placement after the final schedule is committed.
+      await draftSavePromiseRef.current.catch(() => {});
+      const result = await json('/api/dashboard/queue/v2/submit', { method: 'POST', body: new URLSearchParams({ changes: JSON.stringify(changes) }) });
+      const reconciled = await reconcileSchedule();
       const sent = result.notifications?.sent || 0; const failed = result.notifications?.failed || 0;
-      notify(`${t('scheduleSubmitted')} ${sent} DM${sent === 1 ? '' : 's'} sent${failed ? ` · ${failed} failed` : ''}.`, failed ? 'warning' : 'success');
-    }).catch((err) => { notify(err.message || t('draftSyncFailed'), 'error'); loadRef.current?.({ silent: true }).catch(() => {}); });
+      notify(reconciled ? `${t('scheduleSubmitted')} ${sent} DM${sent === 1 ? '' : 's'} sent${failed ? ` · ${failed} failed` : ''}.` : t('scheduleRefreshFailed'), reconciled ? (failed ? 'warning' : 'success') : 'warning');
+      return reconciled;
+    } catch (err) {
+      await reconcileSchedule();
+      notify(err.message || t('draftSyncFailed'), 'error');
+      return false;
+    }
   };
-  const clearDrafts = () => { saveQuietly(); applyDraft([]); json('/api/dashboard/queue/v2/drafts/clear', { method: 'POST', body: new URLSearchParams() }).catch((err) => { notify(err.message, 'error'); }); };
+  const clearDrafts = async () => {
+    saveQuietly();
+    try {
+      await json('/api/dashboard/queue/v2/drafts/clear', { method: 'POST', body: new URLSearchParams() });
+      if (!await reconcileSchedule()) notify(t('scheduleRefreshFailed'), 'warning');
+    } catch (err) {
+      // Keep the visible local draft until a successful refresh proves that
+      // the server actually cleared it.
+      await reconcileSchedule();
+      notify(err.message, 'error');
+    }
+  };
   const resetQueue = async (confirmation) => {
     await json('/api/admin/queue/reset', { method: 'POST', body: new URLSearchParams({ confirmation }) });
     applyDraft([]);
@@ -1979,44 +2109,33 @@ function QueueApp({ user }) {
   };
   const changeDraftAccounts = (requestId, accounts) => persistDrafts(draftRef.current.map((task) => task.id === requestId ? { ...task, recommendedAccounts: accounts } : task));
   // Returning work to the Pool is intentionally instant. Keep the local
-  // schedule authoritative while the durable submit finishes in background;
-  // otherwise a slow Queue refresh makes a simple drop feel broken.
-  const showReturnedInPool = useCallback((task) => {
-    const returned = { ...task, status: 'pool', designerEmail: null, scheduledDate: null, scheduledStartMinutes: null, isDraft: false, draftCoordinatorEmail: null };
-    applyDraft(draftRef.current.filter((draftTask) => draftTask.id !== task.id));
-    setData((current) => {
-      if (!current) return current;
-      const without = (items = []) => items.filter((item) => item.id !== task.id);
-      const withReturned = (items = []) => [returned, ...without(items)];
-      return {
-        ...current,
-        requests: withReturned(current.requests),
-        planningRequests: without(current.planningRequests),
-        assignedRequests: without(current.assignedRequests),
-        liveDrafts: without(current.liveDrafts),
-        pickRequests: withReturned(current.pickRequests),
-        selfPoolRequests: withReturned(current.selfPoolRequests),
-      };
-    });
-    return returned;
-  }, [applyDraft]);
-  const persistPoolReturn = useCallback((task) => {
+  // draft untouched until the durable submit returns; showing a task in Pool
+  // before a rejected mutation used to make the schedule lie.
+  const persistPoolReturn = useCallback(async (task) => {
     saveQuietly();
-    const returned = showReturnedInPool(task);
     // A prior draft write may already be in flight. Sequence the durable
-    // mutation after it, but never make the person wait to see the result.
-    draftSavePromiseRef.current.catch(() => {}).then(() => json('/api/dashboard/queue/v2/submit', {
-      method: 'POST', body: new URLSearchParams({ changes: JSON.stringify([{
-        id: returned.id, status: 'pool', designerEmail: null, scheduledDate: null,
-        scheduledStartMinutes: null, productionPoints: returned.productionPoints,
-        recommendedAccounts: returned.recommendedAccounts || [],
-      }]) }),
-    })).then(() => {
+    // mutation after it, then fetch the complete reflowed timeline.
+    try {
+      await draftSavePromiseRef.current.catch(() => {});
+      await json('/api/dashboard/queue/v2/submit', {
+        method: 'POST', body: new URLSearchParams({ changes: JSON.stringify([{
+          id: task.id, status: 'pool', designerEmail: null, scheduledDate: null,
+          scheduledStartMinutes: null, productionPoints: task.productionPoints,
+          recommendedAccounts: task.recommendedAccounts || [],
+        }]) }),
+      });
+      if (!await reconcileSchedule()) {
+        notify(t('scheduleRefreshFailed'), 'warning');
+        return false;
+      }
       notify(t('returnedToPool'));
-    }).catch((err) => {
+      return true;
+    } catch (err) {
+      await reconcileSchedule();
       notify(err.message || t('draftSyncFailed'), 'error');
-    });
-  }, [notify, saveQuietly, showReturnedInPool, t]);
+      return false;
+    }
+  }, [notify, reconcileSchedule, saveQuietly, t]);
   const dragTask = (event) => {
     const id = Number(activeQueueDragId || event.dataTransfer?.getData('queue-task'));
     return [...draftRef.current, ...(data?.liveDrafts || []), ...(data?.planningRequests || []), ...(data?.requests || [])].find((task) => task.id === id);
@@ -2045,6 +2164,7 @@ function QueueApp({ user }) {
       return;
     }
     saveQuietly();
+    setDetailNotice(null);
     const now = new Date().toISOString();
     const moveToNow = Boolean(value?.moveToNow);
     const optimistic = actionName === 'start'
@@ -2056,15 +2176,35 @@ function QueueApp({ user }) {
     const body = actionName === 'start'
       ? new URLSearchParams({ move_to_now: String(moveToNow) })
       : value ? new URLSearchParams(actionName === 'close' ? { final_permalinks: JSON.stringify(value) } : {}) : undefined;
-    return json(`/api/dashboard/queue/v2/requests/${target.id}/${actionName}`, { method: 'POST', body }).then((result) => {
-      patchQueueTask(target.id, optimistic);
-      if (actionName === 'start' && result.scheduledDate) {
-        patchQueueTask(target.id, { scheduledDate: result.scheduledDate, scheduledStartMinutes: result.scheduledStartMinutes });
+    try {
+      const result = await json(`/api/dashboard/queue/v2/requests/${target.id}/${actionName}`, { method: 'POST', body });
+      const deferred = actionName === 'start' && (result?.deferred === true || result?.outcome === 'deferred' || result?.outcome === 'not_started');
+      const reconciled = actionName === 'start' ? await reconcileSchedule() : true;
+      if (!reconciled) {
+        const fallback = result?.request || (deferred
+          ? { status: 'scheduled', actualStartedAt: null, completedAt: null, scheduledDate: result?.scheduledDate || target.scheduledDate, scheduledStartMinutes: result?.scheduledStartMinutes ?? target.scheduledStartMinutes }
+          : optimistic);
+        patchQueueTask(target.id, fallback);
+      }
+      if (deferred) {
+        const nextDate = result?.nextAvailableDate || result?.scheduledDate || target.scheduledDate;
+        const nextStart = result?.nextAvailableStartMinutes ?? result?.scheduledStartMinutes ?? target.scheduledStartMinutes;
+        const message = result?.detail || `${t('movedAfterActive')} ${nextDate} · ${time(nextStart)}.`;
+        // A deferred result is explicitly not a start. Keep the detail open,
+        // show its canonical scheduled state, and make the next available slot
+        // visible instead of closing the rail as though the work had started.
+        setDetailNotice({ message, type: 'warning' });
+        notify(message, 'warning');
+        return false;
       }
       closeDetail();
-      if (result.deferred) patchQueueTask(target.id, { status: 'scheduled', actualStartedAt: null, completedAt: null, scheduledDate: result.scheduledDate, scheduledStartMinutes: result.scheduledStartMinutes });
-      notify(result.deferred ? `${t('movedAfterActive')} ${result.scheduledDate} · ${time(result.scheduledStartMinutes)}.` : t('requestUpdated'), result.deferred ? 'warning' : 'success');
-    }).catch((err) => { notify(err.message, 'error'); });
+      notify(reconciled ? t('requestUpdated') : t('scheduleRefreshFailed'), reconciled ? 'success' : 'warning');
+      return true;
+    } catch (err) {
+      if (actionName === 'start') await reconcileSchedule();
+      notify(err.message, 'error');
+      return false;
+    }
   };
   const batchClose = async (requestIds) => {
     if (!requestIds?.length) return;
@@ -2088,17 +2228,24 @@ function QueueApp({ user }) {
     closeDetail();
     json(`/api/dashboard/queue/v2/requests/${target.id}/cancel`, { method: 'POST', body: new URLSearchParams({ reason }) }).then(() => notify(t('requestUpdated'))).catch((err) => { patchQueueTask(target.id, target); notify(err.message, 'error'); });
   };
-  const edit = (values) => {
+  const edit = async (values) => {
     const target = open;
     if (!target) return false;
     saveQuietly();
-    const optimistic = { productionPoints: Number(values.productionPoints), durationMinutes: Number(values.productionPoints) * Number(target.minutesPerPP || 10), priority: values.priority, tags: values.tags, brief: values.brief, notes: values.notes, references: values.references, recommendedAccounts: values.recommendedAccounts };
-    patchQueueTask(target.id, optimistic);
-    setDetailNotice({ message: t('requestUpdated'), type: 'success' });
-    json(`/api/dashboard/queue/v2/requests/${target.id}/edit`, { method: 'POST', body: new URLSearchParams({ production_points: String(values.productionPoints), priority: values.priority, tags: values.tags.join(','), brief: values.brief, notes: values.notes, references: JSON.stringify(values.references), recommended_accounts: JSON.stringify(values.recommendedAccounts) }) }).then((result) => {
-      patchQueueTask(target.id, result.request);
-    }).catch((err) => { patchQueueTask(target.id, target); setDetailNotice({ message: err.message, type: 'error' }); });
-    return true;
+    const localFallback = { productionPoints: Number(values.productionPoints), durationMinutes: Number(values.productionPoints) * Number(target.minutesPerPP || 10), priority: values.priority, tags: values.tags, brief: values.brief, notes: values.notes, references: values.references, recommendedAccounts: values.recommendedAccounts };
+    try {
+      const result = await json(`/api/dashboard/queue/v2/requests/${target.id}/edit`, { method: 'POST', body: new URLSearchParams({ production_points: String(values.productionPoints), priority: values.priority, tags: values.tags.join(','), brief: values.brief, notes: values.notes, references: JSON.stringify(values.references), recommended_accounts: JSON.stringify(values.recommendedAccounts) }) });
+      const reconciled = await reconcileSchedule();
+      if (!reconciled) patchQueueTask(target.id, result.request || localFallback);
+      setDetailNotice({ message: reconciled ? t('requestUpdated') : t('scheduleRefreshFailed'), type: reconciled ? 'success' : 'warning' });
+      return true;
+    } catch (err) {
+      // An edit can grow a block and reflow downstream work. Do not restore
+      // only the edited card; replace the whole local projection on failure.
+      await reconcileSchedule();
+      setDetailNotice({ message: err.message, type: 'error' });
+      return false;
+    }
   };
   const resend = async () => { try { const result = await json(`/api/dashboard/queue/v2/requests/${open.id}/notify`, { method: 'POST' }); setDetailNotice({ message: result.sent ? t('slackSent') : t('slackFailed'), type: result.sent ? 'success' : 'error' }); const events = await json(`/api/dashboard/queue/v2/requests/${open.id}/history`); setHistory(events.events || []); } catch (err) { setDetailNotice({ message: err.message, type: 'error' }); } };
   const upload = async (files) => { let current = open; let failures = 0; for (const file of files) { const body = new FormData(); body.append('file', file); try { const result = await json(`/api/dashboard/queue/v2/requests/${open.id}/attachments`, { method: 'POST', body }); current = result.request; } catch { failures += 1; } } setOpen(current); if (current?.id) patchQueueTask(current.id, current); setDetailNotice({ message: failures ? t('uploadFailed') : t('filesUploaded'), type: failures ? 'error' : 'success' }); };
@@ -2125,11 +2272,24 @@ function QueueApp({ user }) {
       notify(t('requestUpdated')); return true;
     } catch (err) { notify(err.message, 'error'); return false; }
   };
-  const deleteTimeBlock = (block) => {
+  const deleteTimeBlock = async (block) => {
     saveQuietly();
-    setData((current) => current ? { ...current, timeBlocks: (current.timeBlocks || []).filter((item) => item.id !== block.id), pendingTicketCount: Math.max(0, (current.pendingTicketCount || 0) - (block.status === 'pending' ? 1 : 0)) } : current);
-    setTickets((current) => current.filter((ticket) => ticket.id !== block.id));
-    json(`/api/dashboard/queue/v2/tickets/time-block/${block.id}`, { method: 'POST', body: new URLSearchParams({ delete: 'true' }) }).then(() => notify(t('requestUpdated'))).catch((err) => { notify(err.message, 'error'); });
+    try {
+      await json(`/api/dashboard/queue/v2/tickets/time-block/${block.id}`, { method: 'POST', body: new URLSearchParams({ delete: 'true' }) });
+      if (await reconcileSchedule({ refreshTickets: true })) {
+        notify(t('requestUpdated'));
+        return true;
+      }
+      notify(t('scheduleRefreshFailed'), 'warning');
+      return false;
+    } catch (err) {
+      // Leave the block visible until the server confirms deletion. If an
+      // ambiguous network failure happened after the write, reload to show the
+      // actual server state rather than pretending the optimistic delete won.
+      await reconcileSchedule({ refreshTickets: true });
+      notify(err.message, 'error');
+      return false;
+    }
   };
   const saveSchedulerPreferences = (preferences) => {
     saveQuietly();
@@ -2292,7 +2452,7 @@ function QueueApp({ user }) {
       {coordinator && !archive ? <section className={`scheduler-pool${poolDropActive ? ' is-drop-target' : ''}`} onDragOver={poolDragOver} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setPoolDropActive(false); }} onDrop={poolDrop} aria-label={t('poolDropHint')}><header><div><p className="scheduler-eyebrow">{t('productionPool')}</p><h2>{pool.length} {t('readyToSchedule')}</h2></div><small>{poolDropActive ? t('poolDropHint') : t('visibleSchedule')}</small></header><div className="scheduler-pool-list">{pool.map((task) => <PoolCard key={task.id} task={task} onOpen={setOpen} canMultiAssign canCancel />)}{!pool.length ? <p className="scheduler-empty">{t('emptyPool')}</p> : null}</div></section> : null}
       {!coordinator && canSelfAssign && !archive ? <section className="scheduler-pool"><header><div><p className="scheduler-eyebrow">My Pool</p><h2>{selfPool.length} {t('readyToSchedule')}</h2></div><small>Drag your request onto your own schedule.</small></header><div className="scheduler-pool-list">{selfPool.map((task) => <PoolCard key={task.id} task={task} onOpen={setOpen} />)}{!selfPool.length ? <p className="scheduler-empty">Create a post to start your own Pool.</p> : null}</div></section> : null}
       {(coordinator || canSelfAssign) && draft.length ? <div className="scheduler-draft-float"><button type="button" className="scheduler-secondary" onClick={clearDrafts}>{t('clearDrafts')}</button><button type="button" className="scheduler-submit" onClick={submit}><Send size={14} />{t('submit')} {draft.length}</button></div> : null}
-      {archive ? <section className="queue-archive-list"><header><p className="scheduler-eyebrow">{t('archive')}</p><h2>{archived.length} {t('cancelled')}</h2></header>{archived.length ? archived.map((task) => <button type="button" key={task.id} className={`${priorityClass(task.priority)}${hotClass(task)}`} onClick={() => setOpen(task)}><span>{cover(task) ? <img src={cover(task)} alt="" /> : '@'}</span><div><b>@{task.post.account}</b><small>{task.cancellationReason || t('cancelled')}</small>{isHotTask(task) ? <i className="queue-hot-badge">🔥 {hotText(task)}</i> : null}</div><em>{displayTimestamp(task.updatedAt, language)}</em></button>) : <p className="scheduler-empty">{t('noArchived')}</p>}</section> : <>{coordinator && draft.length ? <DraftAccounts draft={draft} designers={data.designers} onAccountsChange={changeDraftAccounts} /> : null}<Scheduler data={data} draft={draft} setDraft={setDraft} onDraftChange={persistDrafts} selectedDate={date} designerScope={designerScope} timeZone={simulatedTimeZone} onOpen={setOpen} onError={(message) => notify(message, 'error')} onCreateTimeBlock={createTimeBlock} onEditTimeBlock={editTimeBlock} onDeleteTimeBlock={deleteTimeBlock} onReturnToPool={returnTaskToPool} onCancelTask={cancelTask} onDuplicateTask={(task) => duplicateRequest(task.id)} onSavePreferences={saveSchedulerPreferences} addTimeNonce={addTimeNonce} />{coordinator ? <AdminAssignmentTable tasks={upcoming} onOpen={setOpen} onBatchClose={data?.viewer?.isAdmin ? batchClose : null} headingKey="upcomingProduction" countKey="activeRequests" /> : <DesignerAssignments tasks={assigned} closedTasks={recentClosed} timeZone={simulatedTimeZone} onOpen={setOpen} />}</>}
+      {archive ? <section className="queue-archive-list"><header><p className="scheduler-eyebrow">{t('archive')}</p><h2>{archived.length} {t('cancelled')}</h2></header>{archived.length ? archived.map((task) => <button type="button" key={task.id} className={`${priorityClass(task.priority)}${hotClass(task)}`} onClick={() => setOpen(task)}><span>{cover(task) ? <img src={cover(task)} alt="" /> : '@'}</span><div><b>@{task.post.account}</b><small>{task.cancellationReason || t('cancelled')}</small>{isHotTask(task) ? <i className="queue-hot-badge">🔥 {hotText(task)}</i> : null}</div><em>{displayTimestamp(task.updatedAt, language)}</em></button>) : <p className="scheduler-empty">{t('noArchived')}</p>}</section> : <>{coordinator && draft.length ? <DraftAccounts draft={draft} designers={data.designers} onAccountsChange={changeDraftAccounts} /> : null}<Scheduler data={data} draft={draft} setDraft={applyDraft} onDraftChange={persistDrafts} selectedDate={date} designerScope={designerScope} timeZone={simulatedTimeZone} canCoordinate={coordinator} onOpen={setOpen} onError={(message) => notify(message, 'error')} onCreateTimeBlock={createTimeBlock} onEditTimeBlock={editTimeBlock} onDeleteTimeBlock={deleteTimeBlock} onReturnToPool={returnTaskToPool} onCancelTask={cancelTask} onDuplicateTask={(task) => duplicateRequest(task.id)} onSavePreferences={saveSchedulerPreferences} addTimeNonce={addTimeNonce} />{coordinator ? <AdminAssignmentTable tasks={upcoming} onOpen={setOpen} onBatchClose={data?.viewer?.isAdmin ? batchClose : null} headingKey="upcomingProduction" countKey="activeRequests" /> : <DesignerAssignments tasks={assigned} closedTasks={recentClosed} timeZone={simulatedTimeZone} onOpen={setOpen} />}</>}
       </> : null}
     </> : null}
     {ticketsOpen && data?.viewer ? <TicketPanel tickets={tickets} loading={ticketsLoading} error={ticketsError} onClose={() => setTicketsOpen(false)} onReview={reviewTicket} onContinueSuggestion={(ticket) => { setCreateSeed({ sourceUrl: ticket.title, reason: ticket.reason }); setTicketsOpen(false); setCreateOpen(true); }} canReview={Boolean(coordinator)} /> : null}

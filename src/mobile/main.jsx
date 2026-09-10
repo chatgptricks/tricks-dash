@@ -20,9 +20,22 @@ import { decodeRouteState, encodeRouteState } from '../urlCodec';
 import './mobile.css';
 
 const LEGACY_PASSWORD = 'authenticated';
-const DAY = () => {
-  const date = new Date();
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+// Queue slots are planned in Costa Rica time. The mobile surface is
+// intentionally read-only, but its day query and Now marker must still agree
+// with desktop rather than drift with the phone's local time zone.
+const QUEUE_TIME_ZONE = 'America/Costa_Rica';
+const queueClockParts = (value = new Date()) => Object.fromEntries(
+  new Intl.DateTimeFormat('en-US', {
+    timeZone: QUEUE_TIME_ZONE, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).formatToParts(value).filter((item) => item.type !== 'literal').map((item) => [item.type, item.value]),
+);
+const DAY = (value = new Date()) => {
+  const parts = queueClockParts(value);
+  return `${parts.year}-${parts.month}-${parts.day}`;
+};
+const queueMinutes = (value = new Date()) => {
+  const parts = queueClockParts(value);
+  return Number(parts.hour || 0) * 60 + Number(parts.minute || 0);
 };
 const I18N = {
   en: {
@@ -59,6 +72,8 @@ const I18N = {
     active: 'Active', inactive: 'Inactive', threshold: 'HOT threshold', group: 'Group', scrapeContent: 'Extract content', reels: 'Reels', postsAndReels: 'Posts & Reels', refreshAvatar: 'Refresh avatar', deactivate: 'Deactivate', activate: 'Activate', accountSaved: 'Account updated.', disk: 'Disk', slack: 'Slack', ocr: 'OCR',
     customAlert: 'Custom notification', alertTitle: 'Title (optional)', alertMessage: 'Message', attachImage: 'Attach image', changeImage: 'Change image', sendAlert: 'Send notification', alertSent: 'Notification sent to Slack.', sendTest: 'Send test',
     dayMap: 'Day map', blockedTime: 'Blocked time',
+    queueMobileSupport: 'Queue on mobile is a live day view. Open desktop to assign, start, close, review, or change the schedule.',
+    openQueueDesktop: 'Open Queue on desktop',
     install: 'Install app', installHelp: 'Add Sentient Dash to your Home Screen for the full app experience.',
     iosInstall: 'In Safari, tap Share and then “Add to Home Screen”.', desktop: 'Open desktop version', signOut: 'Sign out',
     language: 'Language', theme: 'Theme', accent: 'Accent', dark: 'Dark', light: 'Light', greenAccent: 'Sentient green', neonAccent: 'Neon yellow', custom: 'Custom', close: 'Close',
@@ -99,6 +114,8 @@ const I18N = {
     active: 'Activa', inactive: 'Inactiva', threshold: 'Umbral HOT', group: 'Grupo', scrapeContent: 'Extraer contenido', reels: 'Reels', postsAndReels: 'Posts y Reels', refreshAvatar: 'Actualizar avatar', deactivate: 'Desactivar', activate: 'Activar', accountSaved: 'Cuenta actualizada.', disk: 'Disco', slack: 'Slack', ocr: 'OCR',
     customAlert: 'Notificación personalizada', alertTitle: 'Título (opcional)', alertMessage: 'Mensaje', attachImage: 'Adjuntar imagen', changeImage: 'Cambiar imagen', sendAlert: 'Enviar notificación', alertSent: 'Notificación enviada a Slack.', sendTest: 'Enviar prueba',
     dayMap: 'Mapa del día', blockedTime: 'Tiempo bloqueado',
+    queueMobileSupport: 'Queue en móvil es una vista en vivo del día. Abre desktop para asignar, empezar, cerrar, revisar o modificar la agenda.',
+    openQueueDesktop: 'Abrir Queue en desktop',
     install: 'Instalar app', installHelp: 'Agrega Sentient Dash a tu pantalla de inicio para usarla como app.',
     iosInstall: 'En Safari, toca Compartir y luego “Agregar a pantalla de inicio”.', desktop: 'Abrir versión desktop', signOut: 'Cerrar sesión',
     language: 'Idioma', theme: 'Tema', accent: 'Acento', dark: 'Oscuro', light: 'Claro', greenAccent: 'Verde Sentient', neonAccent: 'Amarillo neón', custom: 'Personalizado', close: 'Cerrar',
@@ -407,10 +424,9 @@ function PostSheet({ post, viewer, onClose, onPooled }) {
 
 function QueueView({ viewer }) {
   const { t } = usePrefs();
-  const [date, setDate] = useState(DAY()); const [data, setData] = useState(null); const [error, setError] = useState(''); const [mode, setMode] = useState('agenda'); const [open, setOpen] = useState(null); const [assigning, setAssigning] = useState(null); const [ticketsOpen, setTicketsOpen] = useState(false); const [pickOpen, setPickOpen] = useState(false); const [createOpen, setCreateOpen] = useState(false); const [live, setLive] = useState('connecting'); const [toast, setToast] = useState('');
+  const [date, setDate] = useState(DAY()); const [data, setData] = useState(null); const [error, setError] = useState(''); const [mode, setMode] = useState('agenda'); const [open, setOpen] = useState(null); const [live, setLive] = useState('connecting');
   const revision = useRef(0); const loadRef = useRef(null); const deepLinkOpened = useRef(false);
   const coordinator = Boolean(data?.viewer?.isAdmin || data?.viewer?.isDev || data?.viewer?.operatingRoles?.includes('vc') || viewer.is_admin || viewer.is_dev || viewer.operating_roles?.includes('vc'));
-  const canSelfAssign = Boolean(data?.viewer?.canSelfAssign || viewer.can_self_assign);
   const load = useCallback(async ({ silent = false } = {}) => { if (!silent) setError(''); try { const next = await apiJson(`/api/dashboard/queue/v2?date=${date}`); setData(next); revision.current = Math.max(revision.current, Number(next.liveRevision || 0)); if (open?.id) { const all = [...(next.requests || []), ...(next.planningRequests || []), ...(next.assignedRequests || []), ...(next.liveDrafts || [])]; setOpen(all.find((task) => task.id === open.id) || null); } } catch (err) { setError(err.message); } }, [date, open?.id]);
   loadRef.current = load; useEffect(() => { load(); }, [date]);
   useEffect(() => {
@@ -424,32 +440,22 @@ function QueueView({ viewer }) {
     }).catch((reason) => setError(reason.message));
   }, []);
   useEffect(() => { if (!data?.viewer?.email || import.meta.env.MODE === 'test') { setLive('live'); return undefined; } const controller = new AbortController(); followQueueLive({ after: revision.current, signal: controller.signal, onStatus: setLive, onEvent: (event) => { revision.current = Math.max(revision.current, Number(event.revision || 0)); setTimeout(() => loadRef.current?.({ silent: true }), 80); } }); return () => controller.abort(); }, [data?.viewer?.email]);
-  const tell = (message) => { setToast(message); setTimeout(() => setToast(''), 3500); };
   const assigned = useMemo(() => { const map = new Map((data?.assignedRequests || []).map((task) => [task.id, task])); (data?.liveDrafts || []).filter((task) => task.designerEmail === data?.viewer?.email).forEach((task) => map.set(task.id, task)); return [...map.values()].sort((a, b) => `${a.scheduledDate}${String(a.scheduledStartMinutes || 0).padStart(4, '0')}`.localeCompare(`${b.scheduledDate}${String(b.scheduledStartMinutes || 0).padStart(4, '0')}`)); }, [data]);
   const pool = useMemo(() => { const map = new Map((data?.requests || []).filter((task) => task.status === 'pool').map((task) => [task.id, task])); (data?.liveDrafts || []).forEach((task) => task.status === 'pool' ? map.set(task.id, task) : map.delete(task.id)); return [...map.values()].sort((a, b) => (priorityOrder[a.priority] ?? 2) - (priorityOrder[b.priority] ?? 2)); }, [data]);
   const team = useMemo(() => [...(data?.planningRequests || []), ...(data?.liveDrafts || [])].filter((task, index, rows) => task.designerEmail && ['scheduled', 'in_progress', 'completed'].includes(task.status) && rows.findLastIndex((item) => item.id === task.id) === index).sort((a, b) => `${a.scheduledDate}${String(a.scheduledStartMinutes || 0).padStart(4, '0')}`.localeCompare(`${b.scheduledDate}${String(b.scheduledStartMinutes || 0).padStart(4, '0')}`)), [data]);
-  const pickItems = useMemo(() => {
-    const hot = (data?.hotPickRequests || []).filter((task) => task.status === 'pool');
-    const hotIds = new Set(hot.map((task) => String(task.id)));
-    const regular = (data?.pickRequests || []).filter((task) => task.status === 'pool' && !hotIds.has(String(task.id)) && !(task.isHot || task.tags?.includes('hot')));
-    return [...hot, ...regular];
-  }, [data]);
-  const queuePool = coordinator ? pool : canSelfAssign ? (data?.selfPoolRequests || []).filter((task) => task.status === 'pool') : [];
-  const modes = coordinator ? ['agenda', 'pool', 'team', 'requests'] : canSelfAssign ? ['agenda', 'pool', 'requests'] : ['agenda', 'requests'];
+  const queuePool = coordinator ? pool : [];
+  const modes = coordinator ? ['agenda', 'pool', 'team'] : ['agenda'];
   if (!data && !error) return <Spinner label={t('loading')} />;
   return <div className="m-stack">
     <div className="m-queue-toolbar"><div className={`m-live is-${live}`}>{live === 'live' ? <Wifi size={13} /> : <WifiOff size={13} />}{live === 'live' ? t('activityLive') : t('reconnecting')}</div><div><button onClick={() => setDate(shiftDay(date, -1))} aria-label={t('previousDay')}><ChevronLeft size={18} /></button><button onClick={() => setDate(DAY())}>{date === DAY() ? t('today') : dateLabel(date)}</button><button onClick={() => setDate(shiftDay(date, 1))} aria-label={t('nextDay')}><ChevronRight size={18} /></button></div></div>
-    <div className="m-tab-scroll">{modes.map((value) => <button key={value} className={mode === value ? 'is-on' : ''} onClick={() => { setMode(value); if (value === 'requests') setTicketsOpen(true); }}>{t(value)}{value === 'requests' && data.pendingTicketCount ? <i>{data.pendingTicketCount}</i> : null}</button>)}</div>
-    <div className="m-queue-quick">{!coordinator ? <button onClick={() => setPickOpen(true)}><Sparkles size={16} />{t('pick')}</button> : null}{canSelfAssign || coordinator ? <button onClick={() => setCreateOpen(true)}><Plus size={16} />{t('createPost')}</button> : null}{coordinator ? <button onClick={() => setTicketsOpen(true)}><Inbox size={16} />{t('approvals')}</button> : null}</div>
-    {error ? <Notice type="error">{error}</Notice> : null}{toast ? <Notice>{toast}</Notice> : null}
+    <div className="m-tab-scroll">{modes.map((value) => <button key={value} className={mode === value ? 'is-on' : ''} onClick={() => setMode(value)}>{t(value)}</button>)}</div>
+    <Notice>{t('queueMobileSupport')}</Notice>
+    <a className="m-secondary m-full" href="/queue.html?desktop=1"><ExternalLink size={16} />{t('openQueueDesktop')}</a>
+    {error ? <Notice type="error">{error}</Notice> : null}
     {mode === 'agenda' ? <section className="m-agenda"><div className="m-section-head"><div><span>{dateLabel(date)}</span><h2>{coordinator ? t('team') : t('myDay')}</h2></div></div><MiniSchedule data={data} date={date} coordinator={coordinator} onOpen={setOpen} />{(coordinator ? team.filter((task) => task.scheduledDate === date) : assigned.filter((task) => task.scheduledDate === date)).length ? (coordinator ? team : assigned).filter((task) => task.scheduledDate === date).map((task) => <QueueTaskCard key={task.id} task={task} onClick={() => setOpen(task)} showDesigner={coordinator} />) : <Empty title={t('noAssignments')} />}</section> : null}
     {mode === 'pool' ? <section className="m-queue-list">{queuePool.length ? queuePool.map((task) => <QueueTaskCard key={task.id} task={task} onClick={() => setOpen(task)} />) : <Empty title={t('noPool')} />}</section> : null}
     {mode === 'team' ? <section className="m-team-groups">{data.schedulerUsers?.map((person) => { const work = team.filter((task) => task.designerEmail === person.email && task.scheduledDate === date); return <article key={person.email}><header><Avatar person={person} /><span><b>{person.displayName || displayName(person.email)}</b><small>{work.length} {t('assigned')}</small></span></header>{work.length ? work.map((task) => <QueueTaskCard key={task.id} task={task} compact onClick={() => setOpen(task)} />) : <p>{t('noAssignments')}</p>}</article>; })}</section> : null}
-    {open ? <QueueDetail task={open} coordinator={coordinator} onAssign={() => setAssigning(open)} onClose={() => setOpen(null)} onChanged={() => { setOpen(null); load({ silent: true }); }} tell={tell} /> : null}
-    {assigning ? <AssignmentSheet task={assigning} data={data} onClose={() => setAssigning(null)} onChanged={(message) => { tell(message); load({ silent: true }); }} /> : null}
-    {ticketsOpen ? <TicketsSheet coordinator={coordinator} data={data} onClose={() => { setTicketsOpen(false); if (mode === 'requests') setMode('agenda'); }} onChanged={() => load({ silent: true })} /> : null}
-    {pickOpen ? <PickSheet items={pickItems} onClose={() => setPickOpen(false)} onPicked={() => { tell(t('assignmentSent')); load({ silent: true }); }} /> : null}
-    {createOpen ? <CreatePostSheet onClose={() => setCreateOpen(false)} onCreated={() => { tell(t('created')); load({ silent: true }); }} /> : null}
+    {open ? <QueueDetail task={open} onClose={() => setOpen(null)} /> : null}
   </div>;
 }
 
@@ -465,7 +471,7 @@ function MiniSchedule({ data, date, coordinator, onOpen }) {
   const viewerEmail = data.viewer?.email;
   const people = (coordinator ? roster : roster.filter((person) => person.email === viewerEmail)).filter((person) => tasks.some((task) => task.designerEmail === person.email) || blocks.some((block) => block.requesterEmail === person.email));
   const rows = people.length ? people : [{ email: viewerEmail, displayName: displayName(viewerEmail) }];
-  const now = new Date(); const nowMinutes = now.getHours() * 60 + now.getMinutes(); const showNow = date === DAY();
+  const now = new Date(); const nowMinutes = queueMinutes(now); const showNow = date === DAY(now);
   return <section className="m-day-map"><header><div><span>{t('blockedTime')}</span><h3>{t('dayMap')}</h3></div><div className="m-day-map-hours"><i>00</i><i>06</i><i>12</i><i>18</i><i>24</i></div></header><div className="m-day-map-rows">{rows.map((person) => { const personTasks = tasks.filter((task) => task.designerEmail === person.email); const personBlocks = blocks.filter((block) => block.requesterEmail === person.email); return <div className="m-day-map-row" key={person.email}><b>{coordinator ? (person.displayName || displayName(person.email)) : t('today')}</b><div className="m-day-map-track">{showNow ? <i className="m-day-now" style={{ left: `${(nowMinutes / 1440) * 100}%` }} /> : null}{personTasks.map((task) => { const user = roster.find((item) => item.email === task.designerEmail); const duration = Number(task.durationMinutes || Number(task.productionPoints || 1) * Number(user?.minutesPerPP || 10)); return <button key={task.id} className={`m-day-bar status-${task.status}${task.isDraft ? ' is-draft' : ''}`} style={{ left: `${(Number(task.scheduledStartMinutes || 0) / 1440) * 100}%`, width: `${Math.max(1.2, (duration / 1440) * 100)}%` }} title={`${timeLabel(task.scheduledStartMinutes)} · ${duration} min`} aria-label={`Queue #${task.id}, ${timeLabel(task.scheduledStartMinutes)}, ${duration} minutes`} onClick={() => onOpen(task)} />; })}{personBlocks.map((block) => <i key={`block-${block.id}`} className={`m-day-bar is-time-block status-${block.status}`} style={{ left: `${(Number(block.scheduledStartMinutes || 0) / 1440) * 100}%`, width: `${Math.max(1.2, (Number(block.durationMinutes || 10) / 1440) * 100)}%` }} title={`${block.title || block.category} · ${timeLabel(block.scheduledStartMinutes)}`} />)}</div></div>; })}</div></section>;
 }
 
@@ -478,13 +484,9 @@ function QueueTaskCard({ task, onClick, compact = false, showDesigner = false })
   return <button className={`m-task priority-${task.priority || 'medium'} status-${task.status}${compact ? ' is-compact' : ''}${task.isDraft ? ' is-draft' : ''}`} data-context-type="task" data-context-title={post.title || post.caption || `Queue #${task.id}`} data-context-account={post.account || ''} data-context-shortcode={post.shortcode || ''} data-context-permalink={post.permalink || ''} onClick={onClick}><Cover src={post.coverUrl || task.coverUrl} /><div><span className="m-task-meta"><i>{t(task.status) || task.status}</i>{task.isDraft ? <i>{t('pending')}</i> : null}</span><b>{post.title || post.ocrText || post.caption || `Queue #${task.id}`}</b><small>@{post.account || 'unassigned'} · {task.productionPoints} PP · {task.durationMinutes || Number(task.productionPoints || 1) * Number(task.minutesPerPP || 10)}m</small>{showDesigner ? <em>{displayName(task.designerEmail)}</em> : null}</div>{task.scheduledStartMinutes != null ? <time>{timeLabel(task.scheduledStartMinutes)}</time> : <ChevronRight size={18} />}</button>;
 }
 
-function QueueDetail({ task, coordinator, onAssign, onClose, onChanged, tell }) {
-  const { t } = usePrefs(); const [busy, setBusy] = useState(false); const [notice, setNotice] = useState(''); const [requestOpen, setRequestOpen] = useState(false); const [closing, setClosing] = useState(false); const [link, setLink] = useState('');
-  const run = async (action, body) => { setBusy(true); setNotice(''); try { await apiJson(`/api/dashboard/queue/v2/requests/${task.id}/${action}`, { method: 'POST', body }); tell(t('assignmentSent')); onChanged(); } catch (error) { setNotice(error.message); } finally { setBusy(false); } };
-  const returnPool = () => runSubmit([{ id: task.id, status: 'pool', designerEmail: null, scheduledDate: null, scheduledStartMinutes: null, productionPoints: task.productionPoints, recommendedAccounts: task.recommendedAccounts || [] }]);
-  const runSubmit = async (changes) => { setBusy(true); setNotice(''); try { await apiJson('/api/dashboard/queue/v2/submit', { method: 'POST', body: new URLSearchParams({ changes: JSON.stringify(changes) }) }); tell(t('assignmentSent')); onChanged(); } catch (error) { setNotice(error.message); } finally { setBusy(false); } };
-  const post = task.post || {};
-  return <Sheet title={`Queue #${task.id}`} onClose={onClose} wide><article className="m-task-detail"><Cover src={post.coverUrl || task.coverUrl} /><div className="m-detail-kicker"><span className={`m-priority priority-${task.priority}`}>{t(task.priority) || task.priority}</span><span>{t(task.status) || task.status}</span></div><h3>{post.title || post.ocrText || post.caption || `Queue #${task.id}`}</h3><p>{task.brief || post.caption}</p><div className="m-info-grid"><div><span>{t('designer')}</span><b>{task.designerEmail ? displayName(task.designerEmail) : '—'}</b></div><div><span>{t('date')}</span><b>{task.scheduledDate || '—'}</b></div><div><span>{t('time')}</span><b>{timeLabel(task.scheduledStartMinutes)}</b></div><div><span>PP</span><b>{task.productionPoints}</b></div></div>{task.recommendedAccounts?.length ? <div className="m-bubbles">{task.recommendedAccounts.map((account) => <span key={account}>@{account}</span>)}</div> : null}<Notice type="error">{notice}</Notice><div className="m-action-grid">{task.status === 'scheduled' && !coordinator ? <button className="m-primary" disabled={busy} onClick={() => run('start')}><Play size={16} />{t('start')}</button> : null}{task.status === 'in_progress' && !coordinator ? <button className="m-primary" disabled={busy} onClick={() => run('complete')}><CheckCircle2 size={16} />{t('markComplete')}</button> : null}{task.status === 'completed' && !coordinator ? <button className="m-primary" onClick={() => setClosing(true)}><Link2 size={16} />{t('completeClose')}</button> : null}{!coordinator && ['scheduled', 'in_progress', 'completed'].includes(task.status) ? <button className="m-secondary" onClick={() => setRequestOpen(true)}><TimerReset size={16} />{t('requestChange')}</button> : null}{coordinator && task.status !== 'closed' ? <button className="m-primary" onClick={onAssign}><CalendarDays size={16} />{task.designerEmail ? t('editAssignment') : t('assign')}</button> : null}{coordinator ? <button className="m-secondary" disabled={busy} onClick={() => run('duplicate', new URLSearchParams())}><Plus size={16} />{t('duplicateRequest')}</button> : null}{coordinator && task.status === 'scheduled' ? <button className="m-secondary" disabled={busy} onClick={returnPool}><ArrowLeft size={16} />{t('returnPool')}</button> : null}{post.permalink ? <a className="m-secondary" href={post.permalink} target="_blank" rel="noreferrer"><ExternalLink size={16} />Instagram</a> : null}</div>{closing ? <form className="m-form m-inline-form" onSubmit={(event) => { event.preventDefault(); run('close', new URLSearchParams({ final_permalink: link })); }}><label>{t('finalLink')}<input type="url" required value={link} onChange={(event) => setLink(event.target.value)} /></label><button className="m-primary" disabled={busy}>{t('completeClose')}</button></form> : null}{requestOpen ? <TaskRequestForm task={task} onClose={() => setRequestOpen(false)} onSent={() => { setRequestOpen(false); tell(t('requestSent')); }} /> : null}</article></Sheet>;
+function QueueDetail({ task, onClose }) {
+  const { t } = usePrefs(); const post = task.post || {};
+  return <Sheet title={`Queue #${task.id}`} onClose={onClose} wide><article className="m-task-detail"><Cover src={post.coverUrl || task.coverUrl} /><div className="m-detail-kicker"><span className={`m-priority priority-${task.priority}`}>{t(task.priority) || task.priority}</span><span>{t(task.status) || task.status}</span></div><h3>{post.title || post.ocrText || post.caption || `Queue #${task.id}`}</h3><p>{task.brief || post.caption}</p><div className="m-info-grid"><div><span>{t('designer')}</span><b>{task.designerEmail ? displayName(task.designerEmail) : '—'}</b></div><div><span>{t('date')}</span><b>{task.scheduledDate || '—'}</b></div><div><span>{t('time')}</span><b>{timeLabel(task.scheduledStartMinutes)}</b></div><div><span>PP</span><b>{task.productionPoints}</b></div></div>{task.recommendedAccounts?.length ? <div className="m-bubbles">{task.recommendedAccounts.map((account) => <span key={account}>@{account}</span>)}</div> : null}<Notice>{t('queueMobileSupport')}</Notice><div className="m-action-grid"><a className="m-primary" href="/queue.html?desktop=1"><ExternalLink size={16} />{t('openQueueDesktop')}</a>{post.permalink ? <a className="m-secondary" href={post.permalink} target="_blank" rel="noreferrer"><ExternalLink size={16} />Instagram</a> : null}</div></article></Sheet>;
 }
 
 function AssignmentSheet({ task, data, onClose, onChanged }) {

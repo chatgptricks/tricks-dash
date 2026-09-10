@@ -60,6 +60,8 @@ const click = async (node) => act(async () => { node.dispatchEvent(new window.Mo
     await click(nav[1]);
     checks['Independent Queue renders'] = Boolean(document.querySelector('.m-queue-toolbar')) && Boolean(document.querySelector('.m-task'));
     checks['Queue day map renders'] = Boolean(document.querySelector('.m-day-map')) && Boolean(document.querySelector('.m-day-bar'));
+    checks['Mobile Queue is a desktop-directed support view'] = /Open Queue on desktop/.test(document.body.textContent)
+      && !document.querySelector('.m-queue-quick');
     await click(nav[2]);
     checks['Independent Tracker renders'] = document.querySelectorAll('.m-tracker-row').length === 1 && /100,000/.test(document.body.textContent) && /\+120/.test(document.body.textContent);
     checks['Tracker favorite is first'] = Boolean(document.querySelector('.m-tracker-row:first-child .m-favorite.is-on'));

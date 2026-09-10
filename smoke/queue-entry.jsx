@@ -10,10 +10,13 @@ const day = localDay();
 const post = (account, shortcode) => ({ account, shortcode, caption: `${account} source post`, type: 'Image', coverUrl: '' });
 const base = { productionPoints: 3, minutesPerPP: 10, durationMinutes: 30, priority: 'medium', tags: [], brief: '', notes: '', references: [], attachments: [], recommendedAccounts: [], coordinatorEmail: 'user05@example.com' };
 const pool = { ...base, id: 1, post: post('chatgptricks', 'POOL1'), status: 'pool', designerEmail: null, scheduledDate: null, scheduledStartMinutes: null };
+// A browser-wide draft from a prior user must never hydrate into User 03's
+// Queue session. The app now only reads owner-verified v3 envelopes.
+window.localStorage.setItem('sentient.queueDrafts.v2', JSON.stringify([{ ...pool, status: 'scheduled', designerEmail: 'other@sentientagency.io', scheduledDate: day, scheduledStartMinutes: 600 }]));
 const active = { ...base, id: 2, post: post('chatgptricks', 'ACTIVE1'), status: 'in_progress', designerEmail: 'user03@example.com', scheduledDate: day, scheduledStartMinutes: 540 };
 const scheduled = { ...base, id: 3, post: post('chatgptricks', 'NEXT1'), recommendedAccounts: ['chatgptricks'], status: 'scheduled', designerEmail: 'user03@example.com', scheduledDate: day, scheduledStartMinutes: 570 };
 const payload = {
-  viewer: { displayName: 'User 03 Current', email: 'user03@example.com', isAdmin: true, isDev: true, operatingRoles: ['vc', 'pd'] },
+  viewer: { displayName: 'User 03 Current', email: 'user03@example.com', isAdmin: false, isDev: true, operatingRoles: ['pd'] },
   date: day,
   requests: [pool, active, scheduled],
   pickRequests: [pool],
@@ -153,16 +156,20 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
   const originalError = console.error;
   console.error = (...args) => { const message = args.map(String).join(' '); if (!/not wrapped in act/.test(message)) errors.push(message); originalError(...args); };
   try {
-    await act(async () => {
-      await import('../src/queue.jsx');
-      await new Promise((resolve) => setTimeout(resolve, 40));
-    });
+    // Importing the entrypoint starts its intentionally pending first Queue
+    // fetch. Keep that import outside React's async act boundary so the
+    // smoke harness can inspect the cached view before releasing the fetch.
+    await import('../src/queue.jsx');
+    // Flush the initial effects without importing inside the async act scope;
+    // otherwise React waits for the deliberately unresolved network promise.
+    await act(async () => {});
     checks['Cached Queue view stays visible while reload syncs'] = Boolean(document.querySelector('.scheduler-canvas'))
       && !document.querySelector('.queue-state')
       && Boolean(document.querySelector('.queue-refresh-progress'));
     releaseInitialQueueFetch();
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 250)); });
     checks['Queue renders'] = Boolean(document.querySelector('.scheduler-canvas'));
+    checks['Legacy browser-wide Queue drafts are ignored'] = !document.querySelector('.scheduler-drafts');
     const cachedQueue = JSON.parse(window.sessionStorage.getItem('sentient.queueSnapshot.v1:user03@example.com') || 'null');
     checks['Queue saves the current view for an instant reload'] = cachedQueue?.version === 1
       && cachedQueue?.date === day
@@ -231,6 +238,8 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     const createPostButton = document.querySelector('.queue-create-button');
     const addTimeButton = document.querySelector('.scheduler-add-time');
     checks['Add Time is grouped with Create Post'] = Boolean(addTimeButton) && createPostButton?.parentElement === addTimeButton.parentElement;
+    checks['Dev keeps the coordinator scheduler controls'] = Boolean(addTimeButton)
+      && document.querySelectorAll('.scheduler-resize-handle').length >= 2;
     checks['Queue has no duplicate Admin tool'] = !document.querySelector('.queue-admin-button');
     const profileTrigger = document.querySelector('.queue-settings-trigger');
     checks['Signed-in profile opens Queue settings'] = profileTrigger?.querySelector('img')?.getAttribute('src') === 'https://example.test/esteban-avatar.png';
@@ -290,8 +299,11 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     await click(start);
     await click(document.querySelector('.queue-create-modal .scheduler-primary'));
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 100)); });
-    checks['Start action accepts deferred response'] = started && !document.querySelector('.queue-request-rail');
+    checks['Deferred start keeps the request open and scheduled'] = started
+      && Boolean(document.querySelector('.queue-request-rail'))
+      && Boolean(document.querySelector('.scheduler-block.state-scheduled'));
     checks['Deferred warning is shown'] = /already in progress|Ya hay otro post/.test(document.querySelector('.queue-toast')?.textContent || '');
+    await click(document.querySelector('.rail-close-button'));
 
     const poolCard = document.querySelector('.queue-pool-card');
     const track = document.querySelector('.scheduler-track');
@@ -305,6 +317,11 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 100)); });
     checks['Drop creates one draft'] = document.querySelectorAll('.scheduler-drafts article').length === 1;
     checks['Draft is shared before submit'] = drafted?.length === 1 && Boolean(document.querySelector('.scheduler-block.is-draft'));
+    const localDraftEnvelope = JSON.parse(window.localStorage.getItem('sentient.queueDrafts.v3:user03@example.com') || 'null');
+    checks['Draft recovery is scoped to its authenticated owner'] = localDraftEnvelope?.version === 1
+      && localDraftEnvelope?.ownerEmail === 'user03@example.com'
+      && Array.isArray(localDraftEnvelope?.drafts)
+      && localDraftEnvelope.drafts.length === 1;
     checks['Draft leaves pool before submit'] = document.querySelectorAll('.queue-pool-card').length === 0;
     const poolDrop = document.querySelector('.scheduler-pool');
     const draftBlock = document.querySelector('.scheduler-block.is-draft');
