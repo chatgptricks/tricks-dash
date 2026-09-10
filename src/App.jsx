@@ -1083,16 +1083,25 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
       }
       dashboardPostsRef.current = catalogue.posts;
       dashboardSourcesRef.current = Array.isArray(catalogue.sources) ? catalogue.sources : [];
+      // Do not reveal the complete library until its reload-safe snapshot is
+      // committed. Previously the UI painted first and a page refresh during
+      // IndexedDB's very large structured clone restarted the entire library.
+      try {
+        await writeDashboardSnapshot({
+          posts: catalogue.posts,
+          summary: catalogue.summary || {},
+          accounts: resolvedAccounts.accounts,
+          catalogueComplete: true,
+          catalogueRevision: catalogue.revision,
+          catalogueSources: dashboardSourcesRef.current,
+        });
+      } catch {
+        // Storage can be disabled by private browsing or browser policy. The
+        // verified live catalogue remains usable; a later retry can cache it.
+      }
+      if (!isCurrentRequest()) return;
       setDashboard({ posts: catalogue.posts, summary: catalogue.summary || {} });
       setAccounts(resolvedAccounts.accounts);
-      writeDashboardSnapshot({
-        posts: catalogue.posts,
-        summary: catalogue.summary || {},
-        accounts: resolvedAccounts.accounts,
-        catalogueComplete: true,
-        catalogueRevision: catalogue.revision,
-        catalogueSources: dashboardSourcesRef.current,
-      }).catch(() => {});
       loaded = true;
       reconnectAttempt.current = 0;
       setConnectionNotice('');

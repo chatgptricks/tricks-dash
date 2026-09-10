@@ -1,6 +1,11 @@
 import { API_BASE, apiFetch } from './api';
 
-const PAGE_SIZE = 6_000;
+// A six-thousand-row page made a cold Research load wait on ten or more
+// sequential request/JSON-parse cycles.  Twelve thousand stays well within
+// the API's bounded-response budget while materially reducing that overhead.
+const PAGE_SIZE = 12_000;
+const FULL_SNAPSHOT_SHARDS = 4;
+const MAX_PARALLEL_PAGE_STREAMS = 4;
 
 export class DashboardCatalogueError extends Error {
   constructor(message, status = 0) {
@@ -90,9 +95,9 @@ async function fetchRevision(manifest, signal, onProgress, startingBounds = new 
   let received = 0;
   onProgress?.({ received, total: null });
 
-  const loadSource = async ({ source, upperBound }) => {
+  const loadSourceRange = async ({ source, afterId, upperBound }) => {
     const rows = [];
-    let cursor = Math.min(upperBound, Math.max(0, startingBounds.get(source) || 0));
+    let cursor = afterId;
     while (cursor < upperBound) {
       const params = new URLSearchParams({
         source,
@@ -120,10 +125,34 @@ async function fetchRevision(manifest, signal, onProgress, startingBounds = new 
     return rows;
   };
 
-  // Each source advances one stable primary-key cursor. This avoids a burst
-  // of COUNT/MAX scans and still guarantees that every row below its captured
-  // high-water mark is loaded. Sources can safely progress in parallel.
-  const rawPosts = (await Promise.all(sources.map(loadSource))).flat();
+  const ranges = sources.flatMap(({ source, upperBound }) => {
+    const afterId = Math.min(upperBound, Math.max(0, startingBounds.get(source) || 0));
+    if (afterId >= upperBound) return [];
+    // A cold snapshot is immutable below its high-water mark, so independent
+    // primary-key ranges can be read concurrently without either gaps or
+    // duplicate posts. Deltas stay as one tiny stream; only the first full
+    // library load needs this acceleration.
+    const shardCount = afterId === 0 && upperBound > PAGE_SIZE ? FULL_SNAPSHOT_SHARDS : 1;
+    const span = upperBound - afterId;
+    return Array.from({ length: shardCount }, (_, index) => ({
+      source,
+      afterId: afterId + Math.floor((span * index) / shardCount),
+      upperBound: afterId + Math.floor((span * (index + 1)) / shardCount),
+    })).filter((range) => range.afterId < range.upperBound);
+  });
+
+  // Keep a deliberate ceiling: a few parallel streams use the upgraded API
+  // efficiently, while many tabs cannot stampede Postgres or the browser.
+  const rawPosts = [];
+  let nextRange = 0;
+  const worker = async () => {
+    while (nextRange < ranges.length) {
+      const rangeIndex = nextRange;
+      nextRange += 1;
+      rawPosts.push(...await loadSourceRange(ranges[rangeIndex]));
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(MAX_PARALLEL_PAGE_STREAMS, ranges.length) }, worker));
   const posts = dedupePosts(rawPosts);
   return {
     posts,
