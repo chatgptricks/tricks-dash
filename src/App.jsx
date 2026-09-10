@@ -866,6 +866,8 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
   const [dashboard, setDashboard] = useState({ posts: [], summary: {} });
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [catalogueSyncing, setCatalogueSyncing] = useState(false);
+  const [catalogueProgress, setCatalogueProgress] = useState(0);
   const [loadError, setLoadError] = useState('');
   const [connectionNotice, setConnectionNotice] = useState('');
   const [refreshing, setRefreshing] = useState(false);
@@ -1021,33 +1023,60 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
     dashboardRequestVersionRef.current = requestVersion;
     const isCurrentRequest = () => requestVersion === dashboardRequestVersionRef.current && !signal?.aborted;
     let loaded = false;
+    let previewed = false;
+    let preview = null;
+    let accountsData = null;
+    const revealPreview = () => {
+      if (!preview || !accountsData || !isCurrentRequest()) return;
+      previewed = true;
+      setDashboard({ posts: preview.posts, summary: preview.summary || {} });
+      setAccounts(accountsData.accounts);
+      setLoading(false);
+      setCatalogueSyncing(true);
+    };
     try {
       if (!silent) {
         setLoading(true);
+        setCatalogueSyncing(false);
+        setCatalogueProgress(0);
         setLoadError('');
       }
-      const [catalogue, accountsResponse] = await Promise.all([
-        loadCompleteDashboardCatalogue({ signal, etag: dashboardEtagRef.current }),
-        apiFetch(`${API_BASE}/api/dashboard/accounts`, { signal }),
+      const [catalogue, resolvedAccounts] = await Promise.all([
+        loadCompleteDashboardCatalogue({
+          signal,
+          etag: dashboardEtagRef.current,
+          onPreview: silent ? undefined : (nextPreview) => {
+            preview = nextPreview;
+            revealPreview();
+          },
+          onProgress: silent ? undefined : ({ received }) => {
+            if (isCurrentRequest()) setCatalogueProgress(received);
+          },
+        }),
+        apiFetch(`${API_BASE}/api/dashboard/accounts`, { signal }).then(async (accountsResponse) => {
+          if (accountsResponse.status === 401 || accountsResponse.status === 403) {
+            onUnauthorized();
+            throw new DashboardCatalogueError('Sign in required.', accountsResponse.status);
+          }
+          if (!accountsResponse.ok) throw new Error(`HTTP ${accountsResponse.status}`);
+          const nextAccounts = await accountsResponse.json();
+          if (!Array.isArray(nextAccounts.accounts)) {
+            throw new Error('The shared account roster returned an invalid response.');
+          }
+          accountsData = nextAccounts;
+          revealPreview();
+          return nextAccounts;
+        }),
       ]);
       // A manual refresh, reconnect, or tab return can start another request
       // while this one is in flight. Only the newest response owns the UI.
       if (!isCurrentRequest()) return;
-      if (accountsResponse.status === 401 || accountsResponse.status === 403) {
-        onUnauthorized();
-        return;
-      }
-      if (!accountsResponse.ok) throw new Error(`HTTP ${accountsResponse.status}`);
-      const accountsData = await accountsResponse.json();
       if (!isCurrentRequest()) return;
-      if (!Array.isArray(accountsData.accounts)) {
-        throw new Error('The shared post database returned an invalid response.');
-      }
       // The server has confirmed that the catalog has not changed. Keep the
       // current cards, selection and scroll intact while still accepting the
       // lightweight accounts roster response.
       if (catalogue.notModified) {
-        setAccounts(accountsData.accounts);
+        setAccounts(resolvedAccounts.accounts);
         loaded = true;
         reconnectAttempt.current = 0;
         setConnectionNotice('');
@@ -1070,11 +1099,13 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
         setIncomingData(true);
       }
       setDashboard({ posts: catalogue.posts, summary: catalogue.summary || {} });
-      setAccounts(accountsData.accounts);
+      setAccounts(resolvedAccounts.accounts);
+      setCatalogueSyncing(false);
+      setCatalogueProgress(0);
       writeDashboardSnapshot({
         posts: catalogue.posts,
         summary: catalogue.summary || {},
-        accounts: accountsData.accounts,
+        accounts: resolvedAccounts.accounts,
         catalogueComplete: true,
         catalogueRevision: catalogue.revision,
       }).catch(() => {});
@@ -1099,6 +1130,10 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
         // discard a loaded dashboard or turn a temporary 502 into a blocking
         // red error screen; keep the current UI and reconnect automatically.
         setLoadError('');
+        if (previewed) {
+          setLoading(false);
+          setCatalogueSyncing(false);
+        }
         setConnectionNotice('Reconnecting to the shared Post DB…');
         reconnectAttempt.current += 1;
         if (!reconnectTimer.current) {
@@ -1112,7 +1147,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
       // If the first request fails, keep the structural skeleton in place
       // until the automatic retry succeeds rather than replacing it with an
       // alarming database-error page.
-      if (isCurrentRequest() && loaded) setLoading(false);
+      if (isCurrentRequest() && (loaded || previewed)) setLoading(false);
     }
   }, [loadAccess, onUnauthorized]);
 
@@ -1831,6 +1866,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
             </> : null}
           </ProductHeader>
           {incomingData && !homeView ? <div className="live-data-notice" role="status"><LoaderCircle className="spin" size={16} /><span>New data is incoming</span></div> : null}
+          {catalogueSyncing && !loading && !homeView ? <div className="live-data-notice" role="status"><LoaderCircle className="spin" size={16} /><span>Showing the latest posts — loading the full library{catalogueProgress ? ` (${catalogueProgress.toLocaleString()} synced)` : ''}.</span></div> : null}
           {connectionNotice ? <div className="connection-notice" role="status"><LoaderCircle size={15} /><span>{connectionNotice}</span><button type="button" onClick={() => dashboardLoader.current?.(undefined, { silent: true })}>Retry now</button></div> : null}
 
 

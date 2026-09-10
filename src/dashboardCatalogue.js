@@ -1,6 +1,7 @@
 import { API_BASE, apiFetch } from './api';
 
-const PAGE_SIZE = 2_000;
+const PAGE_SIZE = 6_000;
+const PREVIEW_PAGE_SIZE = 250;
 
 export class DashboardCatalogueError extends Error {
   constructor(message, status = 0) {
@@ -50,6 +51,45 @@ async function fetchManifest(signal, etag = '') {
   return { manifest, etag: response.headers.get('ETag') || `"${manifest.revision}"` };
 }
 
+function catalogueSummary(posts) {
+  const knownLikes = posts.map((post) => Number(post?.likes)).filter((likes) => Number.isFinite(likes));
+  const totalLikes = knownLikes.reduce((sum, likes) => sum + likes, 0);
+  return {
+    'Exported posts': posts.length,
+    'Total likes': totalLikes,
+    'Average likes': knownLikes.length ? Math.round(totalLikes / knownLikes.length) : 0,
+  };
+}
+
+async function fetchRecentPreview(manifest, signal) {
+  // Paint the newest cards before reading every historical page. The full
+  // stable snapshot remains the authority for search and totals, but a user
+  // should never stare at a blank Research screen while that background read
+  // completes.
+  const pages = await Promise.all(manifest.sources.map(async (entry) => {
+    const source = String(entry?.source || '');
+    if (!source) throw new DashboardCatalogueError('The post catalogue named an invalid source.');
+    const params = new URLSearchParams({
+      source,
+      offset: '0',
+      limit: String(PREVIEW_PAGE_SIZE),
+      revision: manifest.revision,
+    });
+    const response = await apiFetch(`${API_BASE}/api/dashboard/posts/page?${params}`, { signal });
+    const body = await jsonOrError(response);
+    if (body?.revision !== manifest.revision || !Array.isArray(body?.posts)) {
+      throw new DashboardCatalogueError('The post catalogue changed while loading.', 409);
+    }
+    return body.posts;
+  }));
+  const posts = dedupePosts(pages.flat()).sort((a, b) => {
+    const left = Number(a?.timestamp) || Date.parse(a?.postDate) || 0;
+    const right = Number(b?.timestamp) || Date.parse(b?.postDate) || 0;
+    return right - left;
+  });
+  return { posts, summary: catalogueSummary(posts) };
+}
+
 async function fetchCompleteRevision(manifest, signal, onProgress) {
   const sources = manifest.sources.map((entry) => {
     const source = String(entry?.source || '');
@@ -97,27 +137,22 @@ async function fetchCompleteRevision(manifest, signal, onProgress) {
   // high-water mark is loaded. Sources can safely progress in parallel.
   const rawPosts = (await Promise.all(sources.map(loadSource))).flat();
   const posts = dedupePosts(rawPosts);
-  const knownLikes = posts.map((post) => Number(post?.likes)).filter((likes) => Number.isFinite(likes));
-  const totalLikes = knownLikes.reduce((sum, likes) => sum + likes, 0);
   return {
     posts,
-    summary: {
-      'Exported posts': posts.length,
-      'Total likes': totalLikes,
-      'Average likes': knownLikes.length ? Math.round(totalLikes / knownLikes.length) : 0,
-    },
+    summary: catalogueSummary(posts),
     rawTotal: rawPosts.length,
     revision: manifest.revision,
   };
 }
 
-export async function loadCompleteDashboardCatalogue({ signal, etag = '', onProgress } = {}) {
+export async function loadCompleteDashboardCatalogue({ signal, etag = '', onProgress, onPreview } = {}) {
   // A write can happen between page requests. Restart once from a newly read
   // manifest; returning a plausible but incomplete mix is never acceptable.
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const manifestResult = await fetchManifest(signal, attempt === 0 ? etag : '');
     if (manifestResult.notModified) return manifestResult;
     try {
+      if (onPreview) onPreview(await fetchRecentPreview(manifestResult.manifest, signal));
       const catalogue = await fetchCompleteRevision(manifestResult.manifest, signal, onProgress);
       return { ...catalogue, etag: manifestResult.etag };
     } catch (error) {
