@@ -668,7 +668,12 @@ function normalizePost(post, now = Date.now()) {
   const postType = typeLabel(String(post.type || 'Image'));
   const timestamp = post.postDate ? new Date(post.postDate).getTime() : Number.NaN;
   const isVideo = post.video === 'Yes' || postType === 'Video';
-  const shortcode = realShortcode(post.shortcode);
+  // Keep the backend's canonical shortcode for identity, including legacy
+  // `post-<id>` placeholders. Only omit that placeholder when constructing a
+  // public Instagram permalink; dropping it here made manual grouping send
+  // `account:<id>` while the server persisted `account:post-<id>`.
+  const rawShortcode = String(post.shortcode || '').trim();
+  const shortcode = realShortcode(rawShortcode);
   const permalink = post.permalink || (shortcode ? `https://www.instagram.com/${isVideo ? 'reel' : 'p'}/${shortcode}/` : '');
   const ageDays = Number.isFinite(timestamp) ? (now - timestamp) / 86400000 : Infinity;
   // A post keeps its HOT flag forever once it earns it (permanent record); the
@@ -689,7 +694,7 @@ function normalizePost(post, now = Date.now()) {
     // Accounts repost each other, so a shortcode alone is not unique across the
     // dataset (~21 collisions today). Everything that identifies a post -- React
     // keys, selection, the sidebar lookup -- uses this instead.
-    postKey: `${post.account || ''}:${shortcode || post.rank || ''}`,
+    postKey: `${post.account || ''}:${rawShortcode || post.rank || ''}`,
     caption,
     // Most cards use the backend excerpt, and only a few visible cards need a
     // rendered headline. Splitting every caption into words here made opening
@@ -1847,8 +1852,27 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
     body.append('account', post.account);
     body.append('shortcode', post.shortcode);
     const response = await apiFetch(`${API_BASE}/api/dashboard/posts/reload`, { method: 'POST', body });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const data = await response.json();
+    let data;
+    try { data = await response.json(); } catch { data = null; }
+    if (!response.ok) throw new Error(data?.detail || `HTTP ${response.status}`);
+    // Reloads run through the durable worker because an Apify detail scrape
+    // can outlive Render's request timeout. Keep polling the small status
+    // record instead of holding the card open on a long-lived HTTP request.
+    if (response.status === 202 && data?.job_id) {
+      const deadline = Date.now() + 5 * 60 * 1000;
+      let job = data;
+      while (job.status === 'queued' || job.status === 'running') {
+        if (Date.now() >= deadline) throw new Error('The refresh is taking longer than expected. It is still running in the background.');
+        await new Promise((resolve) => window.setTimeout(resolve, 1500));
+        const statusResponse = await apiFetch(`${API_BASE}/api/dashboard/posts/reload-jobs/${encodeURIComponent(data.job_id)}`);
+        let statusPayload;
+        try { statusPayload = await statusResponse.json(); } catch { statusPayload = null; }
+        if (!statusResponse.ok) throw new Error(statusPayload?.detail || `HTTP ${statusResponse.status}`);
+        job = statusPayload;
+      }
+      if (job.status !== 'done') throw new Error(job.error || 'The count refresh failed. The saved counts were kept.');
+      data = job.result || {};
+    }
     // The API refresh also re-caches a fresh cover when the previous one was
     // missing or expired. Bump a client-only token so the browser does not
     // reuse a cached 404/502 for the same cover route and CoverImage starts
@@ -2152,7 +2176,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
           <section className="panel gallery">
           <div ref={resultsScrollRef} className="results-scroll">
             {grouping && !filtered.length ? <p className="home-loading" role="status">Grouping similar posts… You can keep using Research.</p> : filtered.length ? (
-              <StackActions onSaved={(result) => { const members = new Map((result.members || []).map((member) => [member.postKey, member])); const keys = new Set(result.postKeys || []); setDashboard((current) => ({ ...current, posts: current.posts.map((post) => { const key = `${post.account}:${post.shortcode}`; const member = members.get(key); return member ? { ...post, stackId: member.stackId, stackSize: member.stackSize } : keys.has(key) ? { ...post, stackId: result.stackId, stackSize: result.stackSize } : post; }) })); }}><div className="gallery-grid">
+              <StackActions onSaved={(result) => { const members = new Map((result.members || []).map((member) => [member.postKey, member])); const keys = new Set(result.postKeys || []); setDashboard((current) => ({ ...current, posts: current.posts.map((post) => { const key = post.postKey || `${post.account}:${post.shortcode || post.rank || ''}`; const member = members.get(key); return member ? { ...post, stackId: member.stackId, stackSize: member.stackSize } : keys.has(key) ? { ...post, stackId: result.stackId, stackSize: result.stackSize } : post; }) })); }}><div className="gallery-grid">
                 {visibleTopics.map((group, index) => <TopicStack key={group.id} posts={group.posts} visiblePosts={group.visiblePosts} total={group.total} renderCard={(post, expand, dragProps) => (
                   <PostCard
                     // Keyed by account+shortcode, not shortcode alone: accounts
@@ -5711,8 +5735,8 @@ function PostMenu({ post, isPromo, onFlags, onReload, onAssign, onQuickAdd, canP
         return;
       }
       setOpen(false);
-    } catch {
-      setNote('That failed -- try again.');
+    } catch (error) {
+      setNote(error?.message || 'That failed -- try again.');
     } finally {
       setBusy('');
     }

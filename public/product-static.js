@@ -1,4 +1,4 @@
-import { productSections, sectionHref, coordinatorFor, openSection } from './product-navigation.js?v=20260905c';
+import { productSections, sectionHref, coordinatorFor, openSection } from './product-navigation.js?v=20260910a';
 const top = document.querySelector('.wrap > .top');
 if (top) {
   const current = location.pathname.includes('tracker') ? 'tracker' : 'insights';

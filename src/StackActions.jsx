@@ -16,8 +16,9 @@ export function StackActions({ children, onSaved }) {
   const mutate = async (endpoint, field, value) => {
     const body = new FormData(); body.set(field, typeof value === 'string' ? value : JSON.stringify(value));
     const response = await apiFetch(`${API_BASE}/api/dashboard/stacks/${endpoint}`, { method: 'POST', body });
-    const result = await response.json();
-    if (!response.ok) throw new Error(result.detail || 'Could not save the stack. Try again.');
+    let result;
+    try { result = await response.json(); } catch { result = null; }
+    if (!response.ok) throw new Error(result?.detail || 'Could not save the stack. Try again.');
     onSaved(result);
     return result;
   };

@@ -12,6 +12,7 @@ export const API_BASE = (import.meta.env.VITE_API_BASE || 'https://cortex-api-db
 
 const TRANSIENT_GATEWAY_STATUSES = new Set([500, 502, 503, 504]);
 const USER_UPSERT_RETRY_ATTEMPTS = 6;
+const POST_REFRESH_RETRY_ATTEMPTS = 4;
 
 // Drop-in replacement for fetch() that attaches the signed-in user's Firebase
 // ID token to every call. getIdToken() returns the cached token and only
@@ -59,24 +60,28 @@ export async function apiFetch(url, options = {}) {
   // connection handoff, or expired Firebase token from making the
   // Self-assign marker appear broken. It gets a longer window than reads
   // because a Render instance can take more than the old five seconds to
-  // become ready after a restart.
+  // become ready after a restart. Post refresh enqueue is also safe to retry:
+  // the backend deduplicates it by account and shortcode before the worker
+  // starts any paid Apify work.
   const method = String(options.method || 'GET').toUpperCase();
   const canRetry = method === 'GET' || method === 'HEAD';
   const isIdempotentUserUpsert = method === 'POST' && /\/api\/admin\/users\/?(?:\?|$)/.test(String(url));
-  const retryAttempts = isIdempotentUserUpsert ? USER_UPSERT_RETRY_ATTEMPTS : (canRetry ? 4 : 1);
+  const isIdempotentPostRefresh = method === 'POST' && /\/api\/dashboard\/posts\/reload\/?(?:\?|$)/.test(String(url));
+  const canRetryMutation = isIdempotentUserUpsert || isIdempotentPostRefresh;
+  const retryAttempts = isIdempotentUserUpsert ? USER_UPSERT_RETRY_ATTEMPTS : (isIdempotentPostRefresh ? POST_REFRESH_RETRY_ATTEMPTS : (canRetry ? 4 : 1));
   let lastError;
   for (let attempt = 0; attempt < retryAttempts; attempt += 1) {
     if (options.signal?.aborted) throw new DOMException('Request aborted.', 'AbortError');
     try {
       const response = await window.fetch(url, { ...options, headers });
-      const refreshMayRecoverUnauthorizedUserUpsert = isIdempotentUserUpsert && response.status === 401;
-      if ((!canRetry && !isIdempotentUserUpsert) || (!TRANSIENT_GATEWAY_STATUSES.has(response.status) && !refreshMayRecoverUnauthorizedUserUpsert) || attempt === retryAttempts - 1) return response;
+      const refreshMayRecoverUnauthorizedMutation = canRetryMutation && response.status === 401;
+      if ((!canRetry && !canRetryMutation) || (!TRANSIENT_GATEWAY_STATUSES.has(response.status) && !refreshMayRecoverUnauthorizedMutation) || attempt === retryAttempts - 1) return response;
       lastError = new Error(`HTTP ${response.status}`);
     } catch (error) {
-      if ((!canRetry && !isIdempotentUserUpsert) || error?.name === 'AbortError' || attempt === retryAttempts - 1) throw error;
+      if ((!canRetry && !canRetryMutation) || error?.name === 'AbortError' || attempt === retryAttempts - 1) throw error;
       lastError = error;
     }
-    if (isIdempotentUserUpsert) await refreshAuthToken(true);
+    if (canRetryMutation) await refreshAuthToken(true);
     // Keep the final waits bounded: they give Render enough time to accept a
     // request after a handoff without trapping the Settings control forever.
     await waitForRetry(retryDelay(attempt), options.signal);
