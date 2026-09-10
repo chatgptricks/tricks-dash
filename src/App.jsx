@@ -57,6 +57,8 @@ import { ACCENT_CHOICES, accentHex } from './prefs';
 import { API_BASE, IG_HANDLE, apiFetch } from './api';
 import { mergeUserDrafts, saveUserProfile, userProfileDraft as userDraft } from './userAdmin';
 import { readDashboardSnapshot, writeDashboardSnapshot } from './dashboardCache';
+// Read durable storage alongside authentication, rather than after it.
+const initialDashboardSnapshot = readDashboardSnapshot().catch(() => null);
 import { DashboardCatalogueError, loadCompleteDashboardCatalogue } from './dashboardCatalogue';
 import { followQueueLive } from './queueLive';
 import { decodeRouteState, encodeRouteState } from './urlCodec';
@@ -1172,7 +1174,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
         // older dashboard build. Cache access is an acceleration, never a
         // prerequisite for the live library: fall through to the API quickly
         // instead of leaving the entire page on Loading indefinitely.
-        const restore = readDashboardSnapshot().then((snapshot) => {
+        const restore = initialDashboardSnapshot.then((snapshot) => {
         const isCompleteSnapshot = snapshot?.catalogueComplete
           && Array.isArray(snapshot.posts)
           && snapshot.posts.length > 0

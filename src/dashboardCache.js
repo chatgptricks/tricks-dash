@@ -1,6 +1,9 @@
 const DB_NAME = 'sentient-dash-cache';
 const STORE_NAME = 'snapshots';
 const DASHBOARD_KEY = 'dashboard-v1';
+const RESPONSE_CACHE = 'sentient-complete-library-v1';
+const RESPONSE_KEY = '/__sentient_complete_library__';
+let restoring;
 
 function openCache() {
   return new Promise((resolve, reject) => {
@@ -13,7 +16,7 @@ function openCache() {
   });
 }
 
-export async function readDashboardSnapshot() {
+async function readLegacySnapshot() {
   if (!window.indexedDB) return null;
   const db = await openCache();
   try {
@@ -41,13 +44,39 @@ export async function readDashboardSnapshot() {
   }
 }
 
+export function readDashboardSnapshot() {
+  // Start once per document; auth and React mounting reuse this same read.
+  restoring ||= (async () => {
+    try {
+      const response = await window.caches?.match(RESPONSE_KEY, { cacheName: RESPONSE_CACHE });
+      if (response) return await response.json();
+    } catch { /* Try the existing IndexedDB snapshot. */ }
+    const snapshot = await readLegacySnapshot();
+    if (snapshot?.catalogueComplete) void writeDashboardSnapshot(snapshot).catch(() => {});
+    return snapshot;
+  })();
+  return restoring;
+}
+
 export async function writeDashboardSnapshot(snapshot) {
+  const payload = JSON.stringify({ ...snapshot, cachedAt: Date.now() });
+  // Cache Storage is shared by tabs and survives hard reloads. Store the
+  // complete response atomically, independently of IndexedDB transaction locks.
+  if (window.caches) {
+    try {
+      const cache = await window.caches.open(RESPONSE_CACHE);
+      await cache.put(RESPONSE_KEY, new Response(payload, {
+        headers: { 'Content-Type': 'application/json' },
+      }));
+      restoring = Promise.resolve(snapshot);
+      return;
+    } catch { /* Storage policy/quota: retain the IndexedDB fallback. */ }
+  }
   if (!window.indexedDB) return;
   const db = await openCache();
   try {
     await new Promise((resolve, reject) => {
       const transaction = db.transaction(STORE_NAME, 'readwrite');
-      const payload = JSON.stringify({ ...snapshot, cachedAt: Date.now() });
       const request = transaction.objectStore(STORE_NAME).put({ payload }, DASHBOARD_KEY);
       // `request.onsuccess` means IndexedDB accepted the put, not that the
       // transaction became durable. Resolve only after commit so the caller
