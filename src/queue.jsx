@@ -1157,6 +1157,7 @@ function Scheduler({ data, draft, setDraft, onDraftChange, selectedDate, designe
   const timelineMarkers = showAll && effectiveTimeline.hasWork
     ? [...new Set([timeline.start, timeline.end, ...Array.from({ length: Math.max(0, Math.floor(timeline.end / 60) - Math.ceil(timeline.start / 60) + 1) }, (_, index) => (Math.ceil(timeline.start / 60) + index) * 60).filter((minute) => minute > timeline.start && minute < timeline.end)])].sort((a, b) => a - b)
     : Array.from({ length: 25 }, (_, hour) => hour * 60);
+  const timeLabelMarkers = showAll && effectiveTimeline.hasWork ? timelineMarkers : timelineMarkers.slice(0, -1);
   useEffect(() => {
     if (initiallyPositionedDateRef.current === selectedDate) return undefined;
     const frame = window.requestAnimationFrame(() => {
@@ -1399,7 +1400,7 @@ function Scheduler({ data, draft, setDraft, onDraftChange, selectedDate, designe
   return <div className="scheduler-shell">
     <section className={`scheduler${isPanning ? ' is-panning' : ''}${showAll && effectiveTimeline.hasWork ? ' is-effective-view' : ''}`} ref={scrollRef} onPointerDown={startPan} onPointerMove={movePan} onPointerUp={endPan} onPointerCancel={endPan}>
       <div className="scheduler-canvas">
-        <div className="scheduler-time-head"><span className="scheduler-time-zone-labels" aria-label="Scheduler time zones"><b title="Costa Rica">🇨🇷</b><b title="Colombia">🇨🇴</b></span><div className="scheduler-time-zone-grid"><div className="scheduler-time-zone-row" aria-label="Costa Rica time">{timelineMarkers.map((minute) => <b key={minute} style={{ left: `${((minute - timeline.start) / timeline.duration) * 100}%` }}>{scheduleTimeForViewer(selectedDate, minute, QUEUE_TIME_ZONE)}</b>)}</div><div className="scheduler-time-zone-row" aria-label="Colombia time">{timelineMarkers.map((minute) => <b key={minute} style={{ left: `${((minute - timeline.start) / timeline.duration) * 100}%` }}>{scheduleTimeForViewer(selectedDate, minute, 'America/Bogota')}</b>)}</div></div></div>
+        <div className="scheduler-time-head"><span className="scheduler-time-zone-labels" aria-label="Scheduler time zones"><b title="Costa Rica">🇨🇷</b><b title="Colombia">🇨🇴</b></span><div className="scheduler-time-zone-grid"><div className="scheduler-time-zone-row" aria-label="Costa Rica time">{timeLabelMarkers.map((minute) => <b key={minute} style={{ left: `${((minute - timeline.start) / timeline.duration) * 100}%` }}>{scheduleTimeForViewer(selectedDate, minute, QUEUE_TIME_ZONE)}</b>)}</div><div className="scheduler-time-zone-row" aria-label="Colombia time">{timeLabelMarkers.map((minute) => <b key={minute} style={{ left: `${((minute - timeline.start) / timeline.duration) * 100}%` }}>{scheduleTimeForViewer(selectedDate, minute, 'America/Bogota')}</b>)}</div></div></div>
         {queueToday && queueNowMinutes >= timeline.start && queueNowMinutes <= timeline.end ? <div className="scheduler-day-overlay"><span className="scheduler-now-global" style={{ left: `${((queueNowMinutes - timeline.start) / timeline.duration) * 100}%` }} title={time(currentMinutes(now, timeZone))}><b>{t('now')}</b></span></div> : null}
         {visibleDesigners.map((designer) => {
           const queueEligible = designer.isQueueDesigner !== false;
