@@ -1174,7 +1174,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
         // instead of leaving the entire page on Loading indefinitely.
         const snapshot = await Promise.race([
           readDashboardSnapshot(),
-          new Promise((resolve) => window.setTimeout(() => resolve(null), 2_000)),
+          new Promise((resolve) => window.setTimeout(() => resolve(null), 5_000)),
         ]);
         const isCompleteSnapshot = snapshot?.catalogueComplete
           && Array.isArray(snapshot.posts)

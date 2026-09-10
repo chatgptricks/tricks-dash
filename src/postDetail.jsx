@@ -621,10 +621,22 @@ export function TranscriptDownload({ post }) {
 export function PostDetailPanel({ post, captionExtra = null }) {
   const { t } = usePrefs();
   const [copyState, setCopyState] = useState('');
+  const [fullDetail, setFullDetail] = useState(null);
+  useEffect(() => {
+    let active = true;
+    setFullDetail(null);
+    if (!post?.captionTruncated || !post?.account || !post?.shortcode) return () => { active = false; };
+    apiFetch(`${API_BASE}/api/dashboard/posts/${encodeURIComponent(post.account)}/${encodeURIComponent(post.shortcode)}/detail`)
+      .then(async (response) => (response.ok ? response.json() : null))
+      .then((detail) => { if (active && detail) setFullDetail(detail); })
+      .catch(() => {});
+    return () => { active = false; };
+  }, [post?.account, post?.shortcode, post?.captionTruncated]);
   if (!post) return null;
+  const caption = fullDetail?.caption || post.caption || '';
   const copyCaption = async () => {
     try {
-      await navigator.clipboard.writeText(post.caption || '');
+      await navigator.clipboard.writeText(caption);
       setCopyState('Copied');
     } catch {
       setCopyState('Could not copy');
@@ -644,7 +656,7 @@ export function PostDetailPanel({ post, captionExtra = null }) {
           </button>
         </div>
         <p>
-          <strong>{post.account || IG_HANDLE}</strong> {post.caption}
+          <strong>{post.account || IG_HANDLE}</strong> {caption}
         </p>
         {post.musicSong ? (
           <SongLine url={post.musicUrl}>
