@@ -38,6 +38,16 @@ try {
   if (!document.querySelector('.post-stack-modal')) throw new Error('Opening member menu must not close stack');
   await act(async () => root.render(null));
   console.log('PASS whole-stack reload and individual expanded menus');
+  const flagged = [];
+  const mixed = stackPosts.map((post, index) => ({ ...post, group: index === 1 ? 'sentient' : 'competitors' }));
+  await act(async () => root.render(<PrefsProvider><StackActions onSaved={() => {}}><TopicStack posts={mixed} renderCard={(post, expand) => <PostCard post={post} onSelect={expand || (() => {})} onFlags={async (member) => flagged.push(member.postKey)} />} /></StackActions></PrefsProvider>));
+  await act(async () => el.querySelector('[aria-label="Stack menu"]').click());
+  await act(async () => [...el.querySelectorAll('[role="menuitem"]')].find((node) => /Mark as promo/.test(node.textContent)).click());
+  if (flagged.join(',') !== 'b') throw new Error('Promo must only target Ours members in mixed stacks');
+  await act(async () => root.render(<PrefsProvider><PostCard post={{ ...sample, group: 'competitors' }} onSelect={() => {}} /></PrefsProvider>));
+  await act(async () => el.querySelector('[aria-label="Post menu"]').click());
+  if (/Mark as promo|Remove promo/.test(el.textContent)) throw new Error('Competitors must not expose promo actions');
+  console.log('PASS promo restricted to Ours in individual and mixed stacks');
   for (const role of ['pd', 'sales', 'trainee', 'vc', 'admin']) {
     const coordinator = ['vc', 'admin'].includes(role);
     await act(async () => root.render(<PrefsProvider><ProductHeader current="research" coordinator={coordinator} /><PostCard post={sample} onSelect={() => {}} canPool={coordinator} canSuggest={!coordinator} /></PrefsProvider>));

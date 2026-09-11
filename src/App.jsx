@@ -1825,6 +1825,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
   }, []);
 
   const setPostFlags = useCallback(async (post, flags) => {
+    if ('is_promo' in flags && post.group !== 'sentient') throw new Error('Promo is only available for Ours accounts.');
     // Optimistic: the toggle should feel instant. On failure we put the old
     // values back rather than leaving the UI lying about server state.
     const previous = { isPromo: post.isPromo, hidden: post.hidden };
@@ -5690,10 +5691,11 @@ function PostMenu({ post, isPromo, onFlags, onReload, onAssign, onQuickAdd, canP
   const stackActions = useStackActions();
   const scope = useStackScope();
   const isStack = scope.length > 1;
+  const promoScope = scope.filter((member) => member.group === 'sentient');
   const runBatch = async (event, key, action) => {
     event.stopPropagation();
     setBusy(key);
-    const result = await runStackOperation(scope, action, (done, total) => setNote(`${done}/${total}`));
+    const result = await runStackOperation(key === 'promo' ? promoScope : scope, action, (done, total) => setNote(`${done}/${total}`));
     setNote(`${result.succeeded}/${result.total} ${t('posts updated')}${result.failures.length ? ` · ${result.failures.length} ${t('failed')}: ${result.failures.map((item) => item.key).join(', ')}` : ''}`);
     setBusy('');
   };
@@ -5770,7 +5772,7 @@ function PostMenu({ post, isPromo, onFlags, onReload, onAssign, onQuickAdd, canP
           {isStack ? <>
             <p className="post-menu-note">{t('Entire stack')} · {scope.length} posts</p>
             <button role="menuitem" disabled={Boolean(busy)} onClick={(event) => runBatch(event, 'reload', onReload)}><RefreshCw size={13} className={busy === 'reload' ? 'spin' : ''} />{t('Reload counts')} · {scope.length}</button>
-            <button role="menuitem" disabled={Boolean(busy)} onClick={(event) => runBatch(event, 'promo', (member) => onFlags(member, { is_promo: !scope.every((item) => item.isPromo) }))}><Megaphone size={13} />{scope.every((item) => item.isPromo) ? t('Remove promo') : t('Mark as promo')} · {scope.length}</button>
+            {promoScope.length > 0 && <button role="menuitem" disabled={Boolean(busy)} onClick={(event) => runBatch(event, 'promo', (member) => onFlags(member, { is_promo: !promoScope.every((item) => item.isPromo) }))}><Megaphone size={13} />{promoScope.every((item) => item.isPromo) ? t('Remove promo') : t('Mark as promo')} · {promoScope.length} Ours</button>}
             <button role="menuitem" disabled={Boolean(busy)} onClick={(event) => runBatch(event, 'hide', (member) => onFlags(member, { hidden: !scope.every((item) => item.hidden) }))}><EyeOff size={13} />{scope.every((item) => item.hidden) ? t('Unhide') : t('Hide')} · {scope.length}</button>
             <button role="menuitem" disabled={Boolean(busy)} onClick={(event) => run(event, 'ungroup', () => stackActions.separate(scope.map(stackPostKey)))}>{t('Ungroup stack')}</button>
           </> : <>
@@ -5789,7 +5791,7 @@ function PostMenu({ post, isPromo, onFlags, onReload, onAssign, onQuickAdd, canP
           {canPool ? <button type="button" role="menuitem" onClick={(event) => { event.stopPropagation(); setOpen(false); onQuickAdd?.(post); }}><Zap size={13} />Quick add to Pool</button> : null}
           {stackActions ? <button type="button" role="menuitem" onClick={(event) => run(event, 'similar', () => stackActions.findSimilar(post))} disabled={Boolean(busy)}><Search size={13} className={busy === 'similar' ? 'spin' : ''} />{busy === 'similar' ? t('Searching…') : t('Find similar')}</button> : null}
           {stackActions && Number(post.stackSize) > 1 ? <button type="button" role="menuitem" onClick={(event) => run(event, 'separate', () => stackActions.separate([post.postKey || `${post.account}:${post.shortcode}`]))} disabled={Boolean(busy)}>↗ {t('Separate from stack')}</button> : null}
-          <button
+          {post.group === 'sentient' && <button
             type="button"
             role="menuitem"
             onClick={(event) => run(event, 'promo', () => onFlags(post, { is_promo: !post.isPromo }))}
@@ -5797,7 +5799,7 @@ function PostMenu({ post, isPromo, onFlags, onReload, onAssign, onQuickAdd, canP
           >
             <Megaphone size={13} />
             {post.isPromo ? 'Remove promo' : 'Mark as promo'}
-          </button>
+          </button>}
           <button
             type="button"
             role="menuitem"
