@@ -1692,6 +1692,9 @@ function QueueApp({ user }) {
       if (generation !== mutationGenerationRef.current) return null;
       if (authenticatedDraftOwnerRef.current !== authenticatedDraftOwner || scopeRef.current !== currentScope) return null;
       setData(schedulerPreferencesRef.current ? { ...next, schedulerPreferences: schedulerPreferencesRef.current } : next);
+      // The initial snapshot plus the periodic catch-up loop keep Queue
+      // usable even when an intermediary delays the SSE handshake.
+      setLiveStatus('live');
       const viewerEmail = queueUserEmail(next.viewer?.email);
       queueViewerEmailRef.current = viewerEmail;
       if (!next.accountOnboarding?.completed && guideCompletedRef.current && !accountSetupDismissedRef.current) setAccountSetupOpen(true);
