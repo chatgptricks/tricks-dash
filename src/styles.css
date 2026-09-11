@@ -4259,14 +4259,43 @@ body {
 
 /* Add-account wizard */
 .wizard-card {
-  width: min(400px, 100%);
+  width: min(520px, 100%);
+  gap: 0;
+  padding: 26px;
+  border: 1px solid rgba(var(--edge), 0.16);
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(var(--accent-rgb), 0.12), transparent 34%),
+    linear-gradient(145deg, var(--surface-1), var(--surface-0));
+  box-shadow: 0 28px 90px rgba(var(--shade), 0.72), 0 0 0 1px rgba(255, 255, 255, 0.025) inset;
+}
+
+.wizard-card .modal-header {
+  margin-bottom: 22px;
+}
+
+.wizard-card .modal-header h2 {
+  font-size: 19px;
+  letter-spacing: -0.03em;
+}
+
+.wizard-card .icon-button {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border-color: rgba(var(--edge), 0.18);
+  background: rgba(var(--edge), 0.06);
 }
 
 .wizard-steps {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin: 2px 0 4px;
+  gap: 8px;
+  margin: 0 0 24px;
+  padding: 10px 12px;
+  border: 1px solid rgba(var(--edge), 0.1);
+  border-radius: 12px;
+  background: rgba(var(--edge), 0.035);
 }
 
 .wizard-step {
@@ -4289,13 +4318,13 @@ body {
   display: grid;
   place-items: center;
   flex: 0 0 auto;
-  width: 20px;
-  height: 20px;
+  width: 25px;
+  height: 25px;
   border: 1px solid rgba(var(--edge), 0.18);
   border-radius: 999px;
   background: var(--surface-0);
   color: rgba(var(--ink), 0.5);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 800;
 }
 
@@ -4308,6 +4337,64 @@ body {
   letter-spacing: 0.02em;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+
+.wizard-card > .wizard-hint {
+  margin: 0 0 20px;
+  color: rgba(var(--ink), 0.58);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.wizard-card > .modal-field {
+  gap: 8px;
+  margin-bottom: 15px;
+  color: rgba(var(--ink), 0.72);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+}
+
+.wizard-card > .modal-field input,
+.wizard-card > .modal-field select,
+.wizard-card > .modal-field textarea {
+  box-sizing: border-box;
+  width: 100%;
+  height: 44px;
+  padding: 0 13px;
+  border: 1px solid rgba(var(--edge), 0.18);
+  border-radius: 11px;
+  background: rgba(var(--shade), 0.22);
+  color: var(--text-strong);
+  font-size: 14px;
+  transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+
+.wizard-card > .modal-field textarea {
+  min-height: 94px;
+  padding: 12px 13px;
+}
+
+.wizard-card > .modal-field input::placeholder,
+.wizard-card > .modal-field textarea::placeholder {
+  color: rgba(var(--ink), 0.36);
+}
+
+.wizard-card > .modal-field input:focus,
+.wizard-card > .modal-field select:focus,
+.wizard-card > .modal-field textarea:focus {
+  border-color: rgba(var(--accent-rgb), 0.72);
+  background: rgba(var(--shade), 0.3);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.12);
+}
+
+.wizard-card > .primary-button {
+  width: 100%;
+  min-height: 46px;
+  margin-top: 7px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 850;
+  letter-spacing: -0.01em;
 }
 
 .wizard-step-active .wizard-step-dot {
