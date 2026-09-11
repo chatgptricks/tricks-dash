@@ -815,13 +815,24 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
    real timeline geometry, drop images, and retain only identity/time/status
    text that can safely truncate inside a narrow block. */
 .scheduler-effective-meta { display:none; }
-.scheduler.is-effective-view .scheduler-card-layout { display:block; width:100%; height:100%; }
+.scheduler.is-effective-view .scheduler-card-layout { display:none; }
 .scheduler.is-effective-view .scheduler-cover-frame,.scheduler.is-effective-view .scheduler-block-copy,.scheduler.is-effective-view .scheduler-time-block>svg,.scheduler.is-effective-view .scheduler-time-block>span:not(.scheduler-effective-meta),.scheduler.is-effective-view .scheduler-time-block>i,.scheduler.is-effective-view .scheduler-resize-handle { display:none; }
 .scheduler.is-effective-view .scheduler-buffer-tongue { border-radius:0 4px 4px 0; }
-.scheduler.is-effective-view .scheduler-effective-meta { display:grid; align-content:center; gap:2px; width:100%; height:100%; min-width:0; padding:4px 5px; overflow:hidden; color:inherit; text-align:left; line-height:1.15; }
+.scheduler.is-effective-view .scheduler-effective-meta { display:grid; align-content:center; gap:2px; width:100%; height:100%; min-width:0; padding:5px 6px; overflow:hidden; color:inherit; text-align:left; line-height:1.15; }
 .scheduler.is-effective-view .scheduler-effective-meta b,.scheduler.is-effective-view .scheduler-effective-meta small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .scheduler.is-effective-view .scheduler-effective-meta b { font-size:9px; font-weight:850; }
 .scheduler.is-effective-view .scheduler-effective-meta small { font-size:8px; font-weight:700; opacity:.76; }
+.scheduler.is-effective-view .scheduler-effective-meta .scheduler-effective-title { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; white-space:normal; font-size:10px; line-height:1.15; }
+.scheduler.is-effective-view .scheduler-effective-account { opacity:1; }
+.scheduler.is-effective-view .scheduler-effective-timing { font-variant-numeric:tabular-nums; }
+@container scheduler-job (max-width:85px) {
+  .scheduler.is-effective-view .scheduler-effective-account { display:none; }
+  .scheduler.is-effective-view .scheduler-effective-meta { padding:4px; }
+}
+@container scheduler-job (max-width:45px) {
+  .scheduler.is-effective-view .scheduler-effective-state { display:none; }
+  .scheduler.is-effective-view .scheduler-effective-meta .scheduler-effective-title { font-size:9px; }
+}
 .scheduler-time-head,.scheduler-row { grid-template-columns:var(--scheduler-label-width) var(--scheduler-day-width); width:100%; min-width:0; }
 .scheduler-time-head { z-index:8; }
 .scheduler-time-head>span,.scheduler-row>header { position:sticky; left:0; z-index:7; background:var(--q-panel); box-shadow:1px 0 0 var(--q-line); }
