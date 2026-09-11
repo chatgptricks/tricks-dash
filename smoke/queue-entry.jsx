@@ -93,6 +93,11 @@ const stubFetch = async (url, options = {}) => {
     payload.assignedRequests = [...payload.assignedRequests, picked];
     return response({ ok: true, request: picked });
   }
+  if (value.includes('/api/dashboard/queue/v2/drafts/clear')) {
+    const ids = JSON.parse(options.body.get('request_ids') || '[]');
+    payload.liveDrafts = payload.liveDrafts.filter(task => !ids.includes(task.id));
+    return response({ ok: true });
+  }
   if (value.includes('/api/dashboard/queue/v2/drafts') && !value.includes('/clear')) {
     drafted = JSON.parse(options.body.get('changes')).map((change) => ({ ...pool, ...change, designerEmail: change.designerEmail, scheduledDate: change.scheduledDate, scheduledStartMinutes: change.scheduledStartMinutes, recommendedAccounts: change.recommendedAccounts || [], status: change.status === 'pool' ? 'pool' : 'scheduled', isDraft: true, draftCoordinatorEmail: 'user03@example.com' }));
     payload.liveDrafts = drafted;
@@ -101,7 +106,7 @@ const stubFetch = async (url, options = {}) => {
   }
   if (value.includes('/api/dashboard/queue/v2/submit')) {
     submitted = JSON.parse(options.body.get('changes'));
-    payload.liveDrafts = [];
+    payload.liveDrafts = payload.liveDrafts.filter(task => !submitted.some(change => change.id === task.id));
     const poolReturn = submitted.find((change) => change.status === 'pool');
     if (poolReturn) {
       const source = [...payload.requests, ...payload.planningRequests].find((task) => task.id === poolReturn.id) || pool;
@@ -333,9 +338,22 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     await act(async () => { returnedPool.dispatchEvent(dragEvent('dragstart')); track.dispatchEvent(dragEvent('dragover', 550)); track.dispatchEvent(dragEvent('drop', 550)); });
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 100)); });
     checks['Pool return can be scheduled again'] = drafted?.[0]?.status === 'scheduled' && Boolean(document.querySelector('.scheduler-block.is-draft'));
-    const submit = document.querySelector('.scheduler-submit');
+    checks['Every post has a clock buffer'] = document.querySelectorAll('.scheduler-buffer-tongue').length === document.querySelectorAll('.scheduler-block').length
+      && [...document.querySelectorAll('.scheduler-buffer-tongue')].every(node => node.querySelector('svg'));
+    checks['Personal time has no buffer tongue'] = !document.querySelector('.is-personal-buffer');
+    const otherScheduled = document.querySelector('.scheduler-block.state-scheduled:not(.is-draft)');
+    await act(async () => { otherScheduled.dispatchEvent(dragEvent('dragstart')); track.dispatchEvent(dragEvent('drop', 850)); });
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 100)); });
+    checks['Two posts can have independent pending changes'] = payload.liveDrafts.length === 2;
+    await click(document.querySelector('.scheduler-draft-actions[data-request-id="1"] button:last-child'));
+    checks['Cancel only discards the selected draft'] = payload.liveDrafts.length === 1 && payload.liveDrafts[0].id === 3;
+    const poolAfterCancel = document.querySelector('.queue-pool-card');
+    await act(async () => { poolAfterCancel.dispatchEvent(dragEvent('dragstart')); track.dispatchEvent(dragEvent('drop', 550)); });
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 100)); });
+    const submit = document.querySelector('.scheduler-draft-actions[data-request-id="1"] button');
+    checks['Each draft has confirm and cancel icons'] = document.querySelectorAll('.scheduler-draft-actions button').length === 4 && !document.querySelector('.scheduler-draft-float');
     await click(submit);
-    checks['Submit applies planned work before network confirmation'] = !document.querySelector('.scheduler-block.is-draft') && Boolean(document.querySelector('.scheduler-block.state-scheduled'));
+    checks['Confirm preserves the other pending post'] = payload.liveDrafts.length === 1 && payload.liveDrafts[0].id === 3;
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 500)); });
     checks['Submit sends final planned position'] = submitted?.length === 1 && submitted[0].status === 'scheduled' && submitted[0].designerEmail === 'user03@example.com';
     await click(document.querySelector('.queue-create-button'));

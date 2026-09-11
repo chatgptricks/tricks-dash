@@ -15,6 +15,7 @@ import chatgptricksProfileImage from './assets/chatgptricks-profile.jpg';
 import traselvelorealProfileImage from './assets/traselveloreal-profile.jpg';
 import { QUEUE_BUFFER_MINUTES, QUEUE_DAY_END, QUEUE_DAY_START, minutesPerPPOf, planQueueDrop } from './queuePlanner';
 import { followQueueLive } from './queueLive';
+import { createQueueRefresh } from './queueRefresh';
 import { decodeRouteState } from './urlCodec';
 import './styles.css';
 import './queue.css';
@@ -50,8 +51,7 @@ const schedulerTaskDuration = (task) => {
   return planned;
 };
 const schedulerTaskBufferMinutes = (task) => {
-  const planned = Math.max(10, Number(task?.durationMinutes || 10));
-  return ['completed', 'closed'].includes(task?.status) && schedulerTaskDuration(task) < planned ? QUEUE_BUFFER_MINUTES : 0;
+  return task?.scheduledDate && task?.status !== 'pool' && task?.status !== 'cancelled' ? QUEUE_BUFFER_MINUTES : 0;
 };
 const minutesFromTime = (value) => { const [hour, minute] = String(value || '00:00').split(':').map(Number); return Math.max(0, Math.min(1430, hour * 60 + minute)); };
 const currentMinutes = (value = new Date(), timeZone = '') => {
@@ -139,7 +139,7 @@ const queueSnapshotKey = (email) => `${QUEUE_SNAPSHOT_KEY}:${String(email || '')
 const readQueueSnapshot = (email) => {
   try {
     const snapshot = JSON.parse(window.sessionStorage.getItem(queueSnapshotKey(email)) || 'null');
-    if (!snapshot || snapshot.version !== 1 || !snapshot.data || !snapshot.date || snapshot.archive) return null;
+    if (!snapshot || snapshot.version !== 1 || !snapshot.data || snapshot.date !== DAY(new Date(), QUEUE_TIME_ZONE) || snapshot.archive) return null;
     return snapshot;
   } catch {
     return null;
@@ -420,7 +420,7 @@ function PriorityBadge({ priority }) {
   return isUrgent(priority) ? <span className="queue-priority-badge priority-urgent">{t('priorityUrgent')}</span> : null;
 }
 
-function TaskBlock({ task, editable, onOpen, onResizeStart, onContextMenu, accountAvatars = {}, timeZone = QUEUE_TIME_ZONE, timeline = { start: 0, duration: QUEUE_DAY_END } }) {
+function TaskBlock({ task, editable, onConfirmDraft, onCancelDraft, draftBusy, onOpen, onResizeStart, onContextMenu, accountAvatars = {}, timeZone = QUEUE_TIME_ZONE, timeline = { start: 0, duration: QUEUE_DAY_END } }) {
   const { t } = useQueuePreferences();
   const pendingTickets = Array.isArray(task.pendingTickets) ? task.pendingTickets : [];
   const pendingTicketLabel = pendingTickets.map((ticket) => ticket.type === 'pp_revision' ? t('ppRevision') : ticket.type === 'move' ? t('moveRequest') : t('cancellationRequest')).join(' · ');
@@ -475,7 +475,7 @@ function TaskBlock({ task, editable, onOpen, onResizeStart, onContextMenu, accou
     </span>
     <span className="scheduler-effective-meta" aria-hidden="true"><b>{accountMention(task.post.account) || blockTitle || t('post')}</b><small>{scheduledTime} · {task.productionPoints} PP · {stateLabel}</small></span>
     {canResize ? <><span className="scheduler-resize-handle scheduler-resize-handle-left" role="separator" aria-label={`${t('resizeBar')} ${t('resizeLeft')}`} onPointerDown={(event) => onResizeStart(event, task, 'left')} /><span className="scheduler-resize-handle scheduler-resize-handle-right" role="separator" aria-label={`${t('resizeBar')} ${t('resizeRight')}`} onPointerDown={(event) => onResizeStart(event, task, 'right')} /></> : null}
-  </button>{bufferMinutes ? <span className={`scheduler-buffer-tongue state-${task.status}`} aria-label={t('handoffBuffer')} title={t('handoffBuffer')} style={{ left: `${((left + width - timeline.start) / timeline.duration) * 100}%`, width: `${((bufferMinutes / timeline.duration) * 100)}%` }} /> : null}</>;
+  </button>{bufferMinutes ? <span className={`scheduler-buffer-tongue state-${task.status}`} aria-label={t('handoffBuffer')} title={t('handoffBuffer')} style={{ left: `${((left + width - timeline.start) / timeline.duration) * 100}%`, width: `${((bufferMinutes / timeline.duration) * 100)}%` }}><Clock3 size={12} aria-hidden="true" /></span> : null}{task.isDraft && onConfirmDraft && (editable || draftBusy === task.id) ? <span className="scheduler-draft-actions" data-request-id={task.id} style={{ left: `${((left + width - timeline.start) / timeline.duration) * 100}%` }}><button type="button" disabled={draftBusy != null} title={t('saveChanges')} aria-label={t('saveChanges')} onClick={() => onConfirmDraft(task.id)}>{draftBusy === task.id ? <LoaderCircle size={14} className="queue-spin" /> : <Check size={14} />}</button><button type="button" disabled={draftBusy != null} title={t('cancel')} aria-label={t('cancel')} onClick={() => onCancelDraft(task.id)}><X size={14} /></button></span> : null}</>;
 }
 
 function TimeBlock({ block, onContextMenu, onMoveStart, onResizeStart, editable = false, timeZone = QUEUE_TIME_ZONE, timeline = { start: 0, duration: QUEUE_DAY_END } }) {
@@ -1135,7 +1135,7 @@ function schedulerUserRole(user, t) {
   return '';
 }
 
-function Scheduler({ data, draft, setDraft, onDraftChange, selectedDate, designerScope, timeZone = '', canCoordinate = false, onOpen, onError, onCreateTimeBlock, onEditTimeBlock, onDeleteTimeBlock, onReturnToPool, onCancelTask, onDuplicateTask, onSavePreferences, addTimeNonce = 0 }) {
+function Scheduler({ data, draft, setDraft, onDraftChange, onConfirmDraft, onCancelDraft, draftBusy, selectedDate, designerScope, timeZone = '', canCoordinate = false, onOpen, onError, onCreateTimeBlock, onEditTimeBlock, onDeleteTimeBlock, onReturnToPool, onCancelTask, onDuplicateTask, onSavePreferences, addTimeNonce = 0 }) {
   const displayName = useQueueDisplayName();
   const { t, language } = useQueuePreferences();
   // QueueApp owns the effective capability (including Dev access and role
@@ -1197,7 +1197,7 @@ function Scheduler({ data, draft, setDraft, onDraftChange, selectedDate, designe
     const intervals = [
       ...allTasks.filter((task) => visibleEmails.has(task.designerEmail) && task.scheduledDate === selectedDate && !['pool', 'cancelled'].includes(task.status)).map((task) => ({ start: Number(task.scheduledStartMinutes ?? 0), duration: schedulerTaskDuration(task) })),
       ...(data.timeBlocks || []).filter((block) => visibleEmails.has(block.requesterEmail) && block.scheduledDate === selectedDate).map((block) => ({ start: Number(block.scheduledStartMinutes ?? 0), duration: Math.max(10, Number(block.durationMinutes || 10)) })),
-    ].map(({ start, duration }) => ({ start: Math.max(0, start), end: Math.min(QUEUE_DAY_END, start + duration) })).filter((interval) => interval.end > interval.start);
+    ].map(({ start, duration }) => ({ start: Math.max(0, start), end: Math.min(QUEUE_DAY_END, start + duration + QUEUE_BUFFER_MINUTES) })).filter((interval) => interval.end > interval.start);
     if (!intervals.length) return { start: 0, end: QUEUE_DAY_END, duration: QUEUE_DAY_END, hasWork: false };
     // Keep a deliberate, rounded margin around the first and last block. The
     // former exact-bound calculation pinned cards to the edges and made the
@@ -1338,6 +1338,7 @@ function Scheduler({ data, draft, setDraft, onDraftChange, selectedDate, designe
     event.preventDefault(); if (!selfPlanner) return; event.dataTransfer.dropEffect = 'move'; const result = planForEvent(event, designer); setDropPreview(result.ok ? { designer, ...result } : null);
   };
   const drop = (event, designer) => {
+    if (draftBusy != null) return;
     if (isUserRowDrag(event)) return;
     event.preventDefault(); if (!selfPlanner) return;
     const result = planForEvent(event, designer); setDropPreview(null);
@@ -1492,7 +1493,7 @@ function Scheduler({ data, draft, setDraft, onDraftChange, selectedDate, designe
               {timelineMarkers.map((minute) => <i key={minute} style={{ left: `${((minute - timeline.start) / timeline.duration) * 100}%` }} />)}
               {timeBlocks.map((block) => { const editableTime = coordinator || block.requesterEmail === data.viewer.email; const renderBlock = timeBlockInteraction?.preview?.id === block.id ? timeBlockInteraction.preview : block; return <TimeBlock key={block.id} block={renderBlock} timeline={timeline} editable={editableTime} timeZone={timeZone} onMoveStart={(event, item) => startTimeBlockInteraction(event, item, 'move')} onResizeStart={(event, item, edge) => startTimeBlockInteraction(event, item, 'resize', edge)} onContextMenu={(event, item) => { if (!editableTime) return; event.preventDefault(); setContextMenu({ x: event.clientX, y: event.clientY, type: 'time', designer, block: item }); }} />; })}
               {dropPreview?.designer === designer.email ? <span className={`scheduler-drop-preview${previewNextDay ? ' is-next-day' : ''}`} style={{ left: `${previewLeft}%`, width: `${previewWidth}%` }}><b>@{dropPreview.target.post.account}</b><small>{previewNextDay ? `${displayDate(scheduleDateForViewer(dropPreview.target.scheduledDate, dropPreview.target.scheduledStartMinutes, timeZone), language)} · ` : ''}{scheduleTimeForViewer(dropPreview.target.scheduledDate, dropPreview.target.scheduledStartMinutes, timeZone)} · {dropPreview.target.durationMinutes} min</small></span> : null}
-              {tasks.map((task) => { const renderTask = resizeState?.preview?.id === task.id ? resizeState.preview : task; return <TaskBlock key={task.id} task={renderTask} timeline={timeline} timeZone={timeZone} editable={selfPlanner && (coordinator || renderTask.coordinatorEmail === data.viewer.email) && (!renderTask.isDraft || renderTask.draftCoordinatorEmail === data.viewer.email)} accountAvatars={accountAvatars} onResizeStart={startResize} onContextMenu={(event, item) => { if (!coordinator) return; event.preventDefault(); setContextMenu({ x: event.clientX, y: event.clientY, type: 'task', task: item }); }} onOpen={onOpen} />; })}
+              {tasks.map((task) => { const renderTask = resizeState?.preview?.id === task.id ? resizeState.preview : task; return <TaskBlock key={task.id} task={renderTask} onConfirmDraft={onConfirmDraft} onCancelDraft={onCancelDraft} draftBusy={draftBusy} timeline={timeline} timeZone={timeZone} editable={draftBusy == null && selfPlanner && (coordinator || renderTask.coordinatorEmail === data.viewer.email) && (!renderTask.isDraft || renderTask.draftCoordinatorEmail === data.viewer.email)} accountAvatars={accountAvatars} onResizeStart={startResize} onContextMenu={(event, item) => { if (!coordinator) return; event.preventDefault(); setContextMenu({ x: event.clientX, y: event.clientY, type: 'task', task: item }); }} onOpen={onOpen} />; })}
             </div>
           </div>;
         })}
@@ -1552,6 +1553,8 @@ function QueueApp({ user }) {
   const [history, setHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [draft, setDraft] = useState(() => readQueueDrafts(user?.email));
+  const [draftBusy, setDraftBusy] = useState(null);
+  const draftActionRef = useRef(false);
   const [liveStatus, setLiveStatus] = useState('connecting');
   const [archive, setArchive] = useState(false);
   const [poolDropActive, setPoolDropActive] = useState(false);
@@ -1602,6 +1605,10 @@ function QueueApp({ user }) {
   const persistDraftsRef = useRef(null);
   const openRef = useRef(open);
   const loadRef = useRef(null);
+  const refreshQueueRef = useRef(createQueueRefresh());
+  const scopeRef = useRef('');
+  const currentScope = `${authenticatedDraftOwner}:${date}:${archive}`;
+  scopeRef.current = currentScope;
   const liveRevisionRef = useRef(0);
   const liveRefreshTimerRef = useRef(null);
   const incomingUpdateTimerRef = useRef(null);
@@ -1641,18 +1648,20 @@ function QueueApp({ user }) {
     setOpen(null);
     setLoading(true);
   }, [authenticatedDraftOwner, setDraftInMemory]);
-  const load = useCallback(async ({ silent = false } = {}) => {
+  const load = useCallback(({ silent = false } = {}) => refreshQueueRef.current(async () => {
+    if (scopeRef.current !== currentScope) return null;
     const showLoader = !silent && !loadedOnceRef.current;
     if (showLoader) setLoading(true);
     else if (loadedOnceRef.current) setRefreshing(true);
     try {
       const next = await json(`/api/dashboard/queue/v2?date=${date}&archive=${archive ? 'true' : 'false'}`);
-      if (authenticatedDraftOwnerRef.current !== authenticatedDraftOwner) return null;
+      if (authenticatedDraftOwnerRef.current !== authenticatedDraftOwner || scopeRef.current !== currentScope) return null;
       setData(schedulerPreferencesRef.current ? { ...next, schedulerPreferences: schedulerPreferencesRef.current } : next);
       const viewerEmail = queueUserEmail(next.viewer?.email);
       queueViewerEmailRef.current = viewerEmail;
       if (!next.accountOnboarding?.completed && guideCompletedRef.current && !accountSetupDismissedRef.current) setAccountSetupOpen(true);
       loadedOnceRef.current = true;
+      if (!archive) writeQueueSnapshot(authenticatedDraftOwner, { version: 1, date, archive: false, savedAt: Date.now(), data: next });
       liveRevisionRef.current = Math.max(liveRevisionRef.current, Number(next.liveRevision) || 0);
       const ownsThisSession = Boolean(authenticatedDraftOwner && authenticatedDraftOwnerRef.current === authenticatedDraftOwner && authenticatedDraftOwner === viewerEmail && draftOwnerRef.current === authenticatedDraftOwner);
       const ownDrafts = ownsThisSession
@@ -1684,19 +1693,15 @@ function QueueApp({ user }) {
       setError('');
       return next;
     } catch (err) {
-      if (!silent) setError(err.message || 'Queue could not load.');
+      if (!silent && scopeRef.current === currentScope) setError(err.message || 'Queue could not load.');
       throw err;
     } finally {
       if (showLoader) setLoading(false);
       setRefreshing(false);
     }
-  }, [date, archive, applyDraft, authenticatedDraftOwner, setDraftInMemory]);
+  }), [date, archive, applyDraft, authenticatedDraftOwner, setDraftInMemory, currentScope]);
   loadRef.current = load;
   useEffect(() => { load().catch(() => {}); }, [load]);
-  useEffect(() => {
-    if (!data || archive) return;
-    writeQueueSnapshot(user?.email, { version: 1, date, archive: false, savedAt: Date.now(), data });
-  }, [data, date, archive, user?.email]);
   useEffect(() => { json('/api/dashboard/me').then(setViewer).catch(() => {}); }, []);
   useEffect(() => {
     if (!data?.viewer?.email || import.meta.env.MODE === 'test') return undefined;
@@ -1743,6 +1748,7 @@ function QueueApp({ user }) {
   useEffect(() => { if (!open?.id) { setHistory([]); return; } setDetailNotice(null); setHistoryLoading(true); json(`/api/dashboard/queue/v2/requests/${open.id}/history`).then((result) => setHistory(result.events || [])).catch(() => setHistory([])).finally(() => setHistoryLoading(false)); }, [open?.id]);
 
   const persistDrafts = useCallback((nextDraft) => {
+    if (draftActionRef.current) return Promise.resolve(null);
     const ownerEmail = draftOwnerRef.current;
     if (!ownerEmail || ownerEmail !== authenticatedDraftOwner || queueViewerEmailRef.current !== ownerEmail) {
       // Never turn a browser-local draft into a shared Queue mutation until
@@ -1768,7 +1774,6 @@ function QueueApp({ user }) {
       if (version !== draftSaveVersionRef.current || draftOwnerRef.current !== ownerEmail || queueViewerEmailRef.current !== ownerEmail) return;
       const ownDrafts = (result.drafts || []).filter((task) => queueUserEmail(task.draftCoordinatorEmail) === ownerEmail);
       applyDraft(ownDrafts);
-      liveRevisionRef.current = Math.max(liveRevisionRef.current, Number(result.liveRevision) || 0);
       setData((current) => current ? {
         ...current,
         liveDrafts: [...(current.liveDrafts || []).filter((task) => queueUserEmail(task.draftCoordinatorEmail) !== ownerEmail), ...ownDrafts],
@@ -1846,16 +1851,10 @@ function QueueApp({ user }) {
         const revision = Number(event.revision) || 0;
         if (revision <= liveRevisionRef.current) return;
         liveRevisionRef.current = revision;
-        // The browser that created a draft already painted it synchronously and
-        // receives the authoritative draft response below. Reloading this same
-        // view on its own SSE event made each drag look like a full refresh.
-        // Other tabs/users have no active draft sync, so they still receive the
-        // event and refresh from the shared live state.
-        if (draftSyncingRef.current || (event.actorEmail === data.viewer.email && Date.now() < quietMutationUntilRef.current)) {
-          if (event.actorEmail !== data.viewer.email) {
-            deferredLiveRefreshRef.current = true;
-            setIncomingUpdate(true);
-          }
+        // Wait for local draft writes before reconciling every event, including
+        // other tabs using the same account. Never discard a revision by actor.
+        if (draftSyncingRef.current) {
+          deferredLiveRefreshRef.current = true;
           return;
         }
         setIncomingUpdate(true);
@@ -1875,6 +1874,28 @@ function QueueApp({ user }) {
       },
     });
     return () => { controller.abort(); window.clearTimeout(liveRefreshTimerRef.current); window.clearTimeout(incomingUpdateTimerRef.current); };
+  }, [data?.viewer?.email, loadTickets]);
+
+  // Focus/reconnection repair missed events; the low-frequency fallback also
+  // repairs a stream which remains connected but stops delivering updates.
+  useEffect(() => {
+    if (!data?.viewer?.email || import.meta.env.MODE === 'test') return undefined;
+    const catchUp = () => {
+      if (document.visibilityState === 'hidden' || !navigator.onLine) return;
+      if (draftSyncingRef.current) { deferredLiveRefreshRef.current = true; return; }
+      loadRef.current?.({ silent: true }).catch(() => {});
+      if (ticketsOpenRef.current) loadTickets({ silent: true });
+    };
+    window.addEventListener('online', catchUp);
+    window.addEventListener('focus', catchUp);
+    document.addEventListener('visibilitychange', catchUp);
+    const timer = window.setInterval(catchUp, 60000);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('online', catchUp);
+      window.removeEventListener('focus', catchUp);
+      document.removeEventListener('visibilitychange', catchUp);
+    };
   }, [data?.viewer?.email, loadTickets]);
 
   const isDev = Boolean(viewer?.is_dev || data?.viewer?.isDev || String(user?.email || '').trim().toLowerCase() === DEV_EMAIL);
@@ -2091,9 +2112,12 @@ function QueueApp({ user }) {
       return null;
     } finally { setPickBusy(false); }
   };
-  const submit = async () => {
+  const submit = async (requestId) => {
+    if (draftActionRef.current) return false;
+    draftActionRef.current = true;
+    setDraftBusy(requestId);
     saveQuietly();
-    const pendingDrafts = [...draftRef.current];
+    const pendingDrafts = draftRef.current.filter((task) => task.id === requestId);
     const changes = pendingDrafts.map((task) => ({ id: task.id, status: task.status, designerEmail: task.designerEmail, scheduledDate: task.scheduledDate, scheduledStartMinutes: task.scheduledStartMinutes, productionPoints: task.productionPoints, recommendedAccounts: task.recommendedAccounts || [] }));
     try {
       // A draft write and Submit are sequenced so the server never restores an
@@ -2108,19 +2132,23 @@ function QueueApp({ user }) {
       await reconcileSchedule();
       notify(err.message || t('draftSyncFailed'), 'error');
       return false;
-    }
+    } finally { draftActionRef.current = false; setDraftBusy(null); }
   };
-  const clearDrafts = async () => {
+  const clearDrafts = async (requestId) => {
+    if (draftActionRef.current) return;
+    draftActionRef.current = true;
+    setDraftBusy(requestId);
     saveQuietly();
     try {
-      await json('/api/dashboard/queue/v2/drafts/clear', { method: 'POST', body: new URLSearchParams() });
+      await draftSavePromiseRef.current.catch(() => {});
+      await json('/api/dashboard/queue/v2/drafts/clear', { method: 'POST', body: new URLSearchParams({ request_ids: JSON.stringify([requestId]) }) });
       if (!await reconcileSchedule()) notify(t('scheduleRefreshFailed'), 'warning');
     } catch (err) {
       // Keep the visible local draft until a successful refresh proves that
       // the server actually cleared it.
       await reconcileSchedule();
       notify(err.message, 'error');
-    }
+    } finally { draftActionRef.current = false; setDraftBusy(null); }
   };
   const resetQueue = async (confirmation) => {
     await json('/api/admin/queue/reset', { method: 'POST', body: new URLSearchParams({ confirmation }) });
@@ -2174,6 +2202,7 @@ function QueueApp({ user }) {
     setPoolDropActive(true);
   };
   const poolDrop = (event) => {
+    if (draftActionRef.current) return;
     event.preventDefault();
     if (!coordinator) return;
     const source = dragTask(event);
@@ -2471,7 +2500,7 @@ function QueueApp({ user }) {
         </div>
     </ProductHeader>
     {refreshing ? <div className="queue-refresh-progress" aria-label="Refreshing Queue" /> : null}
-    {incomingUpdate ? <div className="queue-live-refresh-notice" role="status" aria-live="polite"><LoaderCircle className="queue-spin" size={16} /><span><b>{t('newDataIncoming')}</b><small>{t('updatingQueue')}</small></span></div> : null}
+    {incomingUpdate ? <span className="queue-sync-announcement" role="status">{t('updatingQueue')}</span> : null}
     {toast ? <div className={`queue-toast is-${toast.type}`} role="status">{toast.type === 'success' ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}<span>{toast.message}</span><button type="button" onClick={() => setToast(null)}><X size={14} /></button></div> : null}
     {loading && !data ? <QueueSkeleton /> : null}
     {error && !data ? <section className="queue-state queue-error"><p>{error}</p><button type="button" onClick={load}>{t('tryAgain')}</button></section> : null}
@@ -2481,8 +2510,8 @@ function QueueApp({ user }) {
       <section className="scheduler-toolbar"><div className="scheduler-date-title"><p className="scheduler-eyebrow">{coordinator ? t('coordinatorSchedule') : t('mySchedule')}</p><h2><CalendarDays size={18} aria-hidden="true" />{displayDate(date, language)}</h2><span className={`scheduler-date-status${viewingToday ? ' is-today' : ''}`}>{viewingToday ? t('viewingToday') : t('viewingDate')}</span></div>{coordinator ? <label className="scheduler-designer-filter">{t('assignedView')}<select value={designerScope} onChange={selectDesignerScope}><option value="">{t('allUsers')}</option>{(data.schedulerUsers || data.designers).map((person) => <option key={person.email} value={person.email}>{displayName(person.email, person.displayName)}</option>)}</select></label> : null}<div className="scheduler-date-nav" aria-label={t('jumpToDate')}><button type="button" className="scheduler-date-arrow" aria-label={t('previousDay')} title={t('previousDay')} onClick={() => moveDate(-1)}><ChevronLeft size={17} /></button><label className="scheduler-date-picker" title={t('jumpToDate')}><input type="date" value={date} onChange={selectDate} aria-label={t('jumpToDate')} /></label><button type="button" className={`scheduler-date-today${viewingToday ? ' is-current' : ''}`} onClick={() => setDate(todayDate)} disabled={viewingToday} aria-current={viewingToday ? 'date' : undefined} aria-label={viewingToday ? t('viewingToday') : t('today')} title={viewingToday ? t('viewingToday') : t('today')}><CalendarDays size={14} /></button><button type="button" className="scheduler-date-arrow" aria-label={t('nextDay')} title={t('nextDay')} onClick={() => moveDate(1)}><ChevronRight size={17} /></button></div><button type="button" className={`scheduler-archive-toggle${archive ? ' is-on' : ''}`} onClick={() => setArchive((value) => !value)}><Archive size={14} />{archive ? t('liveQueue') : t('archive')}</button></section>
       {coordinator && !archive ? <section className={`scheduler-pool${poolDropActive ? ' is-drop-target' : ''}`} onDragOver={poolDragOver} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setPoolDropActive(false); }} onDrop={poolDrop} aria-label={t('poolDropHint')}><header><div><p className="scheduler-eyebrow">{t('productionPool')}</p><h2>{pool.length} {t('readyToSchedule')}</h2></div><small>{poolDropActive ? t('poolDropHint') : t('visibleSchedule')}</small></header><div className="scheduler-pool-list">{pool.map((task) => <PoolCard key={task.id} task={task} onOpen={setOpen} canMultiAssign canCancel />)}{!pool.length ? <p className="scheduler-empty">{t('emptyPool')}</p> : null}</div></section> : null}
       {!coordinator && canSelfAssign && !archive ? <section className="scheduler-pool"><header><div><p className="scheduler-eyebrow">My Pool</p><h2>{selfPool.length} {t('readyToSchedule')}</h2></div><small>Drag your request onto your own schedule.</small></header><div className="scheduler-pool-list">{selfPool.map((task) => <PoolCard key={task.id} task={task} onOpen={setOpen} />)}{!selfPool.length ? <p className="scheduler-empty">Create a post to start your own Pool.</p> : null}</div></section> : null}
-      {(coordinator || canSelfAssign) && draft.length ? <div className="scheduler-draft-float"><button type="button" className="scheduler-secondary" onClick={clearDrafts}>{t('clearDrafts')}</button><button type="button" className="scheduler-submit" onClick={submit}><Send size={14} />{t('submit')} {draft.length}</button></div> : null}
-      {archive ? <section className="queue-archive-list"><header><p className="scheduler-eyebrow">{t('archive')}</p><h2>{archived.length} {t('cancelled')}</h2></header>{archived.length ? archived.map((task) => <button type="button" key={task.id} className={`${priorityClass(task.priority)}${hotClass(task)}`} onClick={() => setOpen(task)}><span>{cover(task) ? <img src={cover(task)} alt="" /> : '@'}</span><div><b>@{task.post.account}</b><small>{task.cancellationReason || t('cancelled')}</small>{isHotTask(task) ? <i className="queue-hot-badge">🔥 {hotText(task)}</i> : null}</div><em>{displayTimestamp(task.updatedAt, language)}</em></button>) : <p className="scheduler-empty">{t('noArchived')}</p>}</section> : <>{coordinator && draft.length ? <DraftAccounts draft={draft} designers={data.designers} onAccountsChange={changeDraftAccounts} /> : null}<Scheduler data={data} draft={draft} setDraft={applyDraft} onDraftChange={persistDrafts} selectedDate={date} designerScope={designerScope} timeZone={simulatedTimeZone} canCoordinate={coordinator} onOpen={setOpen} onError={(message) => notify(message, 'error')} onCreateTimeBlock={createTimeBlock} onEditTimeBlock={editTimeBlock} onDeleteTimeBlock={deleteTimeBlock} onReturnToPool={returnTaskToPool} onCancelTask={cancelTask} onDuplicateTask={(task) => duplicateRequest(task.id)} onSavePreferences={saveSchedulerPreferences} addTimeNonce={addTimeNonce} />{coordinator ? <AdminAssignmentTable tasks={upcoming} onOpen={setOpen} onBatchClose={data?.viewer?.isAdmin ? batchClose : null} headingKey="upcomingProduction" countKey="activeRequests" /> : <DesignerAssignments tasks={assigned} closedTasks={recentClosed} timeZone={simulatedTimeZone} onOpen={setOpen} />}</>}
+
+      {archive ? <section className="queue-archive-list"><header><p className="scheduler-eyebrow">{t('archive')}</p><h2>{archived.length} {t('cancelled')}</h2></header>{archived.length ? archived.map((task) => <button type="button" key={task.id} className={`${priorityClass(task.priority)}${hotClass(task)}`} onClick={() => setOpen(task)}><span>{cover(task) ? <img src={cover(task)} alt="" /> : '@'}</span><div><b>@{task.post.account}</b><small>{task.cancellationReason || t('cancelled')}</small>{isHotTask(task) ? <i className="queue-hot-badge">🔥 {hotText(task)}</i> : null}</div><em>{displayTimestamp(task.updatedAt, language)}</em></button>) : <p className="scheduler-empty">{t('noArchived')}</p>}</section> : <>{coordinator && draft.length ? <DraftAccounts draft={draft} designers={data.designers} onAccountsChange={changeDraftAccounts} /> : null}<Scheduler onConfirmDraft={submit} onCancelDraft={clearDrafts} draftBusy={draftBusy} data={data} draft={draft} setDraft={applyDraft} onDraftChange={persistDrafts} selectedDate={date} designerScope={designerScope} timeZone={simulatedTimeZone} canCoordinate={coordinator} onOpen={setOpen} onError={(message) => notify(message, 'error')} onCreateTimeBlock={createTimeBlock} onEditTimeBlock={editTimeBlock} onDeleteTimeBlock={deleteTimeBlock} onReturnToPool={returnTaskToPool} onCancelTask={cancelTask} onDuplicateTask={(task) => duplicateRequest(task.id)} onSavePreferences={saveSchedulerPreferences} addTimeNonce={addTimeNonce} />{coordinator ? <AdminAssignmentTable tasks={upcoming} onOpen={setOpen} onBatchClose={data?.viewer?.isAdmin ? batchClose : null} headingKey="upcomingProduction" countKey="activeRequests" /> : <DesignerAssignments tasks={assigned} closedTasks={recentClosed} timeZone={simulatedTimeZone} onOpen={setOpen} />}</>}
       </> : null}
     </> : null}
     {ticketsOpen && data?.viewer ? <TicketPanel tickets={tickets} loading={ticketsLoading} error={ticketsError} onClose={() => setTicketsOpen(false)} onReview={reviewTicket} onContinueSuggestion={(ticket) => { setCreateSeed({ sourceUrl: ticket.title, reason: ticket.reason }); setTicketsOpen(false); setCreateOpen(true); }} canReview={Boolean(coordinator)} /> : null}
