@@ -5074,11 +5074,11 @@ function NewAccountRequestForm({ onClose }) {
   };
   return <div className="modal-backdrop"><form className="modal-card wizard-card" onClick={(event) => event.stopPropagation()} onSubmit={submit}>
     <div className="modal-header"><h2>Add account</h2><button type="button" className="icon-button" onClick={onClose} aria-label="Close"><X size={16} /></button></div>
-    <div className="wizard-steps" role="list"><div className="wizard-step wizard-step-active" role="listitem"><span>1</span><b>Account</b></div><div className="wizard-step" role="listitem"><span>2</span><b>Details</b></div><div className="wizard-step" role="listitem"><span>3</span><b>Confirm</b></div></div>
+    <div className="wizard-steps" role="list"><div className="wizard-step wizard-step-active" role="listitem"><span className="wizard-step-dot">1</span><span className="wizard-step-label">Account</span></div><div className="wizard-step" role="listitem"><span className="wizard-step-dot">2</span><span className="wizard-step-label">Details</span></div><div className="wizard-step" role="listitem"><span className="wizard-step-dot">3</span><span className="wizard-step-label">Confirm</span></div></div>
     <p className="wizard-hint">Add an Instagram account to your workspace.</p>
-    <label>Instagram username<input required maxLength={31} placeholder="@username" value={handle} onChange={(event) => setHandle(event.target.value)} disabled={busy || sent} /></label>
-    <label>Group<select value={group} onChange={(event) => setGroup(event.target.value)} disabled={busy || sent}><option value="competitors">Competitors</option><option value="sentient">Sentient</option></select></label>
-    <label>Notes<textarea maxLength={1000} value={reason} onChange={(event) => setReason(event.target.value)} disabled={busy || sent} /></label>
+    <label className="modal-field">Instagram username<input required maxLength={31} placeholder="@username" value={handle} onChange={(event) => setHandle(event.target.value)} disabled={busy || sent} /></label>
+    <label className="modal-field">Group<select value={group} onChange={(event) => setGroup(event.target.value)} disabled={busy || sent}><option value="competitors">Competitors</option><option value="sentient">Sentient</option></select></label>
+    <label className="modal-field">Notes<textarea maxLength={1000} placeholder="Optional context" value={reason} onChange={(event) => setReason(event.target.value)} disabled={busy || sent} /></label>
     {notice ? <p className="wizard-notice" role="status">{notice}</p> : null}
     <button type={sent ? 'button' : 'submit'} className="primary-button" disabled={busy} onClick={sent ? onClose : undefined}>{sent ? 'Done' : busy ? 'Adding…' : 'Add account'}</button>
   </form></div>;

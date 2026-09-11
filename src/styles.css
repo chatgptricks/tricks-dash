@@ -4185,7 +4185,8 @@ body {
 }
 
 .modal-field input,
-.modal-field select {
+.modal-field select,
+.modal-field textarea {
   height: 36px;
   padding: 0 10px;
   border: 1px solid rgba(var(--edge), 0.12);
@@ -4197,6 +4198,28 @@ body {
   font-weight: 500;
   text-transform: none;
   letter-spacing: normal;
+}
+
+.modal-field textarea {
+  min-height: 76px;
+  padding: 9px 10px;
+  resize: vertical;
+  line-height: 1.4;
+}
+
+.wizard-card .wizard-hint {
+  margin: -3px 0 2px;
+}
+
+.wizard-card .wizard-notice {
+  margin: 2px 0 0;
+  padding: 11px 12px;
+  border: 1px solid rgba(var(--accent-rgb), 0.32);
+  border-radius: 9px;
+  background: rgba(var(--accent-rgb), 0.1);
+  color: var(--text-strong);
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .modal-field input:focus,
