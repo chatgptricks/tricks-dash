@@ -5067,19 +5067,20 @@ function NewAccountRequestForm({ onClose }) {
       const result = await response.json();
       if (!response.ok) throw new Error(result.detail || 'Could not send request.');
       setSent(true);
-      setNotice(result.slackDelivered ? 'Request sent to Dev in Slack and Queue Requests.' : 'Request saved in Queue Requests. Slack delivery failed; Dev can still review it there. Do not submit it again.');
+      setNotice('La cuenta se ha programado para agregar, estara lista en el proximo refresh programado.');
     } catch (error) {
       setNotice(error.message || 'Could not confirm delivery. Check Queue Requests before trying again.');
     } finally { setBusy(false); }
   };
-  return <div className="modal-backdrop"><form className="modal-card" onSubmit={submit}>
-    <div className="modal-header"><h2>Request a new account</h2><button type="button" className="icon-button" onClick={onClose} aria-label="Close"><X size={16} /></button></div>
-    <p>Only Dev can add accounts. Send the Instagram username and context for review.</p>
+  return <div className="modal-backdrop"><form className="modal-card wizard-card" onClick={(event) => event.stopPropagation()} onSubmit={submit}>
+    <div className="modal-header"><h2>Add account</h2><button type="button" className="icon-button" onClick={onClose} aria-label="Close"><X size={16} /></button></div>
+    <div className="wizard-steps" role="list"><div className="wizard-step wizard-step-active" role="listitem"><span>1</span><b>Account</b></div><div className="wizard-step" role="listitem"><span>2</span><b>Details</b></div><div className="wizard-step" role="listitem"><span>3</span><b>Confirm</b></div></div>
+    <p className="wizard-hint">Add an Instagram account to your workspace.</p>
     <label>Instagram username<input required maxLength={31} placeholder="@username" value={handle} onChange={(event) => setHandle(event.target.value)} disabled={busy || sent} /></label>
     <label>Group<select value={group} onChange={(event) => setGroup(event.target.value)} disabled={busy || sent}><option value="competitors">Competitors</option><option value="sentient">Sentient</option></select></label>
-    <label>Reason / notes<textarea maxLength={1000} value={reason} onChange={(event) => setReason(event.target.value)} disabled={busy || sent} /></label>
-    {notice ? <p role="status">{notice}</p> : null}
-    <button type={sent ? 'button' : 'submit'} className="primary-button" disabled={busy} onClick={sent ? onClose : undefined}>{sent ? 'Done' : busy ? 'Sending…' : 'Send request to Dev'}</button>
+    <label>Notes<textarea maxLength={1000} value={reason} onChange={(event) => setReason(event.target.value)} disabled={busy || sent} /></label>
+    {notice ? <p className="wizard-notice" role="status">{notice}</p> : null}
+    <button type={sent ? 'button' : 'submit'} className="primary-button" disabled={busy} onClick={sent ? onClose : undefined}>{sent ? 'Done' : busy ? 'Adding…' : 'Add account'}</button>
   </form></div>;
 }
 

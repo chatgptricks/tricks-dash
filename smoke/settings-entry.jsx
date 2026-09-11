@@ -131,14 +131,14 @@ const clickTab = async (label) => {
     const root = createRoot(host);
     await act(async () => { root.render(<PrefsProvider><SettingsPanel initialTab="accounts" isAdmin userEmail="admin@example.com" /></PrefsProvider>); await new Promise((resolve) => setTimeout(resolve, 30)); });
     await act(async () => { [...host.querySelectorAll('button')].find((node) => node.textContent.trim() === 'Add account').click(); });
-    checks['Admin gets a request form, not the creation wizard'] = /Request a new account/.test(host.textContent) && !host.querySelector('.wizard-steps');
+    checks['Admin gets the account-shaped request flow'] = /Add account/.test(host.textContent) && host.querySelector('.wizard-steps') && !/Initial history import/.test(host.textContent);
     await act(async () => {
       const input = host.querySelector('input[placeholder="@username"]');
       setter.call(input, '@newbrand');
       input.dispatchEvent(new window.Event('input', { bubbles: true }));
     });
     await act(async () => { host.querySelector('form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true })); await new Promise((resolve) => setTimeout(resolve, 30)); });
-    checks['Admin submits request and sees delivery confirmation'] = submittedAccountRequest?.handle === '@newbrand' && /Request sent to Dev in Slack and Queue Requests/.test(host.textContent);
+    checks['Admin submits request and sees scheduled confirmation'] = submittedAccountRequest?.handle === '@newbrand' && /proximo refresh programado/.test(host.textContent);
     await act(async () => { root.unmount(); });
     host.remove();
     checks['No render or console errors'] = errors.length === 0;
