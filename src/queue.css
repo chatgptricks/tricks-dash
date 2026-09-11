@@ -817,6 +817,7 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
 .scheduler-effective-meta { display:none; }
 .scheduler.is-effective-view .scheduler-card-layout { display:block; width:100%; height:100%; }
 .scheduler.is-effective-view .scheduler-cover-frame,.scheduler.is-effective-view .scheduler-block-copy,.scheduler.is-effective-view .scheduler-time-block>svg,.scheduler.is-effective-view .scheduler-time-block>span:not(.scheduler-effective-meta),.scheduler.is-effective-view .scheduler-time-block>i,.scheduler.is-effective-view .scheduler-resize-handle { display:none; }
+.scheduler.is-effective-view .scheduler-buffer-tongue { top:25%; height:50%; border-radius:0 4px 4px 0; }
 .scheduler.is-effective-view .scheduler-effective-meta { display:grid; align-content:center; gap:2px; width:100%; height:100%; min-width:0; padding:4px 5px; overflow:hidden; color:inherit; text-align:left; line-height:1.15; }
 .scheduler.is-effective-view .scheduler-effective-meta b,.scheduler.is-effective-view .scheduler-effective-meta small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .scheduler.is-effective-view .scheduler-effective-meta b { font-size:9px; font-weight:850; }
@@ -1208,6 +1209,25 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
 .scheduler-block.priority-urgent { border-color:var(--priority-urgent); }
 .scheduler-block.is-draft,.scheduler-block.is-extra { border-style:dashed; }
 .scheduler-block.has-pending-ticket { border-style:dotted; }
+.scheduler-buffer-tongue {
+  position:absolute;
+  top:31px;
+  z-index:1;
+  height:42px;
+  min-width:3px;
+  border:1px solid color-mix(in srgb,var(--q-accent) 44%,var(--q-line));
+  border-left:0;
+  border-radius:0 6px 6px 0;
+  background:color-mix(in srgb,var(--q-accent) 22%,var(--q-panel));
+  opacity:.72;
+  pointer-events:none;
+}
+.scheduler-buffer-tongue.state-completed,
+.scheduler-buffer-tongue.state-closed {
+  border-color:color-mix(in srgb,var(--q-accent) 34%,#888);
+  background:color-mix(in srgb,var(--q-accent) 24%,color-mix(in srgb,#888 38%,var(--q-panel)));
+}
+.scheduler-block:hover + .scheduler-buffer-tongue { opacity:1; }
 .scheduler-block:hover .scheduler-resize-handle::after { opacity:.7; }
 .scheduler-card-layout {
   display:grid; grid-template-columns:min(40%,84px) minmax(0,1fr);
