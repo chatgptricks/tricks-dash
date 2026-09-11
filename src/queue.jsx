@@ -2033,7 +2033,6 @@ function QueueApp({ user }) {
           selfPoolRequests: current.viewer?.canSelfAssign ? add(current.selfPoolRequests) : current.selfPoolRequests,
         };
       });
-      setOpen(duplicate);
       notify(t('duplicateCreated'));
       return duplicate;
     } catch (err) {
