@@ -2,6 +2,8 @@ import React, { createContext, useContext, useEffect, useRef, useState } from 'r
 import { createPortal } from 'react-dom';
 import { API_BASE, apiFetch } from './api';
 const Context = createContext(null);
+const CardScope = createContext([]);
+export const useStackScope = () => useContext(CardScope);
 export const postIdentity = (post) => post.postKey || `${post.account}:${post.shortcode}`;
 export const useStackActions = () => useContext(Context);
 export function StackActions({ children, onSaved }) {
@@ -64,6 +66,6 @@ export function StackCard({ posts, children }) {
     onDrop={(event) => { event.preventDefault(); event.stopPropagation(); setOver(false); const source = actions.drag.current; actions.drag.current = null; if (source && !source.every((key) => keys.includes(key))) actions.propose([...source, ...keys]); }}
     onClickCapture={(event) => { if (actions.suppressClick.current) { event.preventDefault(); event.stopPropagation(); return; } if (event.shiftKey) { event.preventDefault(); event.stopPropagation(); actions.select((current) => selected ? current.filter((key) => !keys.includes(key)) : [...new Set([...current, ...keys])]); } }}
     onContextMenu={(event) => { if (!actions.selected.length) return; event.preventDefault(); event.stopPropagation(); actions.setMenu({ x: event.clientX, y: event.clientY, keys: [...new Set([...actions.selected, ...keys])] }); }}>
-    {children}
+    <CardScope.Provider value={posts}>{children}</CardScope.Provider>
   </div>;
 }

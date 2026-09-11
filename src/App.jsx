@@ -1,5 +1,6 @@
 import TopicStack from './TopicStack';
-import { StackActions, useStackActions } from './StackActions';
+import { StackActions, useStackActions, useStackScope } from './StackActions';
+import { resolveResearchPost, runStackOperation, stackPostKey } from './stackOperations';
 import { useTopicGroups } from './useTopicGroups';
 import ProductHeader from './ProductHeader';
 import { editorialStates } from './topicGroups';
@@ -1724,9 +1725,8 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
   ].filter(Boolean).join(' · ');
 
   const selected = useMemo(() => {
-    if (!filtered.length) return null;
-    return filtered.find((post) => post.postKey === selectedKey) ?? filtered[0];
-  }, [filtered, selectedKey]);
+    return resolveResearchPost(posts, filtered, selectedKey);
+  }, [posts, filtered, selectedKey]);
 
   useEffect(() => {
     if (selected?.postKey && selectedKey !== selected.postKey) {
@@ -1842,8 +1842,9 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
       patchPost(post.account, post.shortcode, { isPromo: data.is_promo, hidden: data.hidden });
-    } catch {
+    } catch (error) {
       patchPost(post.account, post.shortcode, previous);
+      throw error;
     }
   }, [patchPost]);
 
@@ -5687,6 +5688,15 @@ function PostMenu({ post, isPromo, onFlags, onReload, onAssign, onQuickAdd, canP
   const [note, setNote] = useState('');
   const ref = useRef(null);
   const stackActions = useStackActions();
+  const scope = useStackScope();
+  const isStack = scope.length > 1;
+  const runBatch = async (event, key, action) => {
+    event.stopPropagation();
+    setBusy(key);
+    const result = await runStackOperation(scope, action, (done, total) => setNote(`${done}/${total}`));
+    setNote(`${result.succeeded}/${result.total} ${t('posts updated')}${result.failures.length ? ` · ${result.failures.length} ${t('failed')}: ${result.failures.map((item) => item.key).join(', ')}` : ''}`);
+    setBusy('');
+  };
 
   useEffect(() => {
     if (!open) return undefined;
@@ -5743,20 +5753,27 @@ function PostMenu({ post, isPromo, onFlags, onReload, onAssign, onQuickAdd, canP
   };
 
   return (
-    <div className="post-menu" ref={ref}>
+    <div className="post-menu" ref={ref} onKeyDown={(event) => event.stopPropagation()}>
       <button
         className="icon-button"
         onClick={(event) => {
           event.stopPropagation();
           setOpen((value) => !value);
         }}
-        aria-label="Post menu"
+        aria-label={isStack ? 'Stack menu' : 'Post menu'}
         aria-expanded={open}
       >
         <MoreHorizontal size={16} />
       </button>
       {open ? (
         <div className="post-menu-panel" role="menu" onClick={(event) => event.stopPropagation()}>
+          {isStack ? <>
+            <p className="post-menu-note">{t('Entire stack')} · {scope.length} posts</p>
+            <button role="menuitem" disabled={Boolean(busy)} onClick={(event) => runBatch(event, 'reload', onReload)}><RefreshCw size={13} className={busy === 'reload' ? 'spin' : ''} />{t('Reload counts')} · {scope.length}</button>
+            <button role="menuitem" disabled={Boolean(busy)} onClick={(event) => runBatch(event, 'promo', (member) => onFlags(member, { is_promo: !scope.every((item) => item.isPromo) }))}><Megaphone size={13} />{scope.every((item) => item.isPromo) ? t('Remove promo') : t('Mark as promo')} · {scope.length}</button>
+            <button role="menuitem" disabled={Boolean(busy)} onClick={(event) => runBatch(event, 'hide', (member) => onFlags(member, { hidden: !scope.every((item) => item.hidden) }))}><EyeOff size={13} />{scope.every((item) => item.hidden) ? t('Unhide') : t('Hide')} · {scope.length}</button>
+            <button role="menuitem" disabled={Boolean(busy)} onClick={(event) => run(event, 'ungroup', () => stackActions.separate(scope.map(stackPostKey)))}>{t('Ungroup stack')}</button>
+          </> : <>
           {canPool ? <button
             type="button"
             role="menuitem"
@@ -5804,7 +5821,8 @@ function PostMenu({ post, isPromo, onFlags, onReload, onAssign, onQuickAdd, canP
           {isPromo && !post.isPromo ? (
             <p className="post-menu-note">Tagged {PROMO_HASHTAG}</p>
           ) : null}
-          {note ? <p className="post-menu-note">{note}</p> : null}
+          </>}
+          {note ? <p className="post-menu-note" role="status">{note}</p> : null}
         </div>
       ) : null}
     </div>

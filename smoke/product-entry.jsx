@@ -26,6 +26,18 @@ try {
   if (el.querySelectorAll('.test-card').length !== 1) throw new Error('Collapse must restore stack');
   console.log('PASS stack cover, expansion, choosing an alternate and collapse');
   const sample = { postKey: 'test:one', account: 'test', shortcode: 'one', postDate: '2026-09-05', timestamp: Date.now(), likes: 10, comments: 2, caption: 'Test', headline: 'Test', postType: 'Image', type: 'Image', permalink: 'https://instagram.com/p/one/' };
+  const refreshed = [];
+  const stackPosts = variants.map((post) => ({ ...sample, ...post }));
+  await act(async () => root.render(<PrefsProvider><StackActions onSaved={() => {}}><TopicStack posts={stackPosts} renderCard={(post, expand) => <PostCard post={post} onSelect={expand || (() => {})} onReload={async (member) => { refreshed.push(member.postKey); }} />} /></StackActions></PrefsProvider>));
+  await act(async () => el.querySelector('[aria-label="Stack menu"]').click());
+  await act(async () => [...el.querySelectorAll('[role="menuitem"]')].find((node) => /Reload counts|Actualizar conteos/.test(node.textContent)).click());
+  if (refreshed.join(',') !== 'a,b,c') throw new Error('Cover must reload every stack member');
+  await act(async () => el.querySelector('.post-stack-trigger').click());
+  if (document.querySelectorAll('.post-stack-modal [aria-label="Post menu"]').length !== 3) throw new Error('Expanded members need individual menus');
+  await act(async () => document.querySelector('.post-stack-modal [aria-label="Post menu"]').click());
+  if (!document.querySelector('.post-stack-modal')) throw new Error('Opening member menu must not close stack');
+  await act(async () => root.render(null));
+  console.log('PASS whole-stack reload and individual expanded menus');
   for (const role of ['pd', 'sales', 'trainee', 'vc', 'admin']) {
     const coordinator = ['vc', 'admin'].includes(role);
     await act(async () => root.render(<PrefsProvider><ProductHeader current="research" coordinator={coordinator} /><PostCard post={sample} onSelect={() => {}} canPool={coordinator} canSuggest={!coordinator} /></PrefsProvider>));
