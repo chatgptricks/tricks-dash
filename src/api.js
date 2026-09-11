@@ -13,6 +13,10 @@ export const API_BASE = (import.meta.env.VITE_API_BASE || 'https://cortex-api-db
 const TRANSIENT_GATEWAY_STATUSES = new Set([500, 502, 503, 504]);
 const USER_UPSERT_RETRY_ATTEMPTS = 6;
 const POST_REFRESH_RETRY_ATTEMPTS = 4;
+// Render can briefly drop the browser connection while waking or moving an
+// instance. Queue is a read-heavy screen, so give safe GETs a longer recovery
+// window instead of surfacing the browser's unhelpful "Failed to fetch".
+const SAFE_READ_RETRY_ATTEMPTS = 8;
 
 // Drop-in replacement for fetch() that attaches the signed-in user's Firebase
 // ID token to every call. getIdToken() returns the cached token and only
@@ -68,7 +72,7 @@ export async function apiFetch(url, options = {}) {
   const isIdempotentUserUpsert = method === 'POST' && /\/api\/admin\/users\/?(?:\?|$)/.test(String(url));
   const isIdempotentPostRefresh = method === 'POST' && /\/api\/dashboard\/posts\/reload\/?(?:\?|$)/.test(String(url));
   const canRetryMutation = isIdempotentUserUpsert || isIdempotentPostRefresh;
-  const retryAttempts = isIdempotentUserUpsert ? USER_UPSERT_RETRY_ATTEMPTS : (isIdempotentPostRefresh ? POST_REFRESH_RETRY_ATTEMPTS : (canRetry ? 4 : 1));
+  const retryAttempts = isIdempotentUserUpsert ? USER_UPSERT_RETRY_ATTEMPTS : (isIdempotentPostRefresh ? POST_REFRESH_RETRY_ATTEMPTS : (canRetry ? SAFE_READ_RETRY_ATTEMPTS : 1));
   let lastError;
   for (let attempt = 0; attempt < retryAttempts; attempt += 1) {
     if (options.signal?.aborted) throw new DOMException('Request aborted.', 'AbortError');
