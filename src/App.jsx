@@ -4112,7 +4112,7 @@ export function SettingsPanel({
                     </div>
                   </div>
                   <p className="wizard-hint">
-                    Click a row to edit its label, category, HOT threshold, or avatar, or pull more history. You can add another account while an import is running; the server queues it automatically and processes one account at a time.
+                    Click a row to edit its label, category, HOT threshold, or avatar, or pull more history. {isDev ? 'You can add another account while an import is running; the server queues it automatically.' : 'Add account sends a request to Dev. Only Dev can add new accounts.'}
                     "Suggested" is the account's average first-hour likes (the same number the HOT check
                     itself compares against), rounded up to the nearest hundred.
                   </p>
@@ -5040,10 +5040,47 @@ export function SettingsPanel({
         </div>
       </div>
       {showAddAccount ? (
-        <AddAccountWizard onClose={() => setShowAddAccount(false)} onAccountCreated={handleAccountCreated} />
+        isDev ? <AddAccountWizard onClose={() => setShowAddAccount(false)} onAccountCreated={handleAccountCreated} /> : <NewAccountRequestForm onClose={() => setShowAddAccount(false)} />
       ) : null}
     </div>
   );
+}
+
+function NewAccountRequestForm({ onClose }) {
+  const [handle, setHandle] = useState('');
+  const [group, setGroup] = useState('competitors');
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState('');
+  const [sent, setSent] = useState(false);
+  const submit = async (event) => {
+    event.preventDefault();
+    if (busy || sent) return;
+    setBusy(true);
+    setNotice('');
+    try {
+      const body = new FormData();
+      body.set('handle', handle.trim());
+      body.set('group', group);
+      body.set('reason', reason.trim());
+      const response = await apiFetch(`${API_BASE}/api/admin/account-requests`, { method: 'POST', body });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.detail || 'Could not send request.');
+      setSent(true);
+      setNotice(result.slackDelivered ? 'Request sent to Dev in Slack and Queue Requests.' : 'Request saved in Queue Requests. Slack delivery failed; Dev can still review it there. Do not submit it again.');
+    } catch (error) {
+      setNotice(error.message || 'Could not confirm delivery. Check Queue Requests before trying again.');
+    } finally { setBusy(false); }
+  };
+  return <div className="modal-backdrop"><form className="modal-card" onSubmit={submit}>
+    <div className="modal-header"><h2>Request a new account</h2><button type="button" className="icon-button" onClick={onClose} aria-label="Close"><X size={16} /></button></div>
+    <p>Only Dev can add accounts. Send the Instagram username and context for review.</p>
+    <label>Instagram username<input required maxLength={31} placeholder="@username" value={handle} onChange={(event) => setHandle(event.target.value)} disabled={busy || sent} /></label>
+    <label>Group<select value={group} onChange={(event) => setGroup(event.target.value)} disabled={busy || sent}><option value="competitors">Competitors</option><option value="sentient">Sentient</option></select></label>
+    <label>Reason / notes<textarea maxLength={1000} value={reason} onChange={(event) => setReason(event.target.value)} disabled={busy || sent} /></label>
+    {notice ? <p role="status">{notice}</p> : null}
+    <button type={sent ? 'button' : 'submit'} className="primary-button" disabled={busy} onClick={sent ? onClose : undefined}>{sent ? 'Done' : busy ? 'Sending…' : 'Send request to Dev'}</button>
+  </form></div>;
 }
 
 function AddAccountWizard({ onClose, onAccountCreated }) {

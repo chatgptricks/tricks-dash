@@ -13,8 +13,13 @@ const usage = {
   users: [{ email: users[0].email, role: 'admin', daily: [{ date: '2026-08-30', count: 12 }], total_all_time: 12, last_7d: 12, active_days: 1, last_seen: new Date().toISOString(), sections: { dashboard: 8, insights: 2, admin: 2 } }],
 };
 let rejectUserSave = false;
+let submittedAccountRequest = null;
 const stubFetch = async (url, options = {}) => {
   const value = String(url);
+  if (value.includes('/api/admin/account-requests')) {
+    submittedAccountRequest = Object.fromEntries(options.body);
+    return ok({ ok: true, slackDelivered: true });
+  }
   if (value.includes('/api/dashboard/me')) return ok({ email: users[0].email, is_admin: true, is_dev: true });
   if (value.includes('/api/admin/accounts')) return ok({ accounts });
   if (value.includes('/api/admin/users')) {
@@ -118,6 +123,24 @@ const clickTab = async (label) => {
 
     await clickTab('System');
     checks['System excludes manual notifications'] = /Disk usage/.test(document.body.textContent) && /Recent Apify runs/.test(document.body.textContent) && !/Custom alert/.test(document.body.textContent);
+    const { createRoot } = await import('react-dom/client');
+    const { SettingsPanel } = await import('../src/App.jsx');
+    const { PrefsProvider } = await import('../src/prefsContext');
+    const host = document.createElement('div');
+    document.body.append(host);
+    const root = createRoot(host);
+    await act(async () => { root.render(<PrefsProvider><SettingsPanel initialTab="accounts" isAdmin userEmail="admin@example.com" /></PrefsProvider>); await new Promise((resolve) => setTimeout(resolve, 30)); });
+    await act(async () => { [...host.querySelectorAll('button')].find((node) => node.textContent.trim() === 'Add account').click(); });
+    checks['Admin gets a request form, not the creation wizard'] = /Request a new account/.test(host.textContent) && !host.querySelector('.wizard-steps');
+    await act(async () => {
+      const input = host.querySelector('input[placeholder="@username"]');
+      setter.call(input, '@newbrand');
+      input.dispatchEvent(new window.Event('input', { bubbles: true }));
+    });
+    await act(async () => { host.querySelector('form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true })); await new Promise((resolve) => setTimeout(resolve, 30)); });
+    checks['Admin submits request and sees delivery confirmation'] = submittedAccountRequest?.handle === '@newbrand' && /Request sent to Dev in Slack and Queue Requests/.test(host.textContent);
+    await act(async () => { root.unmount(); });
+    host.remove();
     checks['No render or console errors'] = errors.length === 0;
   } catch (error) {
     errors.push(error.stack || String(error));
