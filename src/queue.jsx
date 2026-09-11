@@ -173,6 +173,11 @@ const displayName = (value, preferred = '') => {
   return words.length ? words.map((word) => `${word.slice(0, 1).toUpperCase()}${word.slice(1).toLowerCase()}`).join(' ') : 'User';
 };
 const QueueNamesContext = createContext(null);
+const QueuePendingContext = createContext(new Set());
+function ItemLoading() {
+  const { t } = useQueuePreferences();
+  return <span className="queue-item-loading" role="status" aria-label={t('updatingQueue')}><LoaderCircle size={20} className="queue-spin" /></span>;
+}
 const useQueueDisplayName = () => useContext(QueueNamesContext) || displayName;
 const queueNameResolver = (data) => {
   const names = new Map([...(data?.designers || []), ...(data?.schedulerUsers || []), ...(data?.viewer ? [data.viewer] : [])]
@@ -421,6 +426,7 @@ function PriorityBadge({ priority }) {
 }
 
 function TaskBlock({ task, editable, onConfirmDraft, onCancelDraft, draftBusy, onOpen, onResizeStart, onContextMenu, accountAvatars = {}, timeZone = QUEUE_TIME_ZONE, timeline = { start: 0, duration: QUEUE_DAY_END } }) {
+  const pending = useContext(QueuePendingContext).has(`post:${task.id}`);
   const { t } = useQueuePreferences();
   const pendingTickets = Array.isArray(task.pendingTickets) ? task.pendingTickets : [];
   const pendingTicketLabel = pendingTickets.map((ticket) => ticket.type === 'pp_revision' ? t('ppRevision') : ticket.type === 'move' ? t('moveRequest') : t('cancellationRequest')).join(' · ');
@@ -442,7 +448,8 @@ function TaskBlock({ task, editable, onConfirmDraft, onCancelDraft, draftBusy, o
   const stateLabel = statusCopy(task.status, t, task.isDraft);
   const coverUrl = cover(task);
   const isPromo = task.tags?.some((tag) => String(tag).toLowerCase() === 'promo') || task.post?.isPromo;
-  return <><button type="button" draggable={editable && task.status === 'scheduled'} className={`scheduler-block state-${task.status} ${priorityClass(task.priority)}${hotClass(task)}${task.isDraft ? ' is-draft' : ''}${isPromo ? ' is-promo' : ''}${extra ? ' is-extra' : ''}${pendingTickets.length ? ' has-pending-ticket' : ''}`} style={{ left: `${((left - timeline.start) / timeline.duration) * 100}%`, width: `${(width / timeline.duration) * 100}%` }} onDragStart={(event) => { activeQueueDragId = task.id; event.dataTransfer.setData('queue-task', String(task.id)); }} onDragEnd={() => { activeQueueDragId = null; }} onContextMenu={(event) => onContextMenu?.(event, task)} onClick={(event) => { if (event.target.closest('.scheduler-resize-handle')) return; onOpen(task); }} title={`${accountMention(task.post.account) || task.post.title || t('post')}${isUrgent(task.priority) ? ` · ${priorityCopy(task.priority, t)}` : ''} · ${task.productionPoints} PP · ${statusCopy(task.status, t, task.isDraft)}${pendingTicketLabel ? ` · ${pendingTicketLabel}` : ''} · ${jobType} · ${scheduledTime}${destinations.length ? ` → ${destinations.map((account) => `@${account}`).join(', ')}` : ''}`}>
+  return <><button type="button" aria-busy={pending} disabled={pending} draggable={!pending && editable && task.status === 'scheduled'} className={`scheduler-block${pending ? ' is-pending-action' : ''} state-${task.status} ${priorityClass(task.priority)}${hotClass(task)}${task.isDraft ? ' is-draft' : ''}${isPromo ? ' is-promo' : ''}${extra ? ' is-extra' : ''}${pendingTickets.length ? ' has-pending-ticket' : ''}`} style={{ left: `${((left - timeline.start) / timeline.duration) * 100}%`, width: `${(width / timeline.duration) * 100}%` }} onDragStart={(event) => { activeQueueDragId = task.id; event.dataTransfer.setData('queue-task', String(task.id)); }} onDragEnd={() => { activeQueueDragId = null; }} onContextMenu={(event) => !pending && onContextMenu?.(event, task)} onClick={(event) => { if (event.target.closest('.scheduler-resize-handle')) return; onOpen(task); }} title={`${accountMention(task.post.account) || task.post.title || t('post')}${isUrgent(task.priority) ? ` · ${priorityCopy(task.priority, t)}` : ''} · ${task.productionPoints} PP · ${statusCopy(task.status, t, task.isDraft)}${pendingTicketLabel ? ` · ${pendingTicketLabel}` : ''} · ${jobType} · ${scheduledTime}${destinations.length ? ` → ${destinations.map((account) => `@${account}`).join(', ')}` : ''}`}>
+    {pending ? <ItemLoading /> : null}
     <span className="scheduler-card-layout">
       <span className="scheduler-cover-frame">
         {coverUrl ? <img className="scheduler-cover-image" src={coverUrl} alt="" draggable={false} /> : <span className="scheduler-cover-fallback"><TypeIcon size={24} /></span>}
@@ -479,12 +486,13 @@ function TaskBlock({ task, editable, onConfirmDraft, onCancelDraft, draftBusy, o
 }
 
 function TimeBlock({ block, onContextMenu, onMoveStart, onResizeStart, editable = false, timeZone = QUEUE_TIME_ZONE, timeline = { start: 0, duration: QUEUE_DAY_END } }) {
+  const pending = useContext(QueuePendingContext).has(`time:${block.id}`);
   const { t } = useQueuePreferences();
   const Icon = ({ meeting: CalendarDays, break: Coffee, promo: TimerReset, focus: Clock3, other: CalendarPlus }[block.category] || CalendarPlus);
   const start = Number(block.scheduledStartMinutes || 0);
   const duration = Math.max(10, Number(block.durationMinutes || 10));
   const displayTime = scheduleTimeForViewer(block.scheduledDate, start, timeZone);
-  return <div className={`scheduler-time-block category-${block.category || 'other'} status-${block.status}${editable ? ' is-editable' : ''}`} onContextMenu={(event) => onContextMenu?.(event, block)} onPointerDown={(event) => { if (editable && event.button === 0 && !event.target.closest('.scheduler-resize-handle')) onMoveStart?.(event, block); }} style={{ left: `${((start - timeline.start) / timeline.duration) * 100}%`, width: `${(duration / timeline.duration) * 100}%` }} title={`${block.title} · ${displayTime} · ${duration} min · ${block.status === 'pending' ? t('pendingApproval') : t('approved')}`}><Icon size={13} /><span><b>{block.title || t(block.category || 'other')}</b><small>{displayTime} · {duration} min</small></span><span className="scheduler-effective-meta" aria-hidden="true"><b>{block.title || t(block.category || 'other')}</b><small>{displayTime} · {duration} min</small></span>{block.status === 'pending' ? <i>{t('pendingApproval')}</i> : null}{editable ? <><span className="scheduler-resize-handle scheduler-resize-handle-left" role="separator" aria-label={`${t('resizeBar')} ${t('resizeLeft')}`} onPointerDown={(event) => onResizeStart?.(event, block, 'left')} /><span className="scheduler-resize-handle scheduler-resize-handle-right" role="separator" aria-label={`${t('resizeBar')} ${t('resizeRight')}`} onPointerDown={(event) => onResizeStart?.(event, block, 'right')} /></> : null}</div>;
+  return <div aria-busy={pending} className={`scheduler-time-block${pending ? ' is-pending-action' : ''} category-${block.category || 'other'} status-${block.status}${editable ? ' is-editable' : ''}`} onContextMenu={(event) => !pending && onContextMenu?.(event, block)} onPointerDown={(event) => { if (!pending && editable && event.button === 0 && !event.target.closest('.scheduler-resize-handle')) onMoveStart?.(event, block); }} style={{ left: `${((start - timeline.start) / timeline.duration) * 100}%`, width: `${(duration / timeline.duration) * 100}%` }} title={`${block.title} · ${displayTime} · ${duration} min · ${block.status === 'pending' ? t('pendingApproval') : t('approved')}`}>{pending ? <ItemLoading /> : null}<Icon size={13} /><span><b>{block.title || t(block.category || 'other')}</b><small>{displayTime} · {duration} min</small></span><span className="scheduler-effective-meta" aria-hidden="true"><b>{block.title || t(block.category || 'other')}</b><small>{displayTime} · {duration} min</small></span>{block.status === 'pending' ? <i>{t('pendingApproval')}</i> : null}{editable ? <><span className="scheduler-resize-handle scheduler-resize-handle-left" role="separator" aria-label={`${t('resizeBar')} ${t('resizeLeft')}`} onPointerDown={(event) => onResizeStart?.(event, block, 'left')} /><span className="scheduler-resize-handle scheduler-resize-handle-right" role="separator" aria-label={`${t('resizeBar')} ${t('resizeRight')}`} onPointerDown={(event) => onResizeStart?.(event, block, 'right')} /></> : null}</div>;
 }
 
 function TimeBlockForm({ form, setForm, busy, onClose, onSubmit, users = [], canChooseUser = false, timeZone = QUEUE_TIME_ZONE }) {
@@ -843,9 +851,10 @@ function AssignMultipleAccountsModal({ task, accounts = [], designers = [], busy
 }
 
 function PoolCard({ task, onOpen, canMultiAssign = false, canCancel = false }) {
+  const pending = useContext(QueuePendingContext).has(`post:${task.id}`);
   const displayName = useQueueDisplayName();
   const { t } = useQueuePreferences();
-  return <article className={`queue-pool-card ${priorityClass(task.priority)}${hotClass(task)}${task.isDraft ? ' is-draft' : ''}`} draggable data-context-type="pool" data-context-title={task.post.title || accountMention(task.post.account) || t('post')} data-context-post-key={task.postKey || task.id} data-context-request-id={task.id} data-context-duplicate="true" data-context-multi-assign={canMultiAssign ? 'true' : 'false'} data-context-cancel={canCancel ? 'true' : 'false'} data-context-account={task.post.account || ''} data-context-shortcode={task.post.shortcode || ''} data-context-permalink={task.post.permalink || ''} onDragStart={(event) => { activeQueueDragId = task.id; event.dataTransfer.setData('queue-task', String(task.id)); }} onDragEnd={() => { activeQueueDragId = null; }}><button type="button" onClick={() => onOpen(task)}>{cover(task) ? <img src={cover(task)} alt="" /> : <span className="queue-pool-empty">@</span>}<span><b>{task.post.title || accountMention(task.post.account) || t('post')}</b><small>{task.post.title && task.post.account ? `${accountMention(task.post.account)} · ` : task.post.account ? `${accountMention(task.post.account)} · ` : `${t('accountToSelect')} · `}{task.productionPoints} PP · {task.durationMinutes} min</small>{task.prc ? <em className="queue-prc">PRC · {task.prc === 'Auto PRC' ? task.prc : displayName(task.prc)}</em> : null}{task.isDraft ? <em>{t('returnToPool')}</em> : null}</span><span className="queue-pool-card-badges"><PriorityBadge priority={task.priority} />{isHotTask(task) ? <i className="queue-hot-badge">🔥 {hotText(task)}</i> : null}</span></button><div>{task.tags?.filter((tag) => tag !== 'hot').map((tag) => <i key={tag}>{tag}</i>)}</div></article>;
+  return <article aria-busy={pending} className={`queue-pool-card${pending ? ' is-pending-action' : ''} ${priorityClass(task.priority)}${hotClass(task)}${task.isDraft ? ' is-draft' : ''}`} draggable={!pending} data-context-type="pool" data-context-title={task.post.title || accountMention(task.post.account) || t('post')} data-context-post-key={task.postKey || task.id} data-context-request-id={task.id} data-context-duplicate="true" data-context-multi-assign={canMultiAssign ? 'true' : 'false'} data-context-cancel={canCancel ? 'true' : 'false'} data-context-account={task.post.account || ''} data-context-shortcode={task.post.shortcode || ''} data-context-permalink={task.post.permalink || ''} onDragStart={(event) => { activeQueueDragId = task.id; event.dataTransfer.setData('queue-task', String(task.id)); }} onDragEnd={() => { activeQueueDragId = null; }}>{pending ? <ItemLoading /> : null}<button disabled={pending} type="button" onClick={() => onOpen(task)}>{cover(task) ? <img src={cover(task)} alt="" /> : <span className="queue-pool-empty">@</span>}<span><b>{task.post.title || accountMention(task.post.account) || t('post')}</b><small>{task.post.title && task.post.account ? `${accountMention(task.post.account)} · ` : task.post.account ? `${accountMention(task.post.account)} · ` : `${t('accountToSelect')} · `}{task.productionPoints} PP · {task.durationMinutes} min</small>{task.prc ? <em className="queue-prc">PRC · {task.prc === 'Auto PRC' ? task.prc : displayName(task.prc)}</em> : null}{task.isDraft ? <em>{t('returnToPool')}</em> : null}</span><span className="queue-pool-card-badges"><PriorityBadge priority={task.priority} />{isHotTask(task) ? <i className="queue-hot-badge">🔥 {hotText(task)}</i> : null}</span></button><div>{task.tags?.filter((tag) => tag !== 'hot').map((tag) => <i key={tag}>{tag}</i>)}</div></article>;
 }
 
 function DesignerAssignments({ tasks, closedTasks = [], onOpen, timeZone = QUEUE_TIME_ZONE }) {
@@ -1544,7 +1553,9 @@ function QueueApp({ user }) {
     return savedDate === today ? savedDate : today;
   });
   const [loading, setLoading] = useState(() => !initialSnapshotRef.current?.data);
-  const [refreshing, setRefreshing] = useState(false);
+  const [pendingItems, setPendingItems] = useState(new Set());
+  const pendingItemsRef = useRef(new Set());
+  const mutationGenerationRef = useRef(0);
   const [incomingUpdate, setIncomingUpdate] = useState(false);
   const [error, setError] = useState('');
   const [toast, setToast] = useState(null);
@@ -1652,9 +1663,10 @@ function QueueApp({ user }) {
     if (scopeRef.current !== currentScope) return null;
     const showLoader = !silent && !loadedOnceRef.current;
     if (showLoader) setLoading(true);
-    else if (loadedOnceRef.current) setRefreshing(true);
     try {
+      const generation = mutationGenerationRef.current;
       const next = await json(`/api/dashboard/queue/v2?date=${date}&archive=${archive ? 'true' : 'false'}`);
+      if (generation !== mutationGenerationRef.current) return null;
       if (authenticatedDraftOwnerRef.current !== authenticatedDraftOwner || scopeRef.current !== currentScope) return null;
       setData(schedulerPreferencesRef.current ? { ...next, schedulerPreferences: schedulerPreferencesRef.current } : next);
       const viewerEmail = queueUserEmail(next.viewer?.email);
@@ -1697,7 +1709,6 @@ function QueueApp({ user }) {
       throw err;
     } finally {
       if (showLoader) setLoading(false);
-      setRefreshing(false);
     }
   }), [date, archive, applyDraft, authenticatedDraftOwner, setDraftInMemory, currentScope]);
   loadRef.current = load;
@@ -1982,6 +1993,30 @@ function QueueApp({ user }) {
     } : current);
     setOpen((current) => current?.id === taskId ? { ...current, ...patch } : current);
   }, []);
+  const runItemAction = useCallback(async (key, operation) => {
+    if (pendingItemsRef.current.has(key)) return false;
+    pendingItemsRef.current.add(key);
+    setPendingItems(new Set(pendingItemsRef.current));
+    try {
+      await operation(AbortSignal.timeout(30000));
+      mutationGenerationRef.current += 1;
+      return true;
+    } catch (err) {
+      notify(err.name === 'TimeoutError' ? t('scheduleRefreshFailed') : err.message, 'error');
+      return false;
+    } finally {
+      pendingItemsRef.current.delete(key);
+      setPendingItems(new Set(pendingItemsRef.current));
+      // The mutation is finished. Reconcile quietly without making the user
+      // wait for a second, potentially slow full-schedule read.
+      loadRef.current?.({ silent: true }).catch(() => {});
+    }
+  }, [notify, t]);
+  const cancelPost = useCallback((task, reason = 'Cancelled by coordinator') => runItemAction(`post:${task.id}`, async (signal) => {
+    await json(`/api/dashboard/queue/v2/requests/${task.id}/cancel`, { method: 'POST', signal, body: new URLSearchParams({ reason }) });
+    patchQueueTask(task.id, { status: 'cancelled', cancellationReason: reason });
+    notify(t('requestUpdated'));
+  }), [runItemAction, patchQueueTask, notify, t]);
   const duplicateRequest = useCallback(async (requestId) => {
     const id = Number(requestId);
     if (!Number.isInteger(id) || id < 1) return null;
@@ -2060,18 +2095,12 @@ function QueueApp({ user }) {
       }
       if (action === 'cancel' && coordinator) {
         const target = [...(data?.requests || []), ...(data?.liveDrafts || [])].find((item) => Number(item.id) === Number(requestId) && item.status === 'pool');
-        if (target) {
-          saveQuietly();
-          patchQueueTask(target.id, { status: 'cancelled', cancellationReason: 'Cancelled by coordinator' });
-          json(`/api/dashboard/queue/v2/requests/${target.id}/cancel`, { method: 'POST', body: new URLSearchParams({ reason: 'Cancelled by coordinator' }) })
-            .then(() => notify(t('requestUpdated')))
-            .catch((err) => { patchQueueTask(target.id, target); notify(err.message, 'error'); });
-        }
+        if (target) cancelPost(target);
       }
     };
     window.addEventListener('sentient:context-action', handleContextAction);
     return () => window.removeEventListener('sentient:context-action', handleContextAction);
-  }, [coordinator, data, duplicateRequest, notify, patchQueueTask, saveQuietly, t]);
+  }, [coordinator, data, duplicateRequest, cancelPost]);
   const showScheduledLocally = useCallback((task, placement) => {
     const scheduled = { ...task, ...placement, status: 'scheduled', isDraft: false, draftCoordinatorEmail: null };
     setData((current) => {
@@ -2232,38 +2261,23 @@ function QueueApp({ user }) {
     const body = actionName === 'start'
       ? new URLSearchParams({ move_to_now: String(moveToNow) })
       : value ? new URLSearchParams(actionName === 'close' ? { final_permalinks: JSON.stringify(value) } : {}) : undefined;
-    try {
-      const result = await json(`/api/dashboard/queue/v2/requests/${target.id}/${actionName}`, { method: 'POST', body });
-      const deferred = actionName === 'start' && (result?.deferred === true || result?.outcome === 'deferred' || result?.outcome === 'not_started');
-      // Completion can shorten the measured block. Refresh immediately so the
-      // backend's ten-minute buffered chain reflow is visible without waiting
-      // for the next live event tick.
-      const reconciled = ['start', 'complete'].includes(actionName) ? await reconcileSchedule() : true;
-      if (!reconciled) {
-        const fallback = result?.request || (deferred
-          ? { status: 'scheduled', actualStartedAt: null, completedAt: null, scheduledDate: result?.scheduledDate || target.scheduledDate, scheduledStartMinutes: result?.scheduledStartMinutes ?? target.scheduledStartMinutes }
-          : optimistic);
-        patchQueueTask(target.id, fallback);
-      }
+    closeDetail();
+    let deferred = false;
+    const saved = await runItemAction(`post:${target.id}`, async (signal) => {
+      const result = await json(`/api/dashboard/queue/v2/requests/${target.id}/${actionName}`, { method: 'POST', body, signal });
+      deferred = actionName === 'start' && (result?.deferred === true || result?.outcome === 'deferred' || result?.outcome === 'not_started');
+      const patch = result?.request || (deferred
+        ? { status: 'scheduled', actualStartedAt: null, completedAt: null, scheduledDate: result?.scheduledDate || target.scheduledDate, scheduledStartMinutes: result?.scheduledStartMinutes ?? target.scheduledStartMinutes }
+        : { ...optimistic, scheduledDate: result?.scheduledDate || optimistic.scheduledDate || target.scheduledDate, scheduledStartMinutes: result?.scheduledStartMinutes ?? optimistic.scheduledStartMinutes ?? target.scheduledStartMinutes });
+      patchQueueTask(target.id, patch);
       if (deferred) {
-        const nextDate = result?.nextAvailableDate || result?.scheduledDate || target.scheduledDate;
-        const nextStart = result?.nextAvailableStartMinutes ?? result?.scheduledStartMinutes ?? target.scheduledStartMinutes;
-        const message = result?.detail || `${t('movedAfterActive')} ${nextDate} · ${time(nextStart)}.`;
-        // A deferred result is explicitly not a start. Keep the detail open,
-        // show its canonical scheduled state, and make the next available slot
-        // visible instead of closing the rail as though the work had started.
-        setDetailNotice({ message, type: 'warning' });
+        const message = result?.detail || t('movedAfterActive');
         notify(message, 'warning');
-        return false;
+      } else {
+        notify(t('requestUpdated'));
       }
-      closeDetail();
-      notify(reconciled ? t('requestUpdated') : t('scheduleRefreshFailed'), reconciled ? 'success' : 'warning');
-      return true;
-    } catch (err) {
-      if (actionName === 'start') await reconcileSchedule();
-      notify(err.message, 'error');
-      return false;
-    }
+    });
+    return saved && !deferred;
   };
   const batchClose = async (requestIds) => {
     if (!requestIds?.length) return;
@@ -2282,10 +2296,8 @@ function QueueApp({ user }) {
   const cancel = (reason) => {
     const target = open;
     if (!target) return;
-    saveQuietly();
-    patchQueueTask(target.id, { status: 'cancelled', cancellationReason: reason || '' });
     closeDetail();
-    json(`/api/dashboard/queue/v2/requests/${target.id}/cancel`, { method: 'POST', body: new URLSearchParams({ reason }) }).then(() => notify(t('requestUpdated'))).catch((err) => { patchQueueTask(target.id, target); notify(err.message, 'error'); });
+    return cancelPost(target, reason || '');
   };
   const edit = async (values) => {
     const target = open;
@@ -2331,25 +2343,12 @@ function QueueApp({ user }) {
       notify(t('requestUpdated')); return true;
     } catch (err) { notify(err.message, 'error'); return false; }
   };
-  const deleteTimeBlock = async (block) => {
-    saveQuietly();
-    try {
-      await json(`/api/dashboard/queue/v2/tickets/time-block/${block.id}`, { method: 'POST', body: new URLSearchParams({ delete: 'true' }) });
-      if (await reconcileSchedule({ refreshTickets: true })) {
-        notify(t('requestUpdated'));
-        return true;
-      }
-      notify(t('scheduleRefreshFailed'), 'warning');
-      return false;
-    } catch (err) {
-      // Leave the block visible until the server confirms deletion. If an
-      // ambiguous network failure happened after the write, reload to show the
-      // actual server state rather than pretending the optimistic delete won.
-      await reconcileSchedule({ refreshTickets: true });
-      notify(err.message, 'error');
-      return false;
-    }
-  };
+  const deleteTimeBlock = (block) => runItemAction(`time:${block.id}`, async (signal) => {
+    await json(`/api/dashboard/queue/v2/tickets/time-block/${block.id}`, { method: 'POST', signal, body: new URLSearchParams({ delete: 'true' }) });
+    setData(current => current ? { ...current, timeBlocks: (current.timeBlocks || []).filter(item => item.id !== block.id) } : current);
+    setTickets(current => current.filter(item => item.id !== block.id));
+    notify(t('requestUpdated'));
+  });
   const saveSchedulerPreferences = (preferences) => {
     saveQuietly();
     const optimistic = { hiddenUsers: preferences.hiddenUsers || [], rowOrder: preferences.rowOrder || [] };
@@ -2371,11 +2370,7 @@ function QueueApp({ user }) {
     });
   };
   const returnTaskToPool = (task) => persistPoolReturn(task);
-  const cancelTask = (task) => {
-    saveQuietly();
-    patchQueueTask(task.id, { status: 'cancelled', cancellationReason: 'Cancelled by coordinator' });
-    json(`/api/dashboard/queue/v2/requests/${task.id}/cancel`, { method: 'POST', body: new URLSearchParams({ reason: 'Cancelled by coordinator' }) }).then(() => notify(t('requestUpdated'))).catch((err) => { patchQueueTask(task.id, task); notify(err.message, 'error'); });
-  };
+  const cancelTask = cancelPost;
   const saveManagedAccounts = async (accounts) => {
     saveQuietly();
     const result = await json('/api/dashboard/queue/v2/account-onboarding', { method: 'POST', body: new URLSearchParams({ accounts: JSON.stringify(accounts) }) });
@@ -2486,7 +2481,7 @@ function QueueApp({ user }) {
     if (/^\d{4}-\d{2}-\d{2}$/.test(next)) setDate(next);
   };
 
-  return <QueueNamesContext.Provider value={displayName}><main className="queue-page scheduler-page">
+  return <QueuePendingContext.Provider value={pendingItems}><QueueNamesContext.Provider value={displayName}><main className="queue-page scheduler-page">
     <ProductHeader current="queue" coordinator={coordinator} account={<QueueSettings isAdmin={Boolean(data?.viewer?.isAdmin)} isDev={effectiveDevAccess} userEmail={user.email} avatarUrl={user?.photoURL || data?.viewer?.avatarUrl} displayLabel={user?.displayName || data?.viewer?.displayName} onManageAccounts={() => { accountSetupDismissedRef.current = false; setAccountSetupOpen(true); }} onStartGuide={() => { setGuideStep(-1); setGuideOpen(true); }} onResetQueue={(data?.viewer?.isAdmin || effectiveDevAccess) ? () => setResetOpen(true) : null} onSignOut={() => { clearSsoCookie(); signOut(auth); }} />}><h1>{t('productionQueue')}</h1>
         <div className="queue-actions-group queue-actions-primary">
           <span className={`queue-live-status is-${liveStatus}`} title={liveStatus === 'live' ? t('liveConnected') : liveStatus === 'offline' ? t('liveOffline') : t('liveConnecting')}>{liveStatus === 'offline' ? <WifiOff size={12} /> : <Radio size={12} />}<b>{liveStatus === 'live' ? t('liveConnected') : liveStatus === 'offline' ? t('liveOffline') : t('liveConnecting')}</b></span>
@@ -2499,7 +2494,6 @@ function QueueApp({ user }) {
           {pickAvailable ? <button type="button" className={`queue-pick-button${pickOpen ? ' is-active' : ''}`} onClick={() => setPickOpen(true)}><Check size={14} />{t('pick')}</button> : null}
         </div>
     </ProductHeader>
-    {refreshing ? <div className="queue-refresh-progress" aria-label="Refreshing Queue" /> : null}
     {incomingUpdate ? <span className="queue-sync-announcement" role="status">{t('updatingQueue')}</span> : null}
     {toast ? <div className={`queue-toast is-${toast.type}`} role="status">{toast.type === 'success' ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}<span>{toast.message}</span><button type="button" onClick={() => setToast(null)}><X size={14} /></button></div> : null}
     {loading && !data ? <QueueSkeleton /> : null}
@@ -2551,7 +2545,7 @@ function QueueApp({ user }) {
       timeZone={simulatedTimeZone}
     />
     <DevRolePreview isDev={isDev} canSwitchRoles={Boolean(viewer?.can_role_switch || data?.viewer?.canRoleSwitch || ROLE_SWITCHER_DEFAULTS[String(user?.email || '').trim().toLowerCase()])} availableRoles={data?.viewer?.availableOperatingRoles || viewer?.available_operating_roles || ROLE_SWITCHER_DEFAULTS[String(user?.email || '').trim().toLowerCase()] || []} />
-  </main></QueueNamesContext.Provider>;
+  </main></QueueNamesContext.Provider></QueuePendingContext.Provider>;
 }
 
 function Root() {

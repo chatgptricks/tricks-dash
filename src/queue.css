@@ -1323,3 +1323,7 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
 .scheduler-draft-actions button:hover { filter:brightness(1.2); }
 .scheduler-draft-actions button:focus-visible { outline:2px solid var(--q-text); outline-offset:2px; }
 .scheduler-draft-actions button:disabled { opacity:.55; cursor:wait; }
+.queue-pool-card { position:relative; }
+.is-pending-action { opacity:.48; pointer-events:none; }
+.queue-item-loading { position:absolute; inset:0; z-index:10; display:grid; place-items:center; background:rgba(0,0,0,.25); color:#fff; border-radius:inherit; pointer-events:none; }
+.scheduler.is-effective-view .queue-item-loading,.scheduler.is-effective-view .scheduler-time-block>span.queue-item-loading { display:grid; }

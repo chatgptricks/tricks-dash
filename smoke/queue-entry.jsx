@@ -54,7 +54,11 @@ let submitted = null;
 let drafted = null;
 let started = false;
 let failNextStart = false;
+let allowStart = false;
+let releaseStart;
 let createdTimeBlock = false;
+let releaseDelete;
+let rejectDelete = false;
 let tickets = [
   { id: 70, type: 'cancellation', status: 'pending', requesterEmail: 'user05@example.com', requestId: 3, reason: 'Client changed direction', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), request: { id: 3, post: { account: 'chatgptricks', shortcode: 'NEXT1' }, designerEmail: 'user05@example.com', status: 'scheduled', productionPoints: 3 } },
   { id: 69, type: 'pp_revision', status: 'rejected', requesterEmail: 'user03@example.com', requestId: 3, requestedProductionPoints: 5, reason: 'More editing time', reviewerEmail: 'user05@example.com', reviewedAt: new Date().toISOString(), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), request: { id: 3, post: { account: 'chatgptricks', shortcode: 'NEXT1' }, designerEmail: 'user03@example.com', status: 'scheduled', productionPoints: 3 } },
@@ -70,6 +74,12 @@ const stubFetch = async (url, options = {}) => {
   if (value.includes('/api/dashboard/queue/v2/account-onboarding')) {
     payload.accountOnboarding = { completed: true, selectedAccounts: JSON.parse(options.body.get('accounts') || '[]') };
     return response({ ok: true, accountOnboarding: payload.accountOnboarding });
+  }
+  if (value.includes('/api/dashboard/queue/v2/tickets/time-block/') && options.body?.get('delete')) {
+    await new Promise(resolve => { releaseDelete = resolve; });
+    if (rejectDelete) return { ok: false, status: 409, json: async () => ({ detail: 'Deletion failed' }) };
+    payload.timeBlocks = [];
+    return response({ ok: true });
   }
   if (value.includes('/api/dashboard/queue/v2/tickets/time-block')) {
     const block = { id: 71, type: 'time_block', status: 'pending', requesterEmail: 'user03@example.com', category: options.body.get('category'), title: options.body.get('title') || 'Meeting', scheduledDate: options.body.get('scheduled_date'), scheduledStartMinutes: Number(options.body.get('scheduled_start_minutes')), durationMinutes: Number(options.body.get('duration_minutes')), reason: options.body.get('note') || '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
@@ -119,12 +129,22 @@ const stubFetch = async (url, options = {}) => {
     return response({ ok: true, submitted: submitted.length, notifications: { sent: 1, failed: 0 } });
   }
   if (value.includes('/api/dashboard/queue/v2/requests/3/start')) {
+    if (allowStart) {
+      await new Promise(resolve => { releaseStart = resolve; });
+      scheduled.status = 'in_progress';
+      return response({ ok: true, deferred: false, scheduledDate: day, scheduledStartMinutes: 570 });
+    }
     if (failNextStart) {
       failNextStart = false;
       return { ok: false, status: 403, json: async () => ({ detail: 'Only the assigned designer can start this request.' }) };
     }
     started = true;
     return response({ ok: true, deferred: true, scheduledDate: day, scheduledStartMinutes: 600 });
+  }
+  if (/\/requests\/\d+\/complete/.test(value)) {
+    const id = Number(value.match(/requests\/(\d+)/)[1]);
+    for (const key of ['requests', 'planningRequests', 'assignedRequests']) payload[key] = payload[key].map(task => task.id === id ? { ...task, status: 'completed', completedAt: new Date().toISOString() } : task);
+    return response({ ok: true });
   }
   if (value.includes('/history')) return response({ events: [] });
   if (value.includes('/api/dashboard/me')) return response({ email: 'user03@example.com', is_dev: true });
@@ -170,7 +190,7 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     await act(async () => {});
     checks['Cached Queue view stays visible while reload syncs'] = Boolean(document.querySelector('.scheduler-canvas'))
       && !document.querySelector('.queue-state')
-      && Boolean(document.querySelector('.queue-refresh-progress'));
+      && !document.querySelector('.queue-refresh-progress');
     releaseInitialQueueFetch();
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 250)); });
     checks['Queue renders'] = Boolean(document.querySelector('.scheduler-canvas'));
@@ -289,6 +309,20 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     await click(document.querySelector('.scheduler-time-form > .scheduler-primary'));
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 100)); });
     checks['Pending personal time appears immediately'] = createdTimeBlock && Boolean(document.querySelector('.scheduler-time-block.status-pending'));
+    const deletePersonalTime = async () => {
+      await act(async () => { document.querySelector('.scheduler-time-block').dispatchEvent(new window.MouseEvent('contextmenu', { bubbles: true, cancelable: true })); });
+      await click([...document.querySelectorAll('.scheduler-context-menu button')].find(node => node.textContent === 'Delete personal time'));
+    };
+    rejectDelete = true;
+    await deletePersonalTime();
+    checks['Delete shows loading only on its time block'] = Boolean(document.querySelector('.scheduler-time-block.is-pending-action .queue-item-loading')) && !document.querySelector('.queue-refresh-progress');
+    checks['Other posts remain interactive during deletion'] = !document.querySelector('.scheduler-block').disabled;
+    await act(async () => { releaseDelete(); await new Promise(resolve => setTimeout(resolve, 50)); });
+    checks['Failed delete restores the block'] = Boolean(document.querySelector('.scheduler-time-block:not(.is-pending-action)'));
+    rejectDelete = false;
+    await deletePersonalTime();
+    await act(async () => { releaseDelete(); await new Promise(resolve => setTimeout(resolve, 50)); });
+    checks['Confirmed delete removes the block'] = !document.querySelector('.scheduler-time-block');
 
     const nextBlock = document.querySelector('.scheduler-block.state-scheduled');
     await click(nextBlock);
@@ -299,16 +333,16 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     await click(start);
     checks['Start action asks where to place the work'] = Boolean(document.querySelector('#queue-start-choice-title'));
     await click(document.querySelector('.queue-create-modal .scheduler-primary'));
-    checks['Rejected start preserves the detail and scheduled state'] = Boolean(document.querySelector('.queue-request-rail')) && Boolean(document.querySelector('.scheduler-block.state-scheduled'));
+    checks['Rejected start closes the detail and preserves scheduled state'] = !document.querySelector('.queue-request-rail') && Boolean(document.querySelector('.scheduler-block.state-scheduled'));
     checks['Rejected start shows the server reason'] = document.querySelector('.queue-toast')?.textContent.includes('Only the assigned designer');
-    await click(start);
+    await click(document.querySelector('.scheduler-block.state-scheduled'));
+    await click([...document.querySelectorAll('.queue-detail-actions button')].find(node => /Start work|Empezar trabajo/.test(node.textContent)));
     await click(document.querySelector('.queue-create-modal .scheduler-primary'));
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 100)); });
-    checks['Deferred start keeps the request open and scheduled'] = started
-      && Boolean(document.querySelector('.queue-request-rail'))
+    checks['Deferred start closes the detail and stays scheduled'] = started
+      && !document.querySelector('.queue-request-rail')
       && Boolean(document.querySelector('.scheduler-block.state-scheduled'));
     checks['Deferred warning is shown'] = /already in progress|Ya hay otro post/.test(document.querySelector('.queue-toast')?.textContent || '');
-    await click(document.querySelector('.rail-close-button'));
 
     const poolCard = document.querySelector('.queue-pool-card');
     const track = document.querySelector('.scheduler-track');
@@ -360,6 +394,17 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     checks['Create Post accepts an intelligent source link'] = Boolean(document.querySelector('.queue-source-link input[type="url"]'))
       && Boolean(document.querySelector('.queue-source-link button'));
     await click(document.querySelector('.queue-create-head > button'));
+    await click(document.querySelector('.scheduler-draft-actions[data-request-id="3"] button:last-child'));
+    allowStart = true;
+    await click(document.querySelector('.scheduler-block.state-scheduled'));
+    await click([...document.querySelectorAll('.queue-detail-actions button')].find(node => /Start work|Empezar trabajo/.test(node.textContent)));
+    await click(document.querySelector('.queue-create-modal .scheduler-primary'));
+    checks['Starting closes sidebar while request is pending'] = !document.querySelector('.queue-request-rail') && Boolean(document.querySelector('.scheduler-block.is-pending-action .queue-item-loading'));
+    await act(async () => { releaseStart(); await new Promise(resolve => setTimeout(resolve, 50)); });
+    checks['Start updates state without reload'] = document.querySelectorAll('.scheduler-block.state-in_progress').length === 2 && !document.querySelector('.scheduler-block.is-pending-action');
+    await click(document.querySelector('.scheduler-block.state-in_progress'));
+    await click([...document.querySelectorAll('.queue-detail-actions button')].find(node => /Mark complete|Marcar como completado/.test(node.textContent)));
+    checks['Completing closes sidebar and updates state'] = !document.querySelector('.queue-request-rail') && Boolean(document.querySelector('.scheduler-block.state-completed'));
     checks['No render or console errors'] = errors.length === 0;
 
     console.log('\n=== QUEUE SMOKE ===');
