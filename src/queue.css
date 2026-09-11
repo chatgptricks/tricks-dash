@@ -1338,3 +1338,17 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
 .is-pending-action { opacity:.48; pointer-events:none; }
 .queue-item-loading { position:absolute; inset:0; z-index:10; display:grid; place-items:center; background:rgba(0,0,0,.25); color:#fff; border-radius:inherit; pointer-events:none; }
 .scheduler.is-effective-view .queue-item-loading,.scheduler.is-effective-view .scheduler-time-block>span.queue-item-loading { display:grid; }
+.scheduler-draft-actions { top:12px; }
+.scheduler-draft-actions .scheduler-draft-pages { position:relative; }
+.scheduler-draft-pages small { position:absolute; right:1px; bottom:0; font-size:8px; font-weight:800; background:var(--q-panel-2); border-radius:3px; padding:0 1px; }
+.scheduler-page-picker { position:fixed; z-index:400; width:272px; max-width:calc(100vw - 16px); padding:12px; border:1px solid var(--q-line); border-radius:12px; background:var(--q-panel); color:var(--q-text); box-shadow:0 12px 36px #0006; }
+.scheduler-page-picker header { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:8px; }
+.scheduler-page-picker header>div { display:grid; gap:4px; }
+.scheduler-page-picker header b { font-size:12px; }
+.scheduler-page-picker header small { font-size:11px; color:var(--q-muted); }
+.scheduler-page-picker header button { display:grid; place-items:center; border:0; background:transparent; color:inherit; padding:6px; border-radius:5px; }
+.scheduler-page-options { max-height:200px; overflow:auto; }
+.scheduler-page-options label { display:flex; align-items:center; gap:9px; padding:9px 6px; cursor:pointer; font-size:12px; border-radius:6px; }
+.scheduler-page-options label:hover { background:var(--q-panel-2); }
+.scheduler-page-options input { accent-color:var(--q-accent); }
+.scheduler-page-options p { font-size:12px; color:var(--q-muted); }

@@ -354,8 +354,14 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     checks['Ghost shows a final placement'] = Boolean(ghost?.style.left && ghost?.style.width);
     await act(async () => { track.dispatchEvent(dragEvent('drop', 550)); });
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 100)); });
-    checks['Drop creates one draft'] = document.querySelectorAll('.scheduler-drafts article').length === 1;
+    checks['Drop creates one draft'] = document.querySelectorAll('.scheduler-draft-actions').length === 1;
     checks['Draft is shared before submit'] = drafted?.length === 1 && Boolean(document.querySelector('.scheduler-block.is-draft'));
+    checks['Drafts no longer have a separate bar'] = !document.querySelector('.scheduler-drafts');
+    await click(document.querySelector('.scheduler-draft-pages'));
+    checks['Page picker is local to the draft and assigned user'] = document.querySelector('.scheduler-page-picker')?.textContent.includes('User 03 Current') && document.querySelectorAll('.scheduler-page-options input').length === 1;
+    await click(document.querySelector('.scheduler-page-options input'));
+    checks['Page choice saves to this draft'] = payload.liveDrafts[0].recommendedAccounts.includes('chatgptricks');
+    await click(document.querySelector('.scheduler-page-picker header button'));
     const localDraftEnvelope = JSON.parse(window.localStorage.getItem('sentient.queueDrafts.v3:user03@example.com') || 'null');
     checks['Draft recovery is scoped to its authenticated owner'] = localDraftEnvelope?.version === 1
       && localDraftEnvelope?.ownerEmail === 'user03@example.com'
@@ -365,9 +371,9 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     const poolDrop = document.querySelector('.scheduler-pool');
     const draftBlock = document.querySelector('.scheduler-block.is-draft');
     await act(async () => { draftBlock.dispatchEvent(dragEvent('dragstart')); poolDrop.dispatchEvent(dragEvent('dragover')); poolDrop.dispatchEvent(dragEvent('drop')); });
-    checks['Pool return updates before network confirmation'] = !document.querySelector('.scheduler-drafts article') && Boolean(document.querySelector('.queue-pool-card'));
+    checks['Pool return updates before network confirmation'] = !document.querySelector('.scheduler-draft-actions') && Boolean(document.querySelector('.queue-pool-card'));
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 100)); });
-    checks['Scheduled block returns immediately without Submit'] = submitted?.[0]?.status === 'pool' && !document.querySelector('.scheduler-drafts article') && Boolean(document.querySelector('.queue-pool-card'));
+    checks['Scheduled block returns immediately without Submit'] = submitted?.[0]?.status === 'pool' && !document.querySelector('.scheduler-draft-actions') && Boolean(document.querySelector('.queue-pool-card'));
     const returnedPool = document.querySelector('.queue-pool-card');
     await act(async () => { returnedPool.dispatchEvent(dragEvent('dragstart')); track.dispatchEvent(dragEvent('dragover', 550)); track.dispatchEvent(dragEvent('drop', 550)); });
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 100)); });
@@ -379,13 +385,13 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     await act(async () => { otherScheduled.dispatchEvent(dragEvent('dragstart')); track.dispatchEvent(dragEvent('drop', 850)); });
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 100)); });
     checks['Two posts can have independent pending changes'] = payload.liveDrafts.length === 2;
-    await click(document.querySelector('.scheduler-draft-actions[data-request-id="1"] button:last-child'));
+    await click(document.querySelector('.scheduler-draft-actions[data-request-id="1"] button:nth-child(2)'));
     checks['Cancel only discards the selected draft'] = payload.liveDrafts.length === 1 && payload.liveDrafts[0].id === 3;
     const poolAfterCancel = document.querySelector('.queue-pool-card');
     await act(async () => { poolAfterCancel.dispatchEvent(dragEvent('dragstart')); track.dispatchEvent(dragEvent('drop', 550)); });
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 100)); });
     const submit = document.querySelector('.scheduler-draft-actions[data-request-id="1"] button');
-    checks['Each draft has confirm and cancel icons'] = document.querySelectorAll('.scheduler-draft-actions button').length === 4 && !document.querySelector('.scheduler-draft-float');
+    checks['Each draft has confirm and cancel icons'] = document.querySelectorAll('.scheduler-draft-actions button').length === 6 && !document.querySelector('.scheduler-draft-float');
     await click(submit);
     checks['Confirm preserves the other pending post'] = payload.liveDrafts.length === 1 && payload.liveDrafts[0].id === 3;
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 500)); });
@@ -394,7 +400,7 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     checks['Create Post accepts an intelligent source link'] = Boolean(document.querySelector('.queue-source-link input[type="url"]'))
       && Boolean(document.querySelector('.queue-source-link button'));
     await click(document.querySelector('.queue-create-head > button'));
-    await click(document.querySelector('.scheduler-draft-actions[data-request-id="3"] button:last-child'));
+    await click(document.querySelector('.scheduler-draft-actions[data-request-id="3"] button:nth-child(2)'));
     allowStart = true;
     await click(document.querySelector('.scheduler-block.state-scheduled'));
     await click([...document.querySelectorAll('.queue-detail-actions button')].find(node => /Start work|Empezar trabajo/.test(node.textContent)));
