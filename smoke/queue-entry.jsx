@@ -344,7 +344,9 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
       && Boolean(document.querySelector('.scheduler-block.state-scheduled'));
     checks['Deferred warning is shown'] = /already in progress|Ya hay otro post/.test(document.querySelector('.queue-toast')?.textContent || '');
 
-    const poolCard = document.querySelector('.queue-pool-card');
+    const poolCardShell = document.querySelector('.queue-pool-card');
+    const poolCard = poolCardShell?.querySelector(':scope > button');
+    checks['Pool card primary surface is draggable'] = Boolean(poolCard?.draggable) && !poolCardShell?.draggable;
     const track = document.querySelector('.scheduler-track');
     track.getBoundingClientRect = () => ({ left: 0, right: 1440, top: 0, bottom: 84, width: 1440, height: 84, x: 0, y: 0, toJSON() {} });
     await act(async () => { poolCard.dispatchEvent(dragEvent('dragstart')); });
@@ -374,7 +376,7 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     checks['Pool return updates before network confirmation'] = !document.querySelector('.scheduler-draft-actions') && Boolean(document.querySelector('.queue-pool-card'));
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 100)); });
     checks['Scheduled block returns immediately without Submit'] = submitted?.[0]?.status === 'pool' && !document.querySelector('.scheduler-draft-actions') && Boolean(document.querySelector('.queue-pool-card'));
-    const returnedPool = document.querySelector('.queue-pool-card');
+    const returnedPool = document.querySelector('.queue-pool-card > button');
     await act(async () => { returnedPool.dispatchEvent(dragEvent('dragstart')); track.dispatchEvent(dragEvent('dragover', 550)); track.dispatchEvent(dragEvent('drop', 550)); });
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 100)); });
     checks['Pool return can be scheduled again'] = drafted?.[0]?.status === 'scheduled' && Boolean(document.querySelector('.scheduler-block.is-draft'));
@@ -387,7 +389,7 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     checks['Two posts can have independent pending changes'] = payload.liveDrafts.length === 2;
     await click(document.querySelector('.scheduler-draft-actions[data-request-id="1"] button:nth-child(2)'));
     checks['Cancel only discards the selected draft'] = payload.liveDrafts.length === 1 && payload.liveDrafts[0].id === 3;
-    const poolAfterCancel = document.querySelector('.queue-pool-card');
+    const poolAfterCancel = document.querySelector('.queue-pool-card > button');
     await act(async () => { poolAfterCancel.dispatchEvent(dragEvent('dragstart')); track.dispatchEvent(dragEvent('drop', 550)); });
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 100)); });
     const submit = document.querySelector('.scheduler-draft-actions[data-request-id="1"] button');

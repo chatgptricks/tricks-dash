@@ -10,6 +10,11 @@ const initialPositioningEffect = queueSource.slice(
 );
 if (!initialPositioningEffect.includes('initiallyPositionedDateRef.current === selectedDate')) throw new Error('Scheduler must only auto-position once per selected date.');
 if (initialPositioningEffect.includes('[selectedDate, schedulerUsers.length, queueToday, queueNowMinutes]')) throw new Error('Clock ticks must not retrigger scheduler auto-positioning.');
+const panHandlers = queueSource.slice(queueSource.indexOf('const startPan ='), queueSource.indexOf('const openTimeBlockForm ='));
+if (!panHandlers.includes('startY: event.clientY')) throw new Error('Scheduler panning must distinguish horizontal gestures from vertical scrolling.');
+if (!panHandlers.includes('Math.abs(deltaY) > Math.abs(deltaX)')) throw new Error('Vertical pointer movement must not activate horizontal scheduler panning.');
+const panStart = panHandlers.slice(0, panHandlers.indexOf('const movePan ='));
+if (panStart.includes('setPointerCapture')) throw new Error('Scheduler must not capture clicks before horizontal panning begins.');
 
 const queueTestTime = Date.parse('2026-09-04T14:00:00Z');
 class QueueTestDate extends Date {
