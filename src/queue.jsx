@@ -883,7 +883,7 @@ function PoolCard({ task, onOpen, canMultiAssign = false, canCancel = false }) {
   const pending = useContext(QueuePendingContext).has(`post:${task.id}`);
   const displayName = useQueueDisplayName();
   const { t } = useQueuePreferences();
-  return <article aria-busy={pending} className={`queue-pool-card${pending ? ' is-pending-action' : ''} ${priorityClass(task.priority)}${hotClass(task)}${task.isDraft ? ' is-draft' : ''}`} draggable={!pending} data-context-type="pool" data-context-title={task.post.title || accountMention(task.post.account) || t('post')} data-context-post-key={task.postKey || task.id} data-context-request-id={task.id} data-context-duplicate="true" data-context-multi-assign={canMultiAssign ? 'true' : 'false'} data-context-cancel={canCancel ? 'true' : 'false'} data-context-account={task.post.account || ''} data-context-shortcode={task.post.shortcode || ''} data-context-permalink={task.post.permalink || ''} onDragStart={(event) => { activeQueueDragId = task.id; event.dataTransfer.setData('queue-task', String(task.id)); }} onDragEnd={() => { activeQueueDragId = null; }}>{pending ? <ItemLoading /> : null}<button disabled={pending} type="button" onClick={() => onOpen(task)}>{cover(task) ? <img src={cover(task)} alt="" /> : <span className="queue-pool-empty">@</span>}<span><b>{task.post.title || accountMention(task.post.account) || t('post')}</b><small>{task.post.title && task.post.account ? `${accountMention(task.post.account)} · ` : task.post.account ? `${accountMention(task.post.account)} · ` : `${t('accountToSelect')} · `}{task.productionPoints} PP · {task.durationMinutes} min</small>{task.prc ? <em className="queue-prc">PRC · {task.prc === 'Auto PRC' ? task.prc : displayName(task.prc)}</em> : null}{task.isDraft ? <em>{t('returnToPool')}</em> : null}</span><span className="queue-pool-card-badges"><PriorityBadge priority={task.priority} />{isHotTask(task) ? <i className="queue-hot-badge">🔥 {hotText(task)}</i> : null}</span></button><div>{task.tags?.filter((tag) => tag !== 'hot').map((tag) => <i key={tag}>{tag}</i>)}</div></article>;
+  return <article aria-busy={pending} className={`queue-pool-card${pending ? ' is-pending-action' : ''} ${priorityClass(task.priority)}${hotClass(task)}${task.isDraft ? ' is-draft' : ''}`} data-context-type="pool" data-context-title={task.post.title || accountMention(task.post.account) || t('post')} data-context-post-key={task.postKey || task.id} data-context-request-id={task.id} data-context-duplicate="true" data-context-multi-assign={canMultiAssign ? 'true' : 'false'} data-context-cancel={canCancel ? 'true' : 'false'} data-context-account={task.post.account || ''} data-context-shortcode={task.post.shortcode || ''} data-context-permalink={task.post.permalink || ''}>{pending ? <ItemLoading /> : null}<button disabled={pending} draggable={!pending} type="button" onDragStart={(event) => { activeQueueDragId = task.id; event.dataTransfer.setData('queue-task', String(task.id)); event.dataTransfer.effectAllowed = 'move'; }} onDragEnd={() => { activeQueueDragId = null; }} onClick={() => onOpen(task)}>{cover(task) ? <img src={cover(task)} alt="" draggable="false" /> : <span className="queue-pool-empty">@</span>}<span><b>{task.post.title || accountMention(task.post.account) || t('post')}</b><small>{task.post.title && task.post.account ? `${accountMention(task.post.account)} · ` : task.post.account ? `${accountMention(task.post.account)} · ` : `${t('accountToSelect')} · `}{task.productionPoints} PP · {task.durationMinutes} min</small>{task.prc ? <em className="queue-prc">PRC · {task.prc === 'Auto PRC' ? task.prc : displayName(task.prc)}</em> : null}{task.isDraft ? <em>{t('returnToPool')}</em> : null}</span><span className="queue-pool-card-badges"><PriorityBadge priority={task.priority} />{isHotTask(task) ? <i className="queue-hot-badge">🔥 {hotText(task)}</i> : null}</span></button><div>{task.tags?.filter((tag) => tag !== 'hot').map((tag) => <i key={tag}>{tag}</i>)}</div></article>;
 }
 
 function DesignerAssignments({ tasks, closedTasks = [], onOpen, timeZone = QUEUE_TIME_ZONE }) {
@@ -1298,24 +1298,31 @@ function Scheduler({ data, draft, setDraft, onDraftChange, onConfirmDraft, onCan
     if (event.button !== 0 || event.target.closest('button,a,input,select,textarea,.scheduler-block,.scheduler-time-block,.scheduler-resize-handle')) return;
     const scroller = scrollRef.current;
     if (!scroller) return;
-    panRef.current = { pointerId: event.pointerId, startX: event.clientX, startScroll: scroller.scrollLeft, moved: false };
-    scroller.setPointerCapture?.(event.pointerId);
+    panRef.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, startScroll: scroller.scrollLeft, moved: false, cancelled: false };
   };
   const movePan = (event) => {
     const current = panRef.current;
     const scroller = scrollRef.current;
-    if (!current || !scroller || current.pointerId !== event.pointerId) return;
-    const delta = event.clientX - current.startX;
-    if (!current.moved && Math.abs(delta) < 4) return;
-    current.moved = true;
+    if (!current || !scroller || current.cancelled || current.pointerId !== event.pointerId) return;
+    const deltaX = event.clientX - current.startX;
+    const deltaY = event.clientY - current.startY;
+    if (!current.moved) {
+      if (Math.abs(deltaY) >= 7 && Math.abs(deltaY) > Math.abs(deltaX)) {
+        current.cancelled = true;
+        return;
+      }
+      if (Math.abs(deltaX) < 7 || Math.abs(deltaX) <= Math.abs(deltaY)) return;
+      current.moved = true;
+      scroller.setPointerCapture?.(event.pointerId);
+    }
     event.preventDefault();
-    scroller.scrollLeft = current.startScroll - delta;
+    scroller.scrollLeft = current.startScroll - deltaX;
     setIsPanning(true);
   };
   const endPan = (event) => {
     const current = panRef.current;
     if (!current || (event?.pointerId != null && current.pointerId !== event.pointerId)) return;
-    scrollRef.current?.releasePointerCapture?.(current.pointerId);
+    if (scrollRef.current?.hasPointerCapture?.(current.pointerId)) scrollRef.current.releasePointerCapture(current.pointerId);
     panRef.current = null;
     setIsPanning(false);
   };
