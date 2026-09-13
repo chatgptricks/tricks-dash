@@ -999,8 +999,10 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
       if (!response.ok) throw new Error(result.detail || 'Could not add this post to Queue.');
       await refreshQueueSummary();
       setRefreshNotice({ type: 'success', message: 'Added to Queue with the default 3 PP setup.' });
+      return true;
     } catch (error) {
       setRefreshNotice({ type: 'error', message: error.message || 'Could not add this post to Queue.' });
+      return false;
     }
   }, [refreshQueueSummary]);
 
@@ -2194,6 +2196,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
                     onReload={reloadPost}
                     onAssign={setAssignmentPost}
                     onQuickAdd={quickAddToPool}
+                    onQuickAddSuccess={closeSidebar}
                     canSuggest={!poolAccess && effectiveOperatingRoles.includes('pd')}
                     canPool={poolAccess}
                     {...dragProps}
@@ -2284,7 +2287,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
           {selected ? (
             <PostDetailPanel
               post={selected}
-              captionExtra={<>{selected.account === 'chatgptricks' ? <CanvaLine url={canvaLinkForPost(selected.postDate)} /> : null}{poolAccess ? <><button type="button" className="ghost-button" onClick={() => setAssignmentPost(selected)}><ListTodo size={13} />Send to Pool</button><button type="button" className="ghost-button" title="Quick add to Pool with defaults" onClick={() => quickAddToPool(selected)}><Zap size={13} />Quick add</button></> : null}</>}
+              captionExtra={<>{selected.account === 'chatgptricks' ? <CanvaLine url={canvaLinkForPost(selected.postDate)} /> : null}{poolAccess ? <><button type="button" className="ghost-button" onClick={() => setAssignmentPost(selected)}><ListTodo size={13} />Send to Pool</button><QuickAddButton key={selected.postKey} post={selected} onQuickAdd={quickAddToPool} onAdded={closeSidebar} /></> : null}</>}
             />
           ) : null}
 
@@ -5716,11 +5719,47 @@ function AssignPostModal({ post, userEmail, isAdmin, accounts, onClose, onAssign
   );
 }
 
+// Shared by the card menu and the detail rail. The control owns the short
+// confirmation window so its parent closes only after the write succeeds.
+function QuickAddButton({ post, onQuickAdd, onAdded, className = 'ghost-button', role, label = 'Quick add' }) {
+  const [phase, setPhase] = useState('idle');
+  const closeTimer = useRef(null);
+
+  useEffect(() => () => clearTimeout(closeTimer.current), []);
+
+  const add = async (event) => {
+    event.stopPropagation();
+    if (phase !== 'idle') return;
+    setPhase('adding');
+    const added = await onQuickAdd?.(post);
+    if (!added) {
+      setPhase('idle');
+      return;
+    }
+    setPhase('added');
+    closeTimer.current = setTimeout(() => onAdded?.(), 750);
+  };
+
+  return (
+    <button
+      type="button"
+      role={role}
+      className={`${className} quick-add-button is-${phase}`.trim()}
+      title="Quick add to Pool with defaults"
+      onClick={add}
+      disabled={phase !== 'idle'}
+    >
+      {phase === 'adding' ? <LoaderCircle className="spin" size={13} /> : phase === 'added' ? <Check size={13} /> : <Zap size={13} />}
+      {phase === 'adding' ? 'Adding…' : phase === 'added' ? 'Added' : label}
+    </button>
+  );
+}
+
 // The card's ... menu. Positioned absolutely inside the card header rather
 // than portaled: the header isn't inside an overflow-hidden container, so a
 // plain absolute panel is enough and avoids the fixed-position bookkeeping
 // the account dropdown needs.
-function PostMenu({ post, isPromo, onFlags, onReload, onAssign, onQuickAdd, canPool, canSuggest }) {
+function PostMenu({ post, isPromo, onFlags, onReload, onAssign, onQuickAdd, onQuickAddSuccess, canPool, canSuggest }) {
   const { t } = usePrefs();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState('');
@@ -5826,7 +5865,7 @@ function PostMenu({ post, isPromo, onFlags, onReload, onAssign, onQuickAdd, canP
             <ListTodo size={13} />
             Send to Pool
           </button> : null}
-          {canPool ? <button type="button" role="menuitem" onClick={(event) => { event.stopPropagation(); setOpen(false); onQuickAdd?.(post); }}><Zap size={13} />Quick add to Pool</button> : null}
+          {canPool ? <QuickAddButton post={post} onQuickAdd={onQuickAdd} onAdded={() => { setOpen(false); onQuickAddSuccess?.(); }} className="" role="menuitem" label="Quick add to Pool" /> : null}
           {stackActions ? <button type="button" role="menuitem" onClick={(event) => run(event, 'similar', () => stackActions.findSimilar(post))} disabled={Boolean(busy)}><Search size={13} className={busy === 'similar' ? 'spin' : ''} />{busy === 'similar' ? t('Searching…') : t('Find similar')}</button> : null}
           {stackActions && Number(post.stackSize) > 1 ? <button type="button" role="menuitem" onClick={(event) => run(event, 'separate', () => stackActions.separate([post.postKey || `${post.account}:${post.shortcode}`]))} disabled={Boolean(busy)}>↗ {t('Separate from stack')}</button> : null}
           {post.group === 'sentient' && <button
@@ -5903,7 +5942,7 @@ const FreshnessRing = memo(function FreshnessRing({ timestamp }) {
   );
 });
 
-export const PostCard = memo(function PostCard({ post, priority, selected, onSelect, onFlags, onReload, onAssign, onQuickAdd, canPool, canSuggest, draggable, onDragStart, onDragOver, onDrop, hideCaption = false }) {
+export const PostCard = memo(function PostCard({ post, priority, selected, onSelect, onFlags, onReload, onAssign, onQuickAdd, onQuickAddSuccess, canPool, canSuggest, draggable, onDragStart, onDragOver, onDrop, hideCaption = false }) {
   const [avatarFailed, setAvatarFailed] = useState(false);
   const handleClick = () => onSelect(post.postKey);
   const handleKeyDown = (event) => {
@@ -5968,7 +6007,7 @@ export const PostCard = memo(function PostCard({ post, priority, selected, onSel
         <div className="post-header-actions">
           {post.isDeleted ? <span className="post-deleted-indicator" title="Deleted from Instagram" aria-label="Deleted from Instagram"><Trash2 size={13} /></span> : null}
           <FreshnessRing timestamp={post.timestamp} />
-          <PostMenu post={post} isPromo={isPromo} onFlags={onFlags} onReload={onReload} onAssign={onAssign} onQuickAdd={onQuickAdd} canPool={canPool} canSuggest={canSuggest} />
+          <PostMenu post={post} isPromo={isPromo} onFlags={onFlags} onReload={onReload} onAssign={onAssign} onQuickAdd={onQuickAdd} onQuickAddSuccess={onQuickAddSuccess} canPool={canPool} canSuggest={canSuggest} />
         </div>
       </div>
 
