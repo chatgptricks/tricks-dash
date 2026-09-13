@@ -2482,6 +2482,86 @@ body {
   white-space: nowrap;
 }
 
+.caption-panel .caption-ai-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: 100%;
+  min-height: 36px;
+  margin-top: 10px;
+  border-color: rgba(var(--accent-rgb), 0.35);
+  background: rgba(var(--accent-rgb), 0.08);
+  color: var(--text-strong);
+}
+
+.caption-generator-modal {
+  width: min(680px, 100%);
+}
+
+.caption-generator-source {
+  margin-bottom: 14px;
+}
+
+.caption-generator-source > div {
+  min-width: 0;
+}
+
+.caption-generator-field {
+  display: grid;
+  gap: 7px;
+  margin-bottom: 14px;
+  color: rgba(var(--ink), 0.68);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.caption-generator-field select,
+.caption-generator-field textarea {
+  width: 100%;
+  border: 1px solid rgba(var(--edge), 0.14);
+  border-radius: 9px;
+  outline: none;
+  background: var(--surface-0);
+  color: var(--text);
+  font: inherit;
+}
+
+.caption-generator-field select {
+  height: 42px;
+  padding: 0 11px;
+}
+
+.caption-generator-field textarea {
+  min-height: 260px;
+  padding: 12px;
+  resize: vertical;
+  font-weight: 500;
+  line-height: 1.55;
+}
+
+.caption-generator-field select:focus,
+.caption-generator-field textarea:focus {
+  border-color: rgba(var(--accent-rgb), 0.7);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.1);
+}
+
+.caption-generator-field small {
+  color: rgba(var(--ink), 0.46);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.caption-generator-actions {
+  justify-content: flex-end;
+}
+
+.caption-generator-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 @media (max-width: 1120px) {
   body {
     overflow: auto;

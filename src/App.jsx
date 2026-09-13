@@ -41,6 +41,7 @@ import {
   Search,
   Send,
   Settings,
+  Sparkles,
   SlidersHorizontal,
   Sun,
   TrendingUp,
@@ -902,6 +903,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
   const [availableRoles, setAvailableRoles] = useState(() => ROLE_SWITCHER_DEFAULTS[String(userEmail || '').trim().toLowerCase()] || []);
   const [queuePendingCount, setQueuePendingCount] = useState(0);
   const [assignmentPost, setAssignmentPost] = useState(null);
+  const [captionPost, setCaptionPost] = useState(null);
   const reconnectTimer = useRef(null);
   const reconnectAttempt = useRef(0);
   const dashboardLoader = useRef(null);
@@ -2287,7 +2289,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
           {selected ? (
             <PostDetailPanel
               post={selected}
-              captionExtra={<>{selected.account === 'chatgptricks' ? <CanvaLine url={canvaLinkForPost(selected.postDate)} /> : null}{poolAccess ? <><button type="button" className="ghost-button" onClick={() => setAssignmentPost(selected)}><ListTodo size={13} />Send to Pool</button><QuickAddButton key={selected.postKey} post={selected} onQuickAdd={quickAddToPool} onAdded={closeSidebar} /></> : null}</>}
+              captionExtra={<>{selected.account === 'chatgptricks' ? <CanvaLine url={canvaLinkForPost(selected.postDate)} /> : null}<button type="button" className="ghost-button caption-ai-button" onClick={() => setCaptionPost(selected)}><Sparkles size={13} />Generate similar caption</button>{poolAccess ? <><button type="button" className="ghost-button" onClick={() => setAssignmentPost(selected)}><ListTodo size={13} />Send to Pool</button><QuickAddButton key={selected.postKey} post={selected} onQuickAdd={quickAddToPool} onAdded={closeSidebar} /></> : null}</>}
             />
           ) : null}
 
@@ -2334,6 +2336,14 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
         />
       ) : null}
 
+      {captionPost ? (
+        <GenerateCaptionModal
+          post={captionPost}
+          accounts={accounts}
+          onClose={() => setCaptionPost(null)}
+        />
+      ) : null}
+
       <DevRolePreview isDev={isDev} canSwitchRoles={canSwitchRoles} availableRoles={availableRoles} />
     </div>
   );
@@ -2353,6 +2363,93 @@ function CanvaLine({ url }) {
       <ExternalLink size={14} />
       <span>Open Canva design doc</span>
     </a>
+  );
+}
+
+function GenerateCaptionModal({ post, accounts, onClose }) {
+  const destinations = accounts.filter((account) => account.group === 'sentient' && account.is_active !== false);
+  const [targetAccount, setTargetAccount] = useState('');
+  const [caption, setCaption] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    const onKey = (event) => {
+      if (event.key === 'Escape' && !busy) onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [busy, onClose]);
+
+  const generate = async (event) => {
+    event.preventDefault();
+    if (!targetAccount) {
+      setError('Choose the account this caption is for.');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    setCopied(false);
+    try {
+      const body = new FormData();
+      body.append('source_account', post.account);
+      body.append('shortcode', post.shortcode);
+      body.append('target_account', targetAccount);
+      const response = await apiFetch(`${API_BASE}/api/dashboard/posts/generate-caption`, { method: 'POST', body });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || 'Could not generate a caption right now.');
+      setCaption(String(data.caption || '').trim());
+    } catch (reason) {
+      setError(reason.message || 'Could not generate a caption right now.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(caption);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1800);
+    } catch {
+      setError('Could not copy the caption.');
+    }
+  };
+
+  return (
+    <div className="queue-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) onClose(); }}>
+      <form className="queue-assign-modal caption-generator-modal" onSubmit={generate} aria-labelledby="caption-generator-title">
+        <div className="queue-assign-head">
+          <div>
+            <p className="section-label">AI caption</p>
+            <h2 id="caption-generator-title">Generate a similar caption</h2>
+          </div>
+          <button type="button" className="icon-button" onClick={onClose} aria-label="Close caption generator" disabled={busy}><X size={16} /></button>
+        </div>
+        <div className="queue-assign-post caption-generator-source">
+          <div>
+            <strong>Inspired by @{post.account}</strong>
+            <p>{post.caption || post.headline || post.excerpt || 'Instagram post'}</p>
+          </div>
+        </div>
+        <label className="caption-generator-field">
+          <span>Which account is this for?</span>
+          <select value={targetAccount} onChange={(event) => { setTargetAccount(event.target.value); setCaption(''); setError(''); }} disabled={busy} autoFocus>
+            <option value="">Choose a Sentient account…</option>
+            {destinations.map((account) => <option key={account.handle} value={account.handle}>{account.label || account.handle} · @{account.handle}</option>)}
+          </select>
+          <small>The result follows that account's recent tone, language, CTAs, and formatting.</small>
+        </label>
+        {caption ? <label className="caption-generator-field caption-generator-result"><span>Generated caption · editable</span><textarea value={caption} onChange={(event) => setCaption(event.target.value)} /></label> : null}
+        {error ? <p className="queue-assign-error" role="alert">{error}</p> : null}
+        <div className="queue-assign-actions caption-generator-actions">
+          <button type="button" className="ghost-button" onClick={onClose} disabled={busy}>Cancel</button>
+          {caption ? <button type="button" className="ghost-button" onClick={copy}><Check size={14} />{copied ? 'Copied' : 'Copy caption'}</button> : null}
+          <button type="submit" className="primary-button" disabled={busy || !targetAccount}><Sparkles size={14} />{busy ? 'Generating…' : caption ? 'Regenerate' : 'Generate caption'}</button>
+        </div>
+      </form>
+    </div>
   );
 }
 
