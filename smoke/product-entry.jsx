@@ -48,6 +48,19 @@ try {
   await act(async () => el.querySelector('[aria-label="Post menu"]').click());
   if (/Mark as promo|Remove promo/.test(el.textContent)) throw new Error('Competitors must not expose promo actions');
   console.log('PASS promo restricted to Ours in individual and mixed stacks');
+  let finishQuickAdd;
+  let sideviewClosed = false;
+  await act(async () => root.render(<PrefsProvider><PostCard key="quick-add-test" post={sample} onSelect={() => {}} canPool onQuickAdd={() => new Promise((resolve) => { finishQuickAdd = resolve; })} onQuickAddSuccess={() => { sideviewClosed = true; }} /></PrefsProvider>));
+  await act(async () => el.querySelector('[aria-label="Post menu"]').click());
+  const quickAddButton = el.querySelector('.quick-add-button');
+  if (!quickAddButton) throw new Error('Quick add action must be available from the post menu');
+  await act(async () => quickAddButton.click());
+  if (!el.textContent.includes('Adding…') || sideviewClosed) throw new Error('Quick add must show progress before closing the sideview');
+  await act(async () => { finishQuickAdd(true); await Promise.resolve(); });
+  if (!el.textContent.includes('Added') || sideviewClosed) throw new Error('Quick add must confirm success before closing the sideview');
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 800)); });
+  if (!sideviewClosed || el.querySelector('.post-menu-panel')) throw new Error('Quick add must close the menu and sideview after its success animation');
+  console.log('PASS Quick add progress, success confirmation and delayed sideview close');
   for (const role of ['pd', 'sales', 'trainee', 'vc', 'admin']) {
     const coordinator = ['vc', 'admin'].includes(role);
     await act(async () => root.render(<PrefsProvider><ProductHeader current="research" coordinator={coordinator} /><PostCard post={sample} onSelect={() => {}} canPool={coordinator} canSuggest={!coordinator} /></PrefsProvider>));
