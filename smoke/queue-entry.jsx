@@ -380,6 +380,10 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     await act(async () => { returnedPool.dispatchEvent(dragEvent('dragstart')); track.dispatchEvent(dragEvent('dragover', 550)); track.dispatchEvent(dragEvent('drop', 550)); });
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 100)); });
     checks['Pool return can be scheduled again'] = drafted?.[0]?.status === 'scheduled' && Boolean(document.querySelector('.scheduler-block.is-draft'));
+    await click(document.querySelector('.scheduler-block.is-draft'));
+    checks['Draft sideview keeps caption clear'] = Boolean(document.querySelector('.queue-detail-copy > p'))
+      && !document.querySelector('.queue-detail-notice.is-draft');
+    await click(document.querySelector('.queue-request-rail .rail-close-button'));
     checks['Every post has a clock buffer'] = document.querySelectorAll('.scheduler-buffer-tongue').length === document.querySelectorAll('.scheduler-block').length
       && [...document.querySelectorAll('.scheduler-buffer-tongue')].every(node => node.querySelector('svg'));
     checks['Personal time has no buffer tongue'] = !document.querySelector('.is-personal-buffer');

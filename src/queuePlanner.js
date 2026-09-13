@@ -35,15 +35,18 @@ function splitAbsolute(anchorDate, absolute) {
 function nextFreeStart(preferred, duration, occupied) {
   let candidate = Math.max(0, Math.round(preferred / 10) * 10);
   while (true) {
-    const conflicts = occupied.filter((item) => intervalsConflict(candidate, duration, item.start, item.duration));
+    const conflicts = occupied.filter((item) => intervalsConflict(
+      candidate, duration, item.start, item.duration,
+      QUEUE_BUFFER_MINUTES, item.bufferMinutes ?? QUEUE_BUFFER_MINUTES,
+    ));
     if (!conflicts.length) return candidate;
-    candidate = Math.max(...conflicts.map((item) => item.start + item.duration + QUEUE_BUFFER_MINUTES));
+    candidate = Math.max(...conflicts.map((item) => item.start + item.duration + (item.bufferMinutes ?? QUEUE_BUFFER_MINUTES)));
     candidate = Math.ceil(candidate / 10) * 10;
   }
 }
 
-export function intervalsConflict(start, duration, otherStart, otherDuration, buffer = QUEUE_BUFFER_MINUTES) {
-  return start < otherStart + otherDuration + buffer && start + duration + buffer > otherStart;
+export function intervalsConflict(start, duration, otherStart, otherDuration, buffer = QUEUE_BUFFER_MINUTES, otherBuffer = buffer) {
+  return start < otherStart + otherDuration + Math.max(0, otherBuffer) && start + duration + Math.max(0, buffer) > otherStart;
 }
 
 /**
@@ -64,6 +67,7 @@ export function planQueueDrop({ tasks, target, designerEmail, scheduledDate, des
     id: task.id,
     start: absoluteStart(task, scheduledDate),
     duration: durationOf(task),
+    bufferMinutes: Number(task.bufferMinutes ?? QUEUE_BUFFER_MINUTES),
   }));
   const duration = durationOf(assignedTarget);
   const start = nextFreeStart(desiredStart, duration, occupied);
