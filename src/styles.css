@@ -2552,6 +2552,41 @@ body {
   font-weight: 500;
 }
 
+.caption-generator-manychat {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 2px 0 16px;
+  padding: 11px 12px;
+  border: 1px solid rgba(var(--edge), 0.14);
+  border-radius: 9px;
+  background: rgba(var(--accent-rgb), 0.05);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.caption-generator-manychat input {
+  width: 16px;
+  height: 16px;
+  margin: 1px 0 0;
+  accent-color: var(--accent);
+}
+
+.caption-generator-manychat span {
+  display: grid;
+  gap: 3px;
+}
+
+.caption-generator-manychat strong {
+  font-size: 12px;
+}
+
+.caption-generator-manychat small {
+  color: rgba(var(--ink), 0.5);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
 .caption-generator-actions {
   justify-content: flex-end;
 }
