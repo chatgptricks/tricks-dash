@@ -915,6 +915,9 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
   // fetch only new IDs instead of downloading the historical library again.
   const dashboardPostsRef = useRef([]);
   const dashboardSourcesRef = useRef([]);
+  const dashboardSummaryRef = useRef({});
+  const dashboardAccountsRef = useRef([]);
+  const dashboardCatalogueRevisionRef = useRef('');
   const dashboardFlightRef = useRef(null);
   const requestedRolePreview = window.sessionStorage.getItem('sentient.queueRolePreview') || '';
   const activeRolePreview = ACTIVE_ROLE_PREVIEWS.has(requestedRolePreview) ? requestedRolePreview : '';
@@ -1090,6 +1093,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
       // current cards, selection and scroll intact while still accepting the
       // lightweight accounts roster response.
       if (catalogue.notModified) {
+        dashboardAccountsRef.current = resolvedAccounts.accounts;
         setAccounts(resolvedAccounts.accounts);
         loaded = true;
         reconnectAttempt.current = 0;
@@ -1106,6 +1110,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
       }
       const nextEtag = catalogue.etag;
       if (nextEtag) dashboardEtagRef.current = nextEtag;
+      dashboardCatalogueRevisionRef.current = catalogue.revision || dashboardCatalogueRevisionRef.current;
       const nextRevision = dashboardDataRevision(catalogue.posts, catalogue.summary || {});
       const hasIncomingData = silent && dashboardRevisionRef.current !== null && dashboardRevisionRef.current !== nextRevision;
       if (hasIncomingData) {
@@ -1114,6 +1119,8 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
       }
       dashboardPostsRef.current = catalogue.posts;
       dashboardSourcesRef.current = Array.isArray(catalogue.sources) ? catalogue.sources : [];
+      dashboardSummaryRef.current = catalogue.summary || {};
+      dashboardAccountsRef.current = resolvedAccounts.accounts;
       // The complete response is ready to use. Persistence must never hold
       // the loading screen open when browser storage is slow or unavailable.
       void writeDashboardSnapshot({
@@ -1192,6 +1199,9 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
         if (active && isCompleteSnapshot && !dashboardPostsRef.current.length) {
           dashboardPostsRef.current = snapshot.posts;
           dashboardSourcesRef.current = Array.isArray(snapshot.catalogueSources) ? snapshot.catalogueSources : [];
+          dashboardSummaryRef.current = snapshot.summary || {};
+          dashboardAccountsRef.current = snapshot.accounts;
+          dashboardCatalogueRevisionRef.current = snapshot.catalogueRevision || '';
           setDashboard({ posts: snapshot.posts, summary: snapshot.summary || {} });
           setAccounts(snapshot.accounts);
           setLoading(false);
@@ -1820,12 +1830,27 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
   // posts, so re-fetching the whole thing to reflect a single flag would be
   // both slow and visually jarring (scroll position, image reloads).
   const patchPost = useCallback((account, shortcode, patch) => {
-    setDashboard((current) => ({
-      ...current,
-      posts: current.posts.map((post) =>
-        post.account === account && post.shortcode === shortcode ? { ...post, ...patch } : post,
-      ),
-    }));
+    const applyPatch = (items) => items.map((post) =>
+      post.account === account && post.shortcode === shortcode ? { ...post, ...patch } : post,
+    );
+    dashboardPostsRef.current = applyPatch(dashboardPostsRef.current);
+    setDashboard((current) => {
+      const next = { ...current, posts: applyPatch(current.posts) };
+      dashboardSummaryRef.current = next.summary || {};
+      return next;
+    });
+    // The manifest is intentionally append-oriented, so a count-only update
+    // does not change its high-water marks. Persist the patched full snapshot
+    // immediately; otherwise a hard reload restores the old number even
+    // though the worker already saved the fresh value in the database.
+    void writeDashboardSnapshot({
+      posts: dashboardPostsRef.current,
+      summary: dashboardSummaryRef.current,
+      accounts: dashboardAccountsRef.current,
+      catalogueComplete: true,
+      catalogueRevision: dashboardCatalogueRevisionRef.current,
+      catalogueSources: dashboardSourcesRef.current,
+    }).catch(() => {});
   }, []);
 
   const setPostFlags = useCallback(async (post, flags) => {
