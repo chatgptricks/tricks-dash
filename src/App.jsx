@@ -2289,7 +2289,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
           {selected ? (
             <PostDetailPanel
               post={selected}
-              captionExtra={<>{selected.account === 'chatgptricks' ? <CanvaLine url={canvaLinkForPost(selected.postDate)} /> : null}<button type="button" className="ghost-button caption-ai-button" onClick={() => setCaptionPost(selected)}><Sparkles size={13} />Generate similar caption</button>{poolAccess ? <><button type="button" className="ghost-button" onClick={() => setAssignmentPost(selected)}><ListTodo size={13} />Send to Pool</button><QuickAddButton key={selected.postKey} post={selected} onQuickAdd={quickAddToPool} onAdded={closeSidebar} /></> : null}</>}
+              captionExtra={<>{selected.account === 'chatgptricks' ? <CanvaLine url={canvaLinkForPost(selected.postDate)} /> : null}<button type="button" className="ghost-button caption-ai-button" onClick={() => setCaptionPost(selected)}><Sparkles size={13} />{t('Generate similar caption')}</button>{poolAccess ? <><button type="button" className="ghost-button" onClick={() => setAssignmentPost(selected)}><ListTodo size={13} />Send to Pool</button><QuickAddButton key={selected.postKey} post={selected} onQuickAdd={quickAddToPool} onAdded={closeSidebar} /></> : null}</>}
             />
           ) : null}
 
@@ -2367,8 +2367,10 @@ function CanvaLine({ url }) {
 }
 
 function GenerateCaptionModal({ post, accounts, onClose }) {
+  const { t } = usePrefs();
   const destinations = accounts.filter((account) => account.group === 'sentient' && account.is_active !== false);
   const [targetAccount, setTargetAccount] = useState('');
+  const [removeManychat, setRemoveManychat] = useState(false);
   const [caption, setCaption] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -2385,7 +2387,7 @@ function GenerateCaptionModal({ post, accounts, onClose }) {
   const generate = async (event) => {
     event.preventDefault();
     if (!targetAccount) {
-      setError('Choose the account this caption is for.');
+      setError(t('Choose the account this caption is for.'));
       return;
     }
     setBusy(true);
@@ -2396,12 +2398,13 @@ function GenerateCaptionModal({ post, accounts, onClose }) {
       body.append('source_account', post.account);
       body.append('shortcode', post.shortcode);
       body.append('target_account', targetAccount);
+      body.append('remove_manychat_automation', String(removeManychat));
       const response = await apiFetch(`${API_BASE}/api/dashboard/posts/generate-caption`, { method: 'POST', body });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.detail || 'Could not generate a caption right now.');
+      if (!response.ok) throw new Error(data.detail || t('Could not generate a caption right now.'));
       setCaption(String(data.caption || '').trim());
     } catch (reason) {
-      setError(reason.message || 'Could not generate a caption right now.');
+      setError(reason.message || t('Could not generate a caption right now.'));
     } finally {
       setBusy(false);
     }
@@ -2413,7 +2416,7 @@ function GenerateCaptionModal({ post, accounts, onClose }) {
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1800);
     } catch {
-      setError('Could not copy the caption.');
+      setError(t('Could not copy the caption.'));
     }
   };
 
@@ -2422,31 +2425,35 @@ function GenerateCaptionModal({ post, accounts, onClose }) {
       <form className="queue-assign-modal caption-generator-modal" onSubmit={generate} aria-labelledby="caption-generator-title">
         <div className="queue-assign-head">
           <div>
-            <p className="section-label">AI caption</p>
-            <h2 id="caption-generator-title">Generate a similar caption</h2>
+            <p className="section-label">{t('AI caption')}</p>
+            <h2 id="caption-generator-title">{t('Generate a similar caption')}</h2>
           </div>
-          <button type="button" className="icon-button" onClick={onClose} aria-label="Close caption generator" disabled={busy}><X size={16} /></button>
+          <button type="button" className="icon-button" onClick={onClose} aria-label={t('Close caption generator')} disabled={busy}><X size={16} /></button>
         </div>
         <div className="queue-assign-post caption-generator-source">
           <div>
-            <strong>Inspired by @{post.account}</strong>
+            <strong>{t('Inspired by')} @{post.account}</strong>
             <p>{post.caption || post.headline || post.excerpt || 'Instagram post'}</p>
           </div>
         </div>
         <label className="caption-generator-field">
-          <span>Which account is this for?</span>
+          <span>{t('Which account is this for?')}</span>
           <select value={targetAccount} onChange={(event) => { setTargetAccount(event.target.value); setCaption(''); setError(''); }} disabled={busy} autoFocus>
-            <option value="">Choose a Sentient account…</option>
+            <option value="">{t('Choose a Sentient account…')}</option>
             {destinations.map((account) => <option key={account.handle} value={account.handle}>{account.label || account.handle} · @{account.handle}</option>)}
           </select>
-          <small>The result follows that account's recent tone, language, CTAs, and formatting.</small>
+          <small>{t("The result follows that account's recent tone, language, CTAs, and formatting.")}</small>
         </label>
-        {caption ? <label className="caption-generator-field caption-generator-result"><span>Generated caption · editable</span><textarea value={caption} onChange={(event) => setCaption(event.target.value)} /></label> : null}
+        <label className="caption-generator-manychat">
+          <input type="checkbox" checked={removeManychat} onChange={(event) => { setRemoveManychat(event.target.checked); setCaption(''); setError(''); }} disabled={busy} />
+          <span><strong>{t('Remove ManyChat automation')}</strong><small>{t('Remove comment or DM keywords and promises to send links, prompts, codes, guides, or lists.')}</small></span>
+        </label>
+        {caption ? <label className="caption-generator-field caption-generator-result"><span>{t('Generated caption · editable')}</span><textarea value={caption} onChange={(event) => setCaption(event.target.value)} /></label> : null}
         {error ? <p className="queue-assign-error" role="alert">{error}</p> : null}
         <div className="queue-assign-actions caption-generator-actions">
-          <button type="button" className="ghost-button" onClick={onClose} disabled={busy}>Cancel</button>
-          {caption ? <button type="button" className="ghost-button" onClick={copy}><Check size={14} />{copied ? 'Copied' : 'Copy caption'}</button> : null}
-          <button type="submit" className="primary-button" disabled={busy || !targetAccount}><Sparkles size={14} />{busy ? 'Generating…' : caption ? 'Regenerate' : 'Generate caption'}</button>
+          <button type="button" className="ghost-button" onClick={onClose} disabled={busy}>{t('Cancel')}</button>
+          {caption ? <button type="button" className="ghost-button" onClick={copy}><Check size={14} />{copied ? t('Copied') : t('Copy caption')}</button> : null}
+          <button type="submit" className="primary-button" disabled={busy || !targetAccount}><Sparkles size={14} />{busy ? t('Generating…') : caption ? t('Regenerate') : t('Generate caption')}</button>
         </div>
       </form>
     </div>
