@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import { resolveResearchPost, runStackOperation } from '../src/stackOperations.js';
-const cover = { postKey: 'costarica:cover' };
-const member = { postKey: 'costarica:older' };
+const cover = { postKey: 'costarica:cover', shortcode: 'cover' };
+const member = { postKey: 'costarica:older', shortcode: 'older' };
 assert.equal(resolveResearchPost([cover, member], [cover], member.postKey), member);
 assert.equal(resolveResearchPost([cover, member], [], member.postKey), member);
+assert.equal(resolveResearchPost([cover, member], [], `shortcode:${member.shortcode}`), member);
 assert.equal(resolveResearchPost([cover], [cover], 'missing'), null);
 const calls = [];
 const result = await runStackOperation([cover, member, cover], async (post) => {

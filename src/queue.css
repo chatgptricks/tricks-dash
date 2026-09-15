@@ -775,7 +775,9 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
 /* Admin tabs are standalone workspaces; the scheduler is intentionally absent. */
 .queue-admin-tools { min-height:calc(100dvh - 92px); }
 
-.queue-request-rail .detail { position:relative; }.queue-detail-status { position:absolute; top:20px; right:20px; z-index:3; padding:6px 8px; border:1px solid rgba(255,255,255,.2); border-radius:999px; background:rgba(0,0,0,.66); color:#fff; font-size:9px; font-weight:850; text-transform:uppercase; backdrop-filter:blur(8px); }
+.queue-request-rail .detail { position:relative; }.queue-detail-status { position:absolute; top:68px; right:20px; z-index:3; padding:6px 8px; border:1px solid rgba(255,255,255,.2); border-radius:999px; background:rgba(0,0,0,.66); color:#fff; font-size:9px; font-weight:850; text-transform:uppercase; backdrop-filter:blur(8px); }
+.queue-request-rail .detail>.slide-download { position:absolute; top:10px; left:10px; right:48px; z-index:4; margin:0; padding:6px; border:1px solid rgba(var(--edge),.14); background:rgba(var(--surface-1-rgb),.94); box-shadow:var(--shadow); backdrop-filter:blur(12px); }
+.queue-request-rail .detail>.slide-download .ghost-button { min-height:34px; border-radius:8px; }
 .queue-request-rail .stats-panel { grid-template-columns:repeat(2,minmax(0,1fr)); overflow:visible; }.queue-request-rail .stats-panel .metric { min-height:64px; }.queue-request-rail .stats-panel .metric strong { font-size:12px; line-height:1.35; overflow-wrap:anywhere; }
 .queue-detail-scroll { min-height:0; overflow:auto; padding-right:3px; }.queue-detail-scroll>.slide-download { padding:10px; margin-top:12px; border:1px solid rgba(var(--edge),.09); box-shadow:none; background:var(--surface-2); }.queue-detail-scroll>.slide-download .ghost-button { min-height:34px; border-radius:8px; }
 .queue-detail-copy { overflow:visible; }.queue-detail-copy>p { font-size:12px; line-height:1.55; }
