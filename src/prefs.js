@@ -267,6 +267,7 @@ const ES = {
   'Comments': 'Comentarios',
   'Media': 'Medio',
   'comments': 'comentarios',
+  'View in Research': 'Ver en Research',
   'Download media': 'Descargar media',
   'Download transcript': 'Descargar transcripción',
   'Fetching media…': 'Buscando media…',

@@ -327,6 +327,11 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     const nextBlock = document.querySelector('.scheduler-block.state-scheduled');
     await click(nextBlock);
     checks['Sideview opens'] = Boolean(document.querySelector('.queue-request-rail'));
+    const researchLink = document.querySelector('.queue-request-rail .queue-view-research');
+    checks['Sideview offers media download'] = /Download media|Descargar media/.test(document.querySelector('.queue-request-rail .slide-download')?.textContent || '');
+    checks['Sideview links back to the exact Research post'] = researchLink?.textContent.includes('View in Research')
+      && researchLink.getAttribute('href')?.startsWith('/?r=')
+      && researchLink.getAttribute('target') === 'sentient-research';
     checks['Assignment detail uses the current Settings name'] = document.querySelector('.queue-request-rail').textContent.includes('Esteban Current');
     const start = [...document.querySelectorAll('.queue-detail-actions button')].find((node) => /Start work|Empezar trabajo/.test(node.textContent));
     failNextStart = true;

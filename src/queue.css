@@ -479,6 +479,7 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
 .ghost-button:hover, .icon-button:hover { border-color: rgba(var(--accent-rgb), 0.4); }
 .slide-download { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .slide-download .ghost-button { flex: 1 1 auto; justify-content: center; }
+.queue-view-research { text-decoration: none; }
 .slide-download-note { margin: 0; width: 100%; color: rgba(var(--ink), 0.45); font-size: 11px; }
 .media-modal-backdrop { position: fixed; inset: 0; z-index: 120; display: grid; place-items: center; padding: 20px; background: rgba(var(--shade), .7); backdrop-filter: blur(10px); }
 .media-modal { display: flex; flex-direction: column; gap: 14px; width: min(1360px, 96vw); max-height: min(92vh, 960px); min-height: 0; padding: 18px; border: 1px solid rgba(var(--edge), .2); border-radius: 18px; background: var(--surface-1); box-shadow: 0 32px 100px rgba(var(--shade), .72); }

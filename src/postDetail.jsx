@@ -387,7 +387,7 @@ function MediaCell({ item, picked, disabled, onToggle, onDownload, t }) {
   );
 }
 
-export function SlideDownload({ post }) {
+export function SlideDownload({ post, leadingAction = null }) {
   const { t } = usePrefs();
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState(null);
@@ -470,6 +470,12 @@ export function SlideDownload({ post }) {
   return (
     <>
       <section className="panel slide-download">
+        {leadingAction || (post.researchUrl ? (
+          <a className="ghost-button queue-view-research" href={post.researchUrl} target="sentient-research" rel="noreferrer">
+            <ExternalLink size={15} />
+            {t('View in Research')}
+          </a>
+        ) : null)}
         <button type="button" className="ghost-button" onClick={openPicker}>
           <Download size={15} />
           {t('Download media')}
