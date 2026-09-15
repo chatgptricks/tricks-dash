@@ -16,7 +16,7 @@ import traselvelorealProfileImage from './assets/traselveloreal-profile.jpg';
 import { QUEUE_BUFFER_MINUTES, QUEUE_DAY_END, QUEUE_DAY_START, minutesPerPPOf, planQueueDrop } from './queuePlanner';
 import { followQueueLive } from './queueLive';
 import { createQueueRefresh } from './queueRefresh';
-import { decodeRouteState } from './urlCodec';
+import { decodeRouteState, encodeRouteState } from './urlCodec';
 import './styles.css';
 import './queue.css';
 import './topicStack.css';
@@ -372,7 +372,9 @@ function queuePost(task) {
   const post = task?.publishedPost || task?.post || {};
   const type = post.type || 'Image';
   const shortcode = post.permalink?.match(/instagram\.com\/(?:p|reel|reels|tv)\/([A-Za-z0-9_-]+)/i)?.[1] || (String(post.shortcode || '').startsWith('manual-') ? '' : post.shortcode);
-  return { ...post, postKey: `${post.account}:${post.shortcode}`, account: post.account, shortcode, title: post.title || task?.title || '', isCustom: Boolean(post.isCustom || task?.isCustom), coverUrl: post.coverUrl, caption: post.caption || '', postDate: post.publishedAt, postType: type, type, isVideo: String(type).toLowerCase().includes('video') || String(type).toLowerCase().includes('reel'), showsHotBadge: false, openStack: task?.openStack };
+  const postKey = `${post.account}:${shortcode}`;
+  const researchUrl = post.account && shortcode ? `/?r=${encodeRouteState({ post: postKey })}` : '';
+  return { ...post, postKey, researchUrl, account: post.account, shortcode, title: post.title || task?.title || '', isCustom: Boolean(post.isCustom || task?.isCustom), coverUrl: post.coverUrl, caption: post.caption || '', postDate: post.publishedAt, postType: type, type, isVideo: String(type).toLowerCase().includes('video') || String(type).toLowerCase().includes('reel'), showsHotBadge: false, openStack: task?.openStack };
 }
 
 function AuthGate({ notice, setNotice }) {
