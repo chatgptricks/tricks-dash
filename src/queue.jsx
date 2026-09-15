@@ -372,8 +372,8 @@ function queuePost(task) {
   const post = task?.publishedPost || task?.post || {};
   const type = post.type || 'Image';
   const shortcode = post.permalink?.match(/instagram\.com\/(?:p|reel|reels|tv)\/([A-Za-z0-9_-]+)/i)?.[1] || (String(post.shortcode || '').startsWith('manual-') ? '' : post.shortcode);
-  const postKey = `${post.account}:${shortcode}`;
-  const researchUrl = post.account && shortcode ? `/?r=${encodeRouteState({ post: postKey })}` : '';
+  const postKey = post.account ? `${post.account}:${shortcode}` : `shortcode:${shortcode}`;
+  const researchUrl = shortcode ? `/?r=${encodeRouteState({ post: postKey })}` : '';
   return { ...post, postKey, researchUrl, account: post.account, shortcode, title: post.title || task?.title || '', isCustom: Boolean(post.isCustom || task?.isCustom), coverUrl: post.coverUrl, caption: post.caption || '', postDate: post.publishedAt, postType: type, type, isVideo: String(type).toLowerCase().includes('video') || String(type).toLowerCase().includes('reel'), showsHotBadge: false, openStack: task?.openStack };
 }
 
