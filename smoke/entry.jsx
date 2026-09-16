@@ -233,15 +233,23 @@ const el = document.getElementById('root') || document.body.appendChild(document
     setter.call(captionSelect, 'chatgptricks');
     captionSelect.dispatchEvent(new window.Event('change', { bubbles: true }));
   });
+  const languageSelect = qa('.caption-generator-modal select')[1];
+  await act(async () => {
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value').set;
+    setter.call(languageSelect, 'es');
+    languageSelect.dispatchEvent(new window.Event('change', { bubbles: true }));
+  });
   await click(qa('.caption-generator-modal button').find((button) => /Generate caption/.test(button.textContent)));
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
   inter['caption generation identifies the exact source post'] = CAPTION_REQUESTS[0]?.source_account === 'chatgptricks'
     && CAPTION_REQUESTS[0]?.shortcode === selectedShortcode;
   inter['first caption generation has no previous draft'] = !('previous_caption' in (CAPTION_REQUESTS[0] || {}));
+  inter['caption generation sends the selected language'] = CAPTION_REQUESTS[0]?.output_language === 'es';
   inter['generated caption renders as editable text'] = q('.caption-generator-result textarea')?.value === 'First generated caption';
   await click(qa('.caption-generator-modal button').find((button) => /Regenerate/.test(button.textContent)));
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
   inter['regenerate sends the previous generated caption'] = CAPTION_REQUESTS[1]?.previous_caption === 'First generated caption';
+  inter['regenerate preserves the selected language'] = CAPTION_REQUESTS[1]?.output_language === 'es';
   inter['regenerate replaces the displayed caption'] = q('.caption-generator-result textarea')?.value === 'Different regenerated caption';
   await click(q('.caption-generator-modal [aria-label="Close caption generator"]'));
 
