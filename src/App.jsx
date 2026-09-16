@@ -2395,6 +2395,7 @@ function GenerateCaptionModal({ post, accounts, onClose }) {
   const { t } = usePrefs();
   const destinations = accounts.filter((account) => account.group === 'sentient' && account.is_active !== false);
   const [targetAccount, setTargetAccount] = useState('');
+  const [outputLanguage, setOutputLanguage] = useState('');
   const [removeManychat, setRemoveManychat] = useState(false);
   const [caption, setCaption] = useState('');
   const [busy, setBusy] = useState(false);
@@ -2415,6 +2416,10 @@ function GenerateCaptionModal({ post, accounts, onClose }) {
       setError(t('Choose the account this caption is for.'));
       return;
     }
+    if (!outputLanguage) {
+      setError(t('Choose the language for the generated caption.'));
+      return;
+    }
     setBusy(true);
     setError('');
     setCopied(false);
@@ -2423,6 +2428,7 @@ function GenerateCaptionModal({ post, accounts, onClose }) {
       body.append('source_account', post.account);
       body.append('shortcode', post.shortcode);
       body.append('target_account', targetAccount);
+      body.append('output_language', outputLanguage);
       body.append('remove_manychat_automation', String(removeManychat));
       if (caption) body.append('previous_caption', caption);
       const response = await apiFetch(`${API_BASE}/api/dashboard/posts/generate-caption`, { method: 'POST', body });
@@ -2470,6 +2476,16 @@ function GenerateCaptionModal({ post, accounts, onClose }) {
           </select>
           <small>{t("The result follows that account's recent tone, language, CTAs, and formatting.")}</small>
         </label>
+        <label className="caption-generator-field">
+          <span>{t('What language should the result use?')}</span>
+          <select value={outputLanguage} onChange={(event) => { setOutputLanguage(event.target.value); setCaption(''); setError(''); }} disabled={busy}>
+            <option value="">{t('Choose a language…')}</option>
+            <option value="same">{t('Same as original')}</option>
+            <option value="en">English</option>
+            <option value="es">Español</option>
+            <option value="pt">Português</option>
+          </select>
+        </label>
         <label className="caption-generator-manychat">
           <input type="checkbox" checked={removeManychat} onChange={(event) => { setRemoveManychat(event.target.checked); setCaption(''); setError(''); }} disabled={busy} />
           <span><strong>{t('Remove ManyChat automation')}</strong><small>{t('Remove comment or DM keywords and promises to send links, prompts, codes, guides, or lists.')}</small></span>
@@ -2479,7 +2495,7 @@ function GenerateCaptionModal({ post, accounts, onClose }) {
         <div className="queue-assign-actions caption-generator-actions">
           <button type="button" className="ghost-button" onClick={onClose} disabled={busy}>{t('Cancel')}</button>
           {caption ? <button type="button" className="ghost-button" onClick={copy}><Check size={14} />{copied ? t('Copied') : t('Copy caption')}</button> : null}
-          <button type="submit" className="primary-button" disabled={busy || !targetAccount}><Sparkles size={14} />{busy ? t('Generating…') : caption ? t('Regenerate') : t('Generate caption')}</button>
+          <button type="submit" className="primary-button" disabled={busy || !targetAccount || !outputLanguage}><Sparkles size={14} />{busy ? t('Generating…') : caption ? t('Regenerate') : t('Generate caption')}</button>
         </div>
       </form>
     </div>
