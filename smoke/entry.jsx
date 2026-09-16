@@ -30,11 +30,16 @@ const ACCOUNTS = [
   { handle: 'chatgptricks', label: 'ChatGPTricks', group: 'sentient', has_avatar: 1, active: 1 },
   { handle: 'rivalpage', label: 'Rival Page', group: 'competitors', has_avatar: 0, active: 1 },
 ];
+const CAPTION_REQUESTS = [];
 
-const stubFetch = async (url) => {
+const stubFetch = async (url, options = {}) => {
   const u = String(url);
   let body = {};
-  if (u.includes('/api/dashboard/posts/manifest')) body = { revision: 'desktop-smoke', sources: [{ source: 'canonical', upperBound: POSTS.length }, { source: 'dashboard', upperBound: 0 }] };
+  if (u.includes('/api/dashboard/posts/generate-caption')) {
+    CAPTION_REQUESTS.push(Object.fromEntries(options.body.entries()));
+    body = { caption: CAPTION_REQUESTS.length === 1 ? 'First generated caption' : 'Different regenerated caption' };
+  }
+  else if (u.includes('/api/dashboard/posts/manifest')) body = { revision: 'desktop-smoke', sources: [{ source: 'canonical', upperBound: POSTS.length }, { source: 'dashboard', upperBound: 0 }] };
   else if (u.includes('/api/dashboard/posts/page')) body = { source: 'canonical', afterId: 0, nextCursor: POSTS.length, done: true, upperBound: POSTS.length, revision: 'desktop-smoke', posts: POSTS };
   else if (u.includes('/api/dashboard/posts')) body = { posts: POSTS, summary: {}, ranges: {} };
   else if (u.includes('/api/dashboard/accounts')) body = { accounts: ACCOUNTS };
@@ -218,6 +223,27 @@ const el = document.getElementById('root') || document.body.appendChild(document
   const dl = qa('.slide-download button')[0];
   inter['download button in rail'] = Boolean(dl);
   inter['download button labelled'] = /Download media/.test(dl?.textContent || '');
+
+  const selectedShortcode = q('.selected-post-link')?.href.match(/\/(?:p|reel)\/([^/]+)/)?.[1];
+  const captionButton = qa('button').find((button) => /Generate similar caption/.test(button.textContent));
+  await click(captionButton);
+  const captionSelect = q('.caption-generator-modal select');
+  await act(async () => {
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value').set;
+    setter.call(captionSelect, 'chatgptricks');
+    captionSelect.dispatchEvent(new window.Event('change', { bubbles: true }));
+  });
+  await click(qa('.caption-generator-modal button').find((button) => /Generate caption/.test(button.textContent)));
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
+  inter['caption generation identifies the exact source post'] = CAPTION_REQUESTS[0]?.source_account === 'chatgptricks'
+    && CAPTION_REQUESTS[0]?.shortcode === selectedShortcode;
+  inter['first caption generation has no previous draft'] = !('previous_caption' in (CAPTION_REQUESTS[0] || {}));
+  inter['generated caption renders as editable text'] = q('.caption-generator-result textarea')?.value === 'First generated caption';
+  await click(qa('.caption-generator-modal button').find((button) => /Regenerate/.test(button.textContent)));
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
+  inter['regenerate sends the previous generated caption'] = CAPTION_REQUESTS[1]?.previous_caption === 'First generated caption';
+  inter['regenerate replaces the displayed caption'] = q('.caption-generator-result textarea')?.value === 'Different regenerated caption';
+  await click(q('.caption-generator-modal [aria-label="Close caption generator"]'));
 
   const realFetch = globalThis.fetch;
   let listedUrl = null, zipUrl = null;

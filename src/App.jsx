@@ -2424,6 +2424,7 @@ function GenerateCaptionModal({ post, accounts, onClose }) {
       body.append('shortcode', post.shortcode);
       body.append('target_account', targetAccount);
       body.append('remove_manychat_automation', String(removeManychat));
+      if (caption) body.append('previous_caption', caption);
       const response = await apiFetch(`${API_BASE}/api/dashboard/posts/generate-caption`, { method: 'POST', body });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.detail || t('Could not generate a caption right now.'));
