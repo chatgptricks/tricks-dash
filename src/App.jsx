@@ -1,6 +1,6 @@
 import TopicStack from './TopicStack';
 import { StackActions, useStackActions, useStackScope } from './StackActions';
-import { resolveResearchPost, runStackOperation, stackPostKey } from './stackOperations';
+import { applyStackMembershipResult, resolveResearchPost, runStackOperation, stackPostKey } from './stackOperations';
 import { useTopicGroups } from './useTopicGroups';
 import ProductHeader from './ProductHeader';
 import { editorialStates } from './topicGroups';
@@ -1853,6 +1853,19 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
     }).catch(() => {});
   }, []);
 
+  const applyStackResult = useCallback((result) => {
+    dashboardPostsRef.current = applyStackMembershipResult(dashboardPostsRef.current, result);
+    setDashboard((current) => ({ ...current, posts: applyStackMembershipResult(current.posts, result) }));
+    void writeDashboardSnapshot({
+      posts: dashboardPostsRef.current,
+      summary: dashboardSummaryRef.current,
+      accounts: dashboardAccountsRef.current,
+      catalogueComplete: true,
+      catalogueRevision: dashboardCatalogueRevisionRef.current,
+      catalogueSources: dashboardSourcesRef.current,
+    }).catch(() => {});
+  }, []);
+
   const setPostFlags = useCallback(async (post, flags) => {
     if ('is_promo' in flags && post.group !== 'sentient') throw new Error('Promo is only available for Ours accounts.');
     // Optimistic: the toggle should feel instant. On failure we put the old
@@ -2207,7 +2220,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
           <section className="panel gallery">
           <div ref={resultsScrollRef} className="results-scroll">
             {grouping && !filtered.length ? <p className="home-loading" role="status">Grouping similar posts… You can keep using Research.</p> : filtered.length ? (
-              <StackActions onSaved={(result) => { const members = new Map((result.members || []).map((member) => [member.postKey, member])); const keys = new Set(result.postKeys || []); setDashboard((current) => ({ ...current, posts: current.posts.map((post) => { const key = post.postKey || `${post.account}:${post.shortcode || post.rank || ''}`; const member = members.get(key); return member ? { ...post, stackId: member.stackId, stackSize: member.stackSize } : keys.has(key) ? { ...post, stackId: result.stackId, stackSize: result.stackSize } : post; }) })); }}><div className="gallery-grid">
+              <StackActions onSaved={applyStackResult}><div className="gallery-grid">
                 {visibleTopics.map((group, index) => <TopicStack key={group.id} posts={group.posts} visiblePosts={group.visiblePosts} total={group.total} renderCard={(post, expand, dragProps) => (
                   <PostCard
                     // Keyed by account+shortcode, not shortcode alone: accounts

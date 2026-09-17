@@ -1,5 +1,17 @@
 export const stackPostKey = (post) => post.postKey || `${post.account}:${post.shortcode}`;
 
+export function applyStackMembershipResult(posts, result = {}) {
+  const members = new Map((result.members || []).map((member) => [member.postKey, member]));
+  const keys = new Set(result.postKeys || []);
+  return posts.map((post) => {
+    const key = stackPostKey(post);
+    const member = members.get(key);
+    if (member) return { ...post, stackId: member.stackId, stackSize: member.stackSize };
+    if (keys.has(key)) return { ...post, stackId: result.stackId, stackSize: result.stackSize };
+    return post;
+  });
+}
+
 export function resolveResearchPost(catalogue, filtered, key) {
   if (!key) return filtered[0] || null;
   const exact = catalogue.find((post) => stackPostKey(post) === key);
