@@ -73,6 +73,9 @@ try {
   let calls = 0; let saved = false;
   globalThis.fetch = window.fetch = async () => { calls++; return {ok:true, json:async () => ({stackId:'shared',postKeys:['a','b'],stackSize:2})}; };
   await act(async () => root.render(<PrefsProvider><StackActions onSaved={() => { saved = true; }}>{variants.slice(0,2).map((post) => <TopicStack key={post.postKey} posts={[post]} renderCard={(p) => <button className="test-card">{p.postKey}</button>} />)}</StackActions></PrefsProvider>));
+  for (const card of el.querySelectorAll('.test-card')) await act(async () => card.dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true })));
+  if (document.querySelectorAll('.stack-card-shell.is-multiselected').length !== 2 || !document.querySelector('.stack-selection-bar')) throw new Error('Shift-click grouping must remain immediate');
+  await act(async () => [...document.querySelectorAll('.stack-selection-bar button')].find((node) => /Done|Listo/.test(node.textContent)).click());
   const groupLauncher = document.querySelector('.stack-group-launcher');
   if (!groupLauncher) throw new Error('Grouping needs a visible entry point');
   await act(async () => groupLauncher.click());
@@ -85,7 +88,6 @@ try {
   if (document.querySelector('.stack-selection-bar')) throw new Error('Successful grouping must leave selection mode');
   console.log('PASS visible grouping mode, normal-click selection and confirmation');
   await act(async () => root.render(<PrefsProvider><StackActions onSaved={() => {}}>{variants.slice(0,2).map((post) => <TopicStack key={post.postKey} posts={[post]} renderCard={(p) => <button className="test-card">{p.postKey}</button>} />)}</StackActions></PrefsProvider>));
-  await act(async () => document.querySelector('.stack-group-launcher').click());
   const shells = el.querySelectorAll('.stack-card-shell');
   const drag = new Event('dragstart', {bubbles:true}); Object.defineProperty(drag, 'dataTransfer', {value:{setData(){}}});
   await act(async () => shells[0].dispatchEvent(drag));
@@ -98,7 +100,7 @@ try {
   function Probe({rows}) { observed = useTopicGroups(rows, catalogue).groups; return null; }
   await act(async () => root.render(<Probe rows={[catalogue[2],catalogue[0]]} />));
   if (observed[0].id !== 's' || observed[0].posts.length !== 2) throw new Error('Filtering must preserve membership and order by newest cover');
-  console.log('PASS drag confirmation, cancellation and persistent sorted membership');
+  console.log('PASS direct drag, confirmation, cancellation and persistent sorted membership');
   await act(async () => root.render(<CoverImage post={{shortcode:'retry', coverUrl:'https://example.com/cover.jpg'}} />));
   await act(async () => el.querySelector('img').dispatchEvent(new Event('error')));
   if (!el.querySelector('.cover-fallback')) throw new Error('Failed source should show fallback');

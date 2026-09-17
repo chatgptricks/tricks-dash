@@ -20,7 +20,7 @@
 .m-post-grid .post-stack-heading{font-size:11px;gap:6px}
 .m-post-grid .post-stack-heading small{font-size:10px}
 .m-post-grid .post-stack-trigger{font-size:10px;padding:8px 3px;gap:4px}
-.stack-card-shell{position:relative;min-width:0;border-radius:16px}
+.stack-card-shell{position:relative;min-width:0;border-radius:16px;cursor:grab}
 .stack-card-shell.is-selecting{cursor:pointer}
 .stack-card-shell>.post-card,.stack-card-shell>.m-post-card{width:100%;margin:0}
 .stack-card-shell.is-multiselected{outline:3px solid var(--accent-text,#00ac80);outline-offset:3px}
