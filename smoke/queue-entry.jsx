@@ -215,6 +215,7 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     await click(showAllControl);
     checks['Show all fits the effective schedule with compact block information'] = Boolean(document.querySelector('.scheduler.is-effective-view'))
       && Boolean(document.querySelector('.scheduler-block .scheduler-effective-meta'));
+    checks['Now remains visible in the effective schedule'] = document.querySelectorAll('.scheduler.is-effective-view .scheduler-now-global > b').length === 1;
     await click(document.querySelector('.scheduler-show-all'));
     await click(document.querySelector('.dev-role-preview > button'));
     const timeZonePreview = document.querySelector('.dev-timezone-preview');

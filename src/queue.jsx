@@ -1249,7 +1249,18 @@ function Scheduler({ data, draft, setDraft, onDraftChange, onConfirmDraft, onCan
     const end = Math.min(QUEUE_DAY_END, Math.ceil((last + 30) / 30) * 30);
     return { start, end, duration: Math.max(60, end - start), hasWork: true };
   }, [allTasks, data.timeBlocks, selectedDate, visibleDesigners]);
-  const timeline = showAll && effectiveTimeline.hasWork ? effectiveTimeline : { start: 0, end: QUEUE_DAY_END, duration: QUEUE_DAY_END, hasWork: false };
+  const timeline = (() => {
+    if (!showAll || !effectiveTimeline.hasWork) return { start: 0, end: QUEUE_DAY_END, duration: QUEUE_DAY_END, hasWork: false };
+    if (!queueToday) return effectiveTimeline;
+    // The compact schedule must not make the live Now marker disappear. Keep
+    // a rounded 30-minute margin around the current time, just like the work
+    // blocks, while still preserving every visible assignment in the range.
+    const nowStart = Math.max(0, Math.floor((queueNowMinutes - 30) / 30) * 30);
+    const nowEnd = Math.min(QUEUE_DAY_END, Math.ceil((queueNowMinutes + 30) / 30) * 30);
+    const start = Math.min(effectiveTimeline.start, nowStart);
+    const end = Math.max(effectiveTimeline.end, nowEnd);
+    return { ...effectiveTimeline, start, end, duration: Math.max(60, end - start) };
+  })();
   const minuteAtPointer = (event, rect) => Math.max(0, Math.min(QUEUE_DAY_END, Math.round((timeline.start + ((event.clientX - rect.left) / rect.width) * timeline.duration) / 10) * 10));
   const timelineMarkers = showAll && effectiveTimeline.hasWork
     ? [...new Set([timeline.start, timeline.end, ...Array.from({ length: Math.max(0, Math.floor(timeline.end / 60) - Math.ceil(timeline.start / 60) + 1) }, (_, index) => (Math.ceil(timeline.start / 60) + index) * 60).filter((minute) => minute > timeline.start && minute < timeline.end)])].sort((a, b) => a - b)
@@ -1262,9 +1273,9 @@ function Scheduler({ data, draft, setDraft, onDraftChange, onConfirmDraft, onCan
       const track = scroller?.querySelector('.scheduler-track');
       if (!scroller || !track) return;
       const isToday = selectedDate === DAY(new Date(), QUEUE_TIME_ZONE);
-      const preferred = isToday ? currentMinutes(new Date(), QUEUE_TIME_ZONE) - 180 : 8 * 60;
-      const firstMinute = Math.min(16 * 60, Math.max(0, preferred));
-      scroller.scrollLeft = ((firstMinute - timeline.start) / timeline.duration) * track.offsetWidth;
+      const focusMinute = isToday ? currentMinutes(new Date(), QUEUE_TIME_ZONE) : 8 * 60;
+      const target = track.offsetLeft + ((focusMinute - timeline.start) / timeline.duration) * track.offsetWidth - scroller.clientWidth / 2;
+      scroller.scrollLeft = Math.max(0, Math.min(Math.max(0, scroller.scrollWidth - scroller.clientWidth), target));
       initiallyPositionedDateRef.current = selectedDate;
     });
     return () => window.cancelAnimationFrame(frame);
