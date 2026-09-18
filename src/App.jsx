@@ -3080,7 +3080,21 @@ function AccountMultiSelect({ accounts, counts, selected, onChange, onAddAccount
 const ACCOUNT_GROUP_OPTIONS = [
   { value: 'sentient', label: 'Sentient' },
   { value: 'competitors', label: 'Competitors' },
+  { value: 'leads', label: 'Leads' },
 ];
+const ACCOUNT_SUBCATEGORY_OPTIONS = [
+  { value: 'ai_automation', label: 'AI & Automation' },
+  { value: 'technology_science', label: 'Technology & Science' },
+  { value: 'business_growth', label: 'Business, Finance & Growth' },
+  { value: 'lifestyle_community', label: 'Lifestyle & Community' },
+  { value: 'news_entertainment', label: 'News & Entertainment' },
+  { value: 'personal_brand', label: 'Personal Brand' },
+  { value: 'other', label: 'Other' },
+];
+const accountScopeDefaults = (group) => ({
+  research_enabled: group !== 'leads',
+  promos_enabled: group !== 'sentient',
+});
 const SCRAPE_MODE_OPTIONS = [
   { value: 'posts', label: 'Posts', hint: 'Profile feed, including Reels returned by the normal scraper' },
   { value: 'reels', label: 'Reels', hint: 'Only the Reels tab' },
@@ -3513,6 +3527,9 @@ export function SettingsPanel({
       next[account.handle] = {
         label: account.label || '',
         group: account.group,
+        subcategory: account.subcategory || 'other',
+        research_enabled: account.research_enabled !== false,
+        promos_enabled: account.promos_enabled === true,
         hot_threshold: String(account.hot_threshold ?? ''),
         scrape_mode: SCRAPE_MODE_OPTIONS.some((option) => option.value === account.scrape_mode)
           ? account.scrape_mode
@@ -3614,6 +3631,9 @@ export function SettingsPanel({
     return (
       edit.label !== (account.label || '') ||
       edit.group !== account.group ||
+      edit.subcategory !== (account.subcategory || 'other') ||
+      edit.research_enabled !== (account.research_enabled !== false) ||
+      edit.promos_enabled !== (account.promos_enabled === true) ||
       String(edit.hot_threshold) !== String(account.hot_threshold ?? '') ||
       edit.scrape_mode !== (SCRAPE_MODE_OPTIONS.some((option) => option.value === account.scrape_mode)
         ? account.scrape_mode
@@ -3636,6 +3656,9 @@ export function SettingsPanel({
         password,
         hot_threshold: String(value),
         group: edit.group,
+        subcategory: edit.subcategory,
+        research_enabled: String(edit.research_enabled),
+        promos_enabled: String(edit.promos_enabled),
         scrape_mode: edit.scrape_mode,
       });
       // Backend ignores a blank label rather than clearing it, so only send
@@ -4025,6 +4048,7 @@ export function SettingsPanel({
   const ACCOUNT_SORT_COLUMNS = {
     handle: (a) => a.handle || '',
     group: (a) => a.group || '',
+    subcategory: (a) => a.subcategory || '',
     followers: (a) => a.followers,
     total_posts: (a) => a.total_posts,
     avg_likes: (a) => a.avg_likes,
@@ -4040,7 +4064,8 @@ export function SettingsPanel({
     return (
       account.handle.toLowerCase().includes(q) ||
       (account.label || '').toLowerCase().includes(q) ||
-      (account.group || '').toLowerCase().includes(q)
+      (account.group || '').toLowerCase().includes(q) ||
+      (ACCOUNT_SUBCATEGORY_OPTIONS.find((option) => option.value === account.subcategory)?.label || account.subcategory || '').toLowerCase().includes(q)
     );
   });
 
@@ -4274,7 +4299,7 @@ export function SettingsPanel({
                     </div>
                   </div>
                   <p className="wizard-hint">
-                    Click a row to edit its label, category, HOT threshold, or avatar, or pull more history. {isDev ? 'You can add another account while an import is running; the server queues it automatically.' : 'Add account sends a request to Dev. Only Dev can add new accounts.'}
+                    Click a row to edit its label, category, subcategory, tool visibility, HOT threshold, or avatar, or pull more history. {isDev ? 'You can add another account while an import is running; the server queues it automatically.' : 'Add account sends a request to Dev. Only Dev can add new accounts.'}
                     "Suggested" is the account's average first-hour likes (the same number the HOT check
                     itself compares against), rounded up to the nearest hundred.
                   </p>
@@ -4283,7 +4308,7 @@ export function SettingsPanel({
                     <input
                       type="text"
                       className="accounts-search"
-                      placeholder="Search by handle, label, or category…"
+                      placeholder="Search by handle, label, category, or subcategory…"
                       value={accountSearch}
                       onChange={(event) => setAccountSearch(event.target.value)}
                     />
@@ -4312,6 +4337,7 @@ export function SettingsPanel({
                           {[
                             { key: 'handle', label: 'Account' },
                             { key: 'group', label: 'Category' },
+                            { key: 'subcategory', label: 'Subcategory' },
                             { key: 'followers', label: 'Followers' },
                             { key: 'total_posts', label: 'Posts' },
                             { key: 'avg_likes', label: 'Avg 1h likes (30d)' },
@@ -4331,7 +4357,10 @@ export function SettingsPanel({
                         {sortedRoster.map((account) => {
                           const isOpen = expandedHandle === account.handle;
                           const edit = edits[account.handle] || {
-                            label: '', group: account.group, hot_threshold: '', scrape_mode: account.scrape_mode || 'posts',
+                            label: '', group: account.group, subcategory: account.subcategory || 'other',
+                            research_enabled: account.research_enabled !== false,
+                            promos_enabled: account.promos_enabled === true,
+                            hot_threshold: '', scrape_mode: account.scrape_mode || 'posts',
                           };
                           const isInactive = account.is_active === false;
                           return (
@@ -4366,6 +4395,7 @@ export function SettingsPanel({
                                   </span>
                                 </td>
                                 <td>{ACCOUNT_GROUP_OPTIONS.find((option) => option.value === account.group)?.label || account.group}</td>
+                                <td>{ACCOUNT_SUBCATEGORY_OPTIONS.find((option) => option.value === account.subcategory)?.label || account.subcategory || 'Other'}</td>
                                 <td>{fmtCompact(account.followers)}</td>
                                 <td>{fmtCompact(account.total_posts)}</td>
                                 <td>{fmtCompact(account.avg_likes)}</td>
@@ -4378,7 +4408,7 @@ export function SettingsPanel({
                               </tr>
                               {isOpen ? (
                                 <tr className="accounts-detail-row">
-                                  <td colSpan={7}>
+                                  <td colSpan={8}>
                                     <div className="account-manage-detail" onClick={(event) => event.stopPropagation()}>
                                       <div className="account-manage-fields">
                                         <label className="account-manage-field">
@@ -4399,12 +4429,13 @@ export function SettingsPanel({
                                           <span>Category</span>
                                           <select
                                             value={edit.group}
-                                            onChange={(event) =>
+                                            onChange={(event) => {
+                                              const group = event.target.value;
                                               setEdits((prev) => ({
                                                 ...prev,
-                                                [account.handle]: { ...prev[account.handle], group: event.target.value },
-                                              }))
-                                            }
+                                                [account.handle]: { ...prev[account.handle], group, ...accountScopeDefaults(group) },
+                                              }));
+                                            }}
                                           >
                                             {ACCOUNT_GROUP_OPTIONS.map((option) => (
                                               <option key={option.value} value={option.value}>
@@ -4413,6 +4444,49 @@ export function SettingsPanel({
                                             ))}
                                           </select>
                                         </label>
+                                        <label className="account-manage-field">
+                                          <span>Subcategory</span>
+                                          <select
+                                            value={edit.subcategory}
+                                            onChange={(event) =>
+                                              setEdits((prev) => ({
+                                                ...prev,
+                                                [account.handle]: { ...prev[account.handle], subcategory: event.target.value },
+                                              }))
+                                            }
+                                          >
+                                            {ACCOUNT_SUBCATEGORY_OPTIONS.map((option) => (
+                                              <option key={option.value} value={option.value}>{option.label}</option>
+                                            ))}
+                                          </select>
+                                        </label>
+                                        <div className="account-manage-field account-tool-scope">
+                                          <span>Visible in tools</span>
+                                          <div>
+                                            <label>
+                                              <input
+                                                type="checkbox"
+                                                checked={edit.research_enabled}
+                                                disabled={edit.group === 'leads'}
+                                                onChange={(event) => setEdits((prev) => ({
+                                                  ...prev,
+                                                  [account.handle]: { ...prev[account.handle], research_enabled: event.target.checked },
+                                                }))}
+                                              /> Research
+                                            </label>
+                                            <label>
+                                              <input
+                                                type="checkbox"
+                                                checked={edit.promos_enabled}
+                                                disabled={edit.group === 'leads'}
+                                                onChange={(event) => setEdits((prev) => ({
+                                                  ...prev,
+                                                  [account.handle]: { ...prev[account.handle], promos_enabled: event.target.checked },
+                                                }))}
+                                              /> Promos
+                                            </label>
+                                          </div>
+                                        </div>
                                         <label className="account-manage-field account-manage-field-narrow">
                                           <span>HOT /hr</span>
                                           <input
@@ -4545,7 +4619,7 @@ export function SettingsPanel({
                         })}
                         {!sortedRoster.length ? (
                           <tr>
-                            <td colSpan={7} className="accounts-table-empty">No accounts match.</td>
+                            <td colSpan={8} className="accounts-table-empty">No accounts match.</td>
                           </tr>
                         ) : null}
                       </tbody>
@@ -5239,7 +5313,7 @@ function NewAccountRequestForm({ onClose }) {
     <div className="wizard-steps" role="list"><div className="wizard-step wizard-step-active" role="listitem"><span className="wizard-step-dot">1</span><span className="wizard-step-label">Account</span></div><div className="wizard-step" role="listitem"><span className="wizard-step-dot">2</span><span className="wizard-step-label">Details</span></div><div className="wizard-step" role="listitem"><span className="wizard-step-dot">3</span><span className="wizard-step-label">Confirm</span></div></div>
     <p className="wizard-hint">Add an Instagram account to your workspace.</p>
     <label className="modal-field">Instagram username<input required maxLength={31} placeholder="@username" value={handle} onChange={(event) => setHandle(event.target.value)} disabled={busy || sent} /></label>
-    <label className="modal-field">Group<select value={group} onChange={(event) => setGroup(event.target.value)} disabled={busy || sent}><option value="competitors">Competitors</option><option value="sentient">Sentient</option></select></label>
+    <label className="modal-field">Group<select value={group} onChange={(event) => setGroup(event.target.value)} disabled={busy || sent}>{ACCOUNT_GROUP_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
     <label className="modal-field">Notes<textarea maxLength={1000} placeholder="Optional context" value={reason} onChange={(event) => setReason(event.target.value)} disabled={busy || sent} /></label>
     {notice ? <p className="wizard-notice" role="status">{notice}</p> : null}
     <button type={sent ? 'button' : 'submit'} className="primary-button" disabled={busy} onClick={sent ? onClose : undefined}>{sent ? 'Done' : busy ? 'Adding…' : 'Add account'}</button>
@@ -5254,6 +5328,9 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
   const [handle, setHandle] = useState('');
   const [label, setLabel] = useState('');
   const [group, setGroup] = useState('competitors');
+  const [subcategory, setSubcategory] = useState('ai_automation');
+  const [researchEnabled, setResearchEnabled] = useState(true);
+  const [promosEnabled, setPromosEnabled] = useState(true);
   const [scrapeMode, setScrapeMode] = useState('posts');
   // Held as text, not a number. Coercing on every keystroke meant clearing the
   // field ran Number('') -> 0, so the box refilled itself with a 0 you then had
@@ -5374,6 +5451,9 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
           handle: cleanHandle,
           label: label.trim() || cleanHandle,
           group,
+          subcategory,
+          research_enabled: String(researchEnabled),
+          promos_enabled: String(promosEnabled),
           hot_threshold: String(hotThresholdValue),
           scrape_mode: scrapeMode,
         }),
@@ -5397,6 +5477,9 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
           handle: cleanHandle,
           label: label.trim() || cleanHandle,
           group,
+          subcategory,
+          researchEnabled,
+          promosEnabled,
           scrapeMode,
           avatarUrl: preview?.profile_pic_url || null,
           dateFrom: importScope === 'range' ? importFrom || null : null,
@@ -5509,7 +5592,13 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
           <div className="wizard-panel">
             <label className="modal-field">
               <span>Group</span>
-              <select value={group} onChange={(event) => setGroup(event.target.value)}>
+              <select value={group} onChange={(event) => {
+                const nextGroup = event.target.value;
+                const defaults = accountScopeDefaults(nextGroup);
+                setGroup(nextGroup);
+                setResearchEnabled(defaults.research_enabled);
+                setPromosEnabled(defaults.promos_enabled);
+              }}>
                 {ACCOUNT_GROUP_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
@@ -5517,6 +5606,22 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
                 ))}
               </select>
             </label>
+            <label className="modal-field">
+              <span>Subcategory</span>
+              <select value={subcategory} onChange={(event) => setSubcategory(event.target.value)}>
+                {ACCOUNT_SUBCATEGORY_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            </label>
+            <div className="modal-field wizard-tool-scope">
+              <span>Visible in tools</span>
+              <div>
+                <label><input type="checkbox" checked={researchEnabled} disabled={group === 'leads'} onChange={(event) => setResearchEnabled(event.target.checked)} /> Research</label>
+                <label><input type="checkbox" checked={promosEnabled} disabled={group === 'leads'} onChange={(event) => setPromosEnabled(event.target.checked)} /> Promos</label>
+              </div>
+              <p className="wizard-hint">Leads default to Promos only. Competitors default to both tools.</p>
+            </div>
             <div className="modal-field">
               <span>Content to scrape</span>
               <div className="wizard-scope-toggle" role="radiogroup" aria-label="Content to scrape">
@@ -5641,7 +5746,10 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
               <div>
                 <p className="wizard-summary-handle">@{cleanHandle || 'handle'}</p>
                 <p className="wizard-summary-meta">
-                  {ACCOUNT_GROUP_OPTIONS.find((option) => option.value === group)?.label} · HOT at {hotThresholdValue}+ likes/hr
+                  {ACCOUNT_GROUP_OPTIONS.find((option) => option.value === group)?.label} · {ACCOUNT_SUBCATEGORY_OPTIONS.find((option) => option.value === subcategory)?.label}
+                </p>
+                <p className="wizard-summary-meta">
+                  {[researchEnabled && 'Research', promosEnabled && 'Promos'].filter(Boolean).join(' + ') || 'No tool visibility'} · HOT at {hotThresholdValue}+ likes/hr
                 </p>
                 <p className="wizard-summary-meta">
                   Scraping {SCRAPE_MODE_OPTIONS.find((option) => option.value === scrapeMode)?.label}
