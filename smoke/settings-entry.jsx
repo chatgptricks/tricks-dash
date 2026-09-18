@@ -2,7 +2,7 @@ import { act } from 'react';
 
 const ok = (body) => ({ ok: true, status: 200, json: async () => body, text: async () => JSON.stringify(body) });
 const users = [{ email: 'esteban@sentientagency.io', display_name: 'Esteban', role: 'admin', operating_role: 'vc', operating_roles: '["vc","pd","dev"]', is_admin: 1, slack_user_id: 'U08UYJMPJ76', avatar_url: '/api/dashboard/user-avatar/U08UYJMPJ76' }];
-const accounts = [{ handle: 'chatgptricks', label: 'ChatGPTricks', group: 'sentient', group_name: 'sentient', hot_threshold: 600, scrape_mode: 'posts', is_active: true, followers: 1, total_posts: 1, avg_likes: 1 }];
+const accounts = [{ handle: 'chatgptricks', label: 'ChatGPTricks', group: 'sentient', group_name: 'sentient', subcategory: 'ai_automation', research_enabled: true, promos_enabled: false, hot_threshold: 600, scrape_mode: 'posts', is_active: true, followers: 1, total_posts: 1, avg_likes: 1 }];
 window.localStorage.setItem('sentientdash.settings.accountBackfills.v1', JSON.stringify([{
   id: 'newaccount-1', handle: 'newaccount', label: 'New Account', group: 'sentient', phase: 'done',
   startedAt: Date.now() - 18_000, serverProgress: { phase: 'inserting', done: 100, total: 100 }, added: 25, error: '',
@@ -83,6 +83,11 @@ const clickTab = async (label) => {
     const scrapeSelect = document.querySelector('[aria-label="Content to extract for chatgptricks"]');
     checks['Existing account exposes Reels extraction'] = scrapeSelect?.value === 'posts'
       && [...(scrapeSelect?.options || [])].map((option) => option.value).join('|') === 'posts|reels|both';
+    checks['Account exposes category, subcategory, and tool scopes'] = [...document.querySelectorAll('.account-manage-field select')]
+      .some((select) => [...select.options].some((option) => option.value === 'leads'))
+      && [...document.querySelectorAll('.account-manage-field select')]
+        .some((select) => [...select.options].some((option) => option.value === 'ai_automation'))
+      && document.querySelectorAll('.account-tool-scope input[type="checkbox"]').length === 2;
 
     await clickTab('Users');
     checks['User admin controls are collapsed by default'] = !document.querySelector('.settings-user-admin-panel');

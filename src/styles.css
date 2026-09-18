@@ -6759,6 +6759,31 @@ body {
   outline: none;
 }
 
+.account-tool-scope > div,
+.wizard-tool-scope > div {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 32px;
+}
+
+.account-tool-scope label,
+.wizard-tool-scope label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-strong);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.account-tool-scope input,
+.wizard-tool-scope input {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--accent);
+}
+
 .account-manage-oldest-post {
   align-self: center;
   font-size: 11px;
