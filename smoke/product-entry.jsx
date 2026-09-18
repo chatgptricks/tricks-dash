@@ -1,8 +1,8 @@
-import React, { act } from 'react';
+import React, { act, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { CoverImage } from '../src/postDetail';
 import TopicStack from '../src/TopicStack';
-import { PostCard } from '../src/App';
+import { AccountMultiSelect, PostCard } from '../src/App';
 import { StackActions } from '../src/StackActions';
 import { useTopicGroups } from '../src/useTopicGroups';
 import ProductHeader from '../src/ProductHeader';
@@ -13,6 +13,30 @@ const data = { viewer: { email, displayName: 'Designer' }, assignedRequests: [ta
 globalThis.fetch = window.fetch = async () => ({ ok: true, status: 200, json: async () => data });
 const el = document.body.appendChild(document.createElement('div')); const root = createRoot(el);
 try {
+  let accountSelection = [];
+  function AccountSearchHarness() {
+    const [selected, setSelected] = useState(new Set(['alpha', 'beta', 'gamma']));
+    return <AccountMultiSelect
+      inline
+      accounts={[
+        { handle: 'alpha', label: 'Alpha Studio' },
+        { handle: 'beta', label: 'Beta AI' },
+        { handle: 'gamma', label: 'Gamma News' },
+      ]}
+      counts={{ alpha: 1, beta: 2, gamma: 3 }}
+      selected={selected}
+      onChange={(next) => { accountSelection = [...next]; setSelected(next); }}
+    />;
+  }
+  await act(async () => root.render(<AccountSearchHarness />));
+  const accountSearch = el.querySelector('[aria-label="Search accounts"]');
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(accountSearch, 'beta');
+    accountSearch.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  if (accountSelection.join(',') !== 'beta') throw new Error('Account search must replace selection with matching accounts');
+  if (el.querySelectorAll('.account-multiselect-item').length !== 1 || !el.textContent.includes('Beta AI')) throw new Error('Account search must hide non-matching accounts');
+  console.log('PASS account search selects only visible results');
   let chosen = null;
   const variants = [{postKey:'a',likes:12,timestamp:300},{postKey:'b',likes:97,timestamp:100},{postKey:'c',likes:30,timestamp:200}];
   await act(async () => root.render(<TopicStack posts={variants} renderCard={(post, expand) => <button className="test-card" onClick={expand || (() => { chosen = post.postKey; })}>{post.postKey}</button>} />));

@@ -44,6 +44,7 @@ import {
   Sparkles,
   SlidersHorizontal,
   Sun,
+  Tags,
   TrendingUp,
   Trash2,
   Users,
@@ -132,6 +133,16 @@ const GROUP_TABS = [
   { value: 'hot', label: 'HOT' },
 ];
 
+const ACCOUNT_SUBCATEGORY_OPTIONS = [
+  { value: 'ai_automation', label: 'AI & Automation' },
+  { value: 'technology_science', label: 'Technology & Science' },
+  { value: 'business_growth', label: 'Business, Finance & Growth' },
+  { value: 'lifestyle_community', label: 'Lifestyle & Community' },
+  { value: 'news_entertainment', label: 'News & Entertainment' },
+  { value: 'personal_brand', label: 'Personal Brand' },
+  { value: 'other', label: 'Other' },
+];
+
 // How long a HOT post keeps showing its badge in the grid. 30h rather than
 // 48h: two days still felt stale in practice -- the window covers a post's
 // first full day plus the following morning, then lets go.
@@ -159,6 +170,7 @@ const URL_DEFAULTS = {
   q: '',
   tab: 'all',
   acc: '',
+  cat: '',
   type: 'All posts',
   media: 'all',
   sort: 'newest',
@@ -1370,8 +1382,19 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
     [accounts, activeGroup, customLists],
   );
   const [selectedAccounts, setSelectedAccounts] = useState(() => new Set());
+  const [selectedCategories, setSelectedCategories] = useState(
+    () => new Set(
+      initialUrl.cat
+        .split(',')
+        .map((value) => value.trim())
+        .filter((value) => ACCOUNT_SUBCATEGORY_OPTIONS.some((option) => option.value === value)),
+    ),
+  );
   useEffect(() => {
-    if (rolePreviewActive) { setActiveGroup('all'); setSelectedAccounts(new Set()); }
+    if (rolePreviewActive) {
+      setActiveGroup('all');
+      setSelectedAccounts(new Set(accounts.map((account) => account.handle)));
+    }
   }, [activeRolePreview]);
 
   // Custom lists fall back to the archive icon: they're user-made and there's
@@ -1511,6 +1534,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
       q: query,
       tab: activeGroup,
       acc: isEveryAccount ? '' : [...selectedAccounts].join(','),
+      cat: [...selectedCategories].join(','),
       type: activeType,
       media: mediaFilter,
       sort: sortBy,
@@ -1533,22 +1557,35 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
     });
     try { sessionStorage.setItem('sentient.research.return', '/index.html' + window.location.search); } catch {}
   }, [
-    query, activeGroup, selectedAccounts, accountsInScope, activeType, mediaFilter,
+    query, activeGroup, selectedAccounts, selectedCategories, accountsInScope, activeType, mediaFilter,
     sortBy, minLikes, minComments, dateFrom, dateTo, datePreset, promoOnly, selectedKey,
     isSidebarOpen, ranges.likesMin, ranges.commentsMin,
   ]);
 
-  // Switching tabs changes which accounts are in scope, but the effect that
-  // re-selects them runs *after* this render -- so for one pass the selection
-  // still holds only the previous tab's handles and nothing matches, flashing
-  // "0 results" (easy to misread as a broken date filter). Resolve the
-  // selection here instead: keep only in-scope handles, and treat an empty
-  // result as "everything in this tab".
+  // Keep only handles that belong to the active account scope. An empty Set is
+  // intentionally empty: Account search and Clear both need to be able to
+  // filter every account out rather than silently falling back to all of them.
   const effectiveAccounts = useMemo(() => {
     const inScope = accountsInScope.map((account) => account.handle);
-    const chosen = inScope.filter((handle) => selectedAccounts.has(handle));
-    return new Set(chosen.length ? chosen : inScope);
+    return new Set(inScope.filter((handle) => selectedAccounts.has(handle)));
   }, [accountsInScope, selectedAccounts]);
+
+  const accountCategoryByHandle = useMemo(
+    () => new Map(accounts.map((account) => [account.handle, account.subcategory || 'other'])),
+    [accounts],
+  );
+  const categoryAccountCounts = useMemo(() => {
+    const counts = {};
+    for (const account of accountsInScope) {
+      const category = account.subcategory || 'other';
+      counts[category] = (counts[category] || 0) + 1;
+    }
+    return counts;
+  }, [accountsInScope]);
+  const availableCategories = useMemo(
+    () => ACCOUNT_SUBCATEGORY_OPTIONS.filter((option) => categoryAccountCounts[option.value]),
+    [categoryAccountCounts],
+  );
 
   const activeList = useMemo(
     () =>
@@ -1580,6 +1617,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
       if (showHidden ? !post.hidden : Boolean(post.hidden)) continue;
       if (promoOnly && !(post.isPromo || PROMO_HASHTAG_RE.test(post.caption || ''))) continue;
       if (!effectiveAccounts.has(post.account)) continue;
+      if (selectedCategories.size && !selectedCategories.has(accountCategoryByHandle.get(post.account) || 'other')) continue;
       if (activeType !== 'All posts' && post.postType !== activeType) continue;
       if (mediaFilter === 'video' && !post.isVideo) continue;
       if (mediaFilter === 'static' && post.isVideo) continue;
@@ -1620,7 +1658,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
     });
 
     return output;
-  }, [posts, activeGroup, effectiveAccounts, activeType, mediaFilter, minLikes, minComments, dateFrom, dateTo, searchTerms, sortBy, showHidden, promoOnly, activeList, showHotHistory]);
+  }, [posts, activeGroup, effectiveAccounts, selectedCategories, accountCategoryByHandle, activeType, mediaFilter, minLikes, minComments, dateFrom, dateTo, searchTerms, sortBy, showHidden, promoOnly, activeList, showHotHistory]);
 
   // Leaving the HOT tab collapses history again, so coming back always
   // opens on "what's hot now" rather than a stale expanded state.
@@ -1630,7 +1668,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
 
   useEffect(() => {
     setVisibleStackCount(STACKS_PER_BATCH);
-  }, [deferredQuery, activeGroup, selectedAccounts, activeType, mediaFilter, minLikes, minComments, dateFrom, dateTo, sortBy, showHidden, showHotHistory]);
+  }, [deferredQuery, activeGroup, selectedAccounts, selectedCategories, activeType, mediaFilter, minLikes, minComments, dateFrom, dateTo, sortBy, showHidden, showHotHistory]);
 
   const { groups: topics, loading: grouping } = useTopicGroups(filtered, posts, sortBy);
   const visibleTopics = topics.slice(0, visibleStackCount);
@@ -1638,6 +1676,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
   const activeFilterCount = [
     Boolean(query.trim()),
     selectedAccounts.size < accountsInScope.length,
+    selectedCategories.size > 0,
     activeType !== 'All posts',
     mediaFilter !== 'all',
     datePreset !== 'all' || Boolean(dateFrom) || Boolean(dateTo),
@@ -1680,6 +1719,12 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
         clear: () => setSelectedAccounts(new Set(accountsInScope.map((account) => account.handle))),
       });
     }
+    if (selectedCategories.size) {
+      const label = selectedCategories.size === 1
+        ? ACCOUNT_SUBCATEGORY_OPTIONS.find((option) => selectedCategories.has(option.value))?.label || '1 category'
+        : `${selectedCategories.size} categories`;
+      chips.push({ key: 'cat', label, clear: () => setSelectedCategories(new Set()) });
+    }
     if (activeType !== 'All posts') {
       chips.push({ key: 'type', label: TYPE_LABELS[activeType] ?? activeType, clear: () => setActiveType('All posts') });
     }
@@ -1714,7 +1759,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
     }
     return chips;
   }, [
-    query, selectedAccounts, accountsInScope, activeType, mediaFilter,
+    query, selectedAccounts, selectedCategories, accountsInScope, activeType, mediaFilter,
     datePreset, dateFrom, dateTo, datePresets, minLikes, minComments, sortBy,
   ]);
 
@@ -1725,6 +1770,9 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
         ? accountsInScope.find((account) => selectedAccounts.has(account.handle))?.label
         : String(selectedAccounts.size))
     : '';
+  const categorySummary = selectedCategories.size === 1
+    ? ACCOUNT_SUBCATEGORY_OPTIONS.find((option) => selectedCategories.has(option.value))?.label
+    : (selectedCategories.size ? String(selectedCategories.size) : '');
   const typeSummary = [
     activeType !== 'All posts' ? TYPE_LABELS[activeType] ?? activeType : '',
     promoOnly ? 'Promo' : '',
@@ -1752,6 +1800,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
     setQuery('');
     startTransition(() => {
       setSelectedAccounts(new Set(accountsInScope.map((account) => account.handle)));
+      setSelectedCategories(new Set());
       setActiveType('All posts');
       setMediaFilter('all');
       setSortBy('newest');
@@ -2075,6 +2124,45 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
                       selected={selectedAccounts}
                       onChange={(next) => startTransition(() => setSelectedAccounts(next))}
                     />
+                  </FilterPopover>
+
+                  <FilterPopover
+                    id="category"
+                    icon={<Tags size={13} />}
+                    label={t('Category')}
+                    summary={categorySummary}
+                    isActive={selectedCategories.size > 0}
+                    width={330}
+                  >
+                    <div className="chip-row category-filter-options">
+                      <button
+                        type="button"
+                        className={selectedCategories.size === 0 ? 'chip chip-active' : 'chip'}
+                        onClick={() => startTransition(() => setSelectedCategories(new Set()))}
+                        aria-pressed={selectedCategories.size === 0}
+                      >
+                        {t('All')}
+                      </button>
+                      {availableCategories.map((option) => {
+                        const active = selectedCategories.has(option.value);
+                        return (
+                          <button
+                            key={option.value}
+                            type="button"
+                            className={active ? 'chip chip-active' : 'chip'}
+                            onClick={() => startTransition(() => setSelectedCategories((current) => {
+                              const next = new Set(current);
+                              if (next.has(option.value)) next.delete(option.value);
+                              else next.add(option.value);
+                              return next;
+                            }))}
+                            aria-pressed={active}
+                          >
+                            {option.label}<span>{categoryAccountCounts[option.value]}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </FilterPopover>
 
                   <FilterPopover
@@ -2852,7 +2940,7 @@ function FilterPopover({ id, icon, label, summary, isActive, width = 300, childr
   );
 }
 
-function AccountMultiSelect({ accounts, counts, selected, onChange, onAddAccount, inline = false }) {
+export function AccountMultiSelect({ accounts, counts, selected, onChange, onAddAccount, inline = false }) {
   const [open, setOpen] = useState(inline);
   const [panelRect, setPanelRect] = useState(null);
   const [search, setSearch] = useState('');
@@ -2947,13 +3035,23 @@ function AccountMultiSelect({ accounts, counts, selected, onChange, onAddAccount
   const columns = Math.min(4, Math.max(1, Math.ceil(accounts.length / 9)));
   const panelWidth = Math.max(panelRect?.width ?? 0, columns * COLUMN_PX);
 
-  // Select all / Clear act on what's currently filtered, which is what you
-  // want after searching a niche ("select all the ones matching 'ai'"). With
-  // an empty search that's still every account, so the plain case is normal.
+  // With a search, selecting results replaces the old selection completely;
+  // otherwise accounts that no longer match would keep leaking into the feed.
   const applyToVisible = (add) => {
-    const next = new Set(selected);
+    const next = add && term ? new Set() : new Set(selected);
     visibleAccounts.forEach((account) => (add ? next.add(account.handle) : next.delete(account.handle)));
     onChange(next);
+  };
+
+  const updateSearch = (value) => {
+    setSearch(value);
+    const nextTerm = value.trim().toLowerCase();
+    if (!nextTerm) return;
+    const matches = accounts.filter(
+      (account) => account.handle.toLowerCase().includes(nextTerm)
+        || (account.label || '').toLowerCase().includes(nextTerm),
+    );
+    onChange(new Set(matches.map((account) => account.handle)));
   };
 
   // Inline mode: the caller (a FilterPopover) is already a floating panel, so
@@ -2967,8 +3065,9 @@ function AccountMultiSelect({ accounts, counts, selected, onChange, onAddAccount
                   ref={searchRef}
                   type="search"
                   value={search}
+                  aria-label="Search accounts"
                   placeholder="Search accounts"
-                  onChange={(event) => setSearch(event.target.value)}
+                  onChange={(event) => updateSearch(event.target.value)}
                   // Escape clears the query first and only closes the panel
                   // when it's already empty, so a mistyped search doesn't
                   // cost you the whole dropdown.
@@ -2990,7 +3089,7 @@ function AccountMultiSelect({ accounts, counts, selected, onChange, onAddAccount
               </div>
               <div className="account-multiselect-actions">
                 <button type="button" onClick={() => applyToVisible(true)}>
-                  {term ? `Select these (${visibleAccounts.length})` : 'Select all'}
+                  {term ? `Use results (${visibleAccounts.length})` : 'Select all'}
                 </button>
                 <button type="button" onClick={() => applyToVisible(false)}>
                   Clear
@@ -3081,15 +3180,6 @@ const ACCOUNT_GROUP_OPTIONS = [
   { value: 'sentient', label: 'Sentient' },
   { value: 'competitors', label: 'Competitors' },
   { value: 'leads', label: 'Leads' },
-];
-const ACCOUNT_SUBCATEGORY_OPTIONS = [
-  { value: 'ai_automation', label: 'AI & Automation' },
-  { value: 'technology_science', label: 'Technology & Science' },
-  { value: 'business_growth', label: 'Business, Finance & Growth' },
-  { value: 'lifestyle_community', label: 'Lifestyle & Community' },
-  { value: 'news_entertainment', label: 'News & Entertainment' },
-  { value: 'personal_brand', label: 'Personal Brand' },
-  { value: 'other', label: 'Other' },
 ];
 const accountScopeDefaults = (group) => ({
   research_enabled: group !== 'leads',
