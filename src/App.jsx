@@ -2415,7 +2415,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
           {selected ? (
             <PostDetailPanel
               post={selected}
-              captionExtra={<>{selected.account === 'chatgptricks' ? <CanvaLine url={canvaLinkForPost(selected.postDate)} /> : null}<button type="button" className="ghost-button caption-ai-button" onClick={() => setCaptionPost(selected)}><Sparkles size={13} />{t('Generate similar caption')}</button>{poolAccess ? <><button type="button" className="ghost-button" onClick={() => setAssignmentPost(selected)}><ListTodo size={13} />Send to Pool</button><QuickAddButton key={selected.postKey} post={selected} onQuickAdd={quickAddToPool} onAdded={closeSidebar} /></> : null}</>}
+              captionExtra={<>{selected.account === 'chatgptricks' ? <CanvaLine url={canvaLinkForPost(selected.postDate)} /> : null}<button type="button" className="ghost-button caption-ai-button" onClick={() => setCaptionPost(selected)}><Sparkles size={13} />{t('Generate similar caption')}</button>{isDev ? <DevJevTools post={selected} /> : null}{poolAccess ? <><button type="button" className="ghost-button" onClick={() => setAssignmentPost(selected)}><ListTodo size={13} />Send to Pool</button><QuickAddButton key={selected.postKey} post={selected} onQuickAdd={quickAddToPool} onAdded={closeSidebar} /></> : null}</>}
             />
           ) : null}
 
@@ -2489,6 +2489,60 @@ function CanvaLine({ url }) {
       <ExternalLink size={14} />
       <span>Open Canva design doc</span>
     </a>
+  );
+}
+
+function DevJevTools({ post }) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState('');
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState('');
+  const [query, setQuery] = useState(post.caption || post.ocrText || '');
+
+  const run = async (action) => {
+    setBusy(action);
+    setError('');
+    try {
+      let response;
+      if (action === 'search') {
+        response = await apiFetch(`${API_BASE}/api/dashboard/jev/search?query=${encodeURIComponent(query.trim())}&limit=8`);
+      } else {
+        const body = new FormData();
+        if (action === 'audit-stack') {
+          body.set('post_key', post.postKey || `${post.account}:${post.shortcode}`);
+        } else {
+          body.set('account', post.account || '');
+          body.set('shortcode', post.shortcode || '');
+        }
+        response = await apiFetch(`${API_BASE}/api/dashboard/jev/${action}`, { method: 'POST', body });
+      }
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || 'Jev could not complete this check.');
+      setResult({ action, data });
+    } catch (reason) {
+      setError(reason.message || 'Jev could not complete this check.');
+    } finally {
+      setBusy('');
+    }
+  };
+
+  return (
+    <div className="dev-jev-tools">
+      <button type="button" className="ghost-button dev-jev-trigger" onClick={() => setOpen((value) => !value)} aria-expanded={open}>
+        <Sparkles size={13} /> Jev <span>DEV</span>
+      </button>
+      {open ? (
+        <section className="dev-jev-panel" aria-label="Jev developer tools">
+          <header><div><strong>Jev tools</strong><small>Only visible at DEV level</small></div><button type="button" onClick={() => setOpen(false)} aria-label="Close Jev tools"><X size={14} /></button></header>
+          <div className="dev-jev-actions">
+            {[['classify', 'Classify'], ['queue-suggestions', 'Queue suggestion'], ['promo-review', 'Review promo'], ['audit-stack', 'Audit stack']].map(([action, label]) => <button type="button" key={action} onClick={() => run(action)} disabled={Boolean(busy)}>{busy === action ? <LoaderCircle className="spin" size={12} /> : null}{label}</button>)}
+          </div>
+          <form className="dev-jev-search" onSubmit={(event) => { event.preventDefault(); run('search'); }}><input value={query} onChange={(event) => setQuery(event.target.value)} aria-label="Jev research query" placeholder="Research query…" /><button type="submit" disabled={Boolean(busy) || !query.trim()}>{busy === 'search' ? <LoaderCircle className="spin" size={12} /> : <Search size={12} />}</button></form>
+          {error ? <p className="dev-jev-error" role="alert">{error}</p> : null}
+          {result ? <div className="dev-jev-result"><small>{result.action}</small>{result.action === 'classify' ? <><strong>{result.data.label}</strong><pre>{JSON.stringify(result.data.scores, null, 2)}</pre></> : result.action === 'queue-suggestions' ? <><strong>{result.data.needsQueue ? 'Queue recommended' : 'No Queue needed'}</strong><span>{result.data.tag} · {result.data.urgent ? 'urgent' : 'normal'}</span></> : result.action === 'promo-review' ? <><strong>{result.data.needsReview ? 'Human review recommended' : 'Classification clear'}</strong><span>Semantic promo: {Math.round(Number(result.data.semanticPromo || 0) * 100)}%</span></> : result.action === 'audit-stack' ? <><strong>{result.data.members.filter((item) => !item.sameStack).length} possible outliers</strong><span>{result.data.members.length} members checked</span></> : <><strong>{result.data.results.length} relevant results</strong>{result.data.results.slice(0, 5).map((item) => <span key={item.postKey}>{item.postKey} · {Math.round(item.score * 100)}%</span>)}</>}</div> : null}
+        </section>
+      ) : null}
+    </div>
   );
 }
 
