@@ -283,6 +283,10 @@ const STACKS_PER_BATCH = 60;
 // "...tool. #AIToolSentient" does regardless of case.
 const PROMO_HASHTAG = '#aitoolsentient';
 const PROMO_HASHTAG_RE = /#aitoolsentient\b/i;
+// DEV-only visual preview. This does not write Jev's result or change the
+// post's persisted classification; it lets us review the final card treatment
+// against a real post before deciding whether to make the signal permanent.
+const FORCED_GOLDEN_NUGGET_SHORTCODE = 'ddjf3iqTVUD'.toLowerCase();
 // One emoji favicon per section, drawn as an inline SVG data URI.
 //
 // All the dashboard sections are the same index.html, so a static <link> can
@@ -2326,7 +2330,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
                     // and those cards got stuck at the top of every sort.
                     key={post.postKey}
                     post={post}
-                    goldenNugget={isDev ? goldenNuggets[post.postKey] : null}
+                    goldenNugget={isDev ? (goldenNuggets[post.postKey] || (String(post.shortcode || '').toLowerCase() === FORCED_GOLDEN_NUGGET_SHORTCODE ? { label: 'golden_nugget', targetAccount: post.account, preview: true } : null)) : null}
                     priority={index < 6}
                     selected={selected?.postKey === post.postKey}
                     onSelect={expand || selectPost}

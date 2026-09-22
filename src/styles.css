@@ -9468,5 +9468,25 @@ body {
 .dev-jev-result strong { color: var(--text-strong, #fff); font-size: 12px; }
 .dev-jev-result span { color: var(--ink, #bbb); font-size: 10px; }
 .dev-jev-result pre { max-height: 100px; margin: 2px 0 0; overflow: auto; color: #cbb3ff; font-size: 9px; white-space: pre-wrap; }
-.post-card-golden-nugget { border-color: rgba(248, 195, 58, .72); box-shadow: 0 0 0 1px rgba(248, 195, 58, .22), 0 12px 30px rgba(179, 111, 10, .16); }
+.post-card-golden-nugget {
+  --gold-card-bg: #d6a92e;
+  --gold-card-bg-deep: #b87f16;
+  --gold-card-ink: #251804;
+  background: linear-gradient(155deg, var(--gold-card-bg) 0%, #f0ca58 48%, var(--gold-card-bg-deep) 100%);
+  border-color: #ffe28a;
+  box-shadow: 0 0 0 1px rgba(255, 226, 138, .72), 0 14px 34px rgba(179, 111, 10, .3);
+  color: var(--gold-card-ink);
+}
+.post-card-golden-nugget .post-header,
+.post-card-golden-nugget .post-copy,
+.post-card-golden-nugget .post-editorial-actions { background: transparent; }
+.post-card-golden-nugget .post-user-copy strong,
+.post-card-golden-nugget .post-user-copy span,
+.post-card-golden-nugget .post-copy p,
+.post-card-golden-nugget .post-likes,
+.post-card-golden-nugget .post-footer { color: var(--gold-card-ink); }
+.post-card-golden-nugget .post-editorial-actions button,
+.post-card-golden-nugget .post-editorial-actions a { border-color: rgba(37, 24, 4, .42); background: rgba(255, 239, 165, .34); color: var(--gold-card-ink); }
+.post-card-golden-nugget .post-editorial-actions .editorial-primary { background: rgba(37, 24, 4, .88); color: #ffe89a; border-color: rgba(37, 24, 4, .9); }
+.post-card-golden-nugget .post-avatar { box-shadow: 0 0 0 2px rgba(255, 240, 168, .72); }
 .golden-nugget-badge { position: absolute; top: 8px; left: 8px; z-index: 4; display: inline-flex; align-items: center; gap: 4px; min-height: 24px; padding: 0 8px; border: 1px solid rgba(255, 228, 128, .78); border-radius: 999px; background: linear-gradient(135deg, #8b5a12, #e5b941 52%, #fff0a8); color: #241703; font-size: 10px; font-weight: 900; letter-spacing: .01em; box-shadow: 0 5px 16px rgba(0, 0, 0, .3); }
