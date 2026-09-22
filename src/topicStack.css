@@ -31,7 +31,7 @@
 .stack-selection-bar,.stack-context-menu,.stack-confirm{background:var(--panel,#202020);color:var(--text,#eee);border:1px solid var(--border,#555);border-radius:12px;padding:14px;box-shadow:0 12px 60px #0006}
 .stack-selection-bar{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:11000;display:flex;gap:10px;align-items:center;max-width:calc(100vw - 32px)}
 .stack-selection-bar span{font-weight:750;white-space:nowrap;margin-right:4px}
-.stack-group-launcher-host{display:flex;justify-content:flex-end;padding:12px 18px 18px;isolation:isolate}
+.stack-group-launcher-host{position:sticky;top:0;z-index:4;display:flex;justify-content:flex-end;padding:12px 18px 18px;background:linear-gradient(var(--surface-0,#090909) 72%,transparent);isolation:isolate}
 .stack-group-launcher{position:relative;z-index:1;border:1px solid color-mix(in srgb,var(--accent-text,#00ac80) 55%,transparent);border-radius:999px;padding:11px 16px;background:var(--panel,#202020);color:var(--text,#eee);font:750 13px/1 system-ui;box-shadow:0 10px 32px #0007;cursor:pointer}
 .stack-group-launcher + .stack-group-launcher,.stack-group-launcher ~ .stack-group-launcher{display:none}
 .stack-selection-bar{bottom:88px}
