@@ -7,7 +7,7 @@ const CardScope = createContext([]);
 export const useStackScope = () => useContext(CardScope);
 export const postIdentity = (post) => post.postKey || `${post.account}:${post.shortcode}`;
 export const useStackActions = () => useContext(Context);
-export function StackActions({ children, onSaved }) {
+export function StackActions({ children, onSaved, hideLauncher = false }) {
   const { t } = usePrefs();
   const [selected, select] = useState([]);
   const [selecting, setSelecting] = useState(false);
@@ -51,7 +51,7 @@ export function StackActions({ children, onSaved }) {
   const closeSelection = () => { select([]); setSelecting(false); setMenu(null); setPending(null); setError(''); };
   return <Context.Provider value={{ selected, select, selecting, setSelecting, setMenu, propose, separate, findSimilar, drag, suppressClick }}>
     {children}
-    {!selecting && selected.length === 0 && createPortal(<button type="button" className="stack-group-launcher" onClick={() => { setError(''); setSelecting(true); }}>{t('Group posts')}</button>, document.body)}
+    {!hideLauncher && !selecting && selected.length === 0 && createPortal(<button type="button" className="stack-group-launcher" onClick={() => { setError(''); setSelecting(true); }}>{t('Group posts')}</button>, document.body)}
     {(selecting || selected.length > 0) && createPortal(<div className="stack-selection-bar" role="toolbar" aria-label={t('Group posts')}><span>{selected.length ? `${selected.length} ${t('selected')}` : t('Select posts to group')}</span><button disabled={selected.length < 2} onClick={() => propose(selected)}>{t('Group selected')}</button>{selected.length ? <button onClick={() => select([])}>{t('Clear')}</button> : null}<button onClick={closeSelection}>{t('Done')}</button></div>, document.body)}
     {menu && createPortal(<div className="stack-menu-backdrop" onClick={() => setMenu(null)}><div className="stack-context-menu" role="menu" style={{ left: Math.min(menu.x, window.innerWidth - 230), top: Math.min(menu.y, window.innerHeight - 90) }}><button role="menuitem" disabled={menu.keys.length < 2} onClick={() => propose(menu.keys)}>{t('Group')} {menu.keys.length} posts</button></div></div>, document.body)}
     {pending && createPortal(<div className="stack-confirm-backdrop"><section role="dialog" aria-modal="true" aria-label={t('Confirm grouping')} className="stack-confirm"><h2>{t('Group these posts?')}</h2><p>{t('The selected posts and any existing stacks they belong to will become one shared stack for everyone. The newest post will be the cover.')}</p>{error && <p role="alert">{error}</p>}<footer><button disabled={saving} onClick={() => setPending(null)}>{t('Cancel')}</button><button disabled={saving} onClick={confirm}>{saving ? t('Saving…') : t('Confirm grouping')}</button></footer></section></div>, document.body)}

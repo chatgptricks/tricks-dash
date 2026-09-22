@@ -2317,7 +2317,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
           <section className="panel gallery">
           <div ref={resultsScrollRef} className="results-scroll">
             {grouping && !filtered.length ? <p className="home-loading" role="status">Grouping similar posts… You can keep using Research.</p> : filtered.length ? (
-              <StackActions onSaved={applyStackResult}><div className="gallery-grid">
+              <StackActions onSaved={applyStackResult} hideLauncher={isSidebarOpen}><div className="gallery-grid">
                 {visibleTopics.map((group, index) => <TopicStack key={group.id} posts={group.posts} visiblePosts={group.visiblePosts} total={group.total} renderCard={(post, expand, dragProps) => (
                   <PostCard
                     // Keyed by account+shortcode, not shortcode alone: accounts
