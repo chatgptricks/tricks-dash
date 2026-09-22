@@ -1170,14 +1170,26 @@ img {
   flex: 0 0 auto;
 }
 
-.post-deleted-indicator {
+.post-deleted-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
   display: grid;
   place-items: center;
-  width: 22px;
-  height: 22px;
+  color: #ffe4e4;
+  background: rgba(72, 12, 12, .46);
+  text-shadow: 0 3px 12px rgba(0, 0, 0, .72);
+  pointer-events: none;
+}
+
+.post-deleted-overlay svg {
+  width: clamp(42px, 18%, 76px);
+  height: auto;
+  padding: 13px;
+  border: 2px solid rgba(255, 228, 228, .86);
   border-radius: 999px;
-  color: #f09898;
-  background: rgba(135, 38, 38, .22);
+  background: rgba(83, 16, 16, .78);
+  box-shadow: 0 8px 26px rgba(0, 0, 0, .42);
 }
 
 /* Harvey-ball "freshness" clock -- conic-gradient draws the filled wedge
