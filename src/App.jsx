@@ -967,7 +967,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
   const rememberGoldenNugget = useCallback((postKey, result) => {
     setGoldenNuggets((current) => {
       const next = { ...current };
-      if (result?.label === 'golden_nugget') next[postKey] = result;
+      if (result?.label === 'golden_nugget' || result?.label === 'promising') next[postKey] = result;
       else delete next[postKey];
       return next;
     });
@@ -6381,7 +6381,9 @@ export const PostCard = memo(function PostCard({ post, goldenNugget, priority, s
     event.stopPropagation();
   };
   const effects = hotEffects(post);
-  const cardClassName = `post-card${effects.className}${post.hidden ? ' post-card-hidden' : ''}${goldenNugget ? ' post-card-golden-nugget' : ''}`;
+  const isConfirmedGoldenNugget = goldenNugget?.label === 'golden_nugget';
+  const isPromisingNugget = goldenNugget?.label === 'promising';
+  const cardClassName = `post-card${effects.className}${post.hidden ? ' post-card-hidden' : ''}${isConfirmedGoldenNugget ? ' post-card-golden-nugget' : ''}`;
   // Promo is either detected from the caption hashtag or set explicitly on
   // the post (the card's ... menu writes that flag), so a promo that didn't
   // use the tag can still be marked by hand.
@@ -6445,7 +6447,7 @@ export const PostCard = memo(function PostCard({ post, goldenNugget, priority, s
           </div>
         ) : null}
         {post.showsHotBadge ? <HotBadge post={post} /> : null}
-        {goldenNugget ? <div className="golden-nugget-badge" title={`Golden nugget for @${goldenNugget.targetAccount}`}><Sparkles size={12} />Golden nugget</div> : null}
+        {goldenNugget ? <div className={`golden-nugget-badge${isPromisingNugget ? ' is-promising' : ''}`} title={`${isPromisingNugget ? 'Promising idea' : 'Golden nugget'}${goldenNugget.targetAccount ? ` for @${goldenNugget.targetAccount}` : ''}`}><Sparkles size={12} />{isPromisingNugget ? 'Promising' : 'Golden nugget'}</div> : null}
         {isPromo ? (
           <div className="promo-ribbon" title={`Promo (${PROMO_HASHTAG})`}>
             <span>Promo</span>
