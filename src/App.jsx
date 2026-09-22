@@ -916,6 +916,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
   const [queuePendingCount, setQueuePendingCount] = useState(0);
   const [assignmentPost, setAssignmentPost] = useState(null);
   const [captionPost, setCaptionPost] = useState(null);
+  const [goldenNuggets, setGoldenNuggets] = useState({});
   const reconnectTimer = useRef(null);
   const reconnectAttempt = useRef(0);
   const dashboardLoader = useRef(null);
@@ -959,6 +960,14 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
     const now = Date.now();
     return dashboard.posts.map((post) => normalizePost(post, now));
   }, [dashboard.posts]);
+  const rememberGoldenNugget = useCallback((postKey, result) => {
+    setGoldenNuggets((current) => {
+      const next = { ...current };
+      if (result?.label === 'golden_nugget') next[postKey] = result;
+      else delete next[postKey];
+      return next;
+    });
+  }, []);
   const summary = dashboard.summary;
   const ranges = useMemo(() => calculateRanges(posts), [posts]);
   const datePresets = useMemo(() => buildDatePresets(ranges), [ranges]);
@@ -2317,6 +2326,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
                     // and those cards got stuck at the top of every sort.
                     key={post.postKey}
                     post={post}
+                    goldenNugget={isDev ? goldenNuggets[post.postKey] : null}
                     priority={index < 6}
                     selected={selected?.postKey === post.postKey}
                     onSelect={expand || selectPost}
@@ -2415,7 +2425,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
           {selected ? (
             <PostDetailPanel
               post={selected}
-              captionExtra={<>{selected.account === 'chatgptricks' ? <CanvaLine url={canvaLinkForPost(selected.postDate)} /> : null}<button type="button" className="ghost-button caption-ai-button" onClick={() => setCaptionPost(selected)}><Sparkles size={13} />{t('Generate similar caption')}</button>{isDev ? <DevJevTools post={selected} /> : null}{poolAccess ? <><button type="button" className="ghost-button" onClick={() => setAssignmentPost(selected)}><ListTodo size={13} />Send to Pool</button><QuickAddButton key={selected.postKey} post={selected} onQuickAdd={quickAddToPool} onAdded={closeSidebar} /></> : null}</>}
+              captionExtra={<>{selected.account === 'chatgptricks' ? <CanvaLine url={canvaLinkForPost(selected.postDate)} /> : null}<button type="button" className="ghost-button caption-ai-button" onClick={() => setCaptionPost(selected)}><Sparkles size={13} />{t('Generate similar caption')}</button>{isDev ? <DevJevTools post={selected} onGoldenNugget={(result) => rememberGoldenNugget(selected.postKey, result)} /> : null}{poolAccess ? <><button type="button" className="ghost-button" onClick={() => setAssignmentPost(selected)}><ListTodo size={13} />Send to Pool</button><QuickAddButton key={selected.postKey} post={selected} onQuickAdd={quickAddToPool} onAdded={closeSidebar} /></> : null}</>}
             />
           ) : null}
 
@@ -2492,7 +2502,7 @@ function CanvaLine({ url }) {
   );
 }
 
-function DevJevTools({ post }) {
+function DevJevTools({ post, onGoldenNugget }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState('');
   const [result, setResult] = useState(null);
@@ -2519,6 +2529,7 @@ function DevJevTools({ post }) {
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.detail || 'Jev could not complete this check.');
       setResult({ action, data });
+      if (action === 'golden-nugget') onGoldenNugget?.(data);
     } catch (reason) {
       setError(reason.message || 'Jev could not complete this check.');
     } finally {
@@ -2535,11 +2546,11 @@ function DevJevTools({ post }) {
         <section className="dev-jev-panel" aria-label="Jev developer tools">
           <header><div><strong>Jev tools</strong><small>Only visible at DEV level</small></div><button type="button" onClick={() => setOpen(false)} aria-label="Close Jev tools"><X size={14} /></button></header>
           <div className="dev-jev-actions">
-            {[['classify', 'Classify'], ['queue-suggestions', 'Queue suggestion'], ['promo-review', 'Review promo'], ['audit-stack', 'Audit stack']].map(([action, label]) => <button type="button" key={action} onClick={() => run(action)} disabled={Boolean(busy)}>{busy === action ? <LoaderCircle className="spin" size={12} /> : null}{label}</button>)}
+            {[['golden-nugget', 'Golden nugget'], ['classify', 'Classify'], ['queue-suggestions', 'Queue suggestion'], ['promo-review', 'Review promo'], ['audit-stack', 'Audit stack']].map(([action, label]) => <button type="button" key={action} onClick={() => run(action)} disabled={Boolean(busy)}>{busy === action ? <LoaderCircle className="spin" size={12} /> : null}{label}</button>)}
           </div>
           <form className="dev-jev-search" onSubmit={(event) => { event.preventDefault(); run('search'); }}><input value={query} onChange={(event) => setQuery(event.target.value)} aria-label="Jev research query" placeholder="Research query…" /><button type="submit" disabled={Boolean(busy) || !query.trim()}>{busy === 'search' ? <LoaderCircle className="spin" size={12} /> : <Search size={12} />}</button></form>
           {error ? <p className="dev-jev-error" role="alert">{error}</p> : null}
-          {result ? <div className="dev-jev-result"><small>{result.action}</small>{result.action === 'classify' ? <><strong>{result.data.label}</strong><pre>{JSON.stringify(result.data.scores, null, 2)}</pre></> : result.action === 'queue-suggestions' ? <><strong>{result.data.needsQueue ? 'Queue recommended' : 'No Queue needed'}</strong><span>{result.data.tag} · {result.data.urgent ? 'urgent' : 'normal'}</span></> : result.action === 'promo-review' ? <><strong>{result.data.needsReview ? 'Human review recommended' : 'Classification clear'}</strong><span>Semantic promo: {Math.round(Number(result.data.semanticPromo || 0) * 100)}%</span></> : result.action === 'audit-stack' ? <><strong>{result.data.members.filter((item) => !item.sameStack).length} possible outliers</strong><span>{result.data.members.length} members checked</span></> : <><strong>{result.data.results.length} relevant results</strong>{result.data.results.slice(0, 5).map((item) => <span key={item.postKey}>{item.postKey} · {Math.round(item.score * 100)}%</span>)}</>}</div> : null}
+          {result ? <div className="dev-jev-result"><small>{result.action}</small>{result.action === 'golden-nugget' ? <><strong>{result.data.label === 'golden_nugget' ? 'Golden nugget candidate' : result.data.label === 'promising' ? 'Promising idea' : 'Not a priority yet'}</strong><span>Account: {result.data.targetAccount ? `@${result.data.targetAccount}` : 'none'} · score {Math.round(Number(result.data.score || 0) * 100)}%</span><span>{result.data.strongSignalCount}/7 strong signals · confidence {Math.round(Number(result.data.confidence || 0) * 100)}%</span><span>Strongest: {result.data.strengths.join(', ')}</span></> : result.action === 'classify' ? <><strong>{result.data.label}</strong><pre>{JSON.stringify(result.data.scores, null, 2)}</pre></> : result.action === 'queue-suggestions' ? <><strong>{result.data.needsQueue ? 'Queue recommended' : 'No Queue needed'}</strong><span>{result.data.tag} · {result.data.urgent ? 'urgent' : 'normal'}</span></> : result.action === 'promo-review' ? <><strong>{result.data.needsReview ? 'Human review recommended' : 'Classification clear'}</strong><span>Semantic promo: {Math.round(Number(result.data.semanticPromo || 0) * 100)}%</span></> : result.action === 'audit-stack' ? <><strong>{result.data.members.filter((item) => !item.sameStack).length} possible outliers</strong><span>{result.data.members.length} members checked</span></> : <><strong>{result.data.results.length} relevant results</strong>{result.data.results.slice(0, 5).map((item) => <span key={item.postKey}>{item.postKey} · {Math.round(item.score * 100)}%</span>)}</>}</div> : null}
         </section>
       ) : null}
     </div>
@@ -6353,7 +6364,7 @@ const FreshnessRing = memo(function FreshnessRing({ timestamp }) {
   );
 });
 
-export const PostCard = memo(function PostCard({ post, priority, selected, onSelect, onFlags, onReload, onAssign, onQuickAdd, onQuickAddSuccess, canPool, canSuggest, draggable, onDragStart, onDragOver, onDrop, hideCaption = false }) {
+export const PostCard = memo(function PostCard({ post, goldenNugget, priority, selected, onSelect, onFlags, onReload, onAssign, onQuickAdd, onQuickAddSuccess, canPool, canSuggest, draggable, onDragStart, onDragOver, onDrop, hideCaption = false }) {
   const [avatarFailed, setAvatarFailed] = useState(false);
   const handleClick = () => onSelect(post.postKey);
   const handleKeyDown = (event) => {
@@ -6366,7 +6377,7 @@ export const PostCard = memo(function PostCard({ post, priority, selected, onSel
     event.stopPropagation();
   };
   const effects = hotEffects(post);
-  const cardClassName = `post-card${effects.className}${post.hidden ? ' post-card-hidden' : ''}`;
+  const cardClassName = `post-card${effects.className}${post.hidden ? ' post-card-hidden' : ''}${goldenNugget ? ' post-card-golden-nugget' : ''}`;
   // Promo is either detected from the caption hashtag or set explicitly on
   // the post (the card's ... menu writes that flag), so a promo that didn't
   // use the tag can still be marked by hand.
@@ -6430,6 +6441,7 @@ export const PostCard = memo(function PostCard({ post, priority, selected, onSel
           </div>
         ) : null}
         {post.showsHotBadge ? <HotBadge post={post} /> : null}
+        {goldenNugget ? <div className="golden-nugget-badge" title={`Golden nugget for @${goldenNugget.targetAccount}`}><Sparkles size={12} />Golden nugget</div> : null}
         {isPromo ? (
           <div className="promo-ribbon" title={`Promo (${PROMO_HASHTAG})`}>
             <span>Promo</span>
