@@ -656,6 +656,8 @@ export function PostDetailPanel({ post, captionExtra = null }) {
           <div>
             <p className="section-label">{t('Caption')}</p>
           </div>
+        </div>
+        <div className="caption-copy-row">
           <button className="ghost-button caption-copy-button" onClick={copyCaption} aria-live="polite" title={copyState ? t(copyState) : t('Copy')}>
             {copyState === 'Copied' ? <Check size={15} /> : <Copy size={15} />}
             <span>{copyState ? t(copyState) : t('Copy')}</span>

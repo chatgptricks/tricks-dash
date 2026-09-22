@@ -2426,7 +2426,24 @@ body {
   overflow: hidden;
   font-size: 0;
 }
-.caption-header .caption-copy-button{width:auto;min-width:max-content;padding:0 9px;font-size:11px;gap:6px;position:relative;z-index:2}.caption-header .caption-copy-button span{display:inline}
+.caption-copy-row {
+  display: flex;
+  justify-content: flex-start;
+  min-width: 0;
+  margin: -2px 0 10px;
+}
+
+.caption-copy-row .caption-copy-button {
+  width: auto;
+  min-width: max-content;
+  padding: 0 9px;
+  font-size: 11px;
+  gap: 6px;
+}
+
+.caption-copy-row .caption-copy-button span {
+  display: inline;
+}
 
 .caption-panel p {
   min-height: 0;
@@ -2662,23 +2679,6 @@ body {
   .rail-close-button {
     top: 14px;
     right: 14px;
-  }
-
-  /* The close control belongs to the rail chrome. On the compact bottom-sheet
-     layout the caption panel can start underneath it, so reserve a small
-     header band instead of letting Copy sit beneath the X. */
-  .right-rail.is-open .caption-panel {
-    padding-top: 62px;
-  }
-
-  .right-rail.is-open .caption-header {
-    display: grid;
-    grid-template-columns: 1fr;
-    align-items: start;
-  }
-
-  .right-rail.is-open .caption-header .caption-copy-button {
-    justify-self: start;
   }
 
   .selected-post {
