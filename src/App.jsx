@@ -6433,13 +6433,13 @@ export const PostCard = memo(function PostCard({ post, goldenNugget, priority, s
           </div>
         </div>
         <div className="post-header-actions">
-          {post.isDeleted ? <span className="post-deleted-indicator" title="Deleted from Instagram" aria-label="Deleted from Instagram"><Trash2 size={13} /></span> : null}
           <FreshnessRing timestamp={post.timestamp} />
           <PostMenu post={post} isPromo={isPromo} onFlags={onFlags} onReload={onReload} onAssign={onAssign} onQuickAdd={onQuickAdd} onQuickAddSuccess={onQuickAddSuccess} canPool={canPool} canSuggest={canSuggest} />
         </div>
       </div>
 
       <CoverImage className={`post-media ${posterTheme(post.type)}${post.isVideo && post.showsHotBadge ? ' has-video-hot' : ''}`} post={post} priority={priority}>
+        {post.isDeleted ? <div className="post-deleted-overlay" title="Deleted from Instagram" aria-label="Deleted from Instagram"><Trash2 size={42} strokeWidth={2.4} /></div> : null}
         {post.isVideo ? (
           <div className="media-badge">
             <Video size={13} />
