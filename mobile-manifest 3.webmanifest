@@ -1,0 +1,23 @@
+{
+  "id": "/mobile/",
+  "name": "Sentient Dash",
+  "short_name": "Sentient Dash",
+  "description": "Sentient's mobile research and production workspace.",
+  "start_url": "/mobile/",
+  "scope": "/mobile/",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
+  "orientation": "portrait-primary",
+  "background_color": "#050505",
+  "theme_color": "#050505",
+  "categories": ["business", "productivity"],
+  "icons": [
+    { "src": "/mobile-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/mobile-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/mobile-icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "My Queue", "short_name": "Queue", "url": "/mobile/?r=eyJ0YWIiOiJxdWV1ZSJ9", "icons": [{ "src": "/mobile-icon-192.png", "sizes": "192x192" }] },
+    { "name": "Dashboard", "short_name": "Dashboard", "url": "/mobile/?r=eyJ0YWIiOiJkYXNoYm9hcmQifQ", "icons": [{ "src": "/mobile-icon-192.png", "sizes": "192x192" }] }
+  ]
+}
