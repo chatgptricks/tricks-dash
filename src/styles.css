@@ -2398,10 +2398,8 @@ body {
 
 .caption-panel {
   grid-area: caption;
-  display: grid;
-  /* header / caption text (scrolls internally, takes remaining space) / song
-     line (auto-height, only rendered when the post has music data). */
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  display: flex;
+  flex-direction: column;
   padding: 14px;
   overflow: hidden;
 }
@@ -2453,6 +2451,10 @@ body {
   font-size: 14px;
   line-height: 1.55;
   white-space: pre-wrap;
+}
+
+.caption-panel > p {
+  flex: 1 1 auto;
 }
 
 .caption-panel strong {
