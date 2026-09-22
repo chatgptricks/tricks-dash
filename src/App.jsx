@@ -2012,7 +2012,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
       <div className="backdrop" />
       <main className="app-layout" aria-busy={databaseLoading || undefined}>
         <section ref={leftPaneRef} className="left-pane">
-          <ProductHeader current={homeView ? 'home' : 'research'} coordinator={coordinatorAccess} count={queuePendingCount} account={<SettingsMenu email={userEmail} avatarUrl={userPhoto} isAdmin={effectiveIsAdmin} isDev={isDev && !rolePreviewActive} onSignOut={onSignOut} />}>
+          <ProductHeader current={homeView ? 'home' : 'research'} coordinator={coordinatorAccess} isDev={isDev && !rolePreviewActive} count={queuePendingCount} account={<SettingsMenu email={userEmail} avatarUrl={userPhoto} isAdmin={effectiveIsAdmin} isDev={isDev && !rolePreviewActive} onSignOut={onSignOut} />}>
             {!homeView ? <>
               <div className="topbar-search">
                 <Search size={18} aria-hidden="true" />

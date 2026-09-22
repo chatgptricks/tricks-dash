@@ -189,6 +189,7 @@ export default defineConfig({
         queue: resolve(__dirname, 'queue.html'),
         settings: resolve(__dirname, 'settings.html'),
         promos: resolve(__dirname, 'promos.html'),
+        news: resolve(__dirname, 'news.html'),
         mobile: resolve(__dirname, 'mobile/index.html'),
       },
     },
