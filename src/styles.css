@@ -9429,3 +9429,23 @@ body {
   overflow-wrap: anywhere;
   line-height: 1.2;
 }
+.dev-jev-tools { position: relative; display: inline-flex; }
+.dev-jev-trigger { border-color: rgba(168, 125, 255, .45); color: #b998ff; }
+.dev-jev-trigger span { padding: 2px 5px; border-radius: 4px; background: #b998ff; color: #171020; font-size: 8px; font-weight: 900; letter-spacing: .08em; }
+.dev-jev-panel { position: absolute; z-index: 30; top: calc(100% + 8px); right: 0; width: min(360px, calc(100vw - 32px)); padding: 13px; border: 1px solid rgba(168, 125, 255, .34); border-radius: 12px; background: var(--surface-1, #17151d); box-shadow: 0 18px 45px rgba(0,0,0,.32); }
+.dev-jev-panel header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.dev-jev-panel header div { display: grid; gap: 2px; }
+.dev-jev-panel header strong { color: var(--text-strong, #fff); font-size: 12px; }
+.dev-jev-panel header small, .dev-jev-result small { color: var(--ink, #999); font-size: 10px; }
+.dev-jev-panel header button { display: grid; place-items: center; width: 24px; height: 24px; border: 1px solid rgba(var(--edge,255,255,255),.14); border-radius: 6px; background: transparent; color: var(--ink, #aaa); cursor: pointer; }
+.dev-jev-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.dev-jev-actions button, .dev-jev-search button { min-height: 28px; padding: 0 8px; border: 1px solid rgba(168, 125, 255, .28); border-radius: 7px; background: rgba(168, 125, 255, .08); color: var(--text-strong, #eee); font-size: 10px; cursor: pointer; }
+.dev-jev-actions button:disabled, .dev-jev-search button:disabled { cursor: wait; opacity: .55; }
+.dev-jev-search { display: flex; gap: 6px; margin-top: 9px; }
+.dev-jev-search input { min-width: 0; flex: 1; height: 29px; padding: 0 8px; border: 1px solid rgba(var(--edge,255,255,255),.14); border-radius: 7px; background: rgba(var(--edge,255,255,255),.04); color: var(--text, #eee); font-size: 11px; }
+.dev-jev-search button { display: grid; place-items: center; width: 30px; padding: 0; }
+.dev-jev-error { margin: 9px 0 0; color: #ff9b9b; font-size: 10px; line-height: 1.4; }
+.dev-jev-result { display: grid; gap: 4px; margin-top: 10px; padding-top: 9px; border-top: 1px solid rgba(var(--edge,255,255,255),.1); }
+.dev-jev-result strong { color: var(--text-strong, #fff); font-size: 12px; }
+.dev-jev-result span { color: var(--ink, #bbb); font-size: 10px; }
+.dev-jev-result pre { max-height: 100px; margin: 2px 0 0; overflow: auto; color: #cbb3ff; font-size: 9px; white-space: pre-wrap; }
