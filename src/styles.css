@@ -9456,3 +9456,5 @@ body {
 .dev-jev-result strong { color: var(--text-strong, #fff); font-size: 12px; }
 .dev-jev-result span { color: var(--ink, #bbb); font-size: 10px; }
 .dev-jev-result pre { max-height: 100px; margin: 2px 0 0; overflow: auto; color: #cbb3ff; font-size: 9px; white-space: pre-wrap; }
+.post-card-golden-nugget { border-color: rgba(248, 195, 58, .72); box-shadow: 0 0 0 1px rgba(248, 195, 58, .22), 0 12px 30px rgba(179, 111, 10, .16); }
+.golden-nugget-badge { position: absolute; top: 8px; left: 8px; z-index: 4; display: inline-flex; align-items: center; gap: 4px; min-height: 24px; padding: 0 8px; border: 1px solid rgba(255, 228, 128, .78); border-radius: 999px; background: linear-gradient(135deg, #8b5a12, #e5b941 52%, #fff0a8); color: #241703; font-size: 10px; font-weight: 900; letter-spacing: .01em; box-shadow: 0 5px 16px rgba(0, 0, 0, .3); }
