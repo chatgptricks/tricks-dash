@@ -2664,6 +2664,13 @@ body {
     right: 14px;
   }
 
+  /* The close control belongs to the rail chrome. On the compact bottom-sheet
+     layout the caption panel can start underneath it, so reserve a small
+     header band instead of letting Copy sit beneath the X. */
+  .right-rail.is-open .caption-panel {
+    padding-top: 50px;
+  }
+
   .selected-post {
     width: 100%;
     max-width: none;

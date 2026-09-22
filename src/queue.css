@@ -403,6 +403,7 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
     transform: translateY(calc(100% + 28px));
   }
   .rail-close-button { top: 14px; right: 14px; }
+  .right-rail.is-open .caption-panel { padding-top: 50px; }
   .selected-post { width: 100%; max-width: none; height: auto; }
   .selected-post-media { aspect-ratio: 1080 / 1440; }
 }
