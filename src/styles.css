@@ -2668,7 +2668,17 @@ body {
      layout the caption panel can start underneath it, so reserve a small
      header band instead of letting Copy sit beneath the X. */
   .right-rail.is-open .caption-panel {
-    padding-top: 50px;
+    padding-top: 62px;
+  }
+
+  .right-rail.is-open .caption-header {
+    display: grid;
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .right-rail.is-open .caption-header .caption-copy-button {
+    justify-self: start;
   }
 
   .selected-post {
