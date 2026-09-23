@@ -174,7 +174,7 @@ function NewsApp() {
     apiFetch(`${API_BASE}/api/dashboard/me`).then(async response => { if (!response.ok) { let detail = ''; try { detail = (await response.json()).detail || ''; } catch {} throw new Error(detail || `Access check returned ${response.status}`); } return response.json(); }).then(data => { if (active) setViewer(data); }).catch(reason => { if (active) setViewer({ accessError: reason.message || 'Unable to verify DEV access.' }); });
     return () => { active = false; };
   }, [user]);
-  useEffect(() => { if (user && (viewer?.is_dev || viewer?.isDev)) load(); }, [user, viewer, load]);
+  useEffect(() => { if (user && (viewer?.is_dev || viewer?.isDev || viewer?.can_access_news)) load(); }, [user, viewer, load]);
 
   async function review(item) {
     if (busyRef.current) return false; busyRef.current = true; setReviewing(item.id); setError('');
@@ -225,9 +225,9 @@ function NewsApp() {
 
   if (user === undefined) return <main className="news-loading">Loading News…</main>;
   if (!user) return <Login error={authError} />;
-  const isDev = Boolean(viewer?.is_dev || viewer?.isDev); const handleSignOut = () => { clearSsoCookie(); signOut(firebaseAuth); };
+  const isDev = Boolean(viewer?.is_dev || viewer?.isDev); const canAccessNews = isDev || Boolean(viewer?.can_access_news); const handleSignOut = () => { clearSsoCookie(); signOut(firebaseAuth); };
   if (viewer?.accessError) return <main className="news-auth"><section><span className="news-kicker">Sentient Dash · DEV tool</span><h1>News</h1><p>News could not verify your DEV access: {viewer.accessError}</p><button onClick={() => { setViewer(null); apiFetch(`${API_BASE}/api/dashboard/me`).then(async response => { if (!response.ok) throw new Error(`Access check returned ${response.status}`); return response.json(); }).then(setViewer).catch(reason => setViewer({ accessError: reason.message })); }}>Retry access check</button></section></main>;
-  if (viewer && !isDev) return <main className="news-auth"><section><span className="news-kicker">Sentient Dash · DEV tool</span><h1>News</h1><p>This tool is only available to DEV.</p></section></main>;
+  if (viewer && !canAccessNews) return <main className="news-auth"><section><span className="news-kicker">Sentient Dash · DEV tool</span><h1>News</h1><p>This tool is only available to authorized accounts.</p></section></main>;
 
   const reviewedCount = candidates.filter(item => reviews[item.id]).length;
   const healthyFeeds = feedStatuses.filter(status => status.ok).length;
@@ -242,7 +242,7 @@ function NewsApp() {
   const filters = [['best','Recommended',null],['golden_nugget','Golden',counts.golden],['potential','Potential',counts.potential],['unreviewed','Needs review',pendingCount],['x','X signals',counts.x],['all','All stories',counts.all],['saved','Saved',counts.saved]];
   const feedGroups = [...new Set(NEWS_FEEDS.map(feed => feed.group))];
   return <main className="news-shell">
-    <ProductHeader current="news" coordinator isDev account={<SettingsMenu email={user.email} avatarUrl={user.photoURL || viewer?.avatar_url} isAdmin={Boolean(viewer?.is_admin)} isDev onSignOut={handleSignOut} />}>
+    <ProductHeader current="news" coordinator isDev={isDev} canAccessNews={canAccessNews} account={<SettingsMenu email={user.email} avatarUrl={user.photoURL || viewer?.avatar_url} isAdmin={Boolean(viewer?.is_admin)} isDev={isDev} onSignOut={handleSignOut} />}>
       <h1>News</h1><span className="news-header-subtitle">Discover story ideas from 11 live feeds</span><button className="news-refresh" onClick={load} disabled={loading}>{loading ? 'Refreshing…' : 'Refresh feeds'}</button>
     </ProductHeader>
     <section className="news-source-health" aria-live="polite"><div className="news-health-copy"><span className={`news-health-dot ${healthyFeeds === NEWS_FEEDS.length ? 'is-online' : feedStatuses.length ? 'is-warning' : ''}`} /><span>{loading ? 'Connecting to RSS.app…' : feedStatuses.length ? `${healthyFeeds}/${NEWS_FEEDS.length} feeds · ${feedStatuses.reduce((sum,status) => sum + status.count, 0)} items · ${candidates.length} stories` : `${NEWS_FEEDS.length} RSS.app feeds configured`}</span></div><details><summary>Feeds <span>{healthyFeeds}/{NEWS_FEEDS.length}</span></summary><div className="news-feed-grid">{NEWS_FEEDS.map(feed => { const status = feedStatuses.find(item => item.feed.id === feed.id); return <span key={feed.id} className={status?.ok === false ? 'feed-down' : status?.ok ? 'feed-up' : ''}><i />{feed.label}{status ? ` · ${status.count}` : ''}{status?.error ? ` · ${status.error}` : ''}</span>; })}</div></details></section>
