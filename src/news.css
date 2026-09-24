@@ -5,6 +5,12 @@ body,
 #root { height: auto; min-height: 100%; }
 body { overflow-x: hidden; overflow-y: auto; overscroll-behavior-y: contain; }
 
+.news-auth {
+  --accent: #00ac80;
+  --accent-rgb: 0, 172, 128;
+  --accent-text: #00ac80;
+}
+
 .news-shell {
   --accent: #00ac80;
   --accent-rgb: 0, 172, 128;
