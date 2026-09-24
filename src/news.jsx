@@ -142,6 +142,14 @@ function StoryCard({ item, rank, review, onReview, busy, locked, saved, onSave, 
 function NewsApp() {
   const [user, setUser] = useState(undefined); const [viewer, setViewer] = useState(null); const [authError] = useState(''); const [items, setItems] = useState([]); const [reviews, setReviews] = useState({}); const [loading, setLoading] = useState(false); const [error, setError] = useState(''); const [feedStatuses, setFeedStatuses] = useState([]); const [reviewing, setReviewing] = useState('');
   const [query, setQuery] = useState(''); const [filter, setFilter] = useState('best'); const [feedFilter, setFeedFilter] = useState('all'); const [sortBy, setSortBy] = useState('recommended'); const [visibleLimit, setVisibleLimit] = useState(30); const [saved, setSaved] = useState({}); const [failures, setFailures] = useState({}); const [scanning, setScanning] = useState(false); const [progress, setProgress] = useState({ done: 0, total: 0 }); const stopScan = useRef(false); const busyRef = useRef(false); const loadingRef = useRef(false); const [brief, setBrief] = useState(null); const [storageReady, setStorageReady] = useState(false);
+  useEffect(() => {
+    const previousTheme = document.documentElement.dataset.theme;
+    document.documentElement.dataset.theme = 'dark';
+    return () => {
+      if (previousTheme) document.documentElement.dataset.theme = previousTheme;
+      else delete document.documentElement.dataset.theme;
+    };
+  }, []);
   useEffect(() => { setVisibleLimit(30); }, [filter, feedFilter, sortBy, query]);
   useEffect(() => { if (brief) document.getElementById('news-brief')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, [brief?.item.id]);
   useEffect(() => { if (!user?.uid) return; setStorageReady(false); try { const old = JSON.parse(localStorage.getItem(`news-v4:${user.uid}`) || '{}'); const data = JSON.parse(localStorage.getItem(`news-v5:${user.uid}`) || '{}'); setSaved(data.saved || old.saved || {}); setReviews(Object.fromEntries(Object.entries(data.reviews || {}).map(([id, review]) => [id, normalizeCachedReview(review)]).filter(([, review]) => review))); } catch { setSaved({}); setReviews({}); } setStorageReady(user.uid); return () => { stopScan.current = true; }; }, [user?.uid]);
@@ -242,7 +250,7 @@ function NewsApp() {
   const filters = [['best','Recommended',null],['golden_nugget','Golden',counts.golden],['potential','Potential',counts.potential],['unreviewed','Needs review',pendingCount],['x','X signals',counts.x],['all','All stories',counts.all],['saved','Saved',counts.saved]];
   const feedGroups = [...new Set(NEWS_FEEDS.map(feed => feed.group))];
   return <main className="news-shell">
-    <ProductHeader current="news" coordinator isDev={isDev} canAccessNews={canAccessNews} account={<SettingsMenu email={user.email} avatarUrl={user.photoURL || viewer?.avatar_url} isAdmin={Boolean(viewer?.is_admin)} isDev={isDev} onSignOut={handleSignOut} />}>
+    <ProductHeader current="news" coordinator isDev={isDev} canAccessNews={canAccessNews} account={<SettingsMenu email={user.email} avatarUrl={user.photoURL || viewer?.avatar_url} isAdmin={Boolean(viewer?.is_admin)} isDev={isDev} hideAppearanceControls onSignOut={handleSignOut} />}>
       <h1>News</h1><span className="news-header-subtitle">Discover story ideas from 11 live feeds</span><button className="news-refresh" onClick={load} disabled={loading}>{loading ? 'Refreshing…' : 'Refresh feeds'}</button>
     </ProductHeader>
     <section className="news-source-health" aria-live="polite"><div className="news-health-copy"><span className={`news-health-dot ${healthyFeeds === NEWS_FEEDS.length ? 'is-online' : feedStatuses.length ? 'is-warning' : ''}`} /><span>{loading ? 'Connecting to RSS.app…' : feedStatuses.length ? `${healthyFeeds}/${NEWS_FEEDS.length} feeds · ${feedStatuses.reduce((sum,status) => sum + status.count, 0)} items · ${candidates.length} stories` : `${NEWS_FEEDS.length} RSS.app feeds configured`}</span></div><details><summary>Feeds <span>{healthyFeeds}/{NEWS_FEEDS.length}</span></summary><div className="news-feed-grid">{NEWS_FEEDS.map(feed => { const status = feedStatuses.find(item => item.feed.id === feed.id); return <span key={feed.id} className={status?.ok === false ? 'feed-down' : status?.ok ? 'feed-up' : ''}><i />{feed.label}{status ? ` · ${status.count}` : ''}{status?.error ? ` · ${status.error}` : ''}</span>; })}</div></details></section>
@@ -256,4 +264,4 @@ function NewsApp() {
   </main>;
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<PrefsProvider><NewsApp /></PrefsProvider>);
+ReactDOM.createRoot(document.getElementById('root')).render(<PrefsProvider lang="en" theme="dark"><NewsApp /></PrefsProvider>);

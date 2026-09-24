@@ -336,7 +336,7 @@ function useSectionFavicon(section) {
 // shape as the Settings button on Queue/Tracker/Insights: accent, theme and
 // language live together with account info and, for admins, the same
 // designer-account assignment tool Queue's Admin Tools panel exposes.
-export function SettingsMenu({ email, avatarUrl, isAdmin, isDev, onSignOut, showSettingsLink = true }) {
+export function SettingsMenu({ email, avatarUrl, isAdmin, isDev, onSignOut, showSettingsLink = true, hideAppearanceControls = false }) {
   const { t, lang, theme, setLang, setTheme, accent, setAccent } = usePrefs();
   const [open, setOpen] = useState(false);
   const [avatarFailed, setAvatarFailed] = useState(false);
@@ -374,7 +374,7 @@ export function SettingsMenu({ email, avatarUrl, isAdmin, isDev, onSignOut, show
       </button>
       {open ? (
         <div className="settings-menu-panel" role="menu">
-          <div className="settings-menu-section">
+          {!hideAppearanceControls ? <div className="settings-menu-section">
             <span>{t('Accent color')}</span>
             <div className="settings-accent-picker">
               {ACCENT_CHOICES.map((value) => (
@@ -396,15 +396,15 @@ export function SettingsMenu({ email, avatarUrl, isAdmin, isDev, onSignOut, show
                 <span>{t('Custom')}</span>
               </label>
             </div>
-          </div>
-          <div className="settings-menu-section">
+          </div> : null}
+          {!hideAppearanceControls ? <div className="settings-menu-section">
             <span>{t('Theme')}</span>
             <div className="settings-menu-segment">
               <button type="button" className={theme === 'dark' ? 'is-on' : ''} onClick={() => setTheme('dark')}><Moon size={13} />{t('Dark')}</button>
               <button type="button" className={theme === 'light' ? 'is-on' : ''} onClick={() => setTheme('light')}><Sun size={13} />{t('Light')}</button>
             </div>
-          </div>
-          <div className="settings-menu-section">
+          </div> : null}
+          {!hideAppearanceControls ? <div className="settings-menu-section">
             <span>{t('Language')}</span>
             <div className="lang-toggle" role="group" aria-label="Language">
               {['en', 'es'].map((code) => (
@@ -419,7 +419,7 @@ export function SettingsMenu({ email, avatarUrl, isAdmin, isDev, onSignOut, show
                 </button>
               ))}
             </div>
-          </div>
+          </div> : null}
           {(isAdmin || isDev) && showSettingsLink ? (
             <div className="settings-menu-section settings-menu-admin">
               <span>{t('Command center')}</span>

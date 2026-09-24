@@ -6,6 +6,10 @@ body,
 body { overflow-x: hidden; overflow-y: auto; overscroll-behavior-y: contain; }
 
 .news-shell {
+  --accent: #00ac80;
+  --accent-rgb: 0, 172, 128;
+  --accent-text: #00ac80;
+  --product-accent: #00ac80;
   width: min(100%, 1500px);
   min-height: 100dvh;
   margin: 0 auto;
