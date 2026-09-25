@@ -4,11 +4,12 @@ export const productSections = [
   { id: 'queue', label: 'Queue', es: 'Producción', path: 'queue.html', target: 'sentient-queue' },
   { id: 'tracker', label: 'Tracker', es: 'Tracker', path: 'tracker.html', target: 'sentient-tracker' },
   { id: 'promos', label: 'Promos', es: 'Promos', path: 'promos.html', target: 'sentient-promos' },
+  { id: 'vault', label: 'Vault', es: 'Vault', path: 'vault.html', target: 'sentient-vault', devOnly: true },
   { id: 'news', label: 'News', es: 'Noticias', path: 'news.html', target: 'sentient-news', devOnly: true },
   { id: 'insights', label: 'Insights', es: 'Insights', path: 'insights.html', restricted: true, target: 'sentient-insights' },
 ];
 if (typeof window !== 'undefined') {
-const toolName = /\/queue\.html$/.test(window.location.pathname) ? 'sentient-queue' : /\/tracker\.html$/.test(window.location.pathname) ? 'sentient-tracker' : /\/insights\.html$/.test(window.location.pathname) ? 'sentient-insights' : /\/settings\.html$/.test(window.location.pathname) ? 'sentient-settings' : /\/promos\.html$/.test(window.location.pathname) ? 'sentient-promos' : /\/news\.html$/.test(window.location.pathname) ? 'sentient-news' : 'sentient-dashboard';
+const toolName = /\/vault\.html$/.test(window.location.pathname) ? 'sentient-vault' : /\/queue\.html$/.test(window.location.pathname) ? 'sentient-queue' : /\/tracker\.html$/.test(window.location.pathname) ? 'sentient-tracker' : /\/insights\.html$/.test(window.location.pathname) ? 'sentient-insights' : /\/settings\.html$/.test(window.location.pathname) ? 'sentient-settings' : /\/promos\.html$/.test(window.location.pathname) ? 'sentient-promos' : /\/news\.html$/.test(window.location.pathname) ? 'sentient-news' : 'sentient-dashboard';
 window.name = toolName;
 }
 export function openSection(event, section) {
