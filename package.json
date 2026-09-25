@@ -15,7 +15,8 @@
     "smoke:queue": "node smoke/run-queue.mjs",
     "smoke:settings": "node smoke/run-settings.mjs",
     "smoke:mobile": "node scripts/test-mobile-routing.mjs && node smoke/run-mobile.mjs",
-    "smoke:roles": "node smoke/roles.mjs"
+    "smoke:roles": "node smoke/roles.mjs",
+    "smoke:vault": "node smoke/run-vault.mjs && node smoke/run-vault.mjs admin && node smoke/run-vault.mjs preview"
   },
   "dependencies": {
     "firebase": "^11.6.0",
