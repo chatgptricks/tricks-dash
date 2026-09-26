@@ -9,7 +9,9 @@ window.fetch = async (url, options={}) => {
   const path = String(url), method = options.method || 'GET';
   let body;
   if (path.endsWith('/me')) body = {is_dev:globalThis.__VAULT_TEST_ROLE !== 'admin', queue_role_preview_active:globalThis.__VAULT_TEST_ROLE === 'preview'};
-  else if (method === 'PATCH') {
+  else if (method === 'POST' && path.endsWith('/pool')) {
+    body = Object.assign(items.find(item => item.id === path.split('/').at(-2)), {pool_request_id:42});
+  } else if (method === 'PATCH') {
     if (fail) return {ok:false,status:403,json:async()=>({detail:'Access denied'})};
     const id = path.split('/').pop(), update = JSON.parse(options.body); writes.push(update);
     body = Object.assign(items.find(item => item.id === id), update);
@@ -37,7 +39,7 @@ try {
   assert.ok(writes[0].priority < 0);
   await click(document.querySelector('.vault-discard'));
   assert.equal(document.querySelectorAll('.vault-card').length,1);
-  await click([...document.querySelectorAll('.vault-tabs button')][1]);
+  await click([...document.querySelectorAll('.vault-tabs button')][2]);
   assert.equal(document.querySelector('.vault-card h2').textContent,'Second idea');
   await click(document.querySelector('.vault-discard'));
   assert.equal(document.querySelectorAll('.vault-card').length,0);
@@ -50,6 +52,18 @@ try {
   await act(async()=>{ document.querySelector('.vault-add').dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true})); await tick(); });
   assert.equal(document.querySelectorAll('.vault-card').length,3);
   assert.equal(document.querySelector('.vault-card h2').textContent,'New idea');
+  await click(document.querySelector('.vault-done'));
+  assert.equal(document.querySelectorAll('.vault-card').length,2);
+  await click([...document.querySelectorAll('.vault-tabs button')][1]);
+  assert.equal(document.querySelector('.vault-card h2').textContent,'New idea');
+  assert.equal(document.querySelector('.vault-done').textContent,'Undo Done');
+  await click(document.querySelector('.vault-done'));
+  assert.equal(document.querySelectorAll('.vault-card').length,0);
+  await click(document.querySelector('.vault-tabs button'));
+  assert.equal(document.querySelectorAll('.vault-card').length,3);
+  await click(document.querySelector('.vault-to-pool'));
+  assert.match(document.querySelector('.vault-in-pool').getAttribute('href'),/queue.html\?r=/);
+  assert.match(document.querySelector('.vault-in-pool').textContent,/In Queue/);
   fail = true;
   await click(document.querySelector('.vault-discard'));
   assert.equal(document.querySelectorAll('.vault-card').length,3);
