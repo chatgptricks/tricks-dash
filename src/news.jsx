@@ -141,7 +141,7 @@ function StoryCard({ item, rank, review, onReview, busy, locked, saved, onSave, 
 
 function NewsApp() {
   const [user, setUser] = useState(undefined); const [viewer, setViewer] = useState(null); const [authError] = useState(''); const [items, setItems] = useState([]); const [reviews, setReviews] = useState({}); const [loading, setLoading] = useState(false); const [error, setError] = useState(''); const [feedStatuses, setFeedStatuses] = useState([]); const [reviewing, setReviewing] = useState('');
-  const [query, setQuery] = useState(''); const [filter, setFilter] = useState('best'); const [feedFilter, setFeedFilter] = useState('all'); const [sortBy, setSortBy] = useState('recommended'); const [visibleLimit, setVisibleLimit] = useState(30); const [saved, setSaved] = useState({}); const [failures, setFailures] = useState({}); const [scanning, setScanning] = useState(false); const [progress, setProgress] = useState({ done: 0, total: 0 }); const stopScan = useRef(false); const busyRef = useRef(false); const loadingRef = useRef(false); const [brief, setBrief] = useState(null); const [storageReady, setStorageReady] = useState(false);
+  const [query, setQuery] = useState(''); const [filter, setFilter] = useState('best'); const [feedFilter, setFeedFilter] = useState('all'); const [sortBy, setSortBy] = useState('recommended'); const [visibleLimit, setVisibleLimit] = useState(30); const [saved, setSaved] = useState({}); const [failures, setFailures] = useState({}); const [scanning, setScanning] = useState(false); const [progress, setProgress] = useState({ done: 0, total: 0 }); const stopScan = useRef(false); const busyRef = useRef(false); const loadingRef = useRef(false); const [brief, setBrief] = useState(null);
   useEffect(() => {
     const previousTheme = document.documentElement.dataset.theme;
     document.documentElement.dataset.theme = 'dark';
@@ -152,42 +152,58 @@ function NewsApp() {
   }, []);
   useEffect(() => { setVisibleLimit(30); }, [filter, feedFilter, sortBy, query]);
   useEffect(() => { if (brief) document.getElementById('news-brief')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, [brief?.item.id]);
-  useEffect(() => { if (!user?.uid) return; setStorageReady(false); try { const old = JSON.parse(localStorage.getItem(`news-v4:${user.uid}`) || '{}'); const data = JSON.parse(localStorage.getItem(`news-v5:${user.uid}`) || '{}'); setSaved(data.saved || old.saved || {}); setReviews(Object.fromEntries(Object.entries(data.reviews || {}).map(([id, review]) => [id, normalizeCachedReview(review)]).filter(([, review]) => review))); } catch { setSaved({}); setReviews({}); } setStorageReady(user.uid); return () => { stopScan.current = true; }; }, [user?.uid]);
-  useEffect(() => { if (storageReady !== user?.uid || !user?.uid) return; try { localStorage.setItem(`news-v5:${user.uid}`, JSON.stringify({ saved, reviews })); } catch { setError('Browser storage is full. Some saved ideas may not survive a reload.'); } }, [saved, reviews, storageReady, user?.uid]);
   useEffect(() => { trySsoSignIn().catch(() => {}); return onAuthStateChanged(firebaseAuth, value => { setUser(value || null); setViewer(null); }); }, []);
   useEffect(() => user ? startSsoRefresh() : undefined, [user]);
 
   const load = useCallback(async () => {
     if (!user || loadingRef.current) return;
-    loadingRef.current = true; setLoading(true); setError('');
-    const results = await Promise.allSettled(NEWS_FEEDS.map(feed => loadFeed(feed)));
-    const next = []; const statuses = [];
-    results.forEach((result,index) => {
-      const feed = NEWS_FEEDS[index]; const key = feed.id;
-      if (result.status === 'fulfilled') { feedCache.set(key, result.value); next.push(...result.value); statuses.push({ feed, count: result.value.length, ok: true }); }
-      else { const cached = feedCache.get(key) || []; next.push(...cached); statuses.push({ feed, count: cached.length, ok: false, error: result.reason?.message || 'Feed unavailable', cached: cached.length > 0 }); }
-    });
-    const unique = new Map();
-    next.forEach(item => { if (!item.id) return; const existing = unique.get(item.id); if (!existing) unique.set(item.id, item); else existing.duplicateCoverage = [...(existing.duplicateCoverage || []), item]; });
-    const candidates = storyClusters([...unique.values()].map(item => ({ ...item, relatedStories: [...(item.duplicateCoverage || []).map(extra => ({ title: extra.title, description: stripHtml(extra.description).slice(0, 500), source: extra.source, publisher: extra.publisher, feedLabel: extra.feedLabel, link: extra.link }))] })));
-    setItems(candidates); setFeedStatuses(statuses);
-    const failed = statuses.filter(status => !status.ok).length;
-    if (!candidates.length) setError(failed ? `No stories loaded. ${failed} of ${NEWS_FEEDS.length} feeds failed.` : 'No stories were returned by these feeds.');
-    else if (failed) setError(`${NEWS_FEEDS.length - failed} of ${NEWS_FEEDS.length} feeds loaded. Failed feeds are listed below.`);
-    loadingRef.current = false; setLoading(false);
+    loadingRef.current = true; setLoading(true);
+    try {
+      const response = await apiFetch(`${API_BASE}/api/dashboard/news`);
+      if (!response.ok) throw new Error(`News returned ${response.status}`);
+      const data = await response.json();
+      setItems(data.items || []); setReviews(data.reviews || {}); setSaved(data.saved || {});
+      setFeedStatuses([]); setError('');
+    } catch (reason) { setError(reason.message || 'Unable to load News.'); }
+    finally { loadingRef.current = false; setLoading(false); }
   }, [user]);
+
+  useEffect(() => {
+    if (!user || !(viewer?.is_dev || viewer?.isDev || viewer?.can_access_news)) return undefined;
+    const timer = window.setInterval(load, 30000);
+    return () => window.clearInterval(timer);
+  }, [user, viewer, load]);
+
+  async function saveStory(item, nextSaved, briefText) {
+    try {
+      const response = await apiFetch(`${API_BASE}/api/dashboard/news/save`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: item.id, saved: nextSaved, ...(briefText == null ? {} : { brief: briefText }) }) });
+      if (!response.ok) throw new Error(`Save returned ${response.status}`);
+      setSaved(current => { const next = { ...current }; if (nextSaved) next[item.id] = { item, ...(briefText == null ? {} : { brief: briefText }) }; else delete next[item.id]; return next; });
+    } catch (reason) { setError(`Could not save idea: ${reason.message}`); }
+  }
 
   useEffect(() => {
     if (!user) return undefined; let active = true;
     apiFetch(`${API_BASE}/api/dashboard/me`).then(async response => { if (!response.ok) { let detail = ''; try { detail = (await response.json()).detail || ''; } catch {} throw new Error(detail || `Access check returned ${response.status}`); } return response.json(); }).then(data => { if (active) setViewer(data); }).catch(reason => { if (active) setViewer({ accessError: reason.message || 'Unable to verify DEV access.' }); });
     return () => { active = false; };
   }, [user]);
+  useEffect(() => {
+    if (!user?.uid || !(viewer?.is_dev || viewer?.isDev || viewer?.can_access_news)) return;
+    const keys = [`news-v4:${user.uid}`, `news-v5:${user.uid}`];
+    const legacy = keys.map(key => { try { return JSON.parse(localStorage.getItem(key) || '{}'); } catch { return {}; } });
+    const saved = { ...(legacy[0].saved || {}), ...(legacy[1].saved || {}) };
+    const reviews = { ...(legacy[0].reviews || {}), ...(legacy[1].reviews || {}) };
+    if (!Object.keys(saved).length) return;
+    apiFetch(`${API_BASE}/api/dashboard/news/import`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ saved, reviews }) })
+      .then(response => { if (!response.ok) throw new Error(`Import returned ${response.status}`); keys.forEach(key => localStorage.removeItem(key)); load(); })
+      .catch(reason => setError(`Could not move browser ideas to shared News: ${reason.message}`));
+  }, [user?.uid, viewer, load]);
   useEffect(() => { if (user && (viewer?.is_dev || viewer?.isDev || viewer?.can_access_news)) load(); }, [user, viewer, load]);
 
   async function review(item) {
     if (busyRef.current) return false; busyRef.current = true; setReviewing(item.id); setError('');
     try {
-      const response = await apiFetch(`${API_BASE}/api/dashboard/jev/news-review`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sourceType: item.sourceType, headline: item.title, description: stripHtml(item.description).slice(0, 8000), source: item.source, author: item.author, url: item.link, published: item.published, image: item.image, feedLabel: item.feedLabel, feedGroup: item.feedGroup, socialSignal: item.socialSignal, relatedStories: item.relatedStories || [] }) });
+      const response = await apiFetch(`${API_BASE}/api/dashboard/news/review`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: item.id }) });
       if (!response.ok) { let detail = ''; try { const body = await response.json(); detail = body.detail?.message || body.detail || ''; } catch {} throw new Error(response.status === 403 ? 'News JEV is DEV-only.' : detail || `JEV returned ${response.status}`); }
       const result = await response.json(); const checked = { ...result, reviewedAt: Date.now() }; setReviews(current => ({ ...current, [item.id]: checked })); setFailures(current => ({ ...current, [item.id]: null })); return true;
     } catch (reason) { setFailures(current => ({ ...current, [item.id]: reason.message })); setError(reason.message); return false; }
@@ -216,15 +232,6 @@ function NewsApp() {
   }, [candidates, reviews, saved, query, feedFilter, filter, sortBy]);
   const visibleRanked = ranked.slice(0, visibleLimit);
 
-  async function reviewTop() {
-    if (scanning || busyRef.current) return;
-    const pending = candidates.filter(item => (!query || `${item.searchText || `${item.title} ${stripHtml(item.description)} ${item.source}`}`.toLowerCase().includes(query.toLowerCase())) && (feedFilter === 'all' || item.feedGroup === feedFilter) && !reviews[item.id]).sort((a,b) => discoveryPriority(b) - discoveryPriority(a)).slice(0, 40);
-    if (!pending.length) { setError('All matching stories have a current JEV review. Change the feed or filter to discover more.'); return; }
-    stopScan.current = false; setScanning(true); setProgress({ done: 0, total: pending.length }); let consecutiveErrors = 0;
-    try { for (const item of pending) { if (stopScan.current) break; const ok = await review(item); consecutiveErrors = ok ? 0 : consecutiveErrors + 1; setProgress(current => ({ ...current, done: current.done + 1 })); if (consecutiveErrors >= 3) { setError('Scan paused after three failed reviews. Completed reviews are saved; retry when the service is available.'); break; } } }
-    finally { setScanning(false); }
-  }
-
   function makeBrief(item) {
     const reviewResult = reviews[item.id];
     const text = `WORKING POST BRIEF\n\nStory: ${item.title}\nEditorial angle: ${ANGLES[reviewResult?.editorialAngle] || 'Find the surprising, useful consequence for our audience.'}\nFormat: ${human(reviewResult?.postFormat || 'choose after reporting')}\n\nWhy it may travel: ${Math.round((reviewResult?.viralPotential || reviewResult?.dimensions?.viral_potential?.score || 0) * 100)}% estimated share potential. ${reviewResult?.strengths?.length ? `Strongest signals: ${reviewResult.strengths.map(human).join(', ')}.` : ''}\n\nEvidence to verify:\n${reviewResult?.evidenceText || stripHtml(item.description) || 'Read the original source before drafting.'}\n\nCoverage to compare:\n${(item.relatedStories || []).map(source => `- ${source.title} (${source.source})`).join('\n') || 'No closely matching coverage was found in the other loaded feeds.'}\n\nDraft structure:\n1. Lead with one clear, surprising or relatable fact.\n2. Explain what happened in plain language.\n3. Show the practical consequence or useful takeaway.\n4. Attribute the source and verify claims, dates, and numbers.\n\nDo not copy source wording. Do not present allegations as established facts.\n\nSource: ${item.link}`;
@@ -251,14 +258,14 @@ function NewsApp() {
   const feedGroups = [...new Set(NEWS_FEEDS.map(feed => feed.group))];
   return <main className="news-shell">
     <ProductHeader current="news" coordinator isDev={isDev} canAccessNews={canAccessNews} account={<SettingsMenu email={user.email} avatarUrl={user.photoURL || viewer?.avatar_url} isAdmin={Boolean(viewer?.is_admin)} isDev={isDev} hideAppearanceControls onSignOut={handleSignOut} />}>
-      <h1>News</h1><span className="news-header-subtitle">Discover story ideas from 11 live feeds</span><button className="news-refresh" onClick={load} disabled={loading}>{loading ? 'Refreshing…' : 'Refresh feeds'}</button>
+      <h1>News</h1><span className="news-header-subtitle">Discover story ideas from 11 monitored feeds</span><button className="news-refresh" onClick={load} disabled={loading}>{loading ? 'Refreshing…' : 'Refresh feeds'}</button>
     </ProductHeader>
-    <section className="news-source-health" aria-live="polite"><div className="news-health-copy"><span className={`news-health-dot ${healthyFeeds === NEWS_FEEDS.length ? 'is-online' : feedStatuses.length ? 'is-warning' : ''}`} /><span>{loading ? 'Connecting to RSS.app…' : feedStatuses.length ? `${healthyFeeds}/${NEWS_FEEDS.length} feeds · ${feedStatuses.reduce((sum,status) => sum + status.count, 0)} items · ${candidates.length} stories` : `${NEWS_FEEDS.length} RSS.app feeds configured`}</span></div><details><summary>Feeds <span>{healthyFeeds}/{NEWS_FEEDS.length}</span></summary><div className="news-feed-grid">{NEWS_FEEDS.map(feed => { const status = feedStatuses.find(item => item.feed.id === feed.id); return <span key={feed.id} className={status?.ok === false ? 'feed-down' : status?.ok ? 'feed-up' : ''}><i />{feed.label}{status ? ` · ${status.count}` : ''}{status?.error ? ` · ${status.error}` : ''}</span>; })}</div></details></section>
+    <section className="news-source-health" aria-live="polite"><div className="news-health-copy"><span className={`news-health-dot ${candidates.length ? 'is-online' : ''}`} /><span>{loading ? 'Loading shared News…' : `${candidates.length} shared stories · automatic feed and JEV updates`}</span></div></section>
     {error && <div className="news-alert" role="status">{error}</div>}
-    <section className="news-toolbar" aria-label="Story filters"><div className="news-filter-row"><div className="news-filter-tabs" role="tablist" aria-label="Story filters">{filters.map(([key,label,count]) => <button key={key} role="tab" aria-selected={filter === key} className={filter === key ? 'active' : ''} onClick={() => setFilter(key)}>{label}{count !== null && <b>{count}</b>}</button>)}</div><span className="news-result-count"><strong>{ranked.length}</strong> stories<span className="news-result-reviewed"> · {reviewedCount} scored by JEV</span></span></div><div className="news-search-row"><label className="news-search"><span aria-hidden="true">⌕</span><input aria-label="Search stories" value={query} onChange={event => setQuery(event.target.value)} placeholder="Search stories, sources or topics…" />{query && <button className="news-clear-search" onClick={() => setQuery('')} aria-label="Clear search">×</button>}</label><label className="news-feed-select"><span>Feed</span><select aria-label="Filter stories by topic" value={feedFilter} onChange={event => setFeedFilter(event.target.value)}><option value="all">All feeds</option>{feedGroups.map(group => <option value={group} key={group}>{group}</option>)}</select></label><label className="news-sort-select"><span>Sort</span><select aria-label="Sort stories" value={sortBy} onChange={event => setSortBy(event.target.value)}><option value="recommended">Recommended</option><option value="newest">Newest</option><option value="coverage">Most coverage</option></select></label>{scanning ? <button className="news-stop" onClick={() => { stopScan.current = true; }}>Stop · {progress.done}/{progress.total}</button> : pendingCount > 0 ? <button className="news-scan" onClick={reviewTop} disabled={Boolean(reviewing)}>Review {Math.min(40, pendingCount)} with JEV</button> : <span className="news-up-to-date">{reviewing ? 'Reviewing with JEV…' : 'All caught up'}</span>}</div></section>
+    <section className="news-toolbar" aria-label="Story filters"><div className="news-filter-row"><div className="news-filter-tabs" role="tablist" aria-label="Story filters">{filters.map(([key,label,count]) => <button key={key} role="tab" aria-selected={filter === key} className={filter === key ? 'active' : ''} onClick={() => setFilter(key)}>{label}{count !== null && <b>{count}</b>}</button>)}</div><span className="news-result-count"><strong>{ranked.length}</strong> stories<span className="news-result-reviewed"> · {reviewedCount} scored by JEV</span></span></div><div className="news-search-row"><label className="news-search"><span aria-hidden="true">⌕</span><input aria-label="Search stories" value={query} onChange={event => setQuery(event.target.value)} placeholder="Search stories, sources or topics…" />{query && <button className="news-clear-search" onClick={() => setQuery('')} aria-label="Clear search">×</button>}</label><label className="news-feed-select"><span>Feed</span><select aria-label="Filter stories by topic" value={feedFilter} onChange={event => setFeedFilter(event.target.value)}><option value="all">All feeds</option>{feedGroups.map(group => <option value={group} key={group}>{group}</option>)}</select></label><label className="news-sort-select"><span>Sort</span><select aria-label="Sort stories" value={sortBy} onChange={event => setSortBy(event.target.value)}><option value="recommended">Recommended</option><option value="newest">Newest</option><option value="coverage">Most coverage</option></select></label><span className="news-up-to-date">{pendingCount > 0 ? `${pendingCount} queued for automatic JEV review` : 'All caught up'}</span></div></section>
     {scanning && <div className="news-progress" role="progressbar" aria-label="JEV review progress" aria-valuemin="0" aria-valuemax={progress.total} aria-valuenow={progress.done}><span style={{ width: `${progress.total ? progress.done / progress.total * 100 : 0}%` }} /></div>}
-    {brief && <section id="news-brief" className="news-brief"><div><span className="news-kicker">EDITORIAL WORKSPACE</span><h2>Build an original post</h2><p>Use the source and the story angle to create something clear, useful, and worth sharing.</p></div><textarea aria-label="Post brief" value={brief.text} onChange={event => setBrief({ ...brief, text: event.target.value })} /><div className="news-story-actions"><button onClick={() => { setSaved(current => ({ ...current, [brief.item.id]: { item: brief.item, brief: brief.text } })); setError('Post brief saved in this browser.'); }}>Save brief</button><button onClick={async () => { try { await navigator.clipboard.writeText(brief.text); setError('Brief copied.'); } catch { setError('Copy failed. Select the brief text and copy it manually.'); } }}>Copy brief</button><button onClick={() => setBrief(null)}>Close</button></div></section>}
-    <section className="news-results" aria-label="News stories">{visibleRanked.map((item,index) => <StoryCard key={item.id} rank={index} item={item} review={reviews[item.id]} busy={reviewing === item.id} locked={scanning || Boolean(reviewing)} failure={failures[item.id]} saved={Boolean(saved[item.id])} onReview={review} onSave={() => setSaved(current => { const next = { ...current }; if (next[item.id]) delete next[item.id]; else next[item.id] = { item }; return next; })} onBrief={() => makeBrief(item)} />)}{!ranked.length && <div className="news-empty"><strong>No stories in this view.</strong><span>Clear the search, change the feed, or review unassessed stories. A story without a review has not been rejected.</span>{!items.length && <button onClick={load} disabled={loading}>{loading ? 'Loading feeds…' : 'Load RSS stories'}</button>}</div>}</section>
+    {brief && <section id="news-brief" className="news-brief"><div><span className="news-kicker">EDITORIAL WORKSPACE</span><h2>Build an original post</h2><p>Use the source and the story angle to create something clear, useful, and worth sharing.</p></div><textarea aria-label="Post brief" value={brief.text} onChange={event => setBrief({ ...brief, text: event.target.value })} /><div className="news-story-actions"><button onClick={() => { saveStory(brief.item, true, brief.text); }}>Save brief</button><button onClick={async () => { try { await navigator.clipboard.writeText(brief.text); setError('Brief copied.'); } catch { setError('Copy failed. Select the brief text and copy it manually.'); } }}>Copy brief</button><button onClick={() => setBrief(null)}>Close</button></div></section>}
+    <section className="news-results" aria-label="News stories">{visibleRanked.map((item,index) => <StoryCard key={item.id} rank={index} item={item} review={reviews[item.id]} busy={reviewing === item.id} locked={scanning || Boolean(reviewing)} failure={failures[item.id]} saved={Boolean(saved[item.id])} onReview={review} onSave={() => saveStory(item, !saved[item.id])} onBrief={() => makeBrief(item)} />)}{!ranked.length && <div className="news-empty"><strong>No stories in this view.</strong><span>Clear the search, change the feed, or review unassessed stories. A story without a review has not been rejected.</span>{!items.length && <button onClick={load} disabled={loading}>{loading ? 'Loading feeds…' : 'Load RSS stories'}</button>}</div>}</section>
     {visibleRanked.length < ranked.length && <div className="news-load-more"><span>Showing {visibleRanked.length} of {ranked.length} matching stories</span><button onClick={() => setVisibleLimit(current => Math.min(current + 30, ranked.length))}>Load 30 more stories</button></div>}
     {loading && <div className="news-loading-note">Refreshing RSS.app feeds…</div>}
   </main>;
