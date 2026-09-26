@@ -30,3 +30,9 @@ body { overflow-x: hidden; overflow-y: auto; }
 .vault-shell .vault-primary{box-shadow:0 4px 24px #00ac801c;padding:12px 18px}
 .vault-platform-instagram{background:radial-gradient(ellipse at 30% 20%,#5c385d,#2e2639 80%)}.vault-platform-drive{background:radial-gradient(ellipse at 30% 20%,#3d633d,#23372d 80%)}
 @media(max-width:700px){.vault-grid{grid-template-columns:1fr;gap:20px}.vault-heading{padding:28px 0}.vault-card-cover.has-media{height:245px}.vault-shell{padding-top:5px}}
+.vault-card footer{flex-wrap:wrap;gap:10px}.vault-card footer .vault-workflow-actions{display:flex;flex-wrap:wrap;gap:8px;order:-1;flex-basis:100%;padding-bottom:10px;border-bottom:1px solid #2d3b32}
+.vault-card footer .vault-done{flex:1;background:#00ac8024;border-color:#00ac8060;color:#8cf2c4;font-weight:700;padding:9px 12px}
+.vault-card footer .vault-to-pool{flex:1;background:#e0f5e8;color:#153a26;border-color:#c7e5d3;padding:9px 12px;font-weight:700}
+.vault-in-pool{flex:1;border:1px solid #426951;border-radius:8px;color:#9ee3b9!important;padding:9px 10px;text-align:center;text-decoration:none;font-size:12px}
+.vault-card.is-done{border-color:#237a55}.vault-card.is-done .vault-priority-badge{background:#09673ee8;color:#d1ffe3}
+@media(max-width:700px){.vault-tabs{flex-wrap:wrap}.vault-tabs button{padding:9px 10px}}
