@@ -3357,6 +3357,7 @@ export function SettingsPanel({
   const [expandedHandle, setExpandedHandle] = useState('');
   const [avatarHandle, setAvatarHandle] = useState('');
   const [lifecycleHandle, setLifecycleHandle] = useState('');
+  const [deletingHandle, setDeletingHandle] = useState('');
   const [importFrom, setImportFrom] = useState({});
   const [importCount, setImportCount] = useState({});
   const [importing, setImporting] = useState('');
@@ -3892,6 +3893,36 @@ export function SettingsPanel({
       setNotice('Network error.');
     } finally {
       setLifecycleHandle('');
+    }
+  };
+
+  const deleteAccount = async (account) => {
+    if (!isDev || account.is_canonical || deletingHandle) return;
+    const confirmed = window.confirm(
+      `Delete @${account.handle} from Accounts? Its stored post history will be kept.`
+    );
+    if (!confirmed) return;
+    setDeletingHandle(account.handle);
+    setNotice('');
+    try {
+      const response = await apiFetch(`${API_BASE}/api/admin/accounts/delete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ password, handle: account.handle }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setNotice(body.detail || `Could not delete @${account.handle}.`);
+        return;
+      }
+      setNotice(`@${account.handle} deleted. ${body.retained_posts || 0} stored posts were preserved.`);
+      setExpandedHandle('');
+      await loadRoster();
+      onAccountsChanged?.();
+    } catch (error) {
+      setNotice('Network error deleting account.');
+    } finally {
+      setDeletingHandle('');
     }
   };
 
@@ -4728,6 +4759,18 @@ export function SettingsPanel({
                                           <Power size={13} />
                                           {lifecycleHandle === account.handle ? '…' : isInactive ? 'Reactivate' : 'Deactivate'}
                                         </button>
+                                        {isDev ? (
+                                          <button
+                                            type="button"
+                                            className="ghost-button ghost-button-danger"
+                                            onClick={() => deleteAccount(account)}
+                                            disabled={deletingHandle === account.handle || account.is_canonical}
+                                            title="Remove this account from Accounts while preserving its post history."
+                                          >
+                                            <Trash2 size={13} />
+                                            {deletingHandle === account.handle ? 'Deleting…' : 'Delete account'}
+                                          </button>
+                                        ) : null}
                                         {!isInactive ? (
                                           <div className="account-manage-import">
                                             <input
@@ -5529,7 +5572,8 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
   const previewRequestRef = useRef(0);
 
   const cleanHandle = handle.trim().replace(/^@/, '');
-  const canLeaveStep0 = cleanHandle.length > 0;
+  const validInstagramHandle = /^[a-z0-9](?:[a-z0-9._]{0,28}[a-z0-9])?$/i.test(cleanHandle);
+  const canLeaveStep0 = validInstagramHandle;
 
   // Typing no longer triggers a lookup. Each one costs an Apify credit and
   // takes 5-20s, so spending them on half-typed prefixes was both slow and
@@ -5544,7 +5588,7 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
   }, [cleanHandle]);
 
   const lookupHandle = useCallback(async () => {
-    if (cleanHandle.length < 3 || previewStatus === 'loading') return;
+    if (!/^[a-z0-9](?:[a-z0-9._]{0,28}[a-z0-9])?$/i.test(cleanHandle) || previewStatus === 'loading') return;
     setPreviewStatus('loading');
     setPreviewError('');
     const requestId = ++previewRequestRef.current;
@@ -5576,7 +5620,7 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
 
   const goNext = () => {
     if (step === 0 && !canLeaveStep0) {
-      setNotice('Enter the Instagram handle first.');
+      setNotice('Enter a valid Instagram username: 1–30 letters, numbers, periods, or underscores.');
       return;
     }
     if (step === 1 && importScope === 'range' && !importFrom) {
@@ -5597,7 +5641,10 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
 
   const submit = async (event) => {
     event.preventDefault();
-    if (!password || !cleanHandle) return;
+    if (!password || !validInstagramHandle) {
+      setNotice('Enter a valid Instagram username: 1–30 letters, numbers, periods, or underscores.');
+      return;
+    }
 
     setSubmitting(true);
     setNotice('');
@@ -5704,6 +5751,7 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
                 <div className="wizard-handle-input">
                   <input
                     value={handle}
+                    maxLength={31}
                     onChange={(event) => setHandle(event.target.value)}
                     onKeyDown={(event) => {
                       if (event.key !== 'Enter') return;
@@ -5720,11 +5768,12 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
                     type="button"
                     className="ghost-button"
                     onClick={lookupHandle}
-                    disabled={cleanHandle.length < 3 || previewStatus === 'loading'}
+                    disabled={!validInstagramHandle || previewStatus === 'loading'}
                   >
                     {previewStatus === 'loading' ? 'Checking…' : 'Check'}
                   </button>
                 </div>
+                <small>Use 1–30 letters, numbers, periods, or underscores. Invalid handles are rejected before any Apify lookup.</small>
               </label>
             </div>
             {preview ? (
