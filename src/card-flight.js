@@ -25,12 +25,23 @@ export function sendCardToSide(source, postKey, options = {}) {
   const snapshotNodes=[card,...card.querySelectorAll('*')];
   const geometry=['width','height','min-width','max-width','min-height','max-height','padding','margin','border-radius','font-size','line-height','font-family','font-weight','letter-spacing','box-sizing','aspect-ratio'];
   originalNodes.forEach((node,index)=>{const computed=getComputedStyle(node); geometry.forEach(property=>snapshotNodes[index].style.setProperty(property,computed.getPropertyValue(property)));});
-  // Cloned covers do not retain React's onLoad handler.
-  front.querySelectorAll('img.cover-image').forEach(image=>{
+  // Cloned covers do not retain React's onLoad handler, nor its retries and
+  // fallback sources. Follow the live card's cover so the snapshot recovers
+  // when React moves on to another source or a later attempt.
+  const watchCover=image=>{
+    image.loading='eager';
     const reveal=()=>{image.classList.add('is-loaded');image.parentElement?.querySelector('.cover-image-skeleton')?.remove();};
     if (image.complete && image.naturalWidth) reveal();
     else image.addEventListener('load',reveal,{once:true});
+  };
+  front.querySelectorAll('img.cover-image').forEach(watchCover);
+  const coverObserver=new MutationObserver(()=>{
+    const live=source.querySelector('img.cover-image'), copy=front.querySelector('img.cover-image');
+    const src=live?.getAttribute('src');
+    if (!copy || !src || copy.getAttribute('src')===src) return;
+    copy.classList.remove('is-loaded'); copy.setAttribute('src',src); watchCover(copy);
   });
+  coverObserver.observe(source,{subtree:true,childList:true,attributes:true,attributeFilter:['src']});
   front.classList.add('obs-card-front');
   Object.assign(front.style, { position:'absolute', inset:'0', margin:'0', transform:'none', opacity:'1' });
   card = document.createElement('div');
@@ -69,10 +80,10 @@ export function sendCardToSide(source, postKey, options = {}) {
   if (deckModal) deckModal.dispatchEvent(new CustomEvent('obs-stack-select',{detail:{card:deckSlot,flight:true}}));
   const start = performance.now();
   const seek = () => {
-    if (id !== requestId) return;
+    if (id !== requestId) { coverObserver.disconnect(); return; }
     const slot = document.querySelector(`[data-obs-sideview="${CSS.escape(postKey)}"]`);
     const inspector = slot?.closest('.obs-inspector,.obs-preview-side');
-    if (!slot || inspector?.getAttribute('aria-hidden') === 'true') { if (performance.now()-start < 1000) requestAnimationFrame(seek); return; }
+    if (!slot || inspector?.getAttribute('aria-hidden') === 'true') { if (performance.now()-start < 1000) requestAnimationFrame(seek); else coverObserver.disconnect(); return; }
     delete inspector.dataset.obsClosing;
     document.querySelector('.sidebar-backdrop,.obs-modal-backdrop')?.classList.remove('obs-backdrop-closing');
     inspector.dataset.obsPhase = 'travel';
@@ -108,6 +119,7 @@ export function sendCardToSide(source, postKey, options = {}) {
       if (disposed) return;
       disposed=true;
       resizeObserver?.disconnect();
+      coverObserver.disconnect();
       releaseMenu();
       const exiting=returning;
       card.getAnimations({subtree:true}).forEach(animation=>animation.cancel());

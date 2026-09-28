@@ -75,8 +75,11 @@ try {
  const queueFixture=queueSource.slice(queueSource.indexOf("window.localStorage"),queueSource.indexOf('let releaseInitialQueueFetch'))+`
 payload.accountOnboarding.completed=true; window.__queueFixture=payload;`;
  await page.evaluate(queueFixture);const queueData=await page.evaluate(()=>window.__queueFixture);
- queueData.requests.forEach(task=>{task.post.caption='Long caption for layout validation. '.repeat(30);task.post.coverUrl=cover;task.notes='Manual note left when the post was created from scratch.';});
+ queueData.requests.forEach(task=>{task.post.caption='Long caption for layout validation. '.repeat(30);task.post.coverUrl='https://covers.test/queue-cover.svg';task.notes='Manual note left when the post was created from scratch.';});
  await page.addInitScript(queueFixture);
+ // The first cover attempt fails, as a cold cover endpoint can; React retries,
+ // and the landed Selected post card must follow it instead of staying grey.
+ await page.route('https://covers.test/**',route=>route.request().url().includes('cover_attempt=0')?route.fulfill({status:503,body:''}):route.fulfill({contentType:'image/svg+xml',body:decodeURIComponent(cover.slice(cover.indexOf(',')+1))}));
  await page.route('**/api/dashboard/queue/**',route=>{
   const url=route.request().url();
   return route.fulfill({json:url.includes('/history')?{events:Array.from({length:15},(_,i)=>({id:i,type:'scheduled',actorEmail:'esteban@sentientagency.io',createdAt:new Date().toISOString()}))}:queueData});
@@ -84,6 +87,7 @@ payload.accountOnboarding.completed=true; window.__queueFixture=payload;`;
  await page.goto(`${base}/queue.html?desktop=1`);await page.waitForSelector('.scheduler-block.state-scheduled');
  await page.locator('.scheduler-block.state-scheduled').click();await page.waitForTimeout(1200);
  await page.waitForSelector('.queue-history li');
+ await page.waitForFunction(()=>{const image=document.querySelector('.queue-request-rail .obs-persistent-card img.cover-image');return image?.classList.contains('is-loaded')&&image.naturalWidth>0;},null,{timeout:8000});
  // The Queue page behind an open request must not scroll, even when it is long.
  await page.evaluate(()=>{const d=document.createElement('div');d.id='scroll-probe';d.style.height='3000px';document.querySelector('main,#root').append(d);document.scrollingElement.scrollTop=0;});
  for(const point of [[40,500],null]){
