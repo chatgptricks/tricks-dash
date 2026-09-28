@@ -33,7 +33,7 @@ export default function QueuePostInspector({post,onClose,children,...props}) {
     {close}
     <header className="obs-inspector-heading"><span>{t('Selected post')}</span><small>{t('Queue / Details')}</small></header>
     <InspectorCardSlot post={post} sideview={post.postKey}>
-      <div className="obs-card-fallback" ref={fallback}><PostCard post={post} onSelect={()=>{}} /></div>
+      <div className="obs-card-fallback" ref={fallback}><PostCard post={post} priority onSelect={()=>{}} /></div>
     </InspectorCardSlot>
     <div className="obs-inspector-info">
       {post.permalink ? <a className="ghost-button obs-open-original" href={post.permalink} target="_blank" rel="noopener noreferrer">{t('Open original')} ↗</a> : null}
