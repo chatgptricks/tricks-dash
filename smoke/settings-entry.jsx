@@ -3,10 +3,11 @@ import { act } from 'react';
 const ok = (body) => ({ ok: true, status: 200, json: async () => body, text: async () => JSON.stringify(body) });
 const users = [{ email: 'user03@example.com', display_name: 'User 03', role: 'admin', operating_role: 'vc', operating_roles: '["vc","pd","dev"]', is_admin: 1, slack_user_id: 'U0000000012', avatar_url: '/api/dashboard/user-avatar/U0000000012' }];
 const accounts = [{ handle: 'chatgptricks', label: 'ChatGPTricks', group: 'sentient', group_name: 'sentient', subcategory: 'ai_automation', research_enabled: true, promos_enabled: false, hot_threshold: 600, scrape_mode: 'posts', is_active: true, followers: 1, total_posts: 1, avg_likes: 1 }];
-window.localStorage.setItem('sentientdash.settings.accountBackfills.v1', JSON.stringify([{
-  id: 'newaccount-1', handle: 'newaccount', label: 'New Account', group: 'sentient', phase: 'done',
-  startedAt: Date.now() - 18_000, serverProgress: { phase: 'inserting', done: 100, total: 100 }, added: 25, error: '',
-}]));
+// Import cards come from the server-owned queue, never from browser storage.
+const backfillStatus = { running: true, active: null, queue: [], tasks: [{
+  handle: 'newaccount', status: 'running', requested_at: new Date(Date.now() - 18_000).toISOString(),
+  started_at: new Date(Date.now() - 15_000).toISOString(), progress: { phase: 'inserting', done: 40, total: 100 },
+}] };
 const usage = {
   days: 30, active_users_7d: 1, active_users_30d: 1, total_users: 1, total_events_in_range: 12,
   day_keys: ['2026-08-30'], dow_labels: ['Mon'], global_dow_hour: [Array(24).fill(0)],
@@ -20,6 +21,7 @@ const stubFetch = async (url, options = {}) => {
     submittedAccountRequest = Object.fromEntries(options.body);
     return ok({ ok: true, slackDelivered: true });
   }
+  if (value.includes('/api/admin/accounts/backfill-status')) return ok(backfillStatus);
   if (value.includes('/api/dashboard/me')) return ok({ email: users[0].email, is_admin: true, is_dev: true });
   if (value.includes('/api/admin/accounts')) return ok({ accounts });
   if (value.includes('/api/admin/users')) {
@@ -69,9 +71,11 @@ const clickTab = async (label) => {
     checks['Gear remains available'] = Boolean(document.querySelector('.settings-menu-trigger'));
 
     await clickTab('Accounts');
-    checks['Account import progress is persistent'] = Boolean(document.querySelector('.settings-account-backfill-progress'))
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 50)); });
+    checks['Account import progress comes from the server queue'] = Boolean(document.querySelector('.settings-account-backfill-progress'))
       && /@newaccount/.test(document.body.textContent)
-      && /Imported 25 new posts/.test(document.body.textContent);
+      && !window.localStorage.getItem('sentientdash.settings.accountBackfills.v1');
+    backfillStatus.tasks = [];
     await act(async () => {
       document.querySelector('.settings-account-backfill-dismiss')?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
       await new Promise((resolve) => setTimeout(resolve, 20));

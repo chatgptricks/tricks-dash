@@ -1,8 +1,8 @@
 // Language and theme, shared by the React dashboard.
 //
-// Both live in localStorage rather than the URL: they're about who is looking,
-// not about what is being looked at, so a shared ?tab=hot link shouldn't drag
-// the sender's language along with it.
+// They belong to the person, not the URL, so a shared ?tab=hot link doesn't
+// drag the sender's language along. The server stores them per user (see
+// userPreferences.js); localStorage is only the first-paint copy read here.
 
 export const LANGS = ['en', 'es'];
 export const THEMES = ['dark', 'light'];
@@ -91,7 +91,7 @@ export function readAccent() {
   return 'lime';
 }
 
-export function applyAccent(value, { persist = true } = {}) {
+export function applyAccent(value) {
   const normalized = normalizeAccent(value);
   const hex = accentHex(normalized);
   const rgb = hexRgb(normalized);
@@ -107,23 +107,18 @@ export function applyAccent(value, { persist = true } = {}) {
   root.style.setProperty('--accent-text', textColor);
   root.style.setProperty('--accent-ink', inkColor);
   root.style.setProperty('--accent-soft', `rgba(${rgb.join(', ')}, 0.15)`);
-  if (persist) {
-    try { localStorage.setItem(ACCENT_KEY, normalized); } catch { /* private mode */ }
-  }
   return normalized;
 }
 
 export function applyTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme);
-  try { localStorage.setItem(THEME_KEY, theme); } catch { /* private mode */ }
   // Light mode intentionally darkens bright accents for readable labels and
   // borders. Re-apply the selected accent whenever the theme changes.
-  applyAccent(readAccent(), { persist: false });
+  applyAccent(document.documentElement.getAttribute('data-accent') || readAccent());
 }
 
 export function applyLang(lang) {
   document.documentElement.setAttribute('lang', lang);
-  try { localStorage.setItem(LANG_KEY, lang); } catch { /* private mode */ }
 }
 
 // ---------------------------------------------------------------------------

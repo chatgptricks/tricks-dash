@@ -3,7 +3,8 @@
 // any component either app renders (including the ones in postDetail.jsx)
 // can call usePrefs() without caring which entry point it's mounted in.
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { applyAccent, applyLang, applyTheme, makeT, readAccent, readLang, readTheme } from './prefs';
+import { LANGS, THEMES, applyAccent, applyLang, applyTheme, makeT, normalizeAccent, readAccent, readLang, readTheme } from './prefs';
+import { onServerPreferences, savePreference, syncUserPreferences } from './userPreferences';
 
 const PrefsContext = createContext({ lang: 'en', theme: 'dark', accent: 'lime', t: (x) => x, setLang: () => {}, setTheme: () => {}, setAccent: () => {} });
 export const usePrefs = () => useContext(PrefsContext);
@@ -26,23 +27,31 @@ export function PrefsProvider({ children, lang: controlledLang, theme: controlle
   useEffect(() => { if (!isLangControlled) applyLang(effectiveLang); }, [effectiveLang, isLangControlled]);
   useEffect(() => { if (!isThemeControlled) applyTheme(effectiveTheme); }, [effectiveTheme, isThemeControlled]);
   useEffect(() => { applyAccent(accent); }, [accent]);
+  // The server owns these per user; its values replace the first-paint copy.
   useEffect(() => {
-    const onStorage = (event) => {
-      if (event.key === 'sentient.accent') setAccentState(readAccent());
-    };
-    window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
+    syncUserPreferences();
+    return onServerPreferences((preferences) => {
+      if (LANGS.includes(preferences.language)) setLangState(preferences.language);
+      if (THEMES.includes(preferences.theme)) setThemeState(preferences.theme);
+      if (preferences.accent) setAccentState(normalizeAccent(preferences.accent));
+    });
   }, []);
 
-  const setAccent = (value) => setAccentState(applyAccent(value));
+  const setAccent = (value) => {
+    const normalized = applyAccent(value);
+    savePreference('accent', normalized);
+    setAccentState(normalized);
+  };
+  const setLang = (value) => { savePreference('language', value); setLangState(value); };
+  const setTheme = (value) => { savePreference('theme', value); setThemeState(value); };
 
   const value = useMemo(() => ({
     lang: effectiveLang,
     theme: effectiveTheme,
     accent,
     t: makeT(effectiveLang),
-    setLang: isLangControlled ? () => {} : setLangState,
-    setTheme: isThemeControlled ? () => {} : setThemeState,
+    setLang: isLangControlled ? () => {} : setLang,
+    setTheme: isThemeControlled ? () => {} : setTheme,
     setAccent,
   }), [effectiveLang, effectiveTheme, accent, isLangControlled, isThemeControlled]);
 
