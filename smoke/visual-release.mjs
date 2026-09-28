@@ -57,7 +57,15 @@ try {
  assert.ok(await page.locator('.media-modal-backdrop').evaluate(e=>Number(getComputedStyle(e).zIndex)>11000));
  await page.keyboard.press('Escape');await page.waitForTimeout(100);
  assert.equal(await page.locator('.media-modal').count(),0);assert.equal(await page.locator('.obs-inspector.is-open').count(),1);
- await page.getByRole('button',{name:'Generate similar caption',exact:true}).click();await page.waitForSelector('.caption-generator-modal');await page.keyboard.press('Escape');await page.waitForTimeout(100);assert.equal(await page.locator('.obs-inspector.is-open').count(),1);
+ // A Jev rejection carries an object detail; the modal must show its message.
+ await page.route('**/api/dashboard/posts/generate-caption',route=>route.fulfill({status:502,json:{detail:{message:'The generated caption did not pass Jev verification.',verification:{accepted:false}}}}));
+ await page.getByRole('button',{name:'Generate similar caption',exact:true}).click();await page.waitForSelector('.caption-generator-modal');
+ const captionSelects=page.locator('.caption-generator-modal select');
+ await captionSelects.nth(0).selectOption('chatgptricks');await captionSelects.nth(1).selectOption('en');
+ await page.locator('.caption-generator-modal button[type="submit"]').click();
+ await page.waitForSelector('.caption-generator-modal .queue-assign-error');
+ assert.equal(await page.locator('.caption-generator-modal .queue-assign-error').textContent(),'The generated caption did not pass Jev verification.');
+ await page.keyboard.press('Escape');await page.waitForTimeout(100);assert.equal(await page.locator('.obs-inspector.is-open').count(),1);
  for(const theme of ['dark','light']){
   await page.evaluate(t=>document.documentElement.dataset.theme=t,theme);
   assert.ok(await page.locator('.obs-inspector-info .panel').evaluateAll(es=>es.every(e=>getComputedStyle(e).backgroundColor==='rgba(0, 0, 0, 0)')));

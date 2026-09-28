@@ -2551,7 +2551,9 @@ function GenerateCaptionModal({ post, accounts, onClose }) {
       if (caption) body.append('previous_caption', caption);
       const response = await apiFetch(`${API_BASE}/api/dashboard/posts/generate-caption`, { method: 'POST', body });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.detail || t('Could not generate a caption right now.'));
+      // Jev rejections carry an object detail ({ message, verification }).
+      const detail = typeof data.detail === 'string' ? data.detail : data.detail?.message;
+      if (!response.ok) throw new Error(detail ? t(detail) : t('Could not generate a caption right now.'));
       setCaption(String(data.caption || '').trim());
     } catch (reason) {
       setError(reason.message || t('Could not generate a caption right now.'));
