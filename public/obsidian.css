@@ -543,3 +543,10 @@ body::before { content:''; position:fixed; inset:0; pointer-events:none; z-index
 .post-stack-modal[data-handoff='true'] .post-stack-grid > div { will-change:transform,opacity,filter; }
 @media(prefers-reduced-motion:reduce) { .obs-stack-open.obs-stack-settling > * { animation:none; } }
 :root[data-effects='off'] .obs-stack-open.obs-stack-settling > * { animation:none; }
+
+/* Copy actions for the request caption and manual notes. */
+.queue-copy-row { display:flex; margin-top:10px; }
+.queue-copy-heading { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:6px; }
+.obs-queue-inspector .obs-inspector-info .queue-copy-heading h3 { margin:0; }
+.obs-queue-inspector .obs-inspector-info .queue-copy-button { min-height:28px; padding:5px 10px; }
+.obs-queue-inspector .obs-inspector-info .queue-copy-button.is-copied { color:var(--accent-text); border-color:rgba(var(--accent-rgb),.32); background:rgba(var(--accent-rgb),.1); }
