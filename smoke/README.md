@@ -40,8 +40,8 @@ dashboard.
 
 ## Visual release gate
 
-Run `npm run dev -- --host localhost --port 4178`, then `npm run smoke:visual`.
+Run `npm run smoke:visual` (it starts its own Vite server).
 This exercises the actual Research and Queue pages in Chromium with Firebase
 and backend responses mocked, including nested dialogs, narrow viewports,
 Light/Dark panels, full stack covers, and the closing shuffle. It does not write
-to the live backend. Set `CHROME_PATH` if Chrome is installed elsewhere.
+to the live backend. It uses Chrome when installed (or `CHROME_PATH`), otherwise Playwright's Chromium.

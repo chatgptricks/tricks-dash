@@ -1,7 +1,7 @@
 // Conservative caption matching. No network calls or changes to source posts.
 const STOP = new Set(('the a an and or of to in on for with from by at is are was were be been this that these those it its as but you your we our they their has have had just new now more most how what when who why can could will would says said than into about after before all not only one out over up so do does did using use used follow swipe comment link bio ai de la el los las un una unos unas y o en con por para del al es son fue ser como que se su sus este esta esto lo le te tu tus ha han mas muy ya pero si no sobre entre hoy nuevo nueva aqui').split(' '));
 function tokens(post) {
-  return [...new Set(String(post.caption || post.headline || post.title || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/https?:\/\/\S+|[@#][\p{L}\p{N}_\.]+/gu, ' ').split(/[^\p{L}\p{N}]+/u).filter((word) => word.length > 2 && !STOP.has(word)).slice(0, 65))];
+  return [...new Set(String(post.caption || post.headline || post.title || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/https?:\/\/\S+|[@#][\p{L}\p{N}_.]+/gu, ' ').split(/[^\p{L}\p{N}]+/u).filter((word) => word.length > 2 && !STOP.has(word)).slice(0, 65))];
 }
 export function performanceValue(post, metric = 'likes') {
   if (metric === 'interactions') return post.likes != null && Number(post.likes) >= 0 ? Number(post.likes) + Math.max(0, Number(post.comments) || 0) : -1;

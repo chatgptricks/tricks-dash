@@ -5,14 +5,17 @@ Instagram analytics + content-queue dashboard for Sentient Agency, served at
 `src/styles.css`) rather than component-per-file — grep is your friend here.
 
 For the full picture (feature set, deploy workflow, backend relationship,
-gotchas, backlog) see **`FOR_CODEX.md`** at the repo root. This README only
-covers local setup.
+gotchas, backlog) see **`FOR_CODEX.md`**. It is a local-only handover file
+(ignored by git), so ask for a copy if your checkout doesn't have it. This
+README only covers local setup.
+
+Use npm (`package-lock.json` is the single lockfile; CI runs `npm ci`).
 
 ## Setup
 
 ```bash
-pnpm install
-pnpm dev
+npm install
+npm run dev
 ```
 
 React/Vite pages: `index.html` (main dashboard), `queue.html` (Queue board),
@@ -25,7 +28,7 @@ Set `VITE_API_BASE` to point at a different backend for local dev.
 ## Build
 
 ```bash
-pnpm build
+npm run build
 ```
 
 Deploying is a two-step, two-branch process (source on `main`, static output

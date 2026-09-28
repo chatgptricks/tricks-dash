@@ -1,8 +1,9 @@
 import React, { useLayoutEffect, useRef } from 'react';
-import { PostCard } from './App';
+import { PostCard } from './PostCard';
 import { SlideDownload } from './postDetail';
 import { sendCardToSide } from './card-flight';
 import { useInspectorModal } from './use-inspector-modal';
+import { usePrefs } from './prefsContext';
 
 let queueOrigin=null;
 export function captureQueueCardOrigin(event) {
@@ -11,9 +12,10 @@ export function captureQueueCardOrigin(event) {
 }
 
 export default function QueuePostInspector({post,onClose,children,...props}) {
+  const { t } = usePrefs();
   const fallback=useRef(null);
   const opened=useRef(null);
-  useInspectorModal(true,onClose);
+  useInspectorModal(true,onClose,{inertSiblings:true});
   useLayoutEffect(()=>{
     if (opened.current===post.postKey) return;
     opened.current=post.postKey;
@@ -29,12 +31,12 @@ export default function QueuePostInspector({post,onClose,children,...props}) {
   const info=elements.filter(child=>!close.includes(child) && child!==detail);
   return <aside {...props} className="right-rail obs-inspector is-open queue-request-rail obs-queue-inspector" role="dialog" aria-modal="true" aria-hidden="false">
     {close}
-    <header className="obs-inspector-heading"><span>Selected post</span><small>Queue / Details</small></header>
+    <header className="obs-inspector-heading"><span>{t('Selected post')}</span><small>{t('Queue / Details')}</small></header>
     <section className="obs-card-slot" data-obs-sideview={post.postKey}>
       <div className="obs-card-fallback" ref={fallback}><PostCard post={post} onSelect={()=>{}} /></div>
     </section>
     <div className="obs-inspector-info">
-      {post.permalink ? <a className="ghost-button obs-open-original" href={post.permalink} target="_blank" rel="noopener noreferrer">Open original ↗</a> : null}
+      {post.permalink ? <a className="ghost-button obs-open-original" href={post.permalink} target="_blank" rel="noopener noreferrer">{t('Open original')} ↗</a> : null}
       {detailActions}{info}
     </div>
   </aside>;

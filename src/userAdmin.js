@@ -75,8 +75,8 @@ export async function saveUserProfile(person, { fetcher = apiFetch, onStatus, ti
     if (Array.isArray(saved.users) && profileMatches(saved.users, email, expected)) return saved;
   } catch (error) {
     if ([400, 401, 403, 404, 409, 422].includes(error.status)) {
-      if (error.status === 401) throw new Error('Your session expired. Sign in again; your draft is still here.');
-      if (error.status === 403) throw new Error('Your account cannot make this change. Your draft is still here.');
+      if (error.status === 401) throw new Error('Your session expired. Sign in again; your draft is still here.', { cause: error });
+      if (error.status === 403) throw new Error('Your account cannot make this change. Your draft is still here.', { cause: error });
       throw error;
     }
   }

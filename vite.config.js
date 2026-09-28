@@ -1,168 +1,9 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const coverCache = new Map();
-const require = createRequire(import.meta.url);
 const __dirname = dirname(fileURLToPath(import.meta.url));
-
-let browserPromise = null;
-let contextPromise = null;
-
-async function getBrowserContext() {
-  if (!contextPromise) {
-    contextPromise = (async () => {
-      const { chromium } = require('playwright');
-      if (!browserPromise) {
-        browserPromise = chromium.launch({ headless: true });
-      }
-      const browser = await browserPromise;
-      return browser.newContext({
-        viewport: { width: 1280, height: 1600 },
-      });
-    })();
-  }
-
-  return contextPromise;
-}
-
-async function fetchImageBytes(url) {
-  if (!url) return null;
-
-  const context = await getBrowserContext();
-  const response = await context.request.get(url, { timeout: 30000 });
-  if (!response.ok()) return null;
-
-  return {
-    contentType: response.headers()['content-type'] || 'image/jpeg',
-    buffer: await response.body(),
-  };
-}
-
-function buildEmbedUrl(permalink) {
-  try {
-    const url = new URL(permalink);
-    const trimmedPath = url.pathname.endsWith('/') ? url.pathname : `${url.pathname}/`;
-    url.pathname = `${trimmedPath}embed/captioned/`;
-    url.search = '';
-    url.hash = '';
-    return url.toString();
-  } catch {
-    return null;
-  }
-}
-
-async function resolveInstagramCover(permalink, fallback) {
-  const cacheKey = `${permalink || ''}|${fallback || ''}`;
-  if (coverCache.has(cacheKey)) {
-    return coverCache.get(cacheKey);
-  }
-
-  const request = (async () => {
-    const direct = await fetchImageBytes(fallback);
-    if (direct) return direct;
-
-    const embedUrl = buildEmbedUrl(permalink);
-    if (!embedUrl) return null;
-
-    const context = await getBrowserContext();
-    const page = await context.newPage();
-    try {
-      await page.goto(embedUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-      await page.waitForTimeout(6500);
-
-      const imageSrc = await page.evaluate(() => {
-        const candidates = Array.from(document.images)
-          .map((img) => ({
-            src: img.currentSrc || img.src,
-            width: img.naturalWidth || img.width || 0,
-            height: img.naturalHeight || img.height || 0,
-            alt: img.alt || '',
-          }))
-          .filter((img) => img.src);
-
-        candidates.sort((a, b) => b.width * b.height - a.width * a.height);
-        return candidates.find((img) => img.width >= 600 || /Instagram post shared/i.test(img.alt))?.src ?? candidates[0]?.src ?? null;
-      });
-
-      if (!imageSrc) return null;
-
-      const response = await context.request.get(imageSrc, { timeout: 30000 });
-      if (!response.ok()) return null;
-
-      return {
-        contentType: response.headers()['content-type'] || 'image/jpeg',
-        buffer: await response.body(),
-      };
-    } catch {
-      return null;
-    } finally {
-      await page.close().catch(() => {});
-    }
-  })();
-
-  coverCache.set(cacheKey, request);
-  const resolved = await request;
-  coverCache.set(cacheKey, resolved);
-  return resolved;
-}
-
-function serveInstagramCovers() {
-  const middleware = (req, res, next) => {
-    if (!req.url) {
-      next();
-      return;
-    }
-
-    let url;
-    try {
-      url = new URL(req.url, 'http://localhost');
-    } catch {
-      next();
-      return;
-    }
-
-    if (url.pathname !== '/api/cover') {
-      next();
-      return;
-    }
-
-    const permalink = url.searchParams.get('permalink') || '';
-    const fallback = url.searchParams.get('fallback') || '';
-
-    (async () => {
-      const resolved = await resolveInstagramCover(permalink, fallback);
-
-      if (!resolved) {
-        res.statusCode = 502;
-        res.setHeader('content-type', 'text/plain; charset=utf-8');
-        res.end('Cover image unavailable');
-        return;
-      }
-
-      res.statusCode = 200;
-      res.setHeader('content-type', resolved.contentType);
-      res.setHeader('cache-control', 'public, max-age=86400');
-      res.end(resolved.buffer);
-    })().catch(() => {
-      res.statusCode = 502;
-      res.setHeader('content-type', 'text/plain; charset=utf-8');
-      res.end('Cover image unavailable');
-    });
-  };
-
-  return {
-    name: 'serve-instagram-covers',
-    configureServer(server) {
-      server.middlewares.use(middleware);
-    },
-    configurePreviewServer(server) {
-      server.middlewares.use(middleware);
-    },
-  };
-}
 
 export default defineConfig({
   // Served from the apex of a custom domain (sentientdash.app), so assets
@@ -173,7 +14,7 @@ export default defineConfig({
   // Lets CI/local validation skip the 61MB static archive; normal production
   // builds retain Vite's default public-directory copy behavior.
   publicDir: process.env.VITE_SKIP_PUBLIC === '1' ? false : 'public',
-  plugins: [react(), serveInstagramCovers()],
+  plugins: [react()],
   server: {
     host: '0.0.0.0',
     port: 4175,

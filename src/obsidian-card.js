@@ -1,32 +1,31 @@
-import { useMotionValue, useSpring, useTransform, useReducedMotion } from 'motion/react';
+// Pointer tilt and foil for gallery cards. Plain handlers shared by every card:
+// no per-card hooks or animation state, and nothing runs until a pointer moves.
+// The inline transform is eased by the `.obs-card` CSS transition.
+const reduceMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
-// Motion values update outside React renders: only the active card does work.
-export function useObsidianCard() {
-  const reduceMotion = useReducedMotion();
-  const x = useMotionValue(0), y = useMotionValue(0);
-  const rotateX = useSpring(y, { stiffness: 180, damping: 22 });
-  const rotateY = useSpring(x, { stiffness: 180, damping: 22 });
-  const mx = useMotionValue(50), my = useMotionValue(50);
-  const px = useTransform(mx, value => `${value}%`);
-  const py = useTransform(my, value => `${value}%`);
-  const reset = () => { x.set(0); y.set(0); mx.set(50); my.set(50); };
-  return {
-    style: { rotateX, rotateY, transformPerspective: 1000, '--foil-x': px, '--foil-y': py },
-    onPointerMove(event) {
-      if (event.target.closest('.post-header')) { reset(); return; }
-      if (event.target.closest('button,a,.post-menu') || event.currentTarget.querySelector('.post-menu-panel')) return;
-      if (reduceMotion || event.pointerType === 'touch' || document.documentElement.dataset.effects === 'off' || event.currentTarget.draggable && event.buttons) { reset(); return; }
-      const rect = event.currentTarget.getBoundingClientRect();
-      const u = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
-      const v = Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height));
-      const subtle = document.documentElement.dataset.effects === 'subtle';
-      const angle = subtle ? 4 : 9;
-      x.set((u - .5) * angle); y.set((.5 - v) * angle);
-      mx.set(u * 100); my.set(v * 100);
-    },
-    onPointerLeave: reset,
-  };
+function reset(card) {
+  card.style.removeProperty('transform');
+  card.style.removeProperty('--foil-x');
+  card.style.removeProperty('--foil-y');
 }
+
+export const obsidianCardHandlers = {
+  onPointerMove(event) {
+    const card = event.currentTarget;
+    if (event.target.closest('.post-header')) { reset(card); return; }
+    if (event.target.closest('button,a,.post-menu') || card.querySelector('.post-menu-panel')) return;
+    const effects = document.documentElement.dataset.effects;
+    if (reduceMotion() || event.pointerType === 'touch' || effects === 'off' || (card.draggable && event.buttons)) { reset(card); return; }
+    const rect = card.getBoundingClientRect();
+    const u = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
+    const v = Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height));
+    const angle = effects === 'subtle' ? 4 : 9;
+    card.style.transform = `perspective(1000px) rotateX(${((0.5 - v) * angle).toFixed(2)}deg) rotateY(${((u - 0.5) * angle).toFixed(2)}deg)`;
+    card.style.setProperty('--foil-x', `${(u * 100).toFixed(1)}%`);
+    card.style.setProperty('--foil-y', `${(v * 100).toFixed(1)}%`);
+  },
+  onPointerLeave(event) { reset(event.currentTarget); },
+};
 
 // Same Rate thresholds as the existing HOT tiers; missing Rate uses copper.
 export function hotMetalStyle(post) {

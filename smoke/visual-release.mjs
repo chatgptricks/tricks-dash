@@ -2,7 +2,16 @@
 import { chromium } from 'playwright';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-const browser = await chromium.launch({executablePath: process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless:true});
+import { createServer } from 'vite';
+// Self-contained: serves the app itself, so no separate `npm run dev` is needed.
+const server = await createServer({ logLevel:'error', server:{ host:'localhost', port:4178 } });
+await server.listen();
+const base = (server.resolvedUrls?.local?.[0] || 'http://localhost:4178/').replace(/\/$/, '');
+// Prefer an installed Chrome (CHROME_PATH or the macOS default); otherwise use
+// Playwright's own Chromium (`npx playwright install chromium`).
+const macChrome = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const executablePath = process.env.CHROME_PATH || (fs.existsSync(macChrome) ? macChrome : undefined);
+const browser = await chromium.launch({executablePath, headless:true});
 const page = await browser.newPage({viewport:{width:1440,height:1000}});
 const errors=[]; page.on('pageerror', e=>errors.push(e.message));
 await page.route('**/node_modules/.vite/deps/firebase_auth.js*', route=>route.fulfill({contentType:'text/javascript',body:fs.readFileSync('smoke/stub-firebase-auth.js','utf8')}));
@@ -22,7 +31,7 @@ await page.route('https://cortex-api-db2e.onrender.com/**', async route=>{
 });
 await page.addInitScript(()=>{localStorage.setItem('sentient.lang','en');localStorage.setItem('sentient.theme','dark');});
 try {
- await page.goto('http://localhost:4178/index.html?desktop=1');
+ await page.goto(`${base}/index.html?desktop=1`);
  await page.waitForSelector('.gallery-grid .post-card',{timeout:20000});
  assert.equal(await page.locator('.obs-lab-dock').count(),0);
  const card=page.locator('.gallery-grid > .stack-card-shell .post-card').last();
@@ -59,7 +68,7 @@ payload.accountOnboarding.completed=true; window.__queueFixture=payload;`;
   const url=route.request().url();
   return route.fulfill({json:url.includes('/history')?{events:Array.from({length:15},(_,i)=>({id:i,type:'scheduled',actorEmail:'user03@example.com',createdAt:new Date().toISOString()}))}:queueData});
  });
- await page.goto('http://localhost:4178/queue.html?desktop=1');await page.waitForSelector('.scheduler-block.state-scheduled');
+ await page.goto(`${base}/queue.html?desktop=1`);await page.waitForSelector('.scheduler-block.state-scheduled');
  await page.locator('.scheduler-block.state-scheduled').click();await page.waitForTimeout(1200);
  await page.waitForSelector('.queue-history li');
  for(const width of [1440,390]){
@@ -71,4 +80,4 @@ payload.accountOnboarding.completed=true; window.__queueFixture=payload;`;
  console.log('PASS browser Queue: real scheduler/detail, long caption and 15 history entries, desktop/mobile layout, clean return');
  assert.deepEqual(errors,[]);
  console.log('PASS browser Research: live components, menus, nested dialogs, themes, responsive detail, full covers and opaque closing shuffle');
-} finally { await browser.close(); }
+} finally { await browser.close(); await server.close(); }
