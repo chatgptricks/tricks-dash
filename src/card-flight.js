@@ -55,7 +55,7 @@ export function sendCardToSide(source, postKey, options = {}) {
   const emblem = document.createElement('div'); emblem.className='obs-back-emblem';
   if (avatarUrl) { const image=document.createElement('img'); image.src=avatarUrl; image.alt=''; emblem.append(image); }
   else { const initials=document.createElement('span'); initials.textContent=account.slice(0,2).toUpperCase(); emblem.append(initials); }
-  const label=document.createElement('strong'); label.textContent=`@${account}`; emblem.append(label);
+  const label=document.createElement('strong'); label.textContent=source.dataset.contextAccount || !source.dataset.contextType ? `@${account}` : account; emblem.append(label);
   const bottomFrame=document.createElement('div');
   bottomFrame.className='obs-card-bottom-frame';
   bottomFrame.style.opacity='0';

@@ -1,7 +1,7 @@
 // The gallery card and its menu. Kept out of App.jsx so pages that only need a
 // card (Queue, its inspector, the stack modal) don't pull in the whole dashboard.
 import { memo, useEffect, useRef, useState } from 'react';
-import { Check, ExternalLink, Eye, EyeOff, ListTodo, LoaderCircle, Megaphone, MoreHorizontal, RefreshCw, Search, Sparkles, Trash2, Video, Zap } from 'lucide-react';
+import { Check, ExternalLink, PenLine, Eye, EyeOff, ListTodo, LoaderCircle, Megaphone, MoreHorizontal, RefreshCw, Search, Sparkles, Trash2, Video, Zap } from 'lucide-react';
 import { usePrefs } from './prefsContext';
 import { API_BASE, IG_HANDLE } from './api';
 import { encodeRouteState } from './urlCodec';
@@ -295,6 +295,11 @@ const FreshnessRing = memo(function FreshnessRing({ timestamp }) {
 
 export const PostCard = memo(function PostCard({ post, goldenNugget, priority, selected, onSelect, onFlags, onReload, onAssign, onQuickAdd, onQuickAddSuccess, canPool, canSuggest, draggable, onDragStart, onDragOver, onDrop, hideCaption = false }) {
   const [avatarFailed, setAvatarFailed] = useState(false);
+  const { t } = usePrefs();
+  // Posts created from scratch in Queue have no source account; never
+  // attribute them to the default handle.
+  const manual = !post.account && post.isCustom;
+  const accountLabel = post.account || (manual ? t('Manual post') : IG_HANDLE);
   const handleClick = (event) => {
     if (event.target.closest('button,a,input,select,textarea,[role="menu"],.post-menu')) return;
     sendCardToSide(event.currentTarget, post.postKey); onSelect(post.postKey);
@@ -356,11 +361,11 @@ export const PostCard = memo(function PostCard({ post, goldenNugget, priority, s
                 onError={() => setAvatarFailed(true)}
               />
             ) : (
-              <span className="post-avatar-initials">{(post.account || '?').slice(0, 2).toUpperCase()}</span>
+              <span className="post-avatar-initials">{manual ? <PenLine size={14} /> : (post.account || '?').slice(0, 2).toUpperCase()}</span>
             )}
           </div>
           <div className="post-user-copy">
-            <strong title={post.account || IG_HANDLE}>{post.account || IG_HANDLE}</strong>
+            <strong title={accountLabel}>{accountLabel}</strong>
             <span>{formatDate(post.postDate)}</span>
           </div>
         </div>
@@ -407,7 +412,7 @@ export const PostCard = memo(function PostCard({ post, goldenNugget, priority, s
       <div className="post-copy">
         <div className="post-likes">{formatLikes(post.likes)} likes</div>
         {!hideCaption ? <p>
-          <strong title={post.account || IG_HANDLE}>{post.account || IG_HANDLE}</strong> {post.headline || post.excerpt}
+          <strong title={accountLabel}>{accountLabel}</strong> {post.headline || post.excerpt}
         </p> : null}
         <div className="post-footer">
           <span>{post.comments != null && Number.isFinite(Number(post.comments)) ? compactFormatter.format(post.comments) : '—'} comments</span>
