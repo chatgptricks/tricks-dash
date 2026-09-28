@@ -84,6 +84,14 @@ payload.accountOnboarding.completed=true; window.__queueFixture=payload;`;
  await page.goto(`${base}/queue.html?desktop=1`);await page.waitForSelector('.scheduler-block.state-scheduled');
  await page.locator('.scheduler-block.state-scheduled').click();await page.waitForTimeout(1200);
  await page.waitForSelector('.queue-history li');
+ // The Queue page behind an open request must not scroll, even when it is long.
+ await page.evaluate(()=>{const d=document.createElement('div');d.id='scroll-probe';d.style.height='3000px';document.querySelector('main,#root').append(d);document.scrollingElement.scrollTop=0;});
+ for(const point of [[40,500],null]){
+  let [x,y]=point||[];if(!point){const r=await page.locator('.queue-request-rail .obs-inspector-info').boundingBox();x=r.x+r.width/2;y=r.y+Math.min(r.height/2,200);}
+  await page.mouse.move(x,y);for(let k=0;k<10;k++){await page.mouse.wheel(0,600);await page.waitForTimeout(30);}await page.waitForTimeout(200);
+  assert.equal(await page.evaluate(()=>document.scrollingElement.scrollTop),0);
+ }
+ await page.locator('.queue-request-rail .obs-inspector-info').evaluate(e=>{e.scrollTop=0;});
  // Start work asks where to place the block; that choice must sit above the
  // inspector and receive clicks, and Escape must not close the inspector under it.
  await page.getByRole('button',{name:'Start work',exact:true}).click();
@@ -108,6 +116,7 @@ payload.accountOnboarding.completed=true; window.__queueFixture=payload;`;
   assert.equal(geometry.overlap,false);assert.ok(geometry.overflow<=1);
  }
  await page.keyboard.press('Escape');await page.waitForTimeout(1200);assert.equal(await page.locator('.queue-request-rail,.obs-in-transit,.obs-persistent-card').count(),0);
+ assert.equal(await page.evaluate(()=>document.body.style.overflow),'');await page.evaluate(()=>document.getElementById('scroll-probe')?.remove());
  console.log('PASS browser Queue: real scheduler/detail, long caption and 15 history entries, desktop/mobile layout, clean return');
  assert.deepEqual(errors,[]);
  console.log('PASS browser Research: live components, menus, nested dialogs, themes, responsive detail, full covers and opaque closing shuffle');
