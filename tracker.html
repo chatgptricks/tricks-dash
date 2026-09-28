@@ -5,6 +5,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <script src="/mobile-redirect.js?v=20260908-device"></script>
+<script src="/user-preferences.js?v=20260928-prefs1"></script>
 <script src="/role-preview.js?rev=f20263e" defer></script>
 <script src="/context-menu.js?v=20260901-context1" defer></script>
 <title>Tracker · sentientdash.app</title>
@@ -619,11 +620,8 @@ async function loadSummary(){
 }
 
 /* ---------------- Favourites + sidebar ----------------
-   Favourites live in localStorage rather than the database: this is a
-   per-person "what am I watching today" shortlist, it needs to feel
-   instant, and losing it costs nothing (the account is still tracked, it
-   just isn't pinned). Everything that must survive a device change --
-   which accounts exist, their history -- is already server-side. */
+   Favourites are a per-person shortlist stored on the server with the
+   other user preferences, so they follow the person to every device. */
 const FAV_KEY = 'sentient.tracker.favs';
 // Stored as an ordered array (not just a Set) specifically so the
 // Favourites list can be drag-reordered -- array order IS display order.
@@ -631,8 +629,9 @@ function readFavs(){
   try{ const v = JSON.parse(localStorage.getItem(FAV_KEY)||'[]'); return Array.isArray(v)?v:[]; }
   catch{ return []; }
 }
+// Stored per user on the server; readFavs() reads the first-paint copy.
 function writeFavs(list){
-  try{ localStorage.setItem(FAV_KEY, JSON.stringify(list)); }catch{}
+  window.SentientPreferences?.save('trackerFavorites', list);
 }
 function toggleFav(handle){
   const favs = readFavs();
@@ -1239,6 +1238,7 @@ onAuthStateChanged(auth, async (user) => {
   };
   await window.__refreshFirebaseIdToken();
   window.__signedInEmail = user.email || '';
+  window.SentientPreferences?.load({ email: user.email || '' });
   setSettingsAvatar(user);
   gate.classList.add('hidden');
   if (!booted) {
@@ -1270,7 +1270,6 @@ let theme = readPref(PREF_THEME, ['dark', 'light'],
 function setTheme(next) {
   theme = next;
   document.documentElement.setAttribute('data-theme', theme);
-  try { localStorage.setItem(PREF_THEME, theme); } catch {}
   document.querySelectorAll('#settingsThemeSegment button').forEach((b) => {
     b.classList.toggle('is-on', b.dataset.themeChoice === theme);
   });
@@ -1337,12 +1336,11 @@ observer.observe(document.body, { childList: true, subtree: true });
 
 function setLang(next) {
   lang = next;
-  try { localStorage.setItem(PREF_LANG, lang); } catch {}
   applyI18n();
 }
 
 document.querySelectorAll('.lang-option').forEach((b) => {
-  b.addEventListener('click', () => setLang(b.dataset.lang));
+  b.addEventListener('click', () => { setLang(b.dataset.lang); window.SentientPreferences?.save('language', lang); });
 });
 setTheme(theme);
 applyI18n();
@@ -1380,22 +1378,31 @@ function setAccent(next) {
   root.style.setProperty('--accent-text', accentText(normalized));
   root.style.setProperty('--accent-ink', accentLuminance(rgb) > .179 ? '#151515' : '#f5f8ff');
   root.style.setProperty('--accent-soft', `rgba(${rgb.join(', ')}, .15)`);
-  try { localStorage.setItem(PREF_ACCENT, normalized); } catch {}
   document.querySelectorAll('#settingsAccentPicker button').forEach((b) => {
     b.classList.toggle('is-on', b.dataset.accentChoice === normalized);
   });
   const custom = document.getElementById('settingsCustomColor');
   if (custom) custom.value = accentHex(normalized);
+  return normalized;
 }
 setAccent(readAccent());
 document.querySelectorAll('#settingsAccentPicker button').forEach((b) => {
-  b.addEventListener('click', () => setAccent(b.dataset.accentChoice));
+  b.addEventListener('click', () => window.SentientPreferences?.save('accent', setAccent(b.dataset.accentChoice)));
 });
-document.getElementById('settingsCustomColor')?.addEventListener('input', (event) => setAccent(event.target.value));
+document.getElementById('settingsCustomColor')?.addEventListener('input', (event) => window.SentientPreferences?.save('accent', setAccent(event.target.value)));
 document.querySelectorAll('#settingsThemeSegment button').forEach((b) => {
-  b.addEventListener('click', () => { setTheme(b.dataset.themeChoice); setAccent(readAccent()); });
+  b.addEventListener('click', () => { setTheme(b.dataset.themeChoice); window.SentientPreferences?.save('theme', theme); setAccent(readAccent()); });
 });
 window.addEventListener('storage', (event) => { if (event.key === PREF_ACCENT) setAccent(readAccent()); });
+// Preferences are stored per user on the server; apply its values when they
+// arrive (localStorage above is only the first-paint copy).
+window.addEventListener('sentient-preferences', (event) => {
+  const preferences = event.detail || {};
+  if (preferences.theme === 'dark' || preferences.theme === 'light') setTheme(preferences.theme);
+  if (preferences.language === 'en' || preferences.language === 'es') setLang(preferences.language);
+  if (preferences.accent) setAccent(preferences.accent);
+  if (Array.isArray(preferences.trackerFavorites) && typeof renderSidebar === 'function') { try { renderSidebar(); renderLeaderboard(); } catch { /* data not loaded yet */ } }
+});
 
 const settingsMenu = document.getElementById('settingsMenu');
 const settingsTrigger = document.getElementById('settingsTrigger');
