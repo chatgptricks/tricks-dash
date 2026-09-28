@@ -68,33 +68,6 @@ import { PostDetailPanel } from './postDetail';
 // password prompt anywhere anymore.
 const LEGACY_REFRESH_PASSWORD = 'authenticated';
 
-// Account onboarding can outlive the Settings tab (and often the browser
-// refresh that an admin uses to check whether the scrape is done). Keep the
-// small client-side record locally for labels and avatars, then reconcile it
-// with the server-owned persistent queue. The actual import data remains
-// server-side; this is only UI state and never contains credentials.
-const SETTINGS_ACCOUNT_BACKFILLS_KEY = 'sentientdash.settings.accountBackfills.v1';
-
-function readSettingsAccountBackfills() {
-  if (typeof window === 'undefined') return [];
-  try {
-    const value = JSON.parse(window.localStorage.getItem(SETTINGS_ACCOUNT_BACKFILLS_KEY) || '[]');
-    return Array.isArray(value) ? value.filter((task) => task && task.handle) : [];
-  } catch {
-    return [];
-  }
-}
-
-function persistSettingsAccountBackfills(tasks) {
-  if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.setItem(SETTINGS_ACCOUNT_BACKFILLS_KEY, JSON.stringify(tasks));
-  } catch {
-    // Storage can be unavailable in private browsing; the in-memory state
-    // still keeps the current Settings view useful.
-  }
-}
-
 const settingsUserAvatar = (value) => {
   const raw = String(value || '').trim();
   if (!raw) return '';
@@ -3350,7 +3323,7 @@ export function SettingsPanel({
   // New-account imports are intentionally tracked separately from the manual
   // "Extract history" control. This record survives a Settings reload and
   // remains visible until the background worker reports completion.
-  const [accountBackfills, setAccountBackfills] = useState(readSettingsAccountBackfills);
+  const [accountBackfills, setAccountBackfills] = useState([]);
   const [accountBackfillNow, setAccountBackfillNow] = useState(Date.now());
   const accountBackfillRemoveTimers = useRef(new Map());
 
@@ -3393,7 +3366,6 @@ export function SettingsPanel({
   const patchAccountBackfill = useCallback((handle, patch) => {
     setAccountBackfills((current) => {
       const next = current.map((task) => (task.handle === handle ? { ...task, ...patch, updatedAt: Date.now() } : task));
-      persistSettingsAccountBackfills(next);
       return next;
     });
   }, []);
@@ -3413,7 +3385,6 @@ export function SettingsPanel({
     };
     setAccountBackfills((current) => {
       const next = [...current.filter((item) => item.handle !== task.handle), task];
-      persistSettingsAccountBackfills(next);
       return next;
     });
     return task;
@@ -3427,7 +3398,6 @@ export function SettingsPanel({
     }
     setAccountBackfills((current) => {
       const next = current.filter((task) => task.handle !== handle);
-      persistSettingsAccountBackfills(next);
       return next;
     });
   }, []);
@@ -3501,7 +3471,6 @@ export function SettingsPanel({
               }
             });
             const deduped = Array.from(new Map(next.map((task) => [task.handle, task])).values());
-            persistSettingsAccountBackfills(deduped);
             return deduped;
           });
           return;
@@ -3519,7 +3488,7 @@ export function SettingsPanel({
   }, [unlocked, roster]);
 
   // Keep the completed acknowledgement visible briefly so an admin can see
-  // that the import actually finished, then remove it from localStorage.
+  // that the import actually finished, then remove it.
   useEffect(() => {
     for (const task of accountBackfills) {
       if (task.phase !== 'done' || accountBackfillRemoveTimers.current.has(task.handle)) continue;

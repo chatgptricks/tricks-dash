@@ -10,7 +10,8 @@ import { describeSignInError, firebaseAuth as auth, startGoogleSignIn } from './
 import { clearSsoCookie, startSsoRefresh, trySsoSignIn } from './sso';
 import { API_BASE, apiFetch } from './api';
 import { PrefsProvider, usePrefs } from './prefsContext';
-import { ACCENT_CHOICES, accentHex } from './prefs';
+import { onServerPreferences, readPreference, savePreference, syncUserPreferences } from './userPreferences';
+import { ACCENT_CHOICES, accentHex, readLang } from './prefs';
 import { SelectedPost, SlideDownload, coverUrlForPost } from './postDetail';
 import { PostCard } from './PostCard';
 import chatgptricksProfileImage from './assets/chatgptricks-profile.jpg';
@@ -83,51 +84,10 @@ const displayDate = (value, language) => new Date(`${value}T12:00:00`).toLocaleD
 // Queue work remains scheduled at explicit local dates/times. The dev-only
 // simulator can override the reference clock without changing that data.
 const displayTimestamp = (value, language) => new Date(value).toLocaleString(locale(language), { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-// Schedule drafts can contain assignment and publishing scope. They must never
-// be shared between people who happen to use the same browser profile.
-const QUEUE_DRAFT_KEY_PREFIX = 'sentient.queueDrafts.v3:';
-const QUEUE_DRAFT_STORAGE_VERSION = 1;
 const queueUserEmail = (value) => String(value || '').trim().toLowerCase();
-const queueDraftKey = (email) => {
-  const ownerEmail = queueUserEmail(email);
-  return ownerEmail ? `${QUEUE_DRAFT_KEY_PREFIX}${ownerEmail}` : '';
-};
-const readQueueDrafts = (email) => {
-  const ownerEmail = queueUserEmail(email);
-  const key = queueDraftKey(ownerEmail);
-  if (!ownerEmail || !key) return [];
-  try {
-    const saved = JSON.parse(window.localStorage.getItem(key) || 'null');
-    // Do not migrate the former browser-wide array. It has no trustworthy
-    // owner, so recovering it could publish someone else's schedule.
-    if (saved?.version !== QUEUE_DRAFT_STORAGE_VERSION || saved.ownerEmail !== ownerEmail || !Array.isArray(saved.drafts)) return [];
-    return saved.drafts;
-  } catch {
-    return [];
-  }
-};
-const writeQueueDrafts = (email, drafts) => {
-  const ownerEmail = queueUserEmail(email);
-  const key = queueDraftKey(ownerEmail);
-  if (!ownerEmail || !key) return;
-  try {
-    if (drafts.length) {
-      window.localStorage.setItem(key, JSON.stringify({
-        version: QUEUE_DRAFT_STORAGE_VERSION,
-        ownerEmail,
-        savedAt: Date.now(),
-        drafts,
-      }));
-    } else {
-      window.localStorage.removeItem(key);
-    }
-  } catch {
-    // Draft recovery is a convenience. An unavailable browser store must not
-    // stop a coordinator from working with the live Queue draft.
-  }
-};
 const DESIGNER_SCOPE_KEY_PREFIX = 'sentient.queueDesignerScope.v1:';
 const designerScopeKey = (email) => `${DESIGNER_SCOPE_KEY_PREFIX}${String(email || '').trim().toLowerCase()}`;
+// First-paint copy only; the server's value (see userPreferences.js) wins.
 const readDesignerScope = (email) => {
   try { return window.localStorage.getItem(designerScopeKey(email)) || ''; } catch { return ''; }
 };
@@ -1623,7 +1583,8 @@ function QueueApp({ user }) {
   const [detailNotice, setDetailNotice] = useState(null);
   const [history, setHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
-  const [draft, setDraft] = useState(() => readQueueDrafts(user?.email));
+  // Schedule drafts are owned by the server (queue/v2/drafts); never a browser copy.
+  const [draft, setDraft] = useState([]);
   const [draftBusy, setDraftBusy] = useState(null);
   const draftActionRef = useRef(false);
   const [liveStatus, setLiveStatus] = useState('connecting');
@@ -1644,7 +1605,7 @@ function QueueApp({ user }) {
   const [resetOpen, setResetOpen] = useState(false);
   const [startPlacementOpen, setStartPlacementOpen] = useState(false);
   const [accountSetupOpen, setAccountSetupOpen] = useState(false);
-  const [guideOpen, setGuideOpen] = useState(() => !window.localStorage.getItem('sentient.queueGuide.v1'));
+  const [guideOpen, setGuideOpen] = useState(() => !readPreference('queueGuideCompleted'));
   const [guideStep, setGuideStep] = useState(-1);
   const [overviewOpen, setOverviewOpen] = useState(false);
   const [overview, setOverview] = useState(null);
@@ -1667,11 +1628,8 @@ function QueueApp({ user }) {
   const selectDesignerScope = useCallback((event) => {
     const next = event.target.value;
     setDesignerScope(next);
-    try {
-      if (next) window.localStorage.setItem(designerScopeKey(user?.email), next);
-      else window.localStorage.removeItem(designerScopeKey(user?.email));
-    } catch {}
-  }, [user?.email]);
+    savePreference('queueDesignerScope', next || null);
+  }, []);
   const draftSavePromiseRef = useRef(Promise.resolve());
   const persistDraftsRef = useRef(null);
   const openRef = useRef(open);
@@ -1689,7 +1647,16 @@ function QueueApp({ user }) {
   const ticketsOpenRef = useRef(ticketsOpen);
   const loadedOnceRef = useRef(Boolean(initialSnapshotRef.current?.data));
   const accountSetupDismissedRef = useRef(false);
-  const guideCompletedRef = useRef(Boolean(window.localStorage.getItem('sentient.queueGuide.v1')));
+  const guideCompletedRef = useRef(Boolean(readPreference('queueGuideCompleted')));
+  // The server owns the guide state and designer scope per user; apply them
+  // as soon as they arrive (another device may have completed the guide).
+  useEffect(() => onServerPreferences((preferences) => {
+    if (preferences.queueGuideCompleted) {
+      guideCompletedRef.current = true;
+      setGuideOpen(false);
+    }
+    setDesignerScope(preferences.queueDesignerScope || '');
+  }), []);
 
   const notify = useCallback((message, type = 'success') => { setToast({ message, type }); window.setTimeout(() => setToast(null), 6000); }, []);
   const saveQuietly = useCallback(() => { quietMutationUntilRef.current = Date.now() + 8000; }, []);
@@ -1701,8 +1668,7 @@ function QueueApp({ user }) {
   const applyDraft = useCallback((next) => {
     const safeDrafts = Array.isArray(next) ? next : [];
     setDraftInMemory(safeDrafts);
-    writeQueueDrafts(authenticatedDraftOwner, safeDrafts);
-  }, [authenticatedDraftOwner, setDraftInMemory]);
+  }, [setDraftInMemory]);
   useEffect(() => {
     if (draftOwnerRef.current === authenticatedDraftOwner) return;
     // Firebase can replace the identity without a full page reload. Invalidate
@@ -1714,7 +1680,7 @@ function QueueApp({ user }) {
     draftSaveVersionRef.current += 1;
     draftSavePromiseRef.current = Promise.resolve();
     loadedOnceRef.current = false;
-    setDraftInMemory(readQueueDrafts(authenticatedDraftOwner));
+    setDraftInMemory([]);
     setData(null);
     setOpen(null);
     setLoading(true);
@@ -2000,8 +1966,8 @@ function QueueApp({ user }) {
     const users = data.schedulerUsers || data.designers || [];
     if (users.some((person) => person.email === designerScope)) return;
     setDesignerScope('');
-    try { window.localStorage.removeItem(designerScopeKey(user?.email)); } catch {}
-  }, [data, designerScope, user?.email]);
+    savePreference('queueDesignerScope', null);
+  }, [data, designerScope]);
   const upcoming = useMemo(() => {
     if (!coordinator) return [];
     const byId = new Map();
@@ -2444,7 +2410,7 @@ function QueueApp({ user }) {
     return result;
   };
   const finishGuide = () => {
-    window.localStorage.setItem('sentient.queueGuide.v1', 'completed');
+    savePreference('queueGuideCompleted', true);
     guideCompletedRef.current = true;
     setGuideOpen(false);
     if (!data?.accountOnboarding?.completed && !accountSetupDismissedRef.current) setAccountSetupOpen(true);
@@ -2611,10 +2577,18 @@ function Root() {
   const [user, setUser] = useState(undefined);
   const [notice, setNotice] = useState('');
   const [checked, setChecked] = useState(false);
-  const [language, setLanguageState] = useState(() => window.localStorage.getItem('sentient.lang') || (navigator.language.startsWith('es') ? 'es' : 'en'));
+  const [language, setLanguageState] = useState(() => readLang());
   const [theme, setThemeState] = useState(() => document.documentElement.getAttribute('data-theme') || 'dark');
-  const setLanguage = (value) => { window.localStorage.setItem('sentient.lang', value); setLanguageState(value); };
-  const setTheme = (value) => { window.localStorage.setItem('sentient.theme', value); document.documentElement.setAttribute('data-theme', value); setThemeState(value); };
+  const applyThemeState = (value) => { document.documentElement.setAttribute('data-theme', value); setThemeState(value); };
+  const setLanguage = (value) => { savePreference('language', value); setLanguageState(value); };
+  const setTheme = (value) => { savePreference('theme', value); applyThemeState(value); };
+  useEffect(() => {
+    syncUserPreferences();
+    return onServerPreferences((preferences) => {
+      if (preferences.language === 'en' || preferences.language === 'es') setLanguageState(preferences.language);
+      if (preferences.theme === 'dark' || preferences.theme === 'light') applyThemeState(preferences.theme);
+    });
+  }, []);
   useEffect(() => { getRedirectResult(auth, browserPopupRedirectResolver).catch((error) => setNotice(describeSignInError(error))); }, []);
   useEffect(() => { trySsoSignIn().finally(() => setChecked(true)); }, []);
   useEffect(() => onAuthStateChanged(auth, setUser), []);

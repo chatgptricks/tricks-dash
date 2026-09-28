@@ -370,11 +370,8 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     await click(document.querySelector('.scheduler-page-options input'));
     checks['Page choice saves to this draft'] = payload.liveDrafts[0].recommendedAccounts.includes('chatgptricks');
     await click(document.querySelector('.scheduler-page-picker header button'));
-    const localDraftEnvelope = JSON.parse(window.localStorage.getItem('sentient.queueDrafts.v3:esteban@sentientagency.io') || 'null');
-    checks['Draft recovery is scoped to its authenticated owner'] = localDraftEnvelope?.version === 1
-      && localDraftEnvelope?.ownerEmail === 'esteban@sentientagency.io'
-      && Array.isArray(localDraftEnvelope?.drafts)
-      && localDraftEnvelope.drafts.length === 1;
+    const browserDraftKeys = Array.from({ length: window.localStorage.length }, (_, index) => window.localStorage.key(index)).filter((key) => key?.startsWith('sentient.queueDrafts.'));
+    checks['Drafts live only on the server, never in browser storage'] = browserDraftKeys.length === 0 && payload.liveDrafts.length === 1;
     checks['Draft leaves pool before submit'] = document.querySelectorAll('.queue-pool-card').length === 0;
     const poolDrop = document.querySelector('.scheduler-pool');
     const draftBlock = document.querySelector('.scheduler-block.is-draft');

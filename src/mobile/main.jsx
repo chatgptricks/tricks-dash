@@ -14,6 +14,7 @@ import { browserPopupRedirectResolver, getRedirectResult, onAuthStateChanged, si
 import { API_BASE, apiFetch } from '../api';
 import { loadCompleteDashboardCatalogue } from '../dashboardCatalogue';
 import { authPersistenceReady, describeSignInError, firebaseAuth, startGoogleSignIn } from '../firebase';
+import { onServerPreferences, savePreference, syncUserPreferences } from '../userPreferences';
 import { followQueueLive } from '../queueLive';
 import { clearSsoCookie, startSsoRefresh, trySsoSignIn } from '../sso';
 import { decodeRouteState, encodeRouteState } from '../urlCodec';
@@ -131,7 +132,8 @@ const usePrefs = () => useContext(Prefs);
 const priorityOrder = { urgent: 0, normal: 1, high: 1, medium: 1, low: 1 };
 const TRACKER_FAVORITES_KEY = 'sentient.tracker.favs';
 const readTrackerFavorites = () => { try { const value = JSON.parse(localStorage.getItem(TRACKER_FAVORITES_KEY) || '[]'); return Array.isArray(value) ? value : []; } catch { return []; } };
-const writeTrackerFavorites = (handles) => { try { localStorage.setItem(TRACKER_FAVORITES_KEY, JSON.stringify(handles)); } catch {} };
+// Favorites are stored per user on the server; the read above is the first-paint copy.
+const writeTrackerFavorites = (handles) => savePreference('trackerFavorites', handles);
 const hexRgb = (value) => {
   const hex = String(value || '').replace('#', '');
   const full = hex.length === 3 ? hex.split('').map((digit) => `${digit}${digit}`).join('') : hex;
@@ -189,10 +191,23 @@ function PrefsProvider({ children }) {
   const [theme, setThemeState] = useState(() => localStorage.getItem('sentient.theme') || 'dark');
   const [accent, setAccentState] = useState(() => { const saved = localStorage.getItem('sentient.accent') || 'lime'; return saved === 'custom' ? (localStorage.getItem('sentient.accentCustom') || '#00ac80') : saved; });
   const [customAccent, setCustomAccentState] = useState(() => { const saved = localStorage.getItem('sentient.accent') || ''; return saved.startsWith('#') ? saved : (localStorage.getItem('sentient.accentCustom') || '#00ac80'); });
-  const setLanguage = (value) => { localStorage.setItem('sentient.language', value); setLanguageState(value); };
-  const setTheme = (value) => { localStorage.setItem('sentient.theme', value); document.documentElement.dataset.theme = value; setThemeState(value); };
-  const setAccent = (value) => { localStorage.setItem('sentient.accent', value); document.documentElement.dataset.accent = value; setAccentState(value); };
-  const setCustomAccent = (value) => { localStorage.setItem('sentient.accent', value); localStorage.setItem('sentient.accentCustom', value); document.documentElement.style.setProperty('--custom-accent', value); document.documentElement.style.setProperty('--custom-accent-rgb', hexRgb(value)); document.documentElement.dataset.accent = 'custom'; setCustomAccentState(value); setAccentState(value); };
+  const applyTheme = (value) => { document.documentElement.dataset.theme = value; setThemeState(value); };
+  const applyCustomAccent = (value) => { document.documentElement.style.setProperty('--custom-accent', value); document.documentElement.style.setProperty('--custom-accent-rgb', hexRgb(value)); document.documentElement.dataset.accent = 'custom'; setCustomAccentState(value); setAccentState(value); };
+  const setLanguage = (value) => { savePreference('language', value); setLanguageState(value); };
+  const setTheme = (value) => { savePreference('theme', value); applyTheme(value); };
+  const setAccent = (value) => { savePreference('accent', value); document.documentElement.dataset.accent = value; setAccentState(value); };
+  const setCustomAccent = (value) => { savePreference('accent', value); savePreference('accentCustom', value); applyCustomAccent(value); };
+  // The server owns these per user; its values replace the first-paint copy.
+  useEffect(() => {
+    syncUserPreferences();
+    return onServerPreferences((preferences) => {
+      if (preferences.language === 'en' || preferences.language === 'es') setLanguageState(preferences.language);
+      if (preferences.theme === 'dark' || preferences.theme === 'light') applyTheme(preferences.theme);
+      if (preferences.accentCustom) setCustomAccentState(preferences.accentCustom);
+      if (String(preferences.accent || '').startsWith('#')) applyCustomAccent(preferences.accent);
+      else if (preferences.accent) { document.documentElement.dataset.accent = preferences.accent; setAccentState(preferences.accent); }
+    });
+  }, []);
   useEffect(() => { const custom = String(accent).startsWith('#'); const activeAccent = custom ? accent : customAccent; document.documentElement.dataset.theme = theme; document.documentElement.dataset.accent = custom ? 'custom' : accent; document.documentElement.style.setProperty('--custom-accent', activeAccent); document.documentElement.style.setProperty('--custom-accent-rgb', hexRgb(activeAccent)); document.documentElement.style.setProperty('--custom-accent-ink', accentInk(activeAccent)); }, [theme, accent, customAccent]);
   const t = useCallback((key) => I18N[language]?.[key] || I18N.en[key] || key, [language]);
   return <Prefs.Provider value={{ language, setLanguage, theme, setTheme, accent, setAccent, customAccent, setCustomAccent, t }}>{children}</Prefs.Provider>;
@@ -541,7 +556,7 @@ function TimeBlockForm({ data, onSent }) {
 }
 
 function TrackerView() {
-  const { t } = usePrefs(); const [data, setData] = useState(null); const [detail, setDetail] = useState(null); const [error, setError] = useState(''); const [busy, setBusy] = useState(''); const [favorites, setFavorites] = useState(readTrackerFavorites);
+  const { t } = usePrefs(); const [data, setData] = useState(null); const [detail, setDetail] = useState(null); const [error, setError] = useState(''); const [busy, setBusy] = useState(''); const [favorites, setFavorites] = useState(readTrackerFavorites); useEffect(() => onServerPreferences((preferences) => { if (Array.isArray(preferences.trackerFavorites)) setFavorites(preferences.trackerFavorites); }), []);
   const load = useCallback(() => { setError(''); apiJson('/api/tracker/summary').then(setData).catch((err) => setError(err.message)); }, []); useEffect(() => { load(); }, [load]);
   const open = async (handle) => { setBusy(handle); try { setDetail(await apiJson(`/api/tracker/accounts/${encodeURIComponent(handle)}`)); } catch (err) { setError(err.message); } finally { setBusy(''); } };
   const refresh = async (handle) => { setBusy(handle); try { await apiJson(`/api/tracker/accounts/${encodeURIComponent(handle)}/refresh`, { method: 'POST' }); load(); if (detail?.handle === handle) setDetail(await apiJson(`/api/tracker/accounts/${encodeURIComponent(handle)}`)); } catch (err) { setError(err.message); } finally { setBusy(''); } };
