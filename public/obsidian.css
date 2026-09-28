@@ -553,3 +553,14 @@ body::before { content:''; position:fixed; inset:0; pointer-events:none; z-index
 
 /* Scrolling inside an open inspector never chains to the page behind it. */
 .right-rail.obs-inspector.is-open,.obs-preview-side,.obs-inspector-info { overscroll-behavior:contain; }
+
+/* Rendering stability. Chrome flickers on scroll and hover when a
+   backdrop-filter sits on a scroll container, nests another one inside it,
+   or samples a layer that animates every frame. The inspector already floats
+   over a blurred backdrop, so its glass keeps the same look with a denser
+   tint instead of a second blur. */
+.obs-inspector-info,.obs-inspector-info * { backdrop-filter:none; -webkit-backdrop-filter:none; }
+.obs-inspector-info { background:linear-gradient(135deg,rgba(var(--ink),.055),rgba(var(--ink),.015)),rgba(var(--shade),.6); }
+:root[data-theme='light'] .obs-inspector-info { background:rgba(238,239,242,.9); }
+/* Hold the ambient glow still while an overlay blurs the page behind it. */
+body:has(.sidebar-backdrop,.obs-modal-backdrop,.post-stack-modal)::before { animation-play-state:paused; }
