@@ -74,6 +74,9 @@ try {
   await act(async () => el.querySelector('[aria-label="Post menu"]').click());
   if (/Mark as promo|Remove promo/.test(el.textContent)) throw new Error('Competitors must not expose promo actions');
   console.log('PASS promo restricted to Ours in individual and mixed stacks');
+  await act(async () => root.render(<PrefsProvider><PostCard post={{ ...sample, postKey: 'queue:1', account: '', isCustom: true }} onSelect={() => {}} /></PrefsProvider>));
+  if (el.querySelector('.post-user strong')?.textContent !== 'Manual post' || /chatgptricks/.test(el.textContent)) throw new Error('Manual posts must not be attributed to the default account');
+  console.log('PASS manual posts are not attributed to the default account');
   let finishQuickAdd;
   let sideviewClosed = false;
   await act(async () => root.render(<PrefsProvider><PostCard key="quick-add-test" post={sample} onSelect={() => {}} canPool onQuickAdd={() => new Promise((resolve) => { finishQuickAdd = resolve; })} onQuickAddSuccess={() => { sideviewClosed = true; }} /></PrefsProvider>));

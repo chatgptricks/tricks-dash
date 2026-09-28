@@ -309,6 +309,7 @@ const ES = {
   'Research / Details': 'Research / Detalles',
   'Queue / Details': 'Queue / Detalles',
   'Open original': 'Abrir original',
+  'Manual post': 'Post manual',
   'Open in Canva': 'Abrir en Canva',
   'Open this month\'s Canva design doc': 'Abrir el documento de Canva de este mes',
   'versions': 'versiones',
