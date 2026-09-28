@@ -65,7 +65,8 @@ export function sendCardToSide(source, postKey, options = {}) {
   Object.assign(card.style, { position:'fixed', left:`${rect.left}px`, top:`${rect.top}px`, width:`${width}px`, height:`${height}px`, margin:'0', opacity:'1', transform:'none', zIndex:'45000', pointerEvents:'none', transition:'none', transformOrigin:'center center' });
   document.documentElement.style.setProperty('--obs-inspector-card-width', `${width}px`);
   document.documentElement.style.setProperty('--obs-inspector-card-height', `${height}px`);
-  if (deckModal) deckModal.dispatchEvent(new CustomEvent('obs-stack-select',{detail:{card:source.closest('.post-stack-grid > div')}}));
+  const deckSlot=deckModal ? source.closest('.post-stack-grid > div') : null;
+  if (deckModal) deckModal.dispatchEvent(new CustomEvent('obs-stack-select',{detail:{card:deckSlot,flight:true}}));
   const start = performance.now();
   const seek = () => {
     if (id !== requestId) return;
@@ -80,6 +81,8 @@ export function sendCardToSide(source, postKey, options = {}) {
     const to = slot.getBoundingClientRect();
     const destinationScale = Math.min(1, to.width / width);
     source.classList.add('obs-in-transit');
+    // Hide the deck slot in the same frame the clone appears, never before.
+    if (deckSlot) deckSlot.style.visibility='hidden';
     if (options.homeSource) homeSource.classList.add('obs-in-transit');
     document.body.append(card);
     const media=front.querySelector('.post-media');

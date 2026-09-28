@@ -527,3 +527,19 @@ body::before { content:''; position:fixed; inset:0; pointer-events:none; z-index
 
 /* Detail actions must open above the inspector, including portalled media. */
 .media-modal-backdrop,.queue-modal-backdrop,.modal-backdrop { z-index:12000; }
+
+/* Stack motion: the overlay never grows scrollbars while cards travel
+   outside its box, and the gutter stays put when scrolling is restored. */
+.post-stack-modal { overflow-x:hidden; scrollbar-gutter:stable both-edges; }
+.post-stack-modal[data-dealing='true'],.post-stack-modal[data-closing='true'] { overflow-y:hidden; }
+/* The gallery deck fades back in underneath the returning cards, so the
+   overlay can unmount without the deck popping into place. */
+.obs-stack-open.obs-stack-settling > .stack-card-shell,
+.obs-stack-open.obs-stack-settling > .post-card,
+.obs-stack-open.obs-stack-settling > .m-post-card,
+.obs-stack-open.obs-stack-settling > .obs-deck-layer,
+.obs-stack-open.obs-stack-settling > .post-stack-trigger { visibility:visible; animation:obs-deck-return .42s ease-out .12s both; }
+@keyframes obs-deck-return { from { opacity:0; } to { opacity:1; } }
+.post-stack-modal[data-handoff='true'] .post-stack-grid > div { will-change:transform,opacity,filter; }
+@media(prefers-reduced-motion:reduce) { .obs-stack-open.obs-stack-settling > * { animation:none; } }
+:root[data-effects='off'] .obs-stack-open.obs-stack-settling > * { animation:none; }

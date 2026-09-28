@@ -1,5 +1,5 @@
 import './topicStack.css';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useLayoutEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Clock3, X } from 'lucide-react';
 import { StackCard, postIdentity } from './StackActions';
@@ -32,46 +32,74 @@ export default function TopicStack({ posts, visiblePosts = posts, renderCard, re
   const stackRef = useRef(null);
   const dealRef = useRef([]);
   const closingRef = useRef(false);
-  const closeStack = (selectedCard = null) => {
+  const motionOff = () => (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches || typeof Element.prototype.animate !== 'function') || document.documentElement.dataset.effects === 'off';
+  // Bring the gallery deck back underneath the overlay before it unmounts, so
+  // removing the overlay never swaps one picture for another in a single frame.
+  const revealHome = () => stackRef.current?.classList.add('obs-stack-settling');
+  const closeStack = (selectedCard = null, { deferHide = false } = {}) => {
     if (!(selectedCard instanceof HTMLElement)) selectedCard=null;
     if (closingRef.current) return;
     closingRef.current=true;
+    // Closing during the blur-in used to restart the fade from full blur.
+    // Snapshot the live backdrop first so the exit continues from it.
+    const modalEl=dialog.current;
+    const intro=modalEl?.getAnimations?.().find(animation=>animation.animationName==='obs-deck-focus-in' && animation.playState==='running');
+    const backdropFrom=intro ? (({backgroundColor,backdropFilter})=>({backgroundColor,backdropFilter}))(getComputedStyle(modalEl)) : null;
     const selectedIndex=selectedCard ? [...(cardsRef.current?.children || [])].indexOf(selectedCard) : -1;
-    if (selectedCard) { selectedCard.style.visibility='hidden'; dialog.current?.setAttribute('data-handoff','true'); }
+    // A flying selection hides its own slot once the clone is on screen
+    // (see card-flight). Hiding it here would leave an empty frame first.
+    if (selectedCard) { if (!deferHide) selectedCard.style.visibility='hidden'; dialog.current?.setAttribute('data-handoff','true'); }
     const cards=[...(cardsRef.current?.children || [])];
-    if (!cards.length || (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches || typeof Element.prototype.animate !== 'function') || document.documentElement.dataset.effects === 'off') { setExpanded(false); closingRef.current=false; return; }
+    if (!cards.length || motionOff()) { setExpanded(false); closingRef.current=false; return; }
     dialog.current?.setAttribute('data-closing','true');
+    dialog.current?.removeAttribute('data-dealing');
     [...(cardsRef.current?.children || [])].forEach(card => { card.inert = true; });
     const coverIndex=ranked.findIndex(post=>postIdentity(post)===postIdentity(newest));
     const order=cards.map((card,index)=>({card,animation:dealRef.current[index],index}))
       .filter(({index})=>index!==selectedIndex)
       .sort((a,b)=>(a.index===coverIndex ? 1 : 0)-(b.index===coverIndex ? 1 : 0) || b.index-a.index);
-    const duration=900+Math.max(0,order.length-1)*85;
-    dialog.current?.style.setProperty('--deck-exit-duration',`${duration}ms`);
-    const exits=order.map(({animation,index},position)=>{
-      const card=cardsRef.current.children[index];
+    const handoff=Boolean(selectedCard);
+    // A selection hands the focus to the inspector: the rest of the deck
+    // dissolves into the blur on its way home instead of landing opaque and
+    // vanishing when the overlay unmounts.
+    const cardDuration=handoff ? 640 : 900;
+    const stagger=handoff ? Math.min(45,260/Math.max(order.length,1)) : 85;
+    const duration=cardDuration+Math.max(0,order.length-1)*stagger;
+    dialog.current?.style.setProperty('--deck-exit-duration',`${handoff ? Math.max(duration,850) : duration}ms`);
+    if (backdropFrom) modalEl.animate([backdropFrom,{backgroundColor:'transparent',backdropFilter:'blur(0px)'}],{duration:handoff ? Math.max(duration,850) : duration,easing:'ease',fill:'forwards'});
+    if (handoff) revealHome();
+    const homeCard=stackRef.current?.querySelector(':scope > .stack-card-shell .post-card,:scope > .post-card,:scope > .m-post-card');
+    const home=homeCard?.getBoundingClientRect() || stackRef.current.getBoundingClientRect();
+    const exits=order.map(({card,animation,index},position)=>{
+      // Read the live transform before cancelling so an interrupted deal
+      // continues from where it is instead of snapping to its final slot.
       const current=getComputedStyle(card).transform;
+      const currentOpacity=getComputedStyle(card).opacity;
       animation?.cancel();
       const target=card.getBoundingClientRect();
-      const homeCard=stackRef.current?.querySelector(':scope > .stack-card-shell .post-card,:scope > .post-card,:scope > .m-post-card');
-      const home=homeCard?.getBoundingClientRect() || stackRef.current.getBoundingClientRect();
       const dx=home.left+home.width/2-target.left-target.width/2;
       const dy=home.top+home.height/2-target.top-target.height/2;
+      const scale=`scale(${home.width/target.width},${home.height/target.height})`;
       card.style.zIndex=String(index===coverIndex ? 2000 : 1000-position);
-      const exit=card.animate([
-        {transform:current,opacity:1},
+      const frames=handoff ? [
+        {transform:current,opacity:currentOpacity,filter:'blur(0px)'},
+        {transform:`translate(${dx*.55+40}px,${dy*.55-18}px) rotate(-4deg) scale(${(1+home.width/target.width)/2})`,opacity:.7,filter:'blur(2px)',offset:.5},
+        {transform:`translate(${dx}px,${dy}px) rotate(0deg) ${scale}`,opacity:0,filter:'blur(10px)'}
+      ] : [
+        {transform:current,opacity:currentOpacity},
         // Retrace the dealing arc: slide beside the deck, then tuck into it.
-        {transform:`translate(${dx+70}px,${dy-28}px) rotate(-7deg) scale(${home.width/target.width},${home.height/target.height})`,opacity:1,offset:.68},
-        {transform:`translate(${dx}px,${dy}px) rotate(0deg) scale(${home.width/target.width},${home.height/target.height})`,opacity:1,offset:.9},
-        {transform:`translate(${dx}px,${dy}px) rotate(0deg) scale(${home.width/target.width},${home.height/target.height})`,opacity:1}
-      ],{duration:900,delay:position*85,easing:'cubic-bezier(.4,0,.2,1)',fill:'both'});
-      // Keep returned cards opaque until React swaps the overlay for the gallery.
-      // Hiding/fading each finished card creates a gap before the deck is restored.
-      return exit;
+        {transform:`translate(${dx+70}px,${dy-28}px) rotate(-7deg) ${scale}`,opacity:1,offset:.68},
+        {transform:`translate(${dx}px,${dy}px) rotate(0deg) ${scale}`,opacity:1,offset:.9},
+        {transform:`translate(${dx}px,${dy}px) rotate(0deg) ${scale}`,opacity:1}
+      ];
+      // Keep normally returned cards opaque until React swaps the overlay for
+      // the gallery; hiding them early creates a gap before the deck is back.
+      return card.animate(frames,{duration:cardDuration,delay:position*stagger,easing:handoff ? 'cubic-bezier(.32,.72,0,1)' : 'cubic-bezier(.4,0,.2,1)',fill:'both'});
     });
     dealRef.current=exits;
     const returned = Promise.allSettled(exits.map(animation=>animation.finished)).then(async () => {
-      if (!selectedCard && dialog.current?.isConnected) {
+      if (!handoff && dialog.current?.isConnected) {
+        revealHome();
         // Settle the last few physical cards before replacing the overlay.
         // Keep every layer opaque; the cover stays above the small fan.
         const settling = order.slice(-3).map(({card,index},position) => {
@@ -95,39 +123,46 @@ export default function TopicStack({ posts, visiblePosts = posts, renderCard, re
     });
     if (dialog.current) dialog.current.obsStackReturn = returned;
   };
-  useEffect(() => {
+  // Layout effect: the deal must start before the first paint of the overlay,
+  // otherwise the cards flash in their final slots for a frame and then jump.
+  useLayoutEffect(() => {
     if (!expanded) return;
     const previous = document.activeElement;
     const overflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    dialog.current?.focus();
     const modal=dialog.current;
+    modal?.focus({ preventScroll: true });
     if (modal) modal.obsStackHome=stackRef.current;
-    const handoff=event=>closeStack(event.detail.card);
+    const handoff=event=>closeStack(event.detail.card,{deferHide:Boolean(event.detail.flight)});
     modal?.addEventListener('obs-stack-select',handoff);
     let animations = [];
     closingRef.current=false;
-    const frame = requestAnimationFrame(() => {
-      if ((window.matchMedia?.('(prefers-reduced-motion: reduce)').matches || typeof Element.prototype.animate !== 'function') || document.documentElement.dataset.effects === 'off') return;
-      const origin = stackRef.current?.getBoundingClientRect();
-      if (!origin) return;
+    const origin = stackRef.current?.getBoundingClientRect();
+    if (!motionOff() && origin) {
+      // Cards fly in from the gallery; keep the overlay from growing scrollbars
+      // while they are outside its box.
+      modal?.setAttribute('data-dealing','true');
       animations = [...(cardsRef.current?.children || [])].map((card,index) => {
         const target = card.getBoundingClientRect();
         const depth = Math.min(index,4)*3;
         const dx = origin.left + origin.width/2 - target.left - target.width/2;
         const dy = origin.top + origin.height/2 - target.top - target.height/2 - depth;
+        const scale = `scale(${origin.width/target.width},${origin.height/target.height})`;
         card.style.zIndex=String(1000-index);
         card.inert = true;
         const deal = card.animate([
-          { transform:`translate(${dx}px,${dy}px) rotate(0deg) scale(${origin.width/target.width},${origin.height/target.height})` },
-          { transform:`translate(${dx+70}px,${dy-28}px) rotate(-7deg) scale(${origin.width/target.width},${origin.height/target.height})`, offset:.22 },
+          { transform:`translate(${dx}px,${dy}px) rotate(0deg) ${scale}` },
+          { transform:`translate(${dx+70}px,${dy-28}px) rotate(-7deg) ${scale}`, offset:.22 },
           { transform:'translate(0,0) rotate(0deg) scale(1)' }
         ], { duration:780, delay:Math.min(index, 6)*100, easing:'cubic-bezier(.4,0,.2,1)', fill:'both' });
         deal.finished.then(() => { if (!closingRef.current) card.inert = false; }, () => {});
         return deal;
       });
       dealRef.current=animations;
-    });
+      Promise.allSettled(animations.map(animation=>animation.finished)).then(() => {
+        if (!closingRef.current) modal?.removeAttribute('data-dealing');
+      });
+    }
     const keydown = (event) => {
       if (document.querySelector('.obs-persistent-card,.obs-preview-side,.obs-inspector[aria-hidden="false"]')) return;
       if (event.key === 'Escape') closeStack();
@@ -139,7 +174,7 @@ export default function TopicStack({ posts, visiblePosts = posts, renderCard, re
       }
     };
     document.addEventListener('keydown', keydown);
-    return () => { modal?.removeEventListener('obs-stack-select',handoff); cancelAnimationFrame(frame); animations.forEach(animation=>animation.cancel()); dealRef.current.forEach(animation=>animation.cancel()); dealRef.current=[]; document.body.style.overflow = overflow; document.removeEventListener('keydown', keydown); if (!document.querySelector('.obs-preview-side,.obs-inspector.is-open')) previous?.focus?.({ preventScroll: true }); };
+    return () => { modal?.removeEventListener('obs-stack-select',handoff); stackRef.current?.classList.remove('obs-stack-settling'); animations.forEach(animation=>animation.cancel()); dealRef.current.forEach(animation=>animation.cancel()); dealRef.current=[]; document.body.style.overflow = overflow; document.removeEventListener('keydown', keydown); if (!document.querySelector('.obs-preview-side,.obs-inspector.is-open')) previous?.focus?.({ preventScroll: true }); };
   }, [expanded]);
   if (!newest) return null;
   if (total === 1) return <StackCard posts={posts}>{renderCard(newest)}</StackCard>;
