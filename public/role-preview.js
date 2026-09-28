@@ -38,8 +38,8 @@
     const selected = window.sessionStorage.getItem(ROLE_KEY) || '';
 
     // Standalone Tracker/Insights pages do not share React's header. Keep the
-    // same coordinator-only navigation contract here so a PD never sees links
-    // to tools they cannot use, including when the page builds its header
+    // same navigation contract here: Tracker is open to everyone, Insights is
+    // coordinator-only, including when the page builds its header
     // asynchronously after this script has mounted.
     const applyCoordinatorNavigation = () => {
       const activeRole = window.sessionStorage.getItem(ROLE_KEY) || '';
@@ -49,7 +49,7 @@
       document.querySelectorAll('a[href]').forEach((link) => {
         try {
           const path = new URL(link.href, window.location.href).pathname;
-          if (/\/(?:tracker|insights)\.html$/i.test(path)) {
+          if (/\/insights\.html$/i.test(path)) {
             link.hidden = !effectiveCoordinator;
             // Standalone styles assign `display:flex` to .linkbtn, which can
             // override the browser's default [hidden] rule. Set the inline
@@ -70,7 +70,7 @@
 
     const style = document.createElement('style');
     style.textContent = `
-      a[hidden][href$="/tracker.html"],a[hidden][href$="/insights.html"]{display:none!important}
+      a[hidden][href$="/insights.html"]{display:none!important}
       .sentient-role-preview{position:fixed;right:18px;bottom:18px;z-index:100;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
       .sentient-role-preview>button{display:inline-flex;align-items:center;gap:7px;min-height:34px;padding:0 11px;border:1px solid rgba(var(--accent-rgb),.48);border-radius:9px;background:var(--panel);box-shadow:0 12px 30px rgba(var(--shade),.3);color:var(--text);font-size:12px;font-weight:760;cursor:pointer}
       .sentient-role-preview>button span{padding:2px 5px;border-radius:4px;background:var(--accent);color:var(--accent-ink);font-size:9px;font-weight:900;letter-spacing:.08em}
