@@ -26,6 +26,7 @@ await page.route('https://cortex-api-db2e.onrender.com/**', async route=>{
  else if(url.includes('/posts'))data={posts,summary:{},ranges:{}};
  else if(url.includes('/accounts'))data={accounts:[{handle:'chatgptricks',label:'ChatGPTricks',group:'sentient',active:1,is_active:true}]};
  else if(url.includes('/lists'))data={lists:[]};
+ else if(url.includes('/golden-nuggets'))data={items:[{account:'chatgptricks',shortcode:'VIS4',label:'golden_nugget',targetAccount:'chatgptricks',score:0.8}]};
  else if(url.includes('/admin/me'))data={role:'admin',is_dev:true,email:'user03@example.com'};
  await route.fulfill({json:data});
 });
@@ -37,6 +38,10 @@ try {
  // Golden nuggets render as a gold card, not the dark obsidian surface.
  const golden=page.locator('.post-card-golden-nugget').first();
  assert.match(await golden.evaluate(e=>getComputedStyle(e).backgroundImage),/rgb\(214, 169, 46\)/);
+ // Shared marks from the backend reach every user, not only the DEV reviewer.
+ const shared=page.locator('.post-card[data-context-shortcode="VIS4"]');
+ await shared.first().waitFor();
+ assert.equal(await shared.first().evaluate(e=>e.classList.contains('post-card-golden-nugget')),true);
  const card=page.locator('.gallery-grid > .stack-card-shell .post-card').last();
  await card.locator('[aria-label="Post menu"]').click();
  assert.equal(await page.locator('.obs-inspector.is-open').count(),0);
