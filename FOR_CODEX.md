@@ -107,12 +107,12 @@ Instagram analytics + content-queue tool. It's two repos today:
 - **`chatgptricks/cortex`** — the backend. FastAPI, essentially one big
   `backend/app/main.py` (~114k chars, ~60 routes). Deployed on Render at
   `cortex-api-db2e.onrender.com`. Local path on this Mac:
-  `/Users/tbnalfaro/Desktop/Codex Projects/10 Predict` (the local folder name
+  `/Users/tbnalfaro/Developer/Codex Projects/10 Predict` (the local folder name
   is retained for now).
 
 Local paths as mounted for an agent working on this Mac:
-- tricks-dash: `/Users/tbnalfaro/Desktop/Codex Projects/09 Tricks Dash/Tricks Dash`
-- cortex: `/Users/tbnalfaro/Desktop/Codex Projects/10 Predict`
+- tricks-dash: `/Users/tbnalfaro/Developer/Codex Projects/09 Tricks Dash/Tricks Dash`
+- cortex: `/Users/tbnalfaro/Developer/Codex Projects/10 Predict`
 
 The backend is now Sentient Dash-only. Production data uses Postgres and all
 runtime media uses Cloudflare R2; the local SQLite/data directory is a
