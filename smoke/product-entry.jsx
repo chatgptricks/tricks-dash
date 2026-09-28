@@ -126,6 +126,9 @@ try {
   function Probe({rows}) { observed = useTopicGroups(rows, catalogue).groups; return null; }
   await act(async () => root.render(<Probe rows={[catalogue[2],catalogue[0]]} />));
   if (observed[0].id !== 's' || observed[0].posts.length !== 2) throw new Error('Filtering must preserve membership and order by newest cover');
+  catalogue.forEach((post) => { post.stackSize = 1; });
+  await act(async () => root.render(<Probe rows={[catalogue[0]]} />));
+  if (observed[0].total !== 2) throw new Error('Stack count must match its members, not a stale stackSize');
   console.log('PASS direct drag, confirmation, cancellation and persistent sorted membership');
   await act(async () => root.render(<CoverImage post={{shortcode:'retry', coverUrl:'https://example.com/cover.jpg'}} />));
   await act(async () => el.querySelector('img').dispatchEvent(new Event('error')));
