@@ -37,3 +37,11 @@ network or real project is touched. `entry.jsx` stubs `globalThis.fetch` **and**
 `window.fetch` — `apiFetch` calls `window.fetch`, and stubbing only the former
 makes every request fail and the app render its error state instead of the
 dashboard.
+
+## Visual release gate
+
+Run `npm run dev -- --host localhost --port 4178`, then `npm run smoke:visual`.
+This exercises the actual Research and Queue pages in Chromium with Firebase
+and backend responses mocked, including nested dialogs, narrow viewports,
+Light/Dark panels, full stack covers, and the closing shuffle. It does not write
+to the live backend. Set `CHROME_PATH` if Chrome is installed elsewhere.

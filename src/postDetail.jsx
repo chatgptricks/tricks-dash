@@ -248,6 +248,7 @@ export function Metric({ label, value }) {
 export const SelectedPost = memo(function SelectedPost({ post }) {
   const preview = (
     <CoverImage className={`selected-post-media ${posterTheme(post.type)}`} post={post} priority>
+      {post.showsHotBadge ? <><span className="obs-foil" aria-hidden="true" /><span className="obs-glare" aria-hidden="true" /></> : null}
       {post.isVideo ? (
         <div className="media-badge">
           <Video size={13} />
@@ -674,7 +675,7 @@ export function PostDetailPanel({ post, captionExtra = null }) {
         ) : post.usesOriginalAudio ? (
           <SongLine url={post.musicUrl}>Original audio</SongLine>
         ) : null}
-        {captionExtra}
+        {captionExtra ? <div className="obs-detail-actions">{captionExtra}</div> : null}
       </section>
 
       <section className="panel stats-panel">
