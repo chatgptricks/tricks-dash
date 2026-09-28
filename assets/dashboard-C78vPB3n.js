@@ -1,0 +1,1 @@
+import{R as e,j as t,a as r}from"./visual-theme-DByKDxdJ.js";import{A as o}from"./App-BiisVrmG.js";import"./styles-OnX8kTBZ.js";import"./dashboardCatalogue-nCg0ydnc.js";e.createRoot(document.getElementById("root")).render(t.jsx(r.StrictMode,{children:t.jsx(o,{})}));
