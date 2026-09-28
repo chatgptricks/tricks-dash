@@ -65,6 +65,13 @@ try {
  await page.locator('.caption-generator-modal button[type="submit"]').click();
  await page.waitForSelector('.caption-generator-modal .queue-assign-error');
  assert.equal(await page.locator('.caption-generator-modal .queue-assign-error').textContent(),'The generated caption did not pass Jev verification.');
+ // A flagged caption is still returned for editing, with Jev's review note.
+ await page.unroute('**/api/dashboard/posts/generate-caption');
+ await page.route('**/api/dashboard/posts/generate-caption',route=>route.fulfill({json:{caption:'Flagged but editable caption',jevVerification:{accepted:false},jevWarning:'Jev flagged this caption. Check its facts and CTA before publishing.'}}));
+ await page.locator('.caption-generator-modal button[type="submit"]').click();
+ await page.waitForSelector('.caption-generator-modal .caption-generator-review');
+ assert.equal(await page.locator('.caption-generator-modal .caption-generator-result textarea').inputValue(),'Flagged but editable caption');
+ assert.equal(await page.locator('.caption-generator-modal .queue-assign-error').count(),0);
  await page.keyboard.press('Escape');await page.waitForTimeout(100);assert.equal(await page.locator('.obs-inspector.is-open').count(),1);
  for(const theme of ['dark','light']){
   await page.evaluate(t=>document.documentElement.dataset.theme=t,theme);
