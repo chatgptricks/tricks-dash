@@ -564,3 +564,15 @@ body::before { content:''; position:fixed; inset:0; pointer-events:none; z-index
 :root[data-theme='light'] .obs-inspector-info { background:rgba(238,239,242,.9); }
 /* Hold the ambient glow still while an overlay blurs the page behind it. */
 body:has(.sidebar-backdrop,.obs-modal-backdrop,.post-stack-modal)::before { animation-play-state:paused; }
+
+/* Golden nuggets keep their gold card: the obsidian surface above uses
+   !important and otherwise leaves gold-ink text on a dark card. */
+.obs-card.post-card-golden-nugget,
+.obs-card-front.post-card-golden-nugget { background:linear-gradient(155deg,#d6a92e 0%,#f0ca58 48%,#b87f16 100%) !important; box-shadow:inset 0 0 0 1px rgba(255,226,138,.78),0 14px 34px rgba(179,111,10,.3); }
+.obs-card.post-card-golden-nugget:hover { box-shadow:inset 0 0 0 1px rgba(255,236,170,.95),0 20px 44px rgba(179,111,10,.42); }
+.obs-card.post-card-golden-nugget .post-header,
+.obs-card.post-card-golden-nugget .post-copy { background:transparent; }
+.obs-card.post-card-golden-nugget .post-menu > .icon-button { color:var(--gold-card-ink,#251804); }
+.obs-card.post-card-golden-nugget .post-menu > .icon-button:hover::before { background:rgba(37,24,4,.12); }
+/* A HOT badge already owns the cover's top-left corner. */
+.post-media:has(.hot-badge) > .golden-nugget-badge,.post-media:has(.hot-badge) .golden-nugget-badge { top:auto; bottom:8px; }
