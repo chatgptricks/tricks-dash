@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "lint": "eslint .",
     "test": "npm run test:product && npm run test:queue && npm run test:resilience && npm run test:users && npm run smoke:queue && npm run smoke:settings && npm run smoke:mobile && npm run smoke:roles && node smoke/static-pages.mjs && node smoke/tracker.mjs && node smoke/insights-extras.mjs",
     "test:product": "node scripts/test-topics.mjs && node smoke/run-product.mjs",
     "test:queue": "node scripts/test-queue.mjs",
@@ -22,12 +23,15 @@
   "dependencies": {
     "firebase": "^11.6.0",
     "lucide-react": "^0.542.0",
-    "motion": "^13.4.4",
     "react": "^19.1.1",
     "react-dom": "^19.1.1"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@vitejs/plugin-react": "^5.0.4",
+    "eslint": "^10.11.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.12.0",
     "jsdom": "^30.0.1",
     "playwright": "^1.61.1",
     "vite": "^7.0.6"

@@ -1,15 +1,20 @@
 import { useEffect, useRef } from 'react';
 
-export function useInspectorModal(open, close) {
+// `inertSiblings` is for pages whose inspector sits beside the page content
+// (Queue renders it inside <main>) rather than next to a single background pane.
+const BACKDROPS = '.sidebar-backdrop,.obs-modal-backdrop';
+
+export function useInspectorModal(open, close, { inertSiblings = false } = {}) {
   const closeRef = useRef(close);
   closeRef.current = close;
   useEffect(() => {
     if (!open) return;
     const previous = document.activeElement;
     const modal = document.querySelector('.obs-inspector.is-open,.obs-preview-side');
-    const background = document.querySelector('.left-pane,.obs-preview-grid');
-    const wasInert = background?.inert;
-    if (background) background.inert = true;
+    const background = inertSiblings
+      ? [...(modal?.parentElement?.children || [])].filter(node => node !== modal && !node.matches(BACKDROPS) && !node.inert)
+      : [document.querySelector('.left-pane,.obs-preview-grid')].filter(node => node && !node.inert);
+    background.forEach(node => { node.inert = true; });
     const frame = requestAnimationFrame(() => modal?.querySelector('button')?.focus({preventScroll:true}));
     const onKey = event => {
       // Download, caption and assignment dialogs sit above the inspector.
@@ -23,6 +28,6 @@ export function useInspectorModal(open, close) {
       if (!event.shiftKey && document.activeElement === last) {event.preventDefault();first?.focus();}
     };
     document.addEventListener('keydown',onKey);
-    return () => { cancelAnimationFrame(frame);document.removeEventListener('keydown',onKey);if(background)background.inert=wasInert;previous?.focus?.({preventScroll:true}); };
+    return () => { cancelAnimationFrame(frame);document.removeEventListener('keydown',onKey);background.forEach(node => { node.inert = false; });previous?.focus?.({preventScroll:true}); };
   }, [open]);
 }

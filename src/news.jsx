@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { apiFetch, API_BASE } from './api';
@@ -10,7 +10,6 @@ import { PrefsProvider } from './prefsContext';
 import './styles.css';
 import './news.css';
 
-const REVIEW_VERSION = 'news-story-discovery-v2';
 const NEWS_FEEDS = [
   { id: '1FY0ugZC3knghvvL', label: 'AI fraud & warnings', group: 'AI SAFETY', type: 'news' },
   { id: 'Zyy4J7XWhoLMzBmL', label: 'AI risk & policy', group: 'AI SAFETY', type: 'news' },
@@ -23,8 +22,7 @@ const NEWS_FEEDS = [
   { id: 'Q48RJR9Y86VLB48k', label: 'OpenAI · ChatGPT', group: 'Ticker', type: 'news' },
   { id: 'cUiUbXPU5KD7L6u1', label: 'Robots & robotics', group: 'Ticker', type: 'news' },
   { id: 'ow6LmNtmgkH0e876', label: 'Artificial intelligence', group: 'Ticker', type: 'news' },
-].map(feed => ({ ...feed, url: `https://rss.app/feeds/v1.1/${feed.id}.json` }));
-const feedCache = new Map();
+];
 const ANGLES = {
   practical_guide: 'Turn the confirmed idea into a short workflow someone can try.',
   comparison: 'Show the supported differences and explain when each one matters.',
@@ -32,7 +30,6 @@ const ANGLES = {
   visual_explainer: 'Show the mechanism or surprising detail with a simple visual.',
   needs_reporting: 'Get more evidence from the original source before drafting.',
 };
-const STOP_WORDS = new Set('about after also been from have into just more news that their this with will what when where which while your says said how why new latest their says'.split(' '));
 
 function Login({ error }) {
   const [busy, setBusy] = useState(false);
@@ -40,65 +37,23 @@ function Login({ error }) {
   return <main className="news-auth"><section><span className="news-kicker">Sentient Dash · DEV tool</span><h1>News</h1><p>Sign in with your authorized Sentient account to review story ideas.</p><button onClick={login} disabled={busy}>{busy ? 'Signing in…' : 'Sign in with Google'}</button>{error && <p className="news-error">{error}</p>}</section></main>;
 }
 
-function safeHttpUrl(value) {
-  try { const url = new URL(String(value || '')); return ['http:', 'https:'].includes(url.protocol) ? url.href : ''; } catch { return ''; }
-}
-function decodeEntities(value) { const element = document.createElement('textarea'); element.innerHTML = String(value || ''); return element.value; }
-function stripHtml(value) { const element = document.createElement('div'); element.innerHTML = String(value || ''); element.querySelectorAll('script,style').forEach(node => node.remove()); return (element.textContent || element.innerText || '').replace(/\s+/g, ' ').trim(); }
-function canonicalUrl(value) {
-  try { const url = new URL(value); [...url.searchParams.keys()].filter(key => /^(utm_|fbclid|gclid)/i.test(key)).forEach(key => url.searchParams.delete(key)); url.hash = ''; url.pathname = url.pathname.replace(/\/+$/, '') || '/'; return url.href; } catch { return value; }
-}
-function normalize(item, feed) {
-  const link = safeHttpUrl(item.url || item.link || item.guid || '');
-  const published = item.date_published || item.date_modified || item.pubDate || item.isoDate || item.published || item.date || '';
-  const image = safeHttpUrl(item.image || item.thumbnail || item.attachments?.[0]?.url || item.enclosure?.thumbnail || item.enclosure?.link || item.image_url || '');
-  const description = item.content_text || item.description || item.content || item.summary || item.content_html || '';
-  const author = item.authors?.[0]?.name || item.author || item.creator || '';
-  let publisher = feed.label;
-  try { publisher = new URL(link).hostname.replace(/^www\./, ''); } catch {}
-  return { id: canonicalUrl(link), title: decodeEntities(item.title || 'Untitled story'), description, link, image, published, source: author || feed.label, publisher, author, sourceType: feed.type, feedLabel: feed.label, feedGroup: feed.group, socialSignal: feed.socialSignal || '', raw: item };
-}
-async function loadFeed(feed) {
-  const response = await fetch(feed.url, { signal: AbortSignal.timeout(18000), headers: { Accept: 'application/json' } });
-  if (!response.ok) throw new Error(`RSS.app returned ${response.status}`);
-  const payload = await response.json();
-  if (payload?.status === 'error' || payload?.success === false) throw new Error(payload.message || 'RSS.app reported an error');
-  let rows = Array.isArray(payload) ? payload : payload.items || payload.data?.items || payload.data || [];
-  if (!Array.isArray(rows) && Array.isArray(rows.items)) rows = rows.items;
-  if (!Array.isArray(rows)) throw new Error('Invalid feed response');
-  const stories = rows.map(item => normalize(item, feed)).filter(item => item.title && item.link);
-  if (!stories.length && rows.length) throw new Error('Feed contained no usable stories');
-  return stories;
-}
-function titleTokens(title) { return new Set(String(title || '').toLowerCase().match(/[a-z0-9]{3,}/g)?.filter(token => !STOP_WORDS.has(token)) || []); }
-function sameStory(left, right) {
-  if (left.id === right.id) return true;
-  const a = titleTokens(left.title); const b = titleTokens(right.title);
-  if (Math.min(a.size, b.size) < 3) return false;
-  let shared = 0; a.forEach(token => { if (b.has(token)) shared += 1; });
-  return shared / Math.min(a.size, b.size) >= 0.78;
-}
-function storyClusters(stories) {
-  const groups = [];
-  for (const story of stories) {
-    const group = groups.find(candidate => candidate.stories.some(existing => sameStory(existing, story)));
-    if (group) group.stories.push(story); else groups.push({ stories: [story] });
-  }
-  return groups.map(({ stories: group }) => {
-    group.sort((a,b) => (Date.parse(b.published) || 0) - (Date.parse(a.published) || 0));
-    const primary = group[0];
-    const relatedStories = [...group.slice(1), ...(primary.relatedStories || [])].map(item => ({ title: item.title, description: stripHtml(item.description).slice(0, 500), source: item.source, publisher: item.publisher, feedLabel: item.feedLabel, link: item.link }));
-    const feeds = [...new Set([...group.map(item => item.feedLabel), ...(primary.duplicateCoverage || []).map(item => item.feedLabel)])];
-    const publishers = [...new Set([...group.map(item => item.publisher), ...(primary.duplicateCoverage || []).map(item => item.publisher)])];
-    return { ...primary, relatedStories, coverageCount: publishers.length, coverageFeeds: feeds, publishers, searchText: group.map(item => `${item.title} ${stripHtml(item.description)} ${item.source} ${item.feedLabel}`).join(' ') };
-  }).sort((a,b) => (Date.parse(b.published) || 0) - (Date.parse(a.published) || 0));
+// Story text originates from third-party feeds. DOMParser builds an inert
+// document, so handlers such as <img onerror> never run (unlike innerHTML).
+const htmlParser = new DOMParser();
+// Search, ranking and rendering all ask for the same excerpts repeatedly.
+const plainTextCache = new Map();
+function stripHtml(value) {
+  const key = String(value || '');
+  if (plainTextCache.has(key)) return plainTextCache.get(key);
+  const doc = htmlParser.parseFromString(key, 'text/html');
+  doc.querySelectorAll('script,style').forEach(node => node.remove());
+  const text = (doc.body?.textContent || '').replace(/\s+/g, ' ').trim();
+  if (plainTextCache.size > 2000) plainTextCache.clear();
+  plainTextCache.set(key, text);
+  return text;
 }
 function dateLabel(value) { const date = new Date(value); return Number.isNaN(date.getTime()) ? 'Date unavailable' : new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(date); }
 function relativeAge(value) { const age = Date.now() - Date.parse(value); if (!Number.isFinite(age) || age < 0) return ''; const hours = Math.floor(age / 3600000); return hours < 1 ? 'Just now' : hours < 24 ? `${hours}h ago` : `${Math.floor(hours / 24)}d ago`; }
-function normalizeCachedReview(review) {
-  if (!review || review.reviewVersion !== REVIEW_VERSION) return null;
-  return review;
-}
 function discoveryPriority(item) {
   const text = `${item.title} ${stripHtml(item.description)}`.toLowerCase();
   const relevant = /artificial intelligence|\bai\b|chatgpt|openai|claude|anthropic|robot|llm|machine learning/.test(text);
@@ -245,7 +200,6 @@ function NewsApp() {
   if (viewer && !canAccessNews) return <main className="news-auth"><section><span className="news-kicker">Sentient Dash · DEV tool</span><h1>News</h1><p>This tool is only available to authorized accounts.</p></section></main>;
 
   const reviewedCount = candidates.filter(item => reviews[item.id]).length;
-  const healthyFeeds = feedStatuses.filter(status => status.ok).length;
   const counts = {
     all: candidates.length,
     golden: candidates.filter(item => ['golden_nugget', 'gold'].includes(reviews[item.id]?.label)).length,
