@@ -1,3 +1,7 @@
+import { useInspectorModal } from './use-inspector-modal';
+import { sendCardToSide, returnCardFromSide } from './card-flight';
+import { motion } from 'motion/react';
+import { useObsidianCard, hotMetalStyle } from './obsidian-card';
 import TopicStack from './TopicStack';
 import { StackActions, useStackActions, useStackScope } from './StackActions';
 import { applyStackMembershipResult, resolveResearchPost, runStackOperation, stackPostKey } from './stackOperations';
@@ -594,7 +598,8 @@ const dateFormatter = new Intl.DateTimeFormat('en-US', {
 });
 
 function formatDate(iso) {
-  return dateFormatter.format(new Date(iso));
+  const date = iso ? new Date(iso) : null;
+  return date && Number.isFinite(date.getTime()) ? dateFormatter.format(date) : '—';
 }
 
 // Compact "how long ago" for the HOT pill -- shares the badge's own timestamp
@@ -1993,8 +1998,10 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
   }, [patchPost]);
 
   const closeSidebar = useCallback(() => {
-    setIsSidebarOpen(false);
-  }, []);
+    returnCardFromSide(selectedKey, () => setIsSidebarOpen(false));
+  }, [selectedKey]);
+
+  useInspectorModal(isSidebarOpen, closeSidebar);
 
   const selectPost = useCallback((postKey) => {
     startTransition(() => {
@@ -2404,7 +2411,9 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
         /> : null}
 
         {!loading && !loadError ? <aside
-          className={isSidebarOpen ? 'right-rail is-open' : 'right-rail'}
+          className={isSidebarOpen ? 'right-rail obs-inspector is-open' : 'right-rail obs-inspector'}
+          role="dialog"
+          aria-modal={isSidebarOpen ? true : undefined}
           aria-label="Selected post details"
           aria-hidden={!isSidebarOpen}
         >
@@ -2413,26 +2422,20 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
               <X size={14} />
             </button>
           ) : null}
-          <section className="panel detail">
-            {selected ? (
-              <SelectedPost post={selected} />
-            ) : (
-              <div className="empty-state">
-                <p>{t('No posts match the current filters.')}</p>
-                <button className="ghost-button" onClick={onReset}>
-                  {t('Clear filters')}
-                </button>
-              </div>
-            )}
+          <header className="obs-inspector-heading"><span>Selected post</span><small>Research / Details</small></header>
+          <section className="obs-card-slot" data-obs-sideview={isSidebarOpen ? selected?.postKey : undefined}>
+            {selected ? <div className="obs-card-fallback"><PostCard post={selected} selected={false} onSelect={() => {}} /></div> : null}
           </section>
-
+          <div className="obs-inspector-info">
+          {selected?.permalink ? <a className="ghost-button obs-open-original" href={selected.permalink} target="_blank" rel="noopener noreferrer">{t('Open original')} ↗</a> : null}
           {selected ? (
             <PostDetailPanel
               post={selected}
-              captionExtra={<>{selected.account === 'chatgptricks' ? <CanvaLine url={canvaLinkForPost(selected.postDate)} /> : null}<button type="button" className="ghost-button caption-ai-button" onClick={() => setCaptionPost(selected)}><Sparkles size={13} />{t('Generate similar caption')}</button>{isDev ? <DevJevTools post={selected} onGoldenNugget={(result) => rememberGoldenNugget(selected.postKey, result)} /> : null}{poolAccess ? <><button type="button" className="ghost-button" onClick={() => setAssignmentPost(selected)}><ListTodo size={13} />Send to Pool</button><QuickAddButton key={selected.postKey} post={selected} onQuickAdd={quickAddToPool} onAdded={closeSidebar} /></> : null}</>}
+              captionExtra={<>{selected.account === 'chatgptricks' ? <CanvaLine url={canvaLinkForPost(selected.postDate)} /> : null}<button type="button" className="ghost-button caption-ai-button" onClick={() => setCaptionPost(selected)}><Sparkles size={13} />{t('Generate similar caption')}</button>{knownDev ? <DevJevTools post={selected} onGoldenNugget={(result) => rememberGoldenNugget(selected.postKey, result)} /> : null}{poolAccess ? <><button type="button" className="ghost-button" onClick={() => setAssignmentPost(selected)}><ListTodo size={13} />Send to Pool</button><QuickAddButton key={selected.postKey} post={selected} onQuickAdd={quickAddToPool} onAdded={closeSidebar} /></> : null}</>}
             />
           ) : null}
 
+          </div>
         </aside> : null}
       </main>
 
@@ -2499,9 +2502,9 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
 function CanvaLine({ url }) {
   if (!url) return null;
   return (
-    <a className="song-line canva-line" href={url} target="_blank" rel="noreferrer" title="Open this month's Canva design doc">
+    <a className="ghost-button canva-button" href={url} target="_blank" rel="noopener noreferrer" title="Open this month's Canva design doc">
       <ExternalLink size={14} />
-      <span>Open Canva design doc</span>
+      <span>Open in Canva</span>
     </a>
   );
 }
@@ -6307,8 +6310,9 @@ function PostMenu({ post, isPromo, onFlags, onReload, onAssign, onQuickAdd, onQu
   };
 
   return (
-    <div className="post-menu" ref={ref} onKeyDown={(event) => event.stopPropagation()}>
+    <div className="post-menu" ref={ref} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); if (!event.target.closest('button,[role="menu"]')) setOpen((value) => !value); }} onKeyDown={(event) => event.stopPropagation()}>
       <button
+        type="button"
         className="icon-button"
         onClick={(event) => {
           event.stopPropagation();
@@ -6419,10 +6423,15 @@ const FreshnessRing = memo(function FreshnessRing({ timestamp }) {
 
 export const PostCard = memo(function PostCard({ post, goldenNugget, priority, selected, onSelect, onFlags, onReload, onAssign, onQuickAdd, onQuickAddSuccess, canPool, canSuggest, draggable, onDragStart, onDragOver, onDrop, hideCaption = false }) {
   const [avatarFailed, setAvatarFailed] = useState(false);
-  const handleClick = () => onSelect(post.postKey);
+  const handleClick = (event) => {
+    if (event.target.closest('button,a,input,select,textarea,[role="menu"],.post-menu')) return;
+    sendCardToSide(event.currentTarget, post.postKey); onSelect(post.postKey);
+  };
   const handleKeyDown = (event) => {
+    if (event.target !== event.currentTarget) return;
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
+      sendCardToSide(event.currentTarget, post.postKey);
       onSelect(post.postKey);
     }
   };
@@ -6430,16 +6439,22 @@ export const PostCard = memo(function PostCard({ post, goldenNugget, priority, s
     event.stopPropagation();
   };
   const effects = hotEffects(post);
+  const cardMotion = useObsidianCard();
   const isConfirmedGoldenNugget = goldenNugget?.label === 'golden_nugget';
   const isPromisingNugget = goldenNugget?.label === 'promising';
-  const cardClassName = `post-card${effects.className}${post.hidden ? ' post-card-hidden' : ''}${isConfirmedGoldenNugget ? ' post-card-golden-nugget' : ''}`;
+  const cardClassName = `post-card obs-card${post.showsHotBadge ? ' obs-card-hot' : ''}${effects.className}${post.hidden ? ' post-card-hidden' : ''}${isConfirmedGoldenNugget ? ' post-card-golden-nugget' : ''}`;
   // Promo is either detected from the caption hashtag or set explicitly on
   // the post (the card's ... menu writes that flag), so a promo that didn't
   // use the tag can still be marked by hand.
   const isPromo = Boolean(post.isPromo) || PROMO_HASHTAG_RE.test(post.caption || '');
 
   return (
-    <article
+    <motion.article
+      {...cardMotion}
+      style={{ ...cardMotion.style, ...hotMetalStyle(post) }}
+      initial={false}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: .45, ease: [.22, .61, .36, 1] }}
       className={cardClassName}
       onClick={handleClick}
       onKeyDown={handleKeyDown}
@@ -6477,7 +6492,7 @@ export const PostCard = memo(function PostCard({ post, goldenNugget, priority, s
             )}
           </div>
           <div className="post-user-copy">
-            <strong>{post.account || IG_HANDLE}</strong>
+            <strong title={post.account || IG_HANDLE}>{post.account || IG_HANDLE}</strong>
             <span>{formatDate(post.postDate)}</span>
           </div>
         </div>
@@ -6488,6 +6503,7 @@ export const PostCard = memo(function PostCard({ post, goldenNugget, priority, s
       </div>
 
       <CoverImage className={`post-media ${posterTheme(post.type)}${post.isVideo && post.showsHotBadge ? ' has-video-hot' : ''}`} post={post} priority={priority}>
+        {post.showsHotBadge ? <><span className="obs-metal" aria-hidden="true" /><span className="obs-foil" aria-hidden="true" /><span className="obs-glare" aria-hidden="true" /></> : <span className="obs-soft-glare" aria-hidden="true" />}
         {post.isDeleted ? <div className="post-deleted-overlay" title="Deleted from Instagram" aria-label="Deleted from Instagram"><Trash2 size={42} strokeWidth={2.4} /></div> : null}
         {post.isVideo ? (
           <div className="media-badge">
@@ -6515,7 +6531,7 @@ export const PostCard = memo(function PostCard({ post, goldenNugget, priority, s
       </CoverImage>
 
       <div className="post-editorial-actions" onClick={stopAction}>
-        <button type="button" onClick={() => onSelect(post.postKey)}>View details</button>
+        <button type="button" onClick={(event) => { sendCardToSide(event.currentTarget.closest('.post-card'), post.postKey); onSelect(post.postKey); }}>View details</button>
         {post.queueRequestId && post.queueState !== 'cancelled' ? <a className="editorial-primary" href={`/queue.html?r=${encodeRouteState({ task: post.queueRequestId })}`}>Open in Queue</a> : canPool ? <button type="button" className="editorial-primary" onClick={() => onAssign(post)}>Send to Pool</button> : canSuggest ? <a className="editorial-primary" href={`/queue.html?r=${encodeRouteState({ suggest: post.permalink })}`}>Suggest post</a> : null}
         <a href={post.permalink} target="_blank" rel="noreferrer">Original <ExternalLink size={11} /></a>
       </div>
@@ -6523,14 +6539,14 @@ export const PostCard = memo(function PostCard({ post, goldenNugget, priority, s
       <div className="post-copy">
         <div className="post-likes">{formatLikes(post.likes)} likes</div>
         {!hideCaption ? <p>
-          <strong>{post.account || IG_HANDLE}</strong> {post.headline || post.excerpt}
+          <strong title={post.account || IG_HANDLE}>{post.account || IG_HANDLE}</strong> {post.headline || post.excerpt}
         </p> : null}
         <div className="post-footer">
-          <span>{compactFormatter.format(post.comments)} comments</span>
+          <span>{post.comments != null && Number.isFinite(Number(post.comments)) ? compactFormatter.format(post.comments) : '—'} comments</span>
           <span>{formatDate(post.postDate)}</span>
         </div>
       </div>
-    </article>
+    </motion.article>
   );
 });
 

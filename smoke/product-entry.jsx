@@ -12,6 +12,7 @@ const task = { id: 7, designerEmail: email, title: 'My assigned story', status: 
 const data = { viewer: { email, displayName: 'Designer' }, assignedRequests: [task, { ...task, id: 8, title: 'Another designer story', designerEmail: 'other@example.com' }], planningRequests: [task], requests: [{ status: 'pool' }], pendingTicketCount: 2 };
 globalThis.fetch = window.fetch = async () => ({ ok: true, status: 200, json: async () => data });
 const el = document.body.appendChild(document.createElement('div')); const root = createRoot(el);
+const galleryCards = () => [...el.querySelectorAll('.test-card')].filter(card => !card.closest('[inert]'));
 try {
   let accountSelection = [];
   function AccountSearchHarness() {
@@ -40,14 +41,14 @@ try {
   let chosen = null;
   const variants = [{postKey:'a',likes:12,timestamp:300},{postKey:'b',likes:97,timestamp:100},{postKey:'c',likes:30,timestamp:200}];
   await act(async () => root.render(<TopicStack posts={variants} renderCard={(post, expand) => <button className="test-card" onClick={expand || (() => { chosen = post.postKey; })}>{post.postKey}</button>} />));
-  if (el.querySelectorAll('.test-card').length !== 1 || el.querySelector('.test-card').textContent !== 'a') throw new Error('Stack must show newest cover only');
-  await act(async () => el.querySelector('.test-card').click());
+  if (galleryCards().length !== 1 || galleryCards()[0].textContent !== 'a') throw new Error('Stack must show newest cover only');
+  await act(async () => galleryCards()[0].click());
   if ([...document.querySelectorAll('.post-stack-modal .test-card')].map((x) => x.textContent).join(',') !== 'b,c,a') throw new Error('Expand must expose every version in likes order');
   if (document.querySelector('.stack-champion .test-card').textContent !== 'b') throw new Error('Champion must be the most liked, not the cover');
   await act(async () => document.querySelectorAll('.post-stack-modal .test-card')[1].click());
   if (chosen !== 'c') throw new Error('Expanded version must be selectable');
   if (document.querySelector('.post-stack-modal')) throw new Error('Choosing a post must close the modal');
-  if (el.querySelectorAll('.test-card').length !== 1) throw new Error('Collapse must restore stack');
+  if (galleryCards().length !== 1) throw new Error('Collapse must restore stack');
   console.log('PASS stack cover, expansion, choosing an alternate and collapse');
   const sample = { postKey: 'test:one', account: 'test', shortcode: 'one', postDate: '2026-09-05', timestamp: Date.now(), likes: 10, comments: 2, caption: 'Test', headline: 'Test', postType: 'Image', type: 'Image', permalink: 'https://instagram.com/p/one/' };
   const refreshed = [];
