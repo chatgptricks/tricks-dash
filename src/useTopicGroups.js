@@ -15,7 +15,12 @@ export function useTopicGroups(posts, catalogue = posts, sort = 'newest') {
       if (!full.has(id)) full.set(id, []);
       full.get(id).push(post);
     }
-    const result = [...grouped.values()].map((group) => ({ ...group, visiblePosts: group.posts, posts: full.get(group.id) || group.posts }));
+    // Count the members actually present: a post's stored stackSize can be
+    // stale after regrouping, so the badge would disagree with the open stack.
+    const result = [...grouped.values()].map((group) => {
+      const members = full.get(group.id) || group.posts;
+      return { ...group, visiblePosts: group.posts, posts: members, total: members.length };
+    });
     const newest = (group) => Math.max(...group.posts.map((post) => Number(post.timestamp) || Date.parse(post.postDate) || 0));
     if (sort === 'newest') result.sort((a,b) => newest(b) - newest(a) || a.id.localeCompare(b.id));
     if (sort === 'oldest') result.sort((a,b) => newest(a) - newest(b) || a.id.localeCompare(b.id));
