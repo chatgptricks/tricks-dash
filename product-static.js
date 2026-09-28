@@ -25,7 +25,8 @@ const accessTimer = setInterval(async () => {
     const response = await fetch('https://cortex-api-db2e.onrender.com/api/dashboard/me', { headers: window.__sentientRolePreviewHeaders ? window.__sentientRolePreviewHeaders(headers) : headers });
     if (!response.ok) return;
     const viewer = await response.json(); const allowed = coordinatorFor(viewer);
-    document.querySelectorAll('.product-nav a').forEach((link) => { if (/\/(tracker|insights)\.html$/.test(new URL(link.href).pathname)) { link.hidden = !allowed; link.style.display = allowed ? '' : 'none'; } });
+    // Tracker is open to everyone; only Insights stays coordinator-only.
+    document.querySelectorAll('.product-nav a').forEach((link) => { if (/\/insights\.html$/.test(new URL(link.href).pathname)) { link.hidden = !allowed; link.style.display = allowed ? '' : 'none'; } });
   } catch {}
 }, 250);
 
