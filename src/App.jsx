@@ -260,6 +260,7 @@ const STACKS_PER_BATCH = 60;
 // post's persisted classification; it lets us review the final card treatment
 // against a real post before deciding whether to make the signal permanent.
 const FORCED_GOLDEN_NUGGET_SHORTCODE = 'ddjf3iqTVUD'.toLowerCase();
+const goldenNuggetKey = (account, shortcode) => `${String(account || '').replace(/^@/, '').toLowerCase()}:${String(shortcode || '')}`;
 // One emoji favicon per section, drawn as an inline SVG data URI.
 //
 // All the dashboard sections are the same index.html, so a static <link> can
@@ -896,14 +897,43 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
     const now = Date.now();
     return dashboard.posts.map((post) => normalizePost(post, now));
   }, [dashboard.posts]);
-  const rememberGoldenNugget = useCallback((postKey, result) => {
+  // Confirmed Golden Nuggets are stored by the backend and shared with every
+  // user. A DEV review in this tab updates both views immediately.
+  const [sharedGoldenNuggets, setSharedGoldenNuggets] = useState({});
+  const loadGoldenNuggets = useCallback(async () => {
+    try {
+      const response = await apiFetch(`${API_BASE}/api/dashboard/golden-nuggets`);
+      if (!response.ok) return;
+      const data = await response.json();
+      if (!Array.isArray(data.items)) return;
+      setSharedGoldenNuggets(Object.fromEntries(data.items.map((item) => [goldenNuggetKey(item.account, item.shortcode), item])));
+    } catch {
+      // Golden Nuggets are an enhancement -- never block the dashboard on them.
+    }
+  }, []);
+  useEffect(() => {
+    loadGoldenNuggets();
+    const timer = window.setInterval(loadGoldenNuggets, 120_000);
+    return () => window.clearInterval(timer);
+  }, [loadGoldenNuggets]);
+  const rememberGoldenNugget = useCallback((post, result) => {
     setGoldenNuggets((current) => {
       const next = { ...current };
-      if (result?.label === 'golden_nugget' || result?.label === 'promising') next[postKey] = result;
-      else delete next[postKey];
+      if (result?.label === 'golden_nugget' || result?.label === 'promising') next[post.postKey] = result;
+      else delete next[post.postKey];
+      return next;
+    });
+    setSharedGoldenNuggets((current) => {
+      const key = goldenNuggetKey(post.account, post.shortcode);
+      const next = { ...current };
+      if (result?.label === 'golden_nugget') next[key] = { ...result, account: post.account, shortcode: post.shortcode };
+      else delete next[key];
       return next;
     });
   }, []);
+  const goldenNuggetFor = (post) => goldenNuggets[post.postKey]
+    || sharedGoldenNuggets[goldenNuggetKey(post.account, post.shortcode)]
+    || (isDev && String(post.shortcode || '').toLowerCase() === FORCED_GOLDEN_NUGGET_SHORTCODE ? { label: 'golden_nugget', targetAccount: post.account, preview: true } : null);
   const summary = dashboard.summary;
   const ranges = useMemo(() => calculateRanges(posts), [posts]);
   const datePresets = useMemo(() => buildDatePresets(ranges), [ranges]);
@@ -2275,7 +2305,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
                     // and those cards got stuck at the top of every sort.
                     key={post.postKey}
                     post={post}
-                    goldenNugget={isDev ? (goldenNuggets[post.postKey] || (String(post.shortcode || '').toLowerCase() === FORCED_GOLDEN_NUGGET_SHORTCODE ? { label: 'golden_nugget', targetAccount: post.account, preview: true } : null)) : null}
+                    goldenNugget={goldenNuggetFor(post)}
                     priority={index < 6}
                     selected={selected?.postKey === post.postKey}
                     onSelect={expand || selectPost}
@@ -2375,7 +2405,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
           {selected ? (
             <PostDetailPanel
               post={selected}
-              captionExtra={<>{selected.account === 'chatgptricks' ? <CanvaLine url={canvaLinkForPost(selected.postDate)} /> : null}<button type="button" className="ghost-button caption-ai-button" onClick={() => setCaptionPost(selected)}><Sparkles size={13} />{t('Generate similar caption')}</button>{knownDev ? <DevJevTools post={selected} onGoldenNugget={(result) => rememberGoldenNugget(selected.postKey, result)} /> : null}{poolAccess ? <><button type="button" className="ghost-button" onClick={() => setAssignmentPost(selected)}><ListTodo size={13} />Send to Pool</button><QuickAddButton key={selected.postKey} post={selected} onQuickAdd={quickAddToPool} onAdded={closeSidebar} /></> : null}</>}
+              captionExtra={<>{selected.account === 'chatgptricks' ? <CanvaLine url={canvaLinkForPost(selected.postDate)} /> : null}<button type="button" className="ghost-button caption-ai-button" onClick={() => setCaptionPost(selected)}><Sparkles size={13} />{t('Generate similar caption')}</button>{knownDev ? <DevJevTools post={selected} onGoldenNugget={(result) => rememberGoldenNugget(selected, result)} /> : null}{poolAccess ? <><button type="button" className="ghost-button" onClick={() => setAssignmentPost(selected)}><ListTodo size={13} />Send to Pool</button><QuickAddButton key={selected.postKey} post={selected} onQuickAdd={quickAddToPool} onAdded={closeSidebar} /></> : null}</>}
             />
           ) : null}
 
