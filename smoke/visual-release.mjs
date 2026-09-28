@@ -17,7 +17,7 @@ const errors=[]; page.on('pageerror', e=>errors.push(e.message));
 await page.route('**/node_modules/.vite/deps/firebase_auth.js*', route=>route.fulfill({contentType:'text/javascript',body:fs.readFileSync('smoke/stub-firebase-auth.js','utf8')}));
 await page.route('**/node_modules/.vite/deps/firebase_app.js*', route=>route.fulfill({contentType:'text/javascript',body:fs.readFileSync('smoke/stub-firebase-app.js','utf8')}));
 const cover='data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="600" height="800"><rect width="600" height="800" fill="#18383d"/><text x="40" y="55" fill="white" font-size="25">TOP — complete cover</text><text x="40" y="750" fill="white" font-size="25">BOTTOM</text></svg>');
-const posts=Array.from({length:5},(_,i)=>({id:i+1,postKey:`chatgptricks:VIS${i}`,shortcode:`VIS${i}`,account:'chatgptricks',caption:'A visual release validation caption. '.repeat(4),postType:'Carousel',type:'Carousel',likes:1000-i*40,comments:23,postDate:new Date(Date.now()-i*3600000).toISOString(),coverUrl:cover,permalink:`https://instagram.com/p/VIS${i}/`,...(i<3?{stackId:'visual-stack',stackSize:3}:{}),isHot:true,hotMultiplier:3}));
+const posts=Array.from({length:5},(_,i)=>({id:i+1,postKey:`chatgptricks:VIS${i}`,shortcode:i===3?'DDJF3IQTVUD':`VIS${i}`,account:'chatgptricks',caption:'A visual release validation caption. '.repeat(4),postType:'Carousel',type:'Carousel',likes:1000-i*40,comments:23,postDate:new Date(Date.now()-i*3600000).toISOString(),coverUrl:cover,permalink:`https://instagram.com/p/VIS${i}/`,...(i<3?{stackId:'visual-stack',stackSize:3}:{}),isHot:true,hotMultiplier:3}));
 await page.route('https://cortex-api-db2e.onrender.com/**', async route=>{
  const url=route.request().url();let data={};
  if(url.includes('/posts/manifest'))data={revision:'visual-gate',sources:[{source:'canonical',upperBound:posts.length},{source:'dashboard',upperBound:0}]};
@@ -34,6 +34,9 @@ try {
  await page.goto(`${base}/index.html?desktop=1`);
  await page.waitForSelector('.gallery-grid .post-card',{timeout:20000});
  assert.equal(await page.locator('.obs-lab-dock').count(),0);
+ // Golden nuggets render as a gold card, not the dark obsidian surface.
+ const golden=page.locator('.post-card-golden-nugget').first();
+ assert.match(await golden.evaluate(e=>getComputedStyle(e).backgroundImage),/rgb\(214, 169, 46\)/);
  const card=page.locator('.gallery-grid > .stack-card-shell .post-card').last();
  await card.locator('[aria-label="Post menu"]').click();
  assert.equal(await page.locator('.obs-inspector.is-open').count(),0);
