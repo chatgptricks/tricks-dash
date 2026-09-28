@@ -550,3 +550,6 @@ body::before { content:''; position:fixed; inset:0; pointer-events:none; z-index
 .obs-queue-inspector .obs-inspector-info .queue-copy-heading h3 { margin:0; }
 .obs-queue-inspector .obs-inspector-info .queue-copy-button { min-height:28px; padding:5px 10px; }
 .obs-queue-inspector .obs-inspector-info .queue-copy-button.is-copied { color:var(--accent-text); border-color:rgba(var(--accent-rgb),.32); background:rgba(var(--accent-rgb),.1); }
+
+/* Scrolling inside an open inspector never chains to the page behind it. */
+.right-rail.obs-inspector.is-open,.obs-preview-side,.obs-inspector-info { overscroll-behavior:contain; }
