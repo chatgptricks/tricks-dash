@@ -84,6 +84,16 @@ payload.accountOnboarding.completed=true; window.__queueFixture=payload;`;
  await page.goto(`${base}/queue.html?desktop=1`);await page.waitForSelector('.scheduler-block.state-scheduled');
  await page.locator('.scheduler-block.state-scheduled').click();await page.waitForTimeout(1200);
  await page.waitForSelector('.queue-history li');
+ // Start work asks where to place the block; that choice must sit above the
+ // inspector and receive clicks, and Escape must not close the inspector under it.
+ await page.getByRole('button',{name:'Start work',exact:true}).click();
+ const startChoice=page.locator('.queue-create-modal[aria-labelledby="queue-start-choice-title"]');
+ await startChoice.waitFor();
+ assert.ok(await startChoice.locator('.scheduler-primary').evaluate(button=>{const r=button.getBoundingClientRect();return button.contains(document.elementFromPoint(r.left+r.width/2,r.top+r.height/2));}));
+ await page.keyboard.press('Escape');await page.waitForTimeout(100);
+ assert.equal(await page.locator('.queue-request-rail').count(),1);
+ await startChoice.getByRole('button',{name:'Close',exact:true}).click();
+ assert.equal(await startChoice.count(),0);
  for(const width of [1440,390]){
   await page.setViewportSize({width,height:1000});await page.waitForTimeout(100);
   const geometry=await page.locator('.obs-inspector-info').evaluate(info=>{const children=[...info.children].filter(e=>e.getBoundingClientRect().height>0);return {overflow:info.scrollWidth-info.clientWidth,overlap:children.slice(1).some((e,i)=>e.getBoundingClientRect().top<children[i].getBoundingClientRect().bottom-1)}});

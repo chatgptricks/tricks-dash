@@ -526,7 +526,7 @@ body::before { content:''; position:fixed; inset:0; pointer-events:none; z-index
 :root:not([data-theme='light']) .obs-inspector-info .slide-download { border:0; border-radius:0; }
 
 /* Detail actions must open above the inspector, including portalled media. */
-.media-modal-backdrop,.queue-modal-backdrop,.modal-backdrop { z-index:12000; }
+.media-modal-backdrop,.queue-modal-backdrop,.modal-backdrop,.queue-create-backdrop { z-index:12000; }
 
 /* Stack motion: the overlay never grows scrollbars while cards travel
    outside its box, and the gutter stays put when scrolling is restored. */
