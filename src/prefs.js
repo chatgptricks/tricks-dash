@@ -310,6 +310,8 @@ const ES = {
   'Queue / Details': 'Queue / Detalles',
   'Open original': 'Abrir original',
   'Manual post': 'Post manual',
+  'The generated caption did not pass Jev verification.': 'El caption generado no pasó la verificación de Jev. Intenta regenerarlo.',
+  'The AI returned an empty caption. Try again.': 'La IA devolvió un caption vacío. Intenta de nuevo.',
   'Open in Canva': 'Abrir en Canva',
   'Open this month\'s Canva design doc': 'Abrir el documento de Canva de este mes',
   'versions': 'versiones',
