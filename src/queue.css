@@ -1182,6 +1182,12 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
 .queue-account-picker { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
 .queue-account-picker label { display:inline-flex; align-items:center; gap:6px; padding:7px 9px; border:1px solid var(--q-line); border-radius:8px; background:var(--q-panel-2); font-size:11px; }
 .queue-account-picker input { accent-color:var(--q-accent); }
+/* Inside the request editor, generic field rules (full-width 34px inputs,
+   uppercase labels) must not reach the account checkboxes. */
+.queue-detail-editor .queue-account-picker label { display:inline-flex; align-items:center; gap:8px; min-height:32px; padding:0 11px; color:var(--q-text); font-size:12px; font-weight:600; letter-spacing:0; text-transform:none; white-space:nowrap; overflow-wrap:normal; cursor:pointer; transition:border-color .15s ease,background .15s ease; }
+.queue-detail-editor .queue-account-picker label:hover { border-color:rgba(var(--edge),.24); }
+.queue-detail-editor .queue-account-picker label:has(input:checked) { border-color:rgba(var(--accent-rgb),.55); background:rgba(var(--accent-rgb),.1); }
+.queue-detail-editor .queue-account-picker input { flex:0 0 auto; width:14px; height:14px; margin:0; padding:0; border:0; background:none; }
 .queue-multi-link-form { display:grid; gap:10px; }
 .queue-multi-link-form label { display:grid; gap:5px; color:var(--q-muted); font-size:11px; font-weight:700; }
 .queue-close-panel { grid-template-rows:auto minmax(0,1fr); }
