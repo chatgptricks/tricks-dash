@@ -39,6 +39,19 @@ try {
  assert.equal(await page.locator('.obs-inspector.is-open').count(),0);
  await page.keyboard.press('Escape');
  await card.locator('.post-media').click();await page.waitForTimeout(1150);
+ // Clicking the card in Selected post opens the original in a new tab.
+ await page.context().route(/instagram\.com/, route=>route.fulfill({contentType:'text/html',body:'<title>original</title>'}));
+ const [original]=await Promise.all([page.waitForEvent('popup'),page.locator('.obs-inspector.is-open .obs-card-slot').click()]);
+ assert.match(original.url(),/instagram\.com\/p\/VIS\d\//);await original.close();
+ assert.equal(await page.locator('.obs-inspector.is-open').count(),1);
+ // The "..." menu on the Selected post card is live: it opens, lists actions,
+ // and Escape closes only the menu, not the inspector.
+ await page.locator('.obs-inspector.is-open .obs-slot-menu [aria-label="Post menu"]').click();
+ await page.waitForSelector('.obs-inspector.is-open .obs-slot-menu .post-menu-panel');
+ assert.ok(await page.locator('.obs-slot-menu .post-menu-panel [role="menuitem"]').count()>=2);
+ await page.keyboard.press('Escape');await page.waitForTimeout(100);
+ assert.equal(await page.locator('.obs-slot-menu .post-menu-panel').count(),0);
+ assert.equal(await page.locator('.obs-inspector.is-open').count(),1);
  await page.getByRole('button',{name:'Download media',exact:true}).click();
  await page.waitForSelector('.media-modal');
  assert.ok(await page.locator('.media-modal-backdrop').evaluate(e=>Number(getComputedStyle(e).zIndex)>11000));

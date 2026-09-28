@@ -109,7 +109,7 @@ export function QuickAddButton({ post, onQuickAdd, onAdded, className = 'ghost-b
 // than portaled: the header isn't inside an overflow-hidden container, so a
 // plain absolute panel is enough and avoids the fixed-position bookkeeping
 // the account dropdown needs.
-function PostMenu({ post, isPromo, onFlags, onReload, onAssign, onQuickAdd, onQuickAddSuccess, canPool, canSuggest }) {
+export function PostMenu({ post, isPromo, onFlags, onReload, onAssign, onQuickAdd, onQuickAddSuccess, canPool, canSuggest }) {
   const { t } = usePrefs();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState('');
@@ -182,7 +182,7 @@ function PostMenu({ post, isPromo, onFlags, onReload, onAssign, onQuickAdd, onQu
   };
 
   return (
-    <div className="post-menu" ref={ref} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); if (event.target === event.currentTarget) setOpen((value) => !value); }} onKeyDown={(event) => event.stopPropagation()}>
+    <div className="post-menu" ref={ref} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); if (event.target === event.currentTarget) setOpen((value) => !value); }} onKeyDown={(event) => { event.stopPropagation(); if (event.key === 'Escape' && open) setOpen(false); }}>
       <button
         type="button"
         className="icon-button"
@@ -440,3 +440,33 @@ export const PostCardLayer = memo(function PostCardLayer({ post }) {
     </article>
   );
 });
+
+// The card shown in the Selected post view. The landed flight clone ignores
+// pointer events, so clicks reach this slot: they open the original post.
+// Controls inside the fallback card (menu, actions) keep their own behavior.
+// With `menuProps`, a live "..." menu is placed over the landed clone's button
+// (card-flight publishes its position), since the clone itself is static.
+export function InspectorCardSlot({ post, sideview, menuProps, children }) {
+  const { t } = usePrefs();
+  const permalink = post?.permalink;
+  const open = () => { if (permalink) window.open(permalink, '_blank', 'noopener,noreferrer'); };
+  return (
+    <section
+      className={`obs-card-slot${permalink ? ' is-link' : ''}`}
+      data-obs-sideview={sideview}
+      role={permalink ? 'link' : undefined}
+      tabIndex={permalink ? 0 : undefined}
+      aria-label={permalink ? t('Open original') : undefined}
+      title={permalink ? t('Open original') : undefined}
+      onClick={(event) => { if (!event.target.closest('button,a,input,select,textarea,[role="menu"],.post-menu')) open(); }}
+      onKeyDown={(event) => { if (event.target === event.currentTarget && event.key === 'Enter') { event.preventDefault(); open(); } }}
+    >
+      {children}
+      {menuProps && post ? (
+        <div className="obs-slot-menu">
+          <PostMenu key={post.postKey} post={post} isPromo={Boolean(post.isPromo) || PROMO_HASHTAG_RE.test(post.caption || '')} {...menuProps} />
+        </div>
+      ) : null}
+    </section>
+  );
+}

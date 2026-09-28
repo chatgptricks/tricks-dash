@@ -17,8 +17,9 @@ export function useInspectorModal(open, close, { inertSiblings = false } = {}) {
     background.forEach(node => { node.inert = true; });
     const frame = requestAnimationFrame(() => modal?.querySelector('button')?.focus({preventScroll:true}));
     const onKey = event => {
-      // Download, caption and assignment dialogs sit above the inspector.
-      const childDialog = [...document.querySelectorAll('.media-modal-backdrop,.queue-modal-backdrop,.modal-backdrop')].some(node => node.getClientRects().length && getComputedStyle(node).visibility !== 'hidden');
+      // Download, caption and assignment dialogs sit above the inspector, and an
+      // open card menu inside it closes itself on Escape.
+      const childDialog = [...document.querySelectorAll('.media-modal-backdrop,.queue-modal-backdrop,.modal-backdrop,.obs-inspector .post-menu-panel')].some(node => node.getClientRects().length && getComputedStyle(node).visibility !== 'hidden');
       if (event.defaultPrevented || childDialog) return;
       if (event.key === 'Escape') { event.preventDefault(); closeRef.current(); }
       if (event.key !== 'Tab' || !modal) return;

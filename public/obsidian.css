@@ -146,6 +146,11 @@ body::before { content:''; position:fixed; inset:0; pointer-events:none; z-index
 .obs-card-slot { grid-area:card; position:relative; width:var(--obs-inspector-card-width,320px); height:var(--obs-inspector-card-height,auto); min-width:0; }
 .obs-card-slot[data-obs-persistent='true'] > .obs-card-fallback { display:none; }
 .obs-card-slot .obs-card { margin:0; width:100%; }
+.obs-card-slot.is-link { cursor:pointer; }
+/* Live "..." menu over the landed (static) card clone; see card-flight.js. */
+.obs-slot-menu { display:none; }
+.obs-card-slot[data-obs-menu-ready='true'] > .obs-slot-menu { display:block; position:absolute; left:var(--obs-menu-left); top:var(--obs-menu-top); z-index:6; transform:scale(var(--obs-menu-scale,1)); transform-origin:top left; cursor:default; }
+.obs-card-slot.is-link:focus-visible { outline:2px solid var(--accent-text); outline-offset:4px; border-radius:18px; }
 .obs-persistent-card { overflow:hidden; border-radius:18px; box-shadow:inset 0 0 0 1px rgba(var(--ink),.08),0 12px 30px rgba(var(--shade),.18); }
 .obs-persistent-card:hover { box-shadow:inset 0 0 0 1px rgba(var(--ink),.08),0 12px 30px rgba(var(--shade),.18); }
 .obs-in-transit { opacity:0 !important; }

@@ -93,10 +93,19 @@ export function sendCardToSide(source, postKey, options = {}) {
     }
     let disposed = false;
     let resizeObserver;
+    // The landed clone is a static snapshot. The inspector renders a live
+    // "..." menu over the clone's own button (see InspectorCardSlot), so the
+    // snapshot hides its copy while landed and shows it again for the return.
+    const snapshotMenu = front.querySelector('.post-header .post-menu');
+    const releaseMenu = () => {
+      delete slot.dataset.obsMenuReady;
+      if (snapshotMenu) snapshotMenu.style.visibility = '';
+    };
     const cleanup = () => {
       if (disposed) return;
       disposed=true;
       resizeObserver?.disconnect();
+      releaseMenu();
       const exiting=returning;
       card.getAnimations({subtree:true}).forEach(animation=>animation.cancel());
       card.remove(); source.classList.remove('obs-in-transit'); homeSource.classList.remove('obs-in-transit');
@@ -117,6 +126,14 @@ export function sendCardToSide(source, postKey, options = {}) {
         const scale = Math.min(1, slot.getBoundingClientRect().width / width);
         card.style.transform = `scale(${scale})`;
         slot.style.height = `${compactHeight * scale}px`;
+        if (snapshotMenu) {
+          const menu = snapshotMenu.getBoundingClientRect(), frame = slot.getBoundingClientRect();
+          slot.style.setProperty('--obs-menu-left', `${menu.left - frame.left}px`);
+          slot.style.setProperty('--obs-menu-top', `${menu.top - frame.top}px`);
+          slot.style.setProperty('--obs-menu-scale', String(scale));
+          snapshotMenu.style.visibility = 'hidden';
+          slot.dataset.obsMenuReady = 'true';
+        }
       };
       fit();
       resizeObserver = new ResizeObserver(fit);
@@ -148,6 +165,7 @@ export function sendCardToSide(source, postKey, options = {}) {
       if (returning) return;
       returning = true;
       resizeObserver?.disconnect();
+      releaseMenu();
       inspector.dataset.obsClosing='true';
       inspector.dataset.obsPhase='travel';
       document.querySelector('.sidebar-backdrop,.obs-modal-backdrop')?.classList.add('obs-backdrop-closing');

@@ -1,6 +1,6 @@
 import { useInspectorModal } from './use-inspector-modal';
 import { returnCardFromSide } from './card-flight';
-import { ACCOUNT_PROFILE_IMAGES, PROMO_HASHTAG, PROMO_HASHTAG_RE, PostCard, PostCardLayer, QuickAddButton } from './PostCard';
+import { ACCOUNT_PROFILE_IMAGES, PROMO_HASHTAG, PROMO_HASHTAG_RE, InspectorCardSlot, PostCard, PostCardLayer, QuickAddButton } from './PostCard';
 import TopicStack from './TopicStack';
 import { StackActions } from './StackActions';
 import { applyStackMembershipResult, resolveResearchPost } from './stackOperations';
@@ -1930,6 +1930,17 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
 
   useInspectorModal(isSidebarOpen, closeSidebar);
 
+  // Same menu wiring as the gallery cards, for the card in Selected post.
+  const inspectorMenuProps = useMemo(() => ({
+    onFlags: setPostFlags,
+    onReload: reloadPost,
+    onAssign: setAssignmentPost,
+    onQuickAdd: quickAddToPool,
+    onQuickAddSuccess: closeSidebar,
+    canPool: poolAccess,
+    canSuggest: !poolAccess && effectiveOperatingRoles.includes('pd'),
+  }), [setPostFlags, reloadPost, quickAddToPool, closeSidebar, poolAccess, effectiveOperatingRoles]);
+
   const selectPost = useCallback((postKey) => {
     startTransition(() => {
       setSelectedKey(postKey);
@@ -2350,9 +2361,9 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
             </button>
           ) : null}
           <header className="obs-inspector-heading"><span>{t('Selected post')}</span><small>{t('Research / Details')}</small></header>
-          <section className="obs-card-slot" data-obs-sideview={isSidebarOpen ? selected?.postKey : undefined}>
-            {selected ? <div className="obs-card-fallback"><PostCard post={selected} selected={false} onSelect={() => {}} /></div> : null}
-          </section>
+          <InspectorCardSlot post={selected} sideview={isSidebarOpen ? selected?.postKey : undefined} menuProps={inspectorMenuProps}>
+            {selected ? <div className="obs-card-fallback"><PostCard post={selected} selected={false} onSelect={() => {}} {...inspectorMenuProps} /></div> : null}
+          </InspectorCardSlot>
           <div className="obs-inspector-info">
           {selected?.permalink ? <a className="ghost-button obs-open-original" href={selected.permalink} target="_blank" rel="noopener noreferrer">{t('Open original')} ↗</a> : null}
           {!selected ? (
