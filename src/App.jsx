@@ -2519,6 +2519,7 @@ function GenerateCaptionModal({ post, accounts, onClose }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
+  const [review, setReview] = useState('');
 
   useEffect(() => {
     const onKey = (event) => {
@@ -2541,6 +2542,7 @@ function GenerateCaptionModal({ post, accounts, onClose }) {
     setBusy(true);
     setError('');
     setCopied(false);
+    setReview('');
     try {
       const body = new FormData();
       body.append('source_account', post.account);
@@ -2555,6 +2557,8 @@ function GenerateCaptionModal({ post, accounts, onClose }) {
       const detail = typeof data.detail === 'string' ? data.detail : data.detail?.message;
       if (!response.ok) throw new Error(detail ? t(detail) : t('Could not generate a caption right now.'));
       setCaption(String(data.caption || '').trim());
+      // Jev review is advisory: a flagged caption is still returned for editing.
+      if (data.jevWarning) setReview(t(data.jevWarning));
     } catch (reason) {
       setError(reason.message || t('Could not generate a caption right now.'));
     } finally {
@@ -2611,6 +2615,7 @@ function GenerateCaptionModal({ post, accounts, onClose }) {
           <span><strong>{t('Remove ManyChat automation')}</strong><small>{t('Remove comment or DM keywords and promises to send links, prompts, codes, guides, or lists.')}</small></span>
         </label>
         {caption ? <label className="caption-generator-field caption-generator-result"><span>{t('Generated caption · editable')}</span><textarea value={caption} onChange={(event) => setCaption(event.target.value)} /></label> : null}
+        {caption && review ? <p className="caption-generator-review" role="status">{review}</p> : null}
         {error ? <p className="queue-assign-error" role="alert">{error}</p> : null}
         <div className="queue-assign-actions caption-generator-actions">
           <button type="button" className="ghost-button" onClick={onClose} disabled={busy}>{t('Cancel')}</button>

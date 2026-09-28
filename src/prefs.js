@@ -312,6 +312,8 @@ const ES = {
   'Manual post': 'Post manual',
   'The generated caption did not pass Jev verification.': 'El caption generado no pasó la verificación de Jev. Intenta regenerarlo.',
   'The AI returned an empty caption. Try again.': 'La IA devolvió un caption vacío. Intenta de nuevo.',
+  'Jev flagged this caption. Check its facts and CTA before publishing.': 'Jev marcó este caption. Revisa sus datos y el CTA antes de publicar.',
+  'Jev verification is unavailable right now. Check this caption before publishing.': 'La verificación de Jev no está disponible ahora. Revisa este caption antes de publicar.',
   'Open in Canva': 'Abrir en Canva',
   'Open this month\'s Canva design doc': 'Abrir el documento de Canva de este mes',
   'versions': 'versiones',
