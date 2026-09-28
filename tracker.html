@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <script src="/mobile-redirect.js?v=20260908-device"></script>
 <script src="/user-preferences.js?v=20260928-prefs1"></script>
-<script src="/role-preview.js?rev=f20263e" defer></script>
+<script src="/role-preview.js?v=20260928-tracker" defer></script>
 <script src="/context-menu.js?v=20260901-context1" defer></script>
 <title>Tracker · sentientdash.app</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext x='50' y='54' font-size='84' text-anchor='middle' dominant-baseline='central'%3E%F0%9F%93%88%3C/text%3E%3C/svg%3E" /><script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -509,7 +509,13 @@ async function authedFetch(path){
       const headers = window.__sentientRolePreviewHeaders ? window.__sentientRolePreviewHeaders() : {};
       if(window.__firebaseIdToken) headers.Authorization = 'Bearer '+window.__firebaseIdToken;
       const r = await fetch(API+path, {headers});
-      if(r.status===401||r.status===403){
+      if(r.status===403){
+        // A permission answer is not an expired session: never sign out.
+        let detail = 'You do not have access to this Tracker action.';
+        try{ const body = await r.json(); if(body && typeof body.detail === 'string') detail = body.detail; }catch{}
+        throw Object.assign(new Error(detail), { status: 403, final: true });
+      }
+      if(r.status===401){
         if(attempt < 2) {
           lastError = new Error('unauthorized');
           await trackerDelay(350 * (attempt + 1));
@@ -529,6 +535,7 @@ async function authedFetch(path){
       return r.json();
     }catch(error){
       lastError = error;
+      if(error?.final) throw error;
       if(attempt < 2){
         await trackerDelay(500 * (attempt + 1));
         continue;
@@ -544,11 +551,13 @@ async function authedPost(path){
   const headers = window.__sentientRolePreviewHeaders ? window.__sentientRolePreviewHeaders() : {};
   if(window.__firebaseIdToken) headers.Authorization = 'Bearer '+window.__firebaseIdToken;
   const r = await fetch(API+path, {method:'POST', headers});
-  if(r.status===401||r.status===403){ window.__onInsightsUnauthorized && window.__onInsightsUnauthorized(); throw new Error('unauthorized'); }
+  // Only an expired session signs out. A refused action (403) or a refresh
+  // limit (429) is reported to the person instead.
+  if(r.status===401){ window.__onInsightsUnauthorized && window.__onInsightsUnauthorized(); throw new Error('unauthorized'); }
   if(!r.ok){
     let detail = 'HTTP '+r.status;
     try{ const body = await r.json(); if(body && body.detail) detail = body.detail; }catch{}
-    throw new Error(detail);
+    throw Object.assign(new Error(detail), { status: r.status, retryAfter: Number(r.headers.get('Retry-After')) || 0 });
   }
   return r.json();
 }
@@ -564,6 +573,50 @@ async function waitForTrackerRefresh(job){
   throw new Error('Tracker refresh is still running. Reopen this account in a moment.');
 }
 
+/* ---------------- Manual refresh allowance ----------------
+   Everyone may refresh. The API enforces a per-person limit (DEV unlimited,
+   admins every 5 minutes, everyone else hourly); the buttons mirror it. */
+let REFRESH_READY_AT = 0;
+let REFRESH_UNLIMITED = false;
+let REFRESH_WINDOW_MS = 0;
+function refreshWaitMessage(ms){
+  const minutes = Math.max(1, Math.ceil(ms / 60000));
+  return document.documentElement.lang === 'es'
+    ? `Podrás actualizar de nuevo en ${minutes} min.`
+    : `You can refresh again in ${minutes} min.`;
+}
+function applyRefreshAllowance(){
+  const wait = REFRESH_UNLIMITED ? 0 : REFRESH_READY_AT - Date.now();
+  document.querySelectorAll('#refreshAllBtn,#detailRefreshBtn,[data-refresh]').forEach((btn) => {
+    if(btn.dataset.running) return;
+    if(btn.dataset.baseTitle === undefined) btn.dataset.baseTitle = btn.title || '';
+    btn.disabled = wait > 0;
+    btn.title = wait > 0 ? refreshWaitMessage(wait) : btn.dataset.baseTitle;
+  });
+}
+function startRefreshCooldown(retryAfterSeconds){
+  if(REFRESH_UNLIMITED) return;
+  REFRESH_READY_AT = Date.now() + (retryAfterSeconds ? retryAfterSeconds * 1000 : REFRESH_WINDOW_MS);
+  applyRefreshAllowance();
+}
+async function loadRefreshAllowance(){
+  try{
+    const allowance = await authedFetch('/api/tracker/refresh-allowance');
+    REFRESH_UNLIMITED = Boolean(allowance.unlimited);
+    REFRESH_WINDOW_MS = (Number(allowance.windowSeconds) || 0) * 1000;
+    REFRESH_READY_AT = Date.now() + (Number(allowance.retryAfterSeconds) || 0) * 1000;
+  }catch{ /* The API still enforces the limit on click. */ }
+  applyRefreshAllowance();
+}
+setInterval(applyRefreshAllowance, 30000);
+function refreshErrorMessage(error, fallback){
+  if(error?.status === 429){
+    startRefreshCooldown(error.retryAfter);
+    return refreshWaitMessage(REFRESH_READY_AT - Date.now());
+  }
+  return fallback + (error?.message || error);
+}
+
 /* ---------------- Manual refresh (real-time follower count) ----------------
    The daily 7am snapshot remains the canonical scheduled reading. A manual
    refresh deliberately asks Instagram again and upserts today's one row, so
@@ -573,10 +626,11 @@ async function refreshAccountNow(handle, btn){
   // button IS the glyph, but the detail page's button also has a "Refresh"
   // label next to it that shouldn't spin along with the icon.
   const icon = btn && (btn.querySelector('.refresh-icon') || btn);
-  if(btn){ btn.disabled = true; }
+  if(btn){ btn.disabled = true; btn.dataset.running = '1'; }
   if(icon){ icon.classList.add('is-spinning'); }
   try{
     const job = await authedPost('/api/tracker/accounts/'+encodeURIComponent(handle)+'/refresh');
+    startRefreshCooldown();
     const result = await waitForTrackerRefresh(job);
     const row = SUMMARY.accounts.find(r=>r.handle===handle);
     if(row){
@@ -593,25 +647,28 @@ async function refreshAccountNow(handle, btn){
     delete DETAIL_CACHE[handle];
     render();
   }catch(e){
-    alert('Could not refresh @'+handle+': '+(e.message||e));
+    alert(refreshErrorMessage(e, 'Could not refresh @'+handle+': '));
   }finally{
-    if(btn){ btn.disabled = false; }
+    if(btn){ btn.disabled = false; delete btn.dataset.running; }
     if(icon){ icon.classList.remove('is-spinning'); }
+    applyRefreshAllowance();
   }
 }
 
 async function refreshAllAccountsNow(btn){
-  if(btn){ btn.disabled = true; btn.dataset.label = btn.textContent; btn.textContent = 'Refreshing all…'; }
+  if(btn){ btn.disabled = true; btn.dataset.running = '1'; btn.dataset.label = btn.textContent; btn.textContent = 'Refreshing all…'; }
   try{
     const job = await authedPost('/api/tracker/snapshot-now');
+    startRefreshCooldown();
     await waitForTrackerRefresh(job);
     DETAIL_CACHE = {};
     await loadSummary();
     render();
   }catch(e){
-    alert('Could not refresh accounts: '+(e.message||e));
+    alert(refreshErrorMessage(e, 'Could not refresh accounts: '));
   }finally{
-    if(btn){ btn.disabled = false; btn.textContent = btn.dataset.label || '↻ Refresh all'; }
+    if(btn){ btn.disabled = false; delete btn.dataset.running; btn.textContent = btn.dataset.label || '↻ Refresh all'; }
+    applyRefreshAllowance();
   }
 }
 
@@ -892,6 +949,7 @@ function renderLeaderboard(){
     refreshAccountNow(btn.dataset.refresh, btn);
   });
   $('#refreshAllBtn').onclick = (e) => refreshAllAccountsNow(e.currentTarget);
+  applyRefreshAllowance();
 }
 
 /* ---------------- Historical stats table ---------------- */
@@ -1089,6 +1147,7 @@ async function renderDetail(handle){
   wireAvatarFallbacks($('#app'));
   $('#backBtn').onclick = () => { writeAcc(''); render(); };
   $('#detailRefreshBtn').onclick = (e) => refreshAccountNow(handle, e.currentTarget);
+  applyRefreshAllowance();
   $('#historyWindow').onchange = (event) => { window.__trackerHistoryWindow = event.currentTarget.value; renderDetail(handle); };
 
   if(visibleDayHist.length){
@@ -1239,6 +1298,7 @@ onAuthStateChanged(auth, async (user) => {
   await window.__refreshFirebaseIdToken();
   window.__signedInEmail = user.email || '';
   window.SentientPreferences?.load({ email: user.email || '' });
+  if (typeof loadRefreshAllowance === 'function') loadRefreshAllowance();
   setSettingsAvatar(user);
   gate.classList.add('hidden');
   if (!booted) {
@@ -1466,6 +1526,6 @@ authedFetch('/api/dashboard/me').then((me) => {
 }).catch(() => {});
 
 </script>
-<script type="module" src="/product-static.js?v=20260905c"></script>
+<script type="module" src="/product-static.js?v=20260928-tracker"></script>
 </body>
 </html>
