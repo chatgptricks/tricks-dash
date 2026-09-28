@@ -75,7 +75,7 @@ try {
  const queueFixture=queueSource.slice(queueSource.indexOf("window.localStorage"),queueSource.indexOf('let releaseInitialQueueFetch'))+`
 payload.accountOnboarding.completed=true; window.__queueFixture=payload;`;
  await page.evaluate(queueFixture);const queueData=await page.evaluate(()=>window.__queueFixture);
- queueData.requests.forEach(task=>{task.post.caption='Long caption for layout validation. '.repeat(30);task.post.coverUrl=cover;});
+ queueData.requests.forEach(task=>{task.post.caption='Long caption for layout validation. '.repeat(30);task.post.coverUrl=cover;task.notes='Manual note left when the post was created from scratch.';});
  await page.addInitScript(queueFixture);
  await page.route('**/api/dashboard/queue/**',route=>{
   const url=route.request().url();
@@ -94,6 +94,14 @@ payload.accountOnboarding.completed=true; window.__queueFixture=payload;`;
  assert.equal(await page.locator('.queue-request-rail').count(),1);
  await startChoice.getByRole('button',{name:'Close',exact:true}).click();
  assert.equal(await startChoice.count(),0);
+ // Caption and manual notes can be copied from the request detail.
+ await page.context().grantPermissions(['clipboard-read','clipboard-write'],{origin:base});
+ const copyText=page.locator('.queue-request-rail .queue-detail-copy');
+ await copyText.getByRole('button',{name:'Copy caption',exact:true}).click();
+ assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),await copyText.locator('> p').first().textContent());
+ await copyText.getByRole('button',{name:'Copied',exact:true}).waitFor();
+ await copyText.getByRole('button',{name:'Copy notes',exact:true}).click();
+ assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),'Manual note left when the post was created from scratch.');
  for(const width of [1440,390]){
   await page.setViewportSize({width,height:1000});await page.waitForTimeout(100);
   const geometry=await page.locator('.obs-inspector-info').evaluate(info=>{const children=[...info.children].filter(e=>e.getBoundingClientRect().height>0);return {overflow:info.scrollWidth-info.clientWidth,overlap:children.slice(1).some((e,i)=>e.getBoundingClientRect().top<children[i].getBoundingClientRect().bottom-1)}});
