@@ -40,22 +40,24 @@ googleProvider.setCustomParameters({ prompt: 'select_account' });
 
 // Sign-in that survives mobile browsers.
 //
-// Popup is still the happy path: it keeps the user on our origin, so Firebase's
-// session state stays first-party. But mobile browsers block popups far more
-// aggressively than desktop (and some in-app webviews have no window.open at
-// all), so when the popup can't open we fall back to a full-page redirect.
-// getRedirectResult() picks the user back up when they come back -- callers
-// handle that themselves since it needs to run once at app start, not per
-// sign-in attempt.
-const POPUP_FALLBACK_CODES = new Set([
-  'auth/popup-blocked',
+// Popup is the path: it keeps the user on our origin, so Firebase's session
+// state stays first-party. It must open inside the click's user activation:
+// any await before signInWithPopup (even an already-resolved promise) lets
+// Safari and installed iPhone apps block it. Persistence is already set at
+// module load, and Firebase queues the sign-in behind it.
+//
+// A blocked popup is reported, not retried as a redirect: a redirect through
+// the separate authDomain fails in browsers that partition third-party
+// storage (Safari, Firefox, Brave) with "Using signInWithRedirect in a
+// storage-partitioned browser environment". Redirect remains only where a
+// popup cannot exist at all (some in-app webviews). getRedirectResult()
+// picks that user back up at app start.
+const REDIRECT_FALLBACK_CODES = new Set([
   'auth/operation-not-supported-in-this-environment',
   'auth/web-storage-unsupported',
-  'auth/internal-error',
 ]);
 
 export async function startGoogleSignIn() {
-  await authPersistenceReady;
   try {
     await signInWithPopup(firebaseAuth, googleProvider, browserPopupRedirectResolver);
     return null;
@@ -64,7 +66,8 @@ export async function startGoogleSignIn() {
     if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
       return null; // user backed out on purpose
     }
-    if (POPUP_FALLBACK_CODES.has(code)) {
+    if (REDIRECT_FALLBACK_CODES.has(code)) {
+      await authPersistenceReady;
       await signInWithRedirect(firebaseAuth, googleProvider, browserPopupRedirectResolver);
       return null; // page is navigating away
     }
@@ -72,10 +75,20 @@ export async function startGoogleSignIn() {
   }
 }
 
+const prefersSpanish = () => {
+  if (typeof document === 'undefined') return false;
+  return String(document.documentElement.lang || navigator.language || '').toLowerCase().startsWith('es');
+};
+
 export function describeSignInError(err) {
   const code = err?.code || '';
   if (code === 'auth/unauthorized-domain') {
     return `This domain (${typeof window !== 'undefined' ? window.location.hostname : ''}) isn't authorized in Firebase yet.`;
+  }
+  if (code === 'auth/popup-blocked') {
+    return prefersSpanish()
+      ? 'Tu navegador bloqueó la ventana de Google. Permite ventanas emergentes para sentientdash.app y vuelve a intentarlo.'
+      : 'Your browser blocked the Google sign-in window. Allow pop-ups for sentientdash.app and try again.';
   }
   if (code === 'auth/network-request-failed') {
     return 'Network error reaching Google. Check your connection and try again.';
