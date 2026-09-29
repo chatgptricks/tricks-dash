@@ -576,3 +576,12 @@ body:has(.sidebar-backdrop,.obs-modal-backdrop,.post-stack-modal)::before { anim
 .obs-card.post-card-golden-nugget .post-menu > .icon-button:hover::before { background:rgba(37,24,4,.12); }
 /* A HOT badge already owns the cover's top-left corner. */
 .post-media:has(.hot-badge) > .golden-nugget-badge,.post-media:has(.hot-badge) .golden-nugget-badge { top:auto; bottom:8px; }
+
+/* Rendering stability in Research. Chrome flickers a backdrop-filter that
+   sits inside a card with a pointer-driven 3D tilt, and repaints every one
+   of them while scrolling over the animated ambient layer. These badges are
+   already near-opaque, so a denser tint replaces the blur. */
+.obs-card .hot-badge,.obs-card .post-stack-trigger,.obs-card .queue-source-state,
+.post-stack > .post-stack-trigger,.selected-post .hot-badge { backdrop-filter:none; -webkit-backdrop-filter:none; }
+:is(.obs-card,.selected-post) .hot-badge:not(.obs-card-hot .hot-badge) { background:rgba(22,18,36,.92); }
+.obs-card .queue-source-state { background:rgba(0,0,0,.82); }
