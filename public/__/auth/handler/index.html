@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<!-- Firebase Auth helper, self-hosted from https://sentient-dash.firebaseapp.com/__/auth/handler
+     so Google sign-in stays first-party on sentientdash.app. Served as a
+     directory index because GitHub Pages downloads extensionless files;
+     script paths are absolute for the same reason. Refresh the copies
+     when the Firebase JS SDK is upgraded. -->
+<html>
+<head>
+<meta name=viewport content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<script type="text/javascript" src="/__/auth/experiments.js"></script>
+<script type="text/javascript" src="/__/auth/handler.js"></script>
+<script type="text/javascript" nonce="firebase-auth-helper">
+var POST_BODY = '{{POST_BODY}}';
+fireauth.oauthhelper.widget.initialize();
+</script>
+</head>
+<body>
+</body>
+</html>
