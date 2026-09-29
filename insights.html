@@ -1130,11 +1130,12 @@ function ssoClearCookie() {
 
 // Popup first (keeps us first-party); full-page redirect when the browser
 // won't give us a popup, which is the common case on mobile.
+// A blocked popup is reported, never retried as a redirect: redirect through
+// the separate authDomain fails in storage-partitioned browsers (Safari,
+// Firefox, Brave). Redirect stays only where a popup cannot exist at all.
 const POPUP_FALLBACK_CODES = new Set([
-  'auth/popup-blocked',
   'auth/operation-not-supported-in-this-environment',
   'auth/web-storage-unsupported',
-  'auth/internal-error',
 ]);
 
 async function startSignIn() {
@@ -1154,6 +1155,11 @@ async function startSignIn() {
 
 function describeSignInError(err) {
   const code = err?.code || '';
+  if (code === 'auth/popup-blocked') {
+    return String(document.documentElement.lang || navigator.language || '').toLowerCase().startsWith('es')
+      ? 'Tu navegador bloqueó la ventana de Google. Permite ventanas emergentes para sentientdash.app y vuelve a intentarlo.'
+      : 'Your browser blocked the Google sign-in window. Allow pop-ups for sentientdash.app and try again.';
+  }
   if (code === 'auth/unauthorized-domain') {
     return 'This domain (' + location.hostname + ') isn’t authorized in Firebase yet.';
   }
