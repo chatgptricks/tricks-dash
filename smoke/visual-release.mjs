@@ -42,6 +42,8 @@ try {
  await page.waitForFunction(()=>document.documentElement.getAttribute('data-accent')==='blue');
  await page.waitForTimeout(600);
  assert.ok(preferenceWrites.some(body=>body.preferences?.language==='en'&&body.preferences?.theme==='dark'&&!('accent' in body.preferences)));
+ // Nothing inside a tilting card uses backdrop-filter (Chrome flickers it).
+ assert.deepEqual(await page.locator('.gallery-grid').evaluate(grid=>[...grid.querySelectorAll('*')].filter(e=>{const s=getComputedStyle(e);return e.getClientRects().length&&s.backdropFilter&&s.backdropFilter!=='none';}).map(e=>e.className)),[]);
  // Golden nuggets render as a gold card, not the dark obsidian surface.
  const golden=page.locator('.post-card-golden-nugget').first();
  assert.match(await golden.evaluate(e=>getComputedStyle(e).backgroundImage),/rgb\(214, 169, 46\)/);
