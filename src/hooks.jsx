@@ -34,8 +34,15 @@ const MATCH_LABELS = {
   related: { label: "Related idea", title: "No matching words; suggested by Jev for its meaning" },
 };
 
+// VITE_HOOKS_API_BASE points at a local Hooks server for development. It is
+// honored only when this page itself runs locally: a production build made
+// on a machine with that .env.local once sent every live search to
+// 127.0.0.1 instead of Cortex.
+const IS_LOCAL_PAGE = ["localhost", "127.0.0.1", "[::1]"].includes(
+  window.location.hostname,
+);
 const HOOKS_API_BASE = (
-  import.meta.env.VITE_HOOKS_API_BASE || API_BASE
+  (IS_LOCAL_PAGE && import.meta.env.VITE_HOOKS_API_BASE) || API_BASE
 ).replace(/\/$/, "");
 
 function fmt(value) {
