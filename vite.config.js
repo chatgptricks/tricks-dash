@@ -31,6 +31,7 @@ export default defineConfig({
         settings: resolve(__dirname, 'settings.html'),
         promos: resolve(__dirname, 'promos.html'),
         news: resolve(__dirname, 'news.html'),
+        hooks: resolve(__dirname, 'hooks.html'),
         vault: resolve(__dirname, 'vault.html'),
         mobile: resolve(__dirname, 'mobile/index.html'),
       },

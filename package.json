@@ -8,7 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint .",
-    "test": "npm run test:product && npm run test:queue && npm run test:resilience && npm run test:users && npm run smoke:queue && npm run smoke:settings && npm run smoke:mobile && npm run smoke:roles && node smoke/static-pages.mjs && node smoke/tracker.mjs && node smoke/insights-extras.mjs && node smoke/sign-in.mjs",
+    "test": "npm run test:product && npm run test:queue && npm run test:resilience && npm run test:users && npm run smoke:queue && npm run smoke:settings && npm run smoke:mobile && npm run smoke:roles && npm run smoke:hooks && node smoke/static-pages.mjs && node smoke/tracker.mjs && node smoke/insights-extras.mjs && node smoke/sign-in.mjs",
     "test:product": "node scripts/test-topics.mjs && node smoke/run-product.mjs",
     "test:queue": "node scripts/test-queue.mjs",
     "test:resilience": "node scripts/test-retry.mjs && node scripts/test-api-resilience.mjs",
@@ -18,6 +18,7 @@
     "smoke:mobile": "node scripts/test-mobile-routing.mjs && node smoke/run-mobile.mjs",
     "smoke:roles": "node smoke/roles.mjs",
     "smoke:vault": "node smoke/run-vault.mjs && node smoke/run-vault.mjs admin && node smoke/run-vault.mjs preview",
+    "smoke:hooks": "node smoke/run-hooks.mjs && node smoke/run-hooks.mjs admin",
     "smoke:visual": "node smoke/visual-release.mjs"
   },
   "dependencies": {
