@@ -648,6 +648,20 @@ body {
   font-weight: 800;
   cursor: pointer;
 }
+.hooks-gate-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.hooks-gate button.is-secondary {
+  border: 1px solid #364031;
+  background: transparent;
+  color: var(--hooks-text);
+}
+.hooks-gate .hooks-auth-error {
+  color: #ffaaa0;
+  font-size: 12px;
+}
 .spin {
   animation: hooks-spin 0.8s linear infinite;
 }
