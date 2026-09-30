@@ -760,3 +760,8 @@ body {
     display: none;
   }
 }
+
+/* Match reason shown first in the tag row. */
+.hook-tags .hook-match { font-weight: 700; }
+.hook-tags .hook-match.is-exact { color: var(--accent-text, #e8ff5a); border-color: rgba(var(--accent-rgb, 232, 255, 90), .45); }
+.hook-tags .hook-match.is-related { font-style: italic; opacity: .85; }

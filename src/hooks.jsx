@@ -26,6 +26,14 @@ import { PrefsProvider } from "./prefsContext";
 import "./styles.css";
 import "./hooks.css";
 
+// Why a hook is in the results: every typed word, some of them, or only
+// related meaning (Jev), which is always listed after the word matches.
+const MATCH_LABELS = {
+  exact: { label: "Exact words", title: "Contains every word you searched" },
+  partial: { label: "Some words", title: "Contains some of the words you searched" },
+  related: { label: "Related idea", title: "No matching words; suggested by Jev for its meaning" },
+};
+
 const HOOKS_API_BASE = (
   import.meta.env.VITE_HOOKS_API_BASE || API_BASE
 ).replace(/\/$/, "");
@@ -112,6 +120,11 @@ function HookCard({ item, index, selected, onUse, onToggleSave }) {
         </div>
         <blockquote>{item.hook_text}</blockquote>
         <div className="hook-tags">
+          {MATCH_LABELS[item.matchType] && (
+            <span className={`hook-match is-${item.matchType}`} title={MATCH_LABELS[item.matchType].title}>
+              {MATCH_LABELS[item.matchType].label}
+            </span>
+          )}
           {item.primary_topic && <span>{human(item.primary_topic)}</span>}
           {(item.categories || []).slice(0, 4).map((category) => (
             <span key={category}>{human(category)}</span>
