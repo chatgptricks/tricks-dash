@@ -26,6 +26,10 @@ import { PrefsProvider } from "./prefsContext";
 import "./styles.css";
 import "./hooks.css";
 
+const HOOKS_API_BASE = (
+  import.meta.env.VITE_HOOKS_API_BASE || API_BASE
+).replace(/\/$/, "");
+
 function fmt(value) {
   const number = Number(value);
   if (!Number.isFinite(number)) return "—";
@@ -49,7 +53,10 @@ function human(value) {
 }
 
 async function request(path, options = {}) {
-  const response = await apiFetch(`${API_BASE}${path}`, options);
+  const base = path.startsWith("/api/dashboard/hooks")
+    ? HOOKS_API_BASE
+    : API_BASE;
+  const response = await apiFetch(`${base}${path}`, options);
   let body = {};
   try {
     body = await response.json();
