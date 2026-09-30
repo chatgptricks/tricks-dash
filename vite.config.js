@@ -5,7 +5,11 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
+  // A developer .env.local may point Hooks at a local server. Production
+  // builds must never ship that address (it once sent live searches to
+  // 127.0.0.1), so builds always blank it; `vite` dev keeps it.
+  define: command === 'build' ? { 'import.meta.env.VITE_HOOKS_API_BASE': JSON.stringify('') } : {},
   // Served from the apex of a custom domain (sentientdash.app), so assets
   // live at the root. This was '/tricks-dash/' when the site was hosted at
   // chatgptricks.github.io/tricks-dash/ -- the repo-name path segment that
@@ -37,4 +41,4 @@ export default defineConfig({
       },
     },
   },
-});
+}));
