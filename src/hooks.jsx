@@ -206,7 +206,7 @@ function DraftList({ drafts, activeId, onOpen, onDelete }) {
 function HookLab() {
   const [user, setUser] = useState(undefined);
   const [viewer, setViewer] = useState(null);
-  const [authError] = useState("");
+  const [authError, setAuthError] = useState("");
   const [query, setQuery] = useState("");
   const [results, setResults] = useState([]);
   const [status, setStatus] = useState({
@@ -454,6 +454,15 @@ function HookLab() {
     }
   }
 
+  async function useAnotherAccount() {
+    // Open the chooser directly from the click. Awaiting Firebase sign-out
+    // first would consume Safari's popup activation and leave the user stuck.
+    clearSsoCookie();
+    setAuthError("");
+    const issue = await startGoogleSignIn();
+    if (issue) setAuthError(describeSignInError(issue));
+  }
+
   if (user === undefined)
     return <main className="hooks-loading">Loading Hooks…</main>;
   if (!user) return <Login error={authError} />;
@@ -464,7 +473,22 @@ function HookLab() {
           <span>Sentient Dash · DEV tool</span>
           <h1>Hooks</h1>
           <p>Hooks could not verify your DEV access: {viewer.accessError}</p>
-          <button onClick={() => window.location.reload()}>Retry</button>
+          {authError && (
+            <p className="hooks-auth-error" role="alert">
+              {authError}
+            </p>
+          )}
+          <div className="hooks-gate-actions">
+            <button onClick={useAnotherAccount}>
+              Use another Google account
+            </button>
+            <button
+              className="is-secondary"
+              onClick={() => window.location.reload()}
+            >
+              Retry
+            </button>
+          </div>
         </section>
       </main>
     );
@@ -475,6 +499,14 @@ function HookLab() {
           <span>Sentient Dash · DEV tool</span>
           <h1>Hooks</h1>
           <p>This tool is available only in DEV full access.</p>
+          {authError && (
+            <p className="hooks-auth-error" role="alert">
+              {authError}
+            </p>
+          )}
+          <button onClick={useAnotherAccount}>
+            Use another Google account
+          </button>
         </section>
       </main>
     );
