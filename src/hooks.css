@@ -27,7 +27,12 @@ body {
   min-height: 100dvh;
   background: var(--bg, #101211);
   color: var(--hooks-text);
-  font-family: Inter, system-ui, sans-serif;
+  font-family:
+    Inter,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
 }
 .hooks-shell {
   width: min(100%, 1500px);
@@ -137,7 +142,12 @@ body {
   border-radius: 9px;
   background: var(--hooks-accent);
   color: #132000;
-  font: 800 12px/1 Inter;
+  font:
+    800 12px/1 Inter,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
   cursor: pointer;
 }
 .hooks-search-method {
@@ -183,7 +193,12 @@ body {
   border: 0;
   background: #182016;
   color: #b8d98d;
-  font: 700 11px Inter;
+  font:
+    700 11px Inter,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
   cursor: pointer;
 }
 .hooks-stats button:disabled {
@@ -271,7 +286,12 @@ body {
   border-right: 1px solid #252d23;
   color: #64705f;
   text-align: center;
-  font: 800 10px/1 Inter;
+  font:
+    800 10px/1 Inter,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
   letter-spacing: 1px;
 }
 .hook-card-body {
@@ -353,7 +373,12 @@ body {
   border-radius: 7px;
   background: transparent;
   color: #b2bcae;
-  font: 700 10px Inter;
+  font:
+    700 10px Inter,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
   text-decoration: none;
   cursor: pointer;
 }
@@ -439,7 +464,12 @@ body {
   border-radius: 6px;
   background: #1a2117;
   color: #acb8a6;
-  font: 600 9px Inter;
+  font:
+    600 9px Inter,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
   cursor: pointer;
 }
 .hook-sources button b {
@@ -488,7 +518,12 @@ body {
   border-radius: 7px;
   background: #1a2018;
   color: #b8c2b3;
-  font: 700 10px Inter;
+  font:
+    700 10px Inter,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
   cursor: pointer;
 }
 .hook-editor-actions button:first-child {
