@@ -593,3 +593,5 @@ body:has(.sidebar-backdrop,.obs-modal-backdrop,.post-stack-modal)::before { anim
    property: Vite 8's CSS minifier keeps only the last of the pair. */
 :root .sidebar-backdrop,:root .obs-modal-backdrop { background:rgba(var(--shade),.55); -webkit-backdrop-filter:blur(20px); backdrop-filter:blur(20px); }
 :root .right-rail.obs-inspector,:root .right-rail.obs-inspector.is-open { -webkit-backdrop-filter:none; backdrop-filter:none; }
+/* Closing without a card flight: the card fades with the page blur. */
+[data-obs-closing='true'] .obs-card-slot > .obs-card-fallback { opacity:0; transition:opacity .4s ease; }
