@@ -26,7 +26,7 @@ body::before { content:''; position:fixed; inset:0; pointer-events:none; z-index
 .shell { padding:24px; background:transparent; }
 .app-layout { height:calc(100dvh - 48px); }
 .backdrop { background:none; }
-.product-header { border:1px solid rgba(var(--ink),.08); border-radius:20px; padding:18px 22px; background:var(--obs-glass); backdrop-filter:blur(28px) saturate(145%); -webkit-backdrop-filter:blur(28px) saturate(145%); box-shadow:0 16px 50px rgba(var(--shade),.12),inset 0 1px 0 rgba(var(--ink),.06); }
+.product-header { border:1px solid rgba(var(--ink),.08); border-radius:20px; padding:18px 22px; background:var(--obs-glass); -webkit-backdrop-filter:blur(28px) saturate(145%); backdrop-filter:blur(28px) saturate(145%); box-shadow:0 16px 50px rgba(var(--shade),.12),inset 0 1px 0 rgba(var(--ink),.06); }
 .product-brand { font-weight:600; letter-spacing:-.035em; }
 .product-brand span { color:var(--accent-text); }
 .product-nav { gap:5px; padding:5px; background:rgba(var(--ink),.025); border-radius:999px; }
@@ -76,7 +76,7 @@ body::before { content:''; position:fixed; inset:0; pointer-events:none; z-index
 .post-stack-trigger { background:rgba(21,24,40,.82); color:#f0edff; border:1px solid rgba(221,216,255,.2); box-shadow:0 6px 18px rgba(0,0,0,.24); backdrop-filter:blur(18px); font-weight:500; }
 .stack-champion { outline:1px solid rgba(var(--accent-rgb),.25); outline-offset:5px; border-radius:18px; }
 .post-stack-modal .stack-champion-label { background:var(--obs-near); color:var(--text); border:1px solid var(--line); font-weight:500; }
-.right-rail .panel,.filter-popover,.settings-menu-panel,.post-menu-panel,.stack-context-menu,.stack-selection-bar,.scheduler-detail,.promo-dialog,.m-sheet { background:var(--obs-near); border:1px solid var(--line); border-radius:18px; backdrop-filter:blur(30px); -webkit-backdrop-filter:blur(30px); box-shadow:0 20px 64px rgba(var(--shade),.24); animation:obs-pop .3s cubic-bezier(.22,.61,.36,1); }
+.right-rail .panel,.filter-popover,.settings-menu-panel,.post-menu-panel,.stack-context-menu,.stack-selection-bar,.scheduler-detail,.promo-dialog,.m-sheet { background:var(--obs-near); border:1px solid var(--line); border-radius:18px; -webkit-backdrop-filter:blur(30px); backdrop-filter:blur(30px); box-shadow:0 20px 64px rgba(var(--shade),.24); animation:obs-pop .3s cubic-bezier(.22,.61,.36,1); }
 .post-stack-modal { background:rgba(var(--shade),.65); backdrop-filter:blur(18px); }
 .auth-screen,.promo-auth,.vault-gate,.news-auth,#authGate,.m-auth { background:transparent !important; }
 .auth-card,#authGate .card { background:var(--obs-glass); border:1px solid var(--line); border-radius:24px; backdrop-filter:blur(30px); box-shadow:0 24px 80px rgba(var(--shade),.24); }
@@ -179,7 +179,7 @@ body::before { content:''; position:fixed; inset:0; pointer-events:none; z-index
   grid-template-rows:auto minmax(0,1fr); border-radius:28px;
   overflow:auto;
 }
-.sidebar-backdrop,.obs-modal-backdrop { position:fixed; inset:0; border:0; padding:0; z-index:10999; background:rgba(var(--shade),.58); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px); cursor:default; }
+.sidebar-backdrop,.obs-modal-backdrop { position:fixed; inset:0; border:0; padding:0; z-index:10999; background:rgba(var(--shade),.58); -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px); cursor:default; }
 .obs-inspector-info { max-height:calc(100dvh - 215px); overflow:auto; padding:0 8px 18px 0; }
 .obs-inspector .rail-close-button { top:24px; right:24px; }
 .obs-preview-side .obs-preview-close { justify-self:end; }
@@ -242,7 +242,7 @@ body::before { content:''; position:fixed; inset:0; pointer-events:none; z-index
 .obs-deck-overflow { position:absolute; top:-63px; right:14px; color:var(--text); font-size:10px; padding:4px 8px; border:1px solid var(--line); border-radius:99px; background:var(--surface-3); opacity:0; translate:0 5px; transition:opacity .25s,translate .25s; pointer-events:none; }
 .post-stack:hover .obs-deck-overflow,.post-stack:focus-within .obs-deck-overflow { opacity:1; translate:0 0; }
 /* Cards dealt onto the screen, without a panel around them. */
-.post-stack-modal { display:block; padding:40px 36px 100px; overflow:auto; background:rgba(var(--shade),.35); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); }
+.post-stack-modal { display:block; padding:40px 36px 100px; overflow:auto; background:rgba(var(--shade),.35); -webkit-backdrop-filter:blur(18px); backdrop-filter:blur(18px); }
 .post-stack-modal-inner { width:min(1400px,100%); margin:auto; max-height:none; padding:0; background:transparent; border:0; border-radius:0; box-shadow:none; overflow:visible; animation:none; }
 .post-stack-modal .post-stack-heading { margin:0 0 30px; padding:0 12px; background:none; }
 .post-stack-modal .post-stack-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,270px)); justify-content:center; align-items:start; gap:48px 30px; padding:24px 14px 40px; max-height:none; overflow:visible; scroll-snap-type:none; }
@@ -260,10 +260,10 @@ body::before { content:''; position:fixed; inset:0; pointer-events:none; z-index
 /* Deep dive floats directly over the blurred gallery. */
 .right-rail.obs-inspector,.right-rail.obs-inspector.is-open,.obs-preview-side {
   background:transparent; border:0; border-radius:0; box-shadow:none;
-  backdrop-filter:none; -webkit-backdrop-filter:none;
+  -webkit-backdrop-filter:none; backdrop-filter:none;
 }
 .sidebar-backdrop,.obs-modal-backdrop {
-  background:rgba(var(--shade),.55); backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px);
+  background:rgba(var(--shade),.55); -webkit-backdrop-filter:blur(20px); backdrop-filter:blur(20px);
 }
 .obs-inspector-info .panel { background:transparent; border:0; box-shadow:none; }
 .obs-inspector .rail-close-button,.obs-preview-close {
@@ -275,10 +275,10 @@ body::before { content:''; position:fixed; inset:0; pointer-events:none; z-index
 .post-stack-modal { animation:obs-deck-focus-in 850ms ease both; }
 .sidebar-backdrop.obs-backdrop-closing,.obs-modal-backdrop.obs-backdrop-closing { animation:obs-focus-out 950ms ease both; }
 .post-stack-modal[data-closing='true'] { animation:obs-deck-focus-out 1200ms ease both; }
-@keyframes obs-focus-in { from { background:rgba(var(--shade),0); backdrop-filter:blur(0px); -webkit-backdrop-filter:blur(0px); } to { background:rgba(var(--shade),.55); backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px); } }
-@keyframes obs-focus-out { from { background:rgba(var(--shade),.55); backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px); } to { background:rgba(var(--shade),0); backdrop-filter:blur(0px); -webkit-backdrop-filter:blur(0px); } }
-@keyframes obs-deck-focus-in { from { background:rgba(var(--shade),0); backdrop-filter:blur(0px); -webkit-backdrop-filter:blur(0px); } to { background:rgba(var(--shade),.35); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); } }
-@keyframes obs-deck-focus-out { from { background:rgba(var(--shade),.35); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); } to { background:rgba(var(--shade),0); backdrop-filter:blur(0px); -webkit-backdrop-filter:blur(0px); } }
+@keyframes obs-focus-in { from { background:rgba(var(--shade),0); -webkit-backdrop-filter:blur(0px); backdrop-filter:blur(0px); } to { background:rgba(var(--shade),.55); -webkit-backdrop-filter:blur(20px); backdrop-filter:blur(20px); } }
+@keyframes obs-focus-out { from { background:rgba(var(--shade),.55); -webkit-backdrop-filter:blur(20px); backdrop-filter:blur(20px); } to { background:rgba(var(--shade),0); -webkit-backdrop-filter:blur(0px); backdrop-filter:blur(0px); } }
+@keyframes obs-deck-focus-in { from { background:rgba(var(--shade),0); -webkit-backdrop-filter:blur(0px); backdrop-filter:blur(0px); } to { background:rgba(var(--shade),.35); -webkit-backdrop-filter:blur(18px); backdrop-filter:blur(18px); } }
+@keyframes obs-deck-focus-out { from { background:rgba(var(--shade),.35); -webkit-backdrop-filter:blur(18px); backdrop-filter:blur(18px); } to { background:rgba(var(--shade),0); -webkit-backdrop-filter:blur(0px); backdrop-filter:blur(0px); } }
 @media(prefers-reduced-motion:reduce) { .sidebar-backdrop,.obs-modal-backdrop,.post-stack-modal { animation:none !important; } }
 :root[data-effects='off'] .sidebar-backdrop,:root[data-effects='off'] .obs-modal-backdrop,:root[data-effects='off'] .post-stack-modal { animation:none; }
 
@@ -378,7 +378,7 @@ body::before { content:''; position:fixed; inset:0; pointer-events:none; z-index
 .obs-inspector-info {
   padding:22px 24px; border:1px solid rgba(var(--ink),.14); border-radius:20px;
   background:linear-gradient(135deg,rgba(var(--ink),.055),rgba(var(--ink),.015)),rgba(var(--shade),.48);
-  backdrop-filter:blur(24px) saturate(125%); -webkit-backdrop-filter:blur(24px) saturate(125%);
+  -webkit-backdrop-filter:blur(24px) saturate(125%); backdrop-filter:blur(24px) saturate(125%);
   box-shadow:inset 0 1px 0 rgba(var(--ink),.08),0 16px 40px rgba(var(--shade),.18);
   box-sizing:border-box; overflow-x:hidden; overflow-y:auto; scrollbar-gutter:stable;
 }
@@ -559,7 +559,7 @@ body::before { content:''; position:fixed; inset:0; pointer-events:none; z-index
    or samples a layer that animates every frame. The inspector already floats
    over a blurred backdrop, so its glass keeps the same look with a denser
    tint instead of a second blur. */
-.obs-inspector-info,.obs-inspector-info * { backdrop-filter:none; -webkit-backdrop-filter:none; }
+.obs-inspector-info,.obs-inspector-info * { -webkit-backdrop-filter:none; backdrop-filter:none; }
 .obs-inspector-info { background:linear-gradient(135deg,rgba(var(--ink),.055),rgba(var(--ink),.015)),rgba(var(--shade),.6); }
 :root[data-theme='light'] .obs-inspector-info { background:rgba(238,239,242,.9); }
 /* Hold the ambient glow still while an overlay blurs the page behind it. */
@@ -582,6 +582,14 @@ body:has(.sidebar-backdrop,.obs-modal-backdrop,.post-stack-modal)::before { anim
    of them while scrolling over the animated ambient layer. These badges are
    already near-opaque, so a denser tint replaces the blur. */
 .obs-card .hot-badge,.obs-card .post-stack-trigger,.obs-card .queue-source-state,
-.post-stack > .post-stack-trigger,.selected-post .hot-badge { backdrop-filter:none; -webkit-backdrop-filter:none; }
+.post-stack > .post-stack-trigger,.selected-post .hot-badge { -webkit-backdrop-filter:none; backdrop-filter:none; }
 :is(.obs-card,.selected-post) .hot-badge:not(.obs-card-hot .hot-badge) { background:rgba(22,18,36,.92); }
 .obs-card .queue-source-state { background:rgba(0,0,0,.82); }
+
+/* Selected post / modals: the blur covers the whole page, never just the
+   inspector box. `:root` raises specificity so these win over styles.css
+   regardless of stylesheet load order; the focus-in/out keyframes above still
+   animate the blur in and out gradually. Keep -webkit- before the standard
+   property: Vite 8's CSS minifier keeps only the last of the pair. */
+:root .sidebar-backdrop,:root .obs-modal-backdrop { background:rgba(var(--shade),.55); -webkit-backdrop-filter:blur(20px); backdrop-filter:blur(20px); }
+:root .right-rail.obs-inspector,:root .right-rail.obs-inspector.is-open { -webkit-backdrop-filter:none; backdrop-filter:none; }
