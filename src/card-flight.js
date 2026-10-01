@@ -244,9 +244,27 @@ export function sendCardToSide(source, postKey, options = {}) {
   requestAnimationFrame(seek);
 }
 
+// Matches the obs-focus-out keyframes in obsidian.css.
+const BACKDROP_FADE_MS = 950;
+
 export function returnCardFromSide(postKey, close) {
   if (activeReturn && enabled()) { activeReturn(close); return; }
   ++requestId;
   activeCleanup?.();
-  close();
+  // No card flight to reverse (e.g. opened from a link): still fade the
+  // page blur out instead of dropping it at once.
+  const backdrop = document.querySelector('.sidebar-backdrop,.obs-modal-backdrop');
+  const inspector = document.querySelector('.obs-inspector.is-open,.obs-preview-side');
+  // Environments without an animation engine (jsdom) close immediately.
+  if (!enabled() || !backdrop || typeof backdrop.animate !== 'function') { close(); return; }
+  if (backdrop.classList.contains('obs-backdrop-closing')) return; // already fading out
+  backdrop.classList.add('obs-backdrop-closing');
+  if (inspector) inspector.dataset.obsClosing = 'true';
+  setTimeout(() => {
+    close();
+    requestAnimationFrame(() => {
+      backdrop.classList.remove('obs-backdrop-closing');
+      if (inspector) delete inspector.dataset.obsClosing;
+    });
+  }, BACKDROP_FADE_MS);
 }
