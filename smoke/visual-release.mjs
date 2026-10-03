@@ -100,9 +100,9 @@ try {
  await page.setViewportSize({width:1440,height:1000});await page.locator('.post-stack-trigger').click();await page.waitForTimeout(1300);
  assert.equal(await page.locator('.post-stack-modal .post-card').count(),3);
  assert.ok(await page.locator('.post-stack-modal .post-media').evaluateAll(es=>es.every(e=>getComputedStyle(e).aspectRatio==='3 / 4')));
- await page.getByRole('button',{name:'Close stack',exact:true}).click();await page.waitForTimeout(1250);
- assert.equal(await page.locator('.post-stack-modal').count(),1); // final shuffle is still visible
- await page.waitForTimeout(650);assert.equal(await page.locator('.post-stack-modal').count(),0);
+ await page.getByRole('button',{name:'Close stack',exact:true}).click();await page.waitForTimeout(150);
+ assert.equal(await page.locator('.post-stack-modal').count(),1); // the return remains continuous, not an abrupt removal
+ await page.locator('.post-stack-modal').waitFor({state:'detached',timeout:1800});
  const queueSource=fs.readFileSync('smoke/queue-entry.jsx','utf8');
  const queueFixture=queueSource.slice(queueSource.indexOf("window.localStorage"),queueSource.indexOf('let releaseInitialQueueFetch'))+`
 payload.accountOnboarding.completed=true; window.__queueFixture=payload;`;

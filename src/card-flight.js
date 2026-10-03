@@ -1,5 +1,6 @@
 let activeCleanup = null;
 let activeReturn = null;
+let fallbackCleanup = null;
 let returning = false;
 let requestId = 0;
 const enabled = () => document.documentElement.dataset.effects !== 'off' && !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
@@ -7,6 +8,7 @@ const enabled = () => document.documentElement.dataset.effects !== 'off' && !win
 export function sendCardToSide(source, postKey, options = {}) {
   if (!source || typeof source.animate !== 'function' || source.closest('.obs-card-slot') && !options.allowSlot || source.closest('.post-stack') && !source.closest('.post-stack-modal')) return;
   const id = ++requestId;
+  fallbackCleanup?.();
   activeCleanup?.();
   const deckModal=source.closest('.post-stack-modal');
   const homeSource=options.homeSource || deckModal?.obsStackHome?.querySelector(':scope > .stack-card-shell .post-card,:scope > .post-card') || source;
@@ -79,11 +81,21 @@ export function sendCardToSide(source, postKey, options = {}) {
   const deckSlot=deckModal ? source.closest('.post-stack-grid > div') : null;
   if (deckModal) deckModal.dispatchEvent(new CustomEvent('obs-stack-select',{detail:{card:deckSlot,flight:true}}));
   const start = performance.now();
+  let seekFrame;
+  const cancelSeek=()=>{
+    cancelAnimationFrame(seekFrame); coverObserver.disconnect();
+    if (activeCleanup===cancelSeek) {
+      activeCleanup=null;
+      document.documentElement.style.removeProperty('--obs-inspector-card-width');
+      document.documentElement.style.removeProperty('--obs-inspector-card-height');
+    }
+  };
+  activeCleanup=cancelSeek;
   const seek = () => {
-    if (id !== requestId) { coverObserver.disconnect(); return; }
+    if (id !== requestId) { cancelSeek(); return; }
     const slot = document.querySelector(`[data-obs-sideview="${CSS.escape(postKey)}"]`);
     const inspector = slot?.closest('.obs-inspector,.obs-preview-side');
-    if (!slot || inspector?.getAttribute('aria-hidden') === 'true') { if (performance.now()-start < 1000) requestAnimationFrame(seek); else coverObserver.disconnect(); return; }
+    if (!slot || inspector?.getAttribute('aria-hidden') === 'true') { if (performance.now()-start < 1000) seekFrame=requestAnimationFrame(seek); else cancelSeek(); return; }
     delete inspector.dataset.obsClosing;
     document.querySelector('.sidebar-backdrop,.obs-modal-backdrop')?.classList.remove('obs-backdrop-closing');
     inspector.dataset.obsPhase = 'travel';
@@ -107,6 +119,13 @@ export function sendCardToSide(source, postKey, options = {}) {
     }
     let disposed = false;
     let resizeObserver;
+    let stopMotion;
+    let effectsObserver;
+    const motionPreference=window.matchMedia?.('(prefers-reduced-motion: reduce)');
+    let finishReturn=null;
+    let flightAnimations=[];
+    let returnCover=null;
+    let shuffleAnimation=null;
     // The landed clone is a static snapshot. The inspector renders a live
     // "..." menu over the clone's own button (see InspectorCardSlot), so the
     // snapshot hides its copy while landed and shows it again for the return.
@@ -119,6 +138,9 @@ export function sendCardToSide(source, postKey, options = {}) {
       if (disposed) return;
       disposed=true;
       resizeObserver?.disconnect();
+      motionPreference?.removeEventListener?.('change',stopMotion);
+      effectsObserver?.disconnect();
+      shuffleAnimation?.cancel(); returnCover?.remove();
       coverObserver.disconnect();
       releaseMenu();
       const exiting=returning;
@@ -151,6 +173,7 @@ export function sendCardToSide(source, postKey, options = {}) {
         }
       };
       fit();
+      resizeObserver?.disconnect();
       resizeObserver = new ResizeObserver(fit);
       resizeObserver.observe(slot);
       inspector.dataset.obsPhase = 'ready';
@@ -163,7 +186,7 @@ export function sendCardToSide(source, postKey, options = {}) {
       { transform:options.origin ? `perspective(1400px) translate3d(${(rect.width-width)/2}px,${(rect.height-height)/2}px,0) rotateY(0deg) scale(${rect.width/width},${rect.height/height})` : 'perspective(1400px) translate3d(0,0,0) rotateY(0deg)' },
       { transform:`perspective(1400px) translate3d(${dx}px,${dy}px,0) rotateY(360deg) scale(${destinationScale})` }
     ];
-    const timing = { duration:subtle ? 900 : 1000, easing:'cubic-bezier(.4,0,.2,1)', iterations:1, fill:'both' };
+    const timing = { duration:subtle ? 560 : 700, easing:'cubic-bezier(.4,0,.2,1)', iterations:1, fill:'both' };
     const animation = card.animate(frames, timing);
     // Morph the silhouette only during the hidden half of the revolution.
     const shape=card.animate([
@@ -176,6 +199,16 @@ export function sendCardToSide(source, postKey, options = {}) {
     ],timing);
     animation.finished.then(() => { if (!disposed && !returning) { animation.cancel(); land(); } }, () => {});
     const frameReveal=bottomFrame.animate([{opacity:0,offset:0},{opacity:0,offset:.25},{opacity:1,offset:.75},{opacity:1,offset:1}],timing);
+    flightAnimations=[animation,shape,trim,frameReveal];
+    stopMotion=()=>{
+      if (enabled() || disposed) return;
+      if (finishReturn) { finishReturn(); return; }
+      flightAnimations.forEach(current=>current.cancel());
+      land();
+    };
+    motionPreference?.addEventListener?.('change',stopMotion);
+    effectsObserver=new MutationObserver(stopMotion);
+    effectsObserver.observe(document.documentElement,{attributes:true,attributeFilter:['data-effects']});
     activeReturn = (close) => {
       if (returning) return;
       returning = true;
@@ -201,6 +234,7 @@ export function sendCardToSide(source, postKey, options = {}) {
       shape.reverse(); trim.reverse(); frameReveal.reverse();
       reverse.reverse();
       const complete = () => {
+        if (disposed) return;
         cleanup(); ++requestId; close();
         requestAnimationFrame(()=> {
           if (!inspector.isConnected || inspector.getAttribute('aria-hidden') === 'true') {
@@ -211,6 +245,7 @@ export function sendCardToSide(source, postKey, options = {}) {
           }
         });
       };
+      finishReturn=complete;
       const finish = async () => {
         // A quick close can arrive before the rest of the deck reaches home.
         // Keep this card visible until the gallery cover is available to shuffle.
@@ -220,6 +255,7 @@ export function sendCardToSide(source, postKey, options = {}) {
         if (!needsShuffle) { complete(); return; }
         const home=homeSource.getBoundingClientRect();
         const cover=homeSource.cloneNode(true);
+        returnCover=cover;
         cover.classList.remove('obs-in-transit');
         cover.classList.add('obs-return-cover');
         cover.removeAttribute('id');cover.querySelectorAll('[id]').forEach(node=>node.removeAttribute('id'));
@@ -233,7 +269,8 @@ export function sendCardToSide(source, postKey, options = {}) {
           {transform:'translate3d(0,-7px,0) rotate(0deg) scale(.98)',opacity:0},
           {transform:`translate3d(${home.width*.42}px,-24px,0) rotate(7deg) scale(1)`,opacity:1,offset:.42},
           {transform:'translate3d(0,0,0) rotate(0deg) scale(1)',opacity:1}
-        ],{duration:560,easing:'cubic-bezier(.22,.61,.36,1)',fill:'both'});
+        ],{duration:280,easing:'cubic-bezier(.22,.61,.36,1)',fill:'both'});
+        shuffleAnimation=shuffle;
         try { await shuffle.finished; } catch { /* Interrupted by a new selection. */ }
         if (!disposed) complete();
         cover.remove();
@@ -241,15 +278,16 @@ export function sendCardToSide(source, postKey, options = {}) {
       reverse.finished.then(finish,finish);
     };
   };
-  requestAnimationFrame(seek);
+  seekFrame=requestAnimationFrame(seek);
 }
 
 // Matches the obs-focus-out keyframes in obsidian.css.
-const BACKDROP_FADE_MS = 950;
+const BACKDROP_FADE_MS = 360;
 
 export function returnCardFromSide(postKey, close) {
+  if (fallbackCleanup) return;
   if (activeReturn && enabled()) { activeReturn(close); return; }
-  ++requestId;
+  const id=++requestId;
   activeCleanup?.();
   // No card flight to reverse (e.g. opened from a link): still fade the
   // page blur out instead of dropping it at once.
@@ -260,11 +298,25 @@ export function returnCardFromSide(postKey, close) {
   if (backdrop.classList.contains('obs-backdrop-closing')) return; // already fading out
   backdrop.classList.add('obs-backdrop-closing');
   if (inspector) inspector.dataset.obsClosing = 'true';
-  setTimeout(() => {
-    close();
+  const finish=()=>{
+    if (id!==requestId) { release(); return; }
+    release(); close();
     requestAnimationFrame(() => {
       backdrop.classList.remove('obs-backdrop-closing');
       if (inspector) delete inspector.dataset.obsClosing;
     });
-  }, BACKDROP_FADE_MS);
+  };
+  const timer=setTimeout(finish,BACKDROP_FADE_MS);
+  const motionPreference=window.matchMedia?.('(prefers-reduced-motion: reduce)');
+  const stop=()=>{if (!enabled()) finish();};
+  const observer=new MutationObserver(stop);
+  const release=()=>{
+    clearTimeout(timer); observer.disconnect(); motionPreference?.removeEventListener?.('change',stop);
+    backdrop.classList.remove('obs-backdrop-closing');
+    if (inspector) delete inspector.dataset.obsClosing;
+    if (fallbackCleanup===release) fallbackCleanup=null;
+  };
+  fallbackCleanup=release;
+  observer.observe(document.documentElement,{attributes:true,attributeFilter:['data-effects']});
+  motionPreference?.addEventListener?.('change',stop);
 }

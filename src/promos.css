@@ -96,3 +96,7 @@
 :root[data-theme='light'] .promo-review-dialog .promo-source-label { color: #60646c; }
 .promo-review-dialog .promo-primary { background: var(--product-accent); color: #08120e !important; border-color: transparent; }
 :root[data-theme='light'] .promo-review-dialog .promo-primary { color: #fff !important; }
+
+/* Review motion adds feedback without changing the inspector's resting layout. */
+.promo-review-modal .promo-review-dialog { animation: none; transform-origin: 50% 40%; }
+.promo-review-dialog button:disabled { cursor: default; }

@@ -32,6 +32,7 @@ export default function TopicStack({ posts, visiblePosts = posts, renderCard, re
   const stackRef = useRef(null);
   const dealRef = useRef([]);
   const closingRef = useRef(false);
+  const cycleRef = useRef(0);
   const motionOff = () => (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches || typeof Element.prototype.animate !== 'function') || document.documentElement.dataset.effects === 'off';
   // Bring the gallery deck back underneath the overlay before it unmounts, so
   // removing the overlay never swaps one picture for another in a single frame.
@@ -43,6 +44,8 @@ export default function TopicStack({ posts, visiblePosts = posts, renderCard, re
     // Closing during the blur-in used to restart the fade from full blur.
     // Snapshot the live backdrop first so the exit continues from it.
     const modalEl=dialog.current;
+    const cycle=cycleRef.current;
+    const isCurrent=()=>cycle===cycleRef.current && modalEl===dialog.current && modalEl?.isConnected;
     const intro=modalEl?.getAnimations?.().find(animation=>animation.animationName==='obs-deck-focus-in' && animation.playState==='running');
     const backdropFrom=intro ? (({backgroundColor,backdropFilter})=>({backgroundColor,backdropFilter}))(getComputedStyle(modalEl)) : null;
     const selectedIndex=selectedCard ? [...(cardsRef.current?.children || [])].indexOf(selectedCard) : -1;
@@ -62,14 +65,15 @@ export default function TopicStack({ posts, visiblePosts = posts, renderCard, re
     // A selection hands the focus to the inspector: the rest of the deck
     // dissolves into the blur on its way home instead of landing opaque and
     // vanishing when the overlay unmounts.
-    const cardDuration=handoff ? 640 : 900;
-    const stagger=handoff ? Math.min(45,260/Math.max(order.length,1)) : 85;
+    const cardDuration=handoff ? 440 : 600;
+    const stagger=Math.min(handoff ? 30 : 45,(handoff ? 120 : 180)/Math.max(order.length-1,1));
     const duration=cardDuration+Math.max(0,order.length-1)*stagger;
-    dialog.current?.style.setProperty('--deck-exit-duration',`${handoff ? Math.max(duration,850) : duration}ms`);
-    if (backdropFrom) modalEl.animate([backdropFrom,{backgroundColor:'transparent',backdropFilter:'blur(0px)'}],{duration:handoff ? Math.max(duration,850) : duration,easing:'ease',fill:'forwards'});
+    dialog.current?.style.setProperty('--deck-exit-duration',`${duration}ms`);
+    const backdropExit=backdropFrom ? modalEl.animate([backdropFrom,{backgroundColor:'transparent',backdropFilter:'blur(0px)'}],{duration,easing:'ease',fill:'forwards'}) : null;
     if (handoff) revealHome();
     const homeCard=stackRef.current?.querySelector(':scope > .stack-card-shell .post-card,:scope > .post-card,:scope > .m-post-card');
-    const home=homeCard?.getBoundingClientRect() || stackRef.current.getBoundingClientRect();
+    const home=homeCard?.getBoundingClientRect() || stackRef.current?.getBoundingClientRect();
+    if (!home) { setExpanded(false); closingRef.current=false; return; }
     const exits=order.map(({card,animation,index},position)=>{
       // Read the live transform before cancelling so an interrupted deal
       // continues from where it is instead of snapping to its final slot.
@@ -96,9 +100,10 @@ export default function TopicStack({ posts, visiblePosts = posts, renderCard, re
       // the gallery; hiding them early creates a gap before the deck is back.
       return card.animate(frames,{duration:cardDuration,delay:position*stagger,easing:handoff ? 'cubic-bezier(.32,.72,0,1)' : 'cubic-bezier(.4,0,.2,1)',fill:'both'});
     });
-    dealRef.current=exits;
+    dealRef.current=backdropExit ? [...exits,backdropExit] : exits;
     const returned = Promise.allSettled(exits.map(animation=>animation.finished)).then(async () => {
-      if (!handoff && dialog.current?.isConnected) {
+      if (!isCurrent()) return;
+      if (!handoff && !motionOff()) {
         revealHome();
         // Settle the last few physical cards before replacing the overlay.
         // Keep every layer opaque; the cover stays above the small fan.
@@ -113,11 +118,12 @@ export default function TopicStack({ posts, visiblePosts = posts, renderCard, re
             {transform:base,opacity:1},
             {transform:shifted.toString(),opacity:1,offset:.42},
             {transform:base,opacity:1}
-          ], {duration:520,delay:isCover ? 45 : 0,easing:'cubic-bezier(.22,.61,.36,1)',fill:'both'});
+          ], {duration:240,delay:isCover ? 20 : 0,easing:'cubic-bezier(.22,.61,.36,1)',fill:'both'});
         });
         dealRef.current = [...exits,...settling];
         await Promise.allSettled(settling.map(animation => animation.finished));
       }
+      if (!isCurrent()) return;
       setExpanded(false); closingRef.current=false;
       return new Promise(resolve => requestAnimationFrame(resolve));
     });
@@ -127,6 +133,7 @@ export default function TopicStack({ posts, visiblePosts = posts, renderCard, re
   // otherwise the cards flash in their final slots for a frame and then jump.
   useLayoutEffect(() => {
     if (!expanded) return;
+    const cycle=++cycleRef.current;
     const previous = document.activeElement;
     const overflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -154,27 +161,40 @@ export default function TopicStack({ posts, visiblePosts = posts, renderCard, re
           { transform:`translate(${dx}px,${dy}px) rotate(0deg) ${scale}` },
           { transform:`translate(${dx+70}px,${dy-28}px) rotate(-7deg) ${scale}`, offset:.22 },
           { transform:'translate(0,0) rotate(0deg) scale(1)' }
-        ], { duration:780, delay:Math.min(index, 6)*100, easing:'cubic-bezier(.4,0,.2,1)', fill:'both' });
-        deal.finished.then(() => { if (!closingRef.current) card.inert = false; }, () => {});
+        ], { duration:520, delay:Math.min(index, 6)*40, easing:'cubic-bezier(.4,0,.2,1)', fill:'both' });
+        deal.finished.then(() => { if (cycle===cycleRef.current && !closingRef.current) card.inert = false; }, () => {});
         return deal;
       });
       dealRef.current=animations;
       Promise.allSettled(animations.map(animation=>animation.finished)).then(() => {
-        if (!closingRef.current) modal?.removeAttribute('data-dealing');
+        if (cycle===cycleRef.current && !closingRef.current) modal?.removeAttribute('data-dealing');
       });
     }
+    const stopMotion=()=>{
+      if (!motionOff()) return;
+      ++cycleRef.current;
+      dealRef.current.forEach(animation=>animation.cancel()); dealRef.current=[];
+      modal?.getAnimations?.().forEach(animation=>animation.cancel());
+      [...(cardsRef.current?.children || [])].forEach(card=>{card.inert=false;});
+      modal?.removeAttribute('data-dealing');
+      if (closingRef.current) { closingRef.current=false; setExpanded(false); }
+    };
+    const preference=window.matchMedia?.('(prefers-reduced-motion: reduce)');
+    preference?.addEventListener?.('change',stopMotion);
+    const effectsObserver=new window.MutationObserver(stopMotion);
+    effectsObserver.observe(document.documentElement,{attributes:true,attributeFilter:['data-effects']});
     const keydown = (event) => {
       if (document.querySelector('.obs-persistent-card,.obs-preview-side,.obs-inspector[aria-hidden="false"]')) return;
       if (event.key === 'Escape') closeStack();
       if (event.key === 'Tab') {
-        const controls = [...(dialog.current?.querySelectorAll('button:not(:disabled),a[href],[tabindex="0"]') || [])];
+        const controls = [...(dialog.current?.querySelectorAll('button:not(:disabled),a[href],[tabindex="0"]') || [])].filter(control=>!control.closest('[inert]'));
         const first = controls[0]; const last = controls[controls.length - 1];
         if (event.shiftKey && (document.activeElement === first || document.activeElement === dialog.current)) { event.preventDefault(); last?.focus(); }
         else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
       }
     };
     document.addEventListener('keydown', keydown);
-    return () => { modal?.removeEventListener('obs-stack-select',handoff); stackRef.current?.classList.remove('obs-stack-settling'); animations.forEach(animation=>animation.cancel()); dealRef.current.forEach(animation=>animation.cancel()); dealRef.current=[]; document.body.style.overflow = overflow; document.removeEventListener('keydown', keydown); if (!document.querySelector('.obs-preview-side,.obs-inspector.is-open')) previous?.focus?.({ preventScroll: true }); };
+    return () => { ++cycleRef.current; preference?.removeEventListener?.('change',stopMotion); effectsObserver.disconnect(); modal?.removeEventListener('obs-stack-select',handoff); stackRef.current?.classList.remove('obs-stack-settling'); animations.forEach(animation=>animation.cancel()); dealRef.current.forEach(animation=>animation.cancel()); dealRef.current=[]; document.body.style.overflow = overflow; document.removeEventListener('keydown', keydown); if (!document.querySelector('.obs-preview-side,.obs-inspector.is-open')) previous?.focus?.({ preventScroll: true }); };
   }, [expanded]);
   if (!newest) return null;
   if (total === 1) return <StackCard posts={posts}>{renderCard(newest)}</StackCard>;

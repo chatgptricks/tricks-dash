@@ -2,27 +2,57 @@
 // no per-card hooks or animation state, and nothing runs until a pointer moves.
 // The inline transform is eased by the `.obs-card` CSS transition.
 const reduceMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+let activeCard = null;
+let pendingFrame = 0;
+let pendingMove = null;
+let watchingPreferences = false;
 
 function reset(card) {
+  if (!card) return;
+  if (pendingMove?.card === card) { cancelAnimationFrame(pendingFrame); pendingFrame = 0; pendingMove = null; }
   card.style.removeProperty('transform');
   card.style.removeProperty('--foil-x');
   card.style.removeProperty('--foil-y');
+  if (activeCard === card) activeCard = null;
+}
+
+function watchPreferences() {
+  if (watchingPreferences) return;
+  watchingPreferences = true;
+  const stop = () => { if (reduceMotion() || document.documentElement.dataset.effects === 'off') reset(activeCard); };
+  window.matchMedia?.('(prefers-reduced-motion: reduce)').addEventListener?.('change', stop);
+  new window.MutationObserver(stop).observe(document.documentElement, { attributes: true, attributeFilter: ['data-effects'] });
+}
+
+function paintTilt() {
+  pendingFrame = 0;
+  const move = pendingMove;
+  pendingMove = null;
+  if (!move) return;
+  const { card, x, y } = move;
+  const effects = document.documentElement.dataset.effects;
+  if (!card.isConnected || reduceMotion() || effects === 'off') { reset(card); return; }
+  const rect = card.getBoundingClientRect();
+  if (!rect.width || !rect.height) { reset(card); return; }
+  const u = Math.min(1, Math.max(0, (x - rect.left) / rect.width));
+  const v = Math.min(1, Math.max(0, (y - rect.top) / rect.height));
+  const angle = effects === 'subtle' ? 4 : 9;
+  card.style.transform = `perspective(1000px) rotateX(${((0.5 - v) * angle).toFixed(2)}deg) rotateY(${((u - 0.5) * angle).toFixed(2)}deg)`;
+  card.style.setProperty('--foil-x', `${(u * 100).toFixed(1)}%`);
+  card.style.setProperty('--foil-y', `${(v * 100).toFixed(1)}%`);
 }
 
 export const obsidianCardHandlers = {
   onPointerMove(event) {
     const card = event.currentTarget;
-    if (event.target.closest('.post-header')) { reset(card); return; }
-    if (event.target.closest('button,a,.post-menu') || card.querySelector('.post-menu-panel')) return;
+    if (event.target.closest('.post-header,button,a,.post-menu') || card.querySelector('.post-menu-panel')) { reset(card); return; }
     const effects = document.documentElement.dataset.effects;
     if (reduceMotion() || event.pointerType === 'touch' || effects === 'off' || (card.draggable && event.buttons)) { reset(card); return; }
-    const rect = card.getBoundingClientRect();
-    const u = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
-    const v = Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height));
-    const angle = effects === 'subtle' ? 4 : 9;
-    card.style.transform = `perspective(1000px) rotateX(${((0.5 - v) * angle).toFixed(2)}deg) rotateY(${((u - 0.5) * angle).toFixed(2)}deg)`;
-    card.style.setProperty('--foil-x', `${(u * 100).toFixed(1)}%`);
-    card.style.setProperty('--foil-y', `${(v * 100).toFixed(1)}%`);
+    watchPreferences();
+    if (activeCard && activeCard !== card) reset(activeCard);
+    activeCard = card;
+    pendingMove = { card, x: event.clientX, y: event.clientY };
+    if (!pendingFrame) pendingFrame = requestAnimationFrame(paintTilt);
   },
   onPointerLeave(event) { reset(event.currentTarget); },
 };

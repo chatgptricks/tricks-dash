@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowLeft, ArrowRight, Check, Copy, ExternalLink, LoaderCircle, RotateCcw, Sparkles, X } from 'lucide-react';
 import { buildReviewBrief, CLASSIFICATION_LABELS, getRelatedPromos, inspectPromo, RELATIONSHIP_LABELS, safeExternalUrl } from './promosIntelligence';
@@ -51,12 +51,83 @@ function SafeLink({ url, children, busy = false, className = '' }) {
   return <a className={className} href={busy ? undefined : href} role="link" aria-disabled={busy || undefined} target="_blank" rel="noopener noreferrer">{children || href}<ExternalLink size={13} aria-hidden="true" /></a>;
 }
 
-// Key the editor by post, retaining unsaved corrections when a JEV-only update arrives.
-export default function PromoReviewDialog(props) {
-  return props.item ? <ReviewDialog key={identity(props.item)} {...props} /> : null;
+function useReviewMotion(backdropRef, dialogRef, entry, closing, onExited) {
+  const animationsRef = useRef([]);
+  const interrupted = useRef(null);
+  const sequence = useRef(0);
+  const arrival = useRef(entry);
+  const exitCallback = useRef(onExited);
+  exitCallback.current = onExited;
+  const motionOff = () => document.documentElement.dataset.effects === 'off' || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  useLayoutEffect(() => {
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const settle = () => { if (motionOff()) animationsRef.current.forEach(animation => animation.finish()); };
+    const observer = new MutationObserver(settle);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-effects'] });
+    media.addEventListener('change', settle);
+    return () => { observer.disconnect(); media.removeEventListener('change', settle); };
+  }, []);
+  useLayoutEffect(() => {
+    const token = ++sequence.current;
+    const backdrop = backdropRef.current, dialog = dialogRef.current;
+    const resuming = Boolean(interrupted.current);
+    const current = interrupted.current || { opacity: getComputedStyle(backdrop).opacity, transform: getComputedStyle(dialog).transform };
+    interrupted.current = null;
+    animationsRef.current.forEach(animation => animation.cancel());
+    animationsRef.current = [];
+    const finish = () => { if (closing && sequence.current === token) exitCallback.current(); };
+    if (motionOff() || typeof dialog.animate !== 'function') { finish(); return; }
+    const styles = getComputedStyle(document.documentElement);
+    const duration = (name, fallback) => {
+      const value = styles.getPropertyValue(name).trim();
+      return value && Number.isFinite(parseFloat(value)) ? parseFloat(value) * (value.endsWith('ms') ? 1 : 1000) : fallback;
+    };
+    const easing = styles.getPropertyValue('--ease-out').trim() || 'cubic-bezier(.16,1,.3,1)';
+    const animate = (node, frames, timing) => {
+      const animation = node.animate(frames, { easing, fill: 'both', ...timing });
+      animationsRef.current.push(animation);
+      return animation;
+    };
+    if (closing) {
+      dialog.focus({ preventScroll: true });
+      const timing = { duration: duration('--motion-exit', 180), easing: 'cubic-bezier(.4,0,1,1)' };
+      animate(backdrop, [{ opacity: current.opacity }, { opacity: 0 }], timing);
+      animate(dialog, [{ transform: current.transform }, { transform: 'translateY(10px) scale(.988)' }], timing);
+    } else if (arrival.current === 'open') {
+      animate(backdrop, [{ opacity: resuming ? current.opacity : 0 }, { opacity: 1 }], { duration: duration('--motion-base', 220) });
+      animate(dialog, [{ transform: resuming ? current.transform : 'translateY(18px) scale(.984)' }, { transform: 'none' }], { duration: duration('--motion-enter', 360) });
+    } else {
+      const offset = arrival.current === 'backward' ? -12 : 12;
+      dialog.querySelectorAll('.promo-review-header > div,.promo-review-summary,.promo-review-attention,.promo-review-layout').forEach(node => {
+        animate(node, [{ opacity: 0, transform: `translateX(${offset}px)` }, { opacity: 1, transform: 'none' }], { duration: duration('--motion-base', 220) });
+      });
+    }
+    const animations = animationsRef.current;
+    Promise.allSettled(animations.map(animation => animation.finished)).then(() => {
+      if (sequence.current !== token) return;
+      if (closing) finish();
+      else { animations.forEach(animation => animation.cancel()); animationsRef.current = []; }
+    });
+    return () => {
+      interrupted.current = { opacity: getComputedStyle(backdrop).opacity, transform: getComputedStyle(dialog).transform };
+      sequence.current += 1; animations.forEach(animation => animation.cancel()); animationsRef.current = [];
+    };
+  }, [closing]);
 }
 
-function ReviewDialog({ item, relatedItems = [], onClose, onSave, onJevReview, onSelect, position, onPrevious, onNext }) {
+// Keep the last detail mounted through its exit, including an end-of-queue save.
+// Key only the editor by post, so a JEV-only update retains unsaved corrections.
+export default function PromoReviewDialog(props) {
+  const [retained, setRetained] = useState(props.item ? props : null);
+  useLayoutEffect(() => { if (props.item) setRetained(props); }, [props]);
+  const current = props.item ? props : retained;
+  if (!current) return null;
+  const changed = retained && identity(retained.item) !== identity(current.item);
+  const entry = changed ? (current.position?.index < retained.position?.index ? 'backward' : 'forward') : 'open';
+  return <ReviewDialog key={identity(current.item)} {...current} entry={entry} closing={!props.item} onExited={() => setRetained(null)} />;
+}
+
+function ReviewDialog({ item, relatedItems = [], onClose, onSave, onJevReview, onSelect, position, onPrevious, onNext, entry, closing, onExited }) {
   const titleId = useId();
   const [draft, setDraft] = useState(() => initialDraft(item));
   const [operation, setOperation] = useState('');
@@ -69,7 +140,7 @@ function ReviewDialog({ item, relatedItems = [], onClose, onSave, onJevReview, o
   const pendingRef = useRef(false);
   const mountedRef = useRef(false);
   const closeRef = useRef(onClose);
-  const busy = Boolean(operation);
+  const busy = Boolean(operation) || closing;
   const caption = text(item.caption);
   const evidence = useMemo(() => Array.isArray(item.evidence) ? item.evidence.filter(entry => entry && typeof entry === 'object') : [], [item.evidence]);
   const groups = useMemo(() => {
@@ -92,7 +163,7 @@ function ReviewDialog({ item, relatedItems = [], onClose, onSave, onJevReview, o
   const index = Number(position?.index);
   const total = Number(position?.total);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     mountedRef.current = true;
     const previous = document.activeElement;
     const backdrop = backdropRef.current;
@@ -124,9 +195,10 @@ function ReviewDialog({ item, relatedItems = [], onClose, onSave, onJevReview, o
       if (previous?.isConnected) previous.focus?.({ preventScroll: true });
     };
   }, []);
+  useReviewMotion(backdropRef, dialogRef, entry, closing, onExited);
 
   const navigate = async (action, { discard = false } = {}) => {
-    if (pendingRef.current || !action) return;
+    if (pendingRef.current || closing || !action) return;
     if (dirty && !discard) { setPendingNavigation({ action }); return; }
     pendingRef.current = true;
     setPendingNavigation(null); setOperation('navigate'); setError(''); setNotice('');
@@ -136,7 +208,7 @@ function ReviewDialog({ item, relatedItems = [], onClose, onSave, onJevReview, o
   };
   closeRef.current = () => navigate(onClose);
   const save = async (reviewStatus, advance = false) => {
-    if (pendingRef.current) return;
+    if (pendingRef.current || closing) return;
     pendingRef.current = true;
     setPendingNavigation(null); setOperation(reviewStatus || 'save'); setError(''); setNotice('');
     try {
@@ -150,7 +222,7 @@ function ReviewDialog({ item, relatedItems = [], onClose, onSave, onJevReview, o
     }
   };
   const reviewWithJev = async () => {
-    if (pendingRef.current) return;
+    if (pendingRef.current || closing) return;
     pendingRef.current = true;
     setOperation('jev'); setError(''); setNotice('');
     try {
@@ -169,7 +241,7 @@ function ReviewDialog({ item, relatedItems = [], onClose, onSave, onJevReview, o
   };
 
   return createPortal(
-    <div ref={backdropRef} className="promo-modal promo-review-modal" onMouseDown={event => {
+    <div ref={backdropRef} className="promo-modal promo-review-modal" data-state={closing ? 'closing' : 'open'} onMouseDown={event => {
       if (event.target === event.currentTarget) navigate(onClose);
     }}>
       <section ref={dialogRef} className="promo-dialog promo-review-dialog" role="dialog" aria-modal="true" aria-labelledby={titleId} aria-busy={busy} tabIndex={-1}>

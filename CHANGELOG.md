@@ -51,10 +51,24 @@ been published or tagged; production still runs the existing release.
   same-brand corroboration, and preserved human corrections during rescans.
   The configured remote API still uses its deployed detector until separately released.
 
+### Visual polish and motion
+
+- Add shared spring easing, responsive press feedback, keyboard focus rings and
+  short menu/form arrivals while preserving existing layouts and Promos grouping.
+- Keep stack choreography bounded even for large groups, speed up card travel,
+  and cancel stale animation work when a view closes or reopens.
+- Animate Promos review entrances, exits and previous/next content transitions;
+  retain focus and background locks until the exit completes.
+- Coalesce card tilt into one update per animation frame and clear it over controls.
+- Honor reduced motion and Effects Off during active animations; avoid sticky
+  hover lifts on touch devices and improve Tracker's selected light-mode contrast.
+- Add fixture-only motion checks for interruption, repeated opening, touch,
+  reduced motion, effects preferences and desktop/mobile tool geometry.
+
 ### Release validation
 
 - `npm run check:release` combines lint, regression tests, the full build and
-  browser workflow checks. CI runs the same command.
+  browser workflow and motion checks. CI runs the same command.
 - Queue refresh, stack operations and Vault access tests are included in the
   standard suite, alongside the new failure and recovery regressions.
 - Local verification on 2026-10-03: `npm run check:release` passed (lint:

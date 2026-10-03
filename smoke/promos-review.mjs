@@ -305,6 +305,69 @@ try {
   assert.equal(await page.evaluate(() => sessionStorage.getItem('sentient.promos.job:user03@example.com')), null);
   assert.ok(jobRequests.length >= 4);
   console.log('PASS stale server filter response, failed queue retry, running scan lock, persisted job, reconnect and current-filter refresh');
+
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await page.evaluate(() => {
+    document.documentElement.dataset.effects = 'on';
+    document.documentElement.style.setProperty('--motion-enter', '600ms');
+    document.documentElement.style.setProperty('--motion-exit', '400ms');
+  });
+  await page.locator('[data-promo-key="alpha:ALPHA"]').click();
+  await page.waitForFunction(() => document.querySelector('.promo-review-dialog')?.getAnimations().some(animation => animation.playState === 'running'));
+  await page.evaluate(() => document.querySelector('[aria-label="Close promotion review"]').click());
+  await page.waitForFunction(() => document.querySelector('.promo-review-modal')?.dataset.state === 'closing');
+  assert.equal(await page.locator('#root').evaluate(node => node.inert), true, 'Background stays inert through the exit');
+  assert.equal(await page.evaluate(() => document.body.style.overflow), 'hidden');
+  assert.equal(await dialog.evaluate(node => node.contains(document.activeElement)), true, 'Focus stays within the exiting inspector');
+  assert.equal(await dialog.getByRole('button', { name: 'Mark reviewed & next', exact: true }).isDisabled(), true);
+  // A new parent selection can arrive during an exit; its canceled completion must not remove the reopened detail.
+  await page.evaluate(() => document.querySelector('[data-promo-key="alpha:ALPHA"]').click());
+  await page.waitForFunction(() => document.querySelector('.promo-review-modal')?.dataset.state === 'open');
+  await page.waitForTimeout(450);
+  assert.equal(await dialog.count(), 1, 'Reopening cancels the previous exit completion');
+  await page.evaluate(() => document.querySelector('[aria-label="Close promotion review"]').click());
+  await page.waitForFunction(() => document.querySelector('.promo-review-modal')?.dataset.state === 'closing');
+  await page.keyboard.press('Escape');
+  await dialog.waitFor({ state: 'detached' });
+  assert.equal(await page.locator('#root').evaluate(node => node.inert), false);
+  assert.equal(await page.evaluate(() => document.body.style.overflow), '');
+  assert.equal(await page.locator('[data-promo-key="alpha:ALPHA"]').evaluate(node => node === document.activeElement), true);
+
+  await page.getByLabel('Review status', { exact: true }).selectOption('');
+  await page.locator('.promo-results-heading strong').getByText('2 posts', { exact: true }).waitFor();
+  await page.getByLabel('Account · loaded', { exact: true }).selectOption('alpha');
+  await page.locator('[data-promo-key="alpha:ALPHA"]').click();
+  await page.waitForFunction(() => document.querySelector('.promo-review-dialog')?.getAnimations().some(animation => animation.playState === 'running'));
+  await page.evaluate(() => { document.documentElement.dataset.effects = 'off'; });
+  await page.waitForFunction(() => !document.querySelector('.promo-review-modal')?.getAnimations({ subtree: true }).some(animation => animation.playState === 'running'));
+  assert.equal(await dialog.evaluate(node => getComputedStyle(node).transform), 'none');
+  await dialog.locator('.promo-related-list button').filter({ hasText: '@beta' }).click();
+  await page.getByRole('heading', { name: 'Review @beta', exact: true }).waitFor();
+  assert.equal(await dialog.getByText('Outside current filtered view', { exact: true }).count(), 1);
+  assert.equal(await dialog.evaluate(node => node.getAnimations({ subtree: true }).filter(animation => animation.playState === 'running').length), 0);
+  await page.evaluate(() => {
+    document.documentElement.dataset.effects = 'on';
+    document.documentElement.style.setProperty('--motion-base', '600ms');
+  });
+  await dialog.locator('.promo-related-list button').filter({ hasText: '@alpha' }).click();
+  await page.getByRole('heading', { name: 'Review @alpha', exact: true }).waitFor();
+  await page.waitForFunction(() => document.querySelector('.promo-review-layout')?.getAnimations().some(animation => animation.playState === 'running'));
+  assert.equal(await page.locator('.promo-review-modal').evaluate(node => node.getAnimations().length), 0, 'Changing posts animates content without flashing the backdrop');
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.waitForFunction(() => !document.querySelector('.promo-review-modal')?.getAnimations({ subtree: true }).some(animation => animation.playState === 'running'));
+  await page.keyboard.press('Escape');
+  assert.equal(await dialog.count(), 0, 'Reduced motion closes without an animation delay');
+
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await page.locator('[data-promo-key="alpha:ALPHA"]').click();
+  await page.getByRole('heading', { name: 'Review @alpha', exact: true }).waitFor();
+  await page.evaluate(() => document.querySelector('[aria-label="Close promotion review"]').click());
+  await page.waitForFunction(() => document.querySelector('.promo-review-modal')?.dataset.state === 'closing');
+  await page.evaluate(() => { document.documentElement.dataset.effects = 'off'; });
+  await dialog.waitFor({ state: 'detached' });
+  assert.equal(await page.locator('#root').evaluate(node => node.inert), false, 'Disabling effects mid-exit completes cleanup');
+  assert.equal(await page.evaluate(() => document.body.style.overflow), '');
+  console.log('PASS interruptible inspector enter/exit, retained focus/locks, content navigation and live motion preferences');
   assert.deepEqual(errors, []);
   console.log(`PASS Promos browser smoke; screenshots: ${output}`);
 } finally {
