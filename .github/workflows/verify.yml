@@ -15,7 +15,6 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run lint
-      - run: VITE_SKIP_PUBLIC=1 npm run build
-      - run: npm test
+      - run: npx playwright install --with-deps chromium
+      - run: npm run check:release
       - run: npm audit --omit=dev --audit-level=high

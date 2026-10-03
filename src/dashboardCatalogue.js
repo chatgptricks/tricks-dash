@@ -183,10 +183,19 @@ export async function loadCompleteDashboardCatalogue({ signal, etag = '', onProg
     if (manifestResult.notModified) return manifestResult;
     try {
       const cachedSources = normaliseSources(cachedCatalogue?.sources);
+      const currentSources = normaliseSources(manifestResult.manifest.sources);
+      if (!currentSources) throw new DashboardCatalogueError('The post catalogue named an invalid source.');
       const canDelta = Array.isArray(cachedCatalogue?.posts)
         && cachedCatalogue.posts.length > 0
         && cachedSources
-        && manifestResult.manifest.sources.every((source) => cachedSources.has(String(source?.source || '')));
+        && currentSources.size > 0
+        && currentSources.size === cachedSources.size
+        // A reset/restore or removed source is not an append-only delta. A
+        // full read must replace the previous snapshot and remove stale rows.
+        && [...currentSources].every(([source, upperBound]) => cachedSources.has(source) && upperBound >= cachedSources.get(source))
+        // A changed revision without new IDs cannot be satisfied by an empty
+        // delta: it may represent updated decorations or a server generation.
+        && [...currentSources].some(([source, upperBound]) => upperBound > cachedSources.get(source));
       const catalogue = await fetchRevision(
         manifestResult.manifest,
         signal,

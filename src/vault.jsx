@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import ReactDOM from 'react-dom/client';
+import { mountApp } from './mountApp';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { apiFetch, API_BASE } from './api';
 import { firebaseAuth, startGoogleSignIn, describeSignInError } from './firebase';
@@ -74,4 +74,4 @@ function Vault() {
     {!rows.length && <p className="vault-empty">{!loaded ? 'Loading your links…' : query || filter !== 'All' ? 'No matching links. Try another search or source.' : discarded ? 'No discarded links.' : view === 'done' ? 'No completed links yet. Mark a card Done! to move it here.' : 'Your collection is ready. Add your first link.'}</p>}
   </main>;
 }
-ReactDOM.createRoot(document.getElementById('root')).render(<PrefsProvider lang="en" theme="dark"><Vault /></PrefsProvider>);
+mountApp(<PrefsProvider lang="en" theme="dark"><Vault /></PrefsProvider>, { lang: 'en' });

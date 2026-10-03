@@ -31,6 +31,8 @@ const ACCOUNTS = [
   { handle: 'rivalpage', label: 'Rival Page', group: 'competitors', has_avatar: 0, active: 1 },
 ];
 const CAPTION_REQUESTS = [];
+let storedLists = [], holdListReads = false, timeOutListWrite = false, listWrites = 0;
+const heldListReads = [], listSignals = [];
 
 const stubFetch = async (url, options = {}) => {
   const u = String(url);
@@ -43,7 +45,21 @@ const stubFetch = async (url, options = {}) => {
   else if (u.includes('/api/dashboard/posts/page')) body = { source: 'canonical', afterId: 0, nextCursor: POSTS.length, done: true, upperBound: POSTS.length, revision: 'desktop-smoke', posts: POSTS };
   else if (u.includes('/api/dashboard/posts')) body = { posts: POSTS, summary: {}, ranges: {} };
   else if (u.includes('/api/dashboard/accounts')) body = { accounts: ACCOUNTS };
-  else if (u.includes('/api/dashboard/lists')) body = { lists: [] };
+  else if (u.includes('/api/dashboard/lists')) {
+    listSignals.push(options.signal);
+    if (options.method === 'POST') {
+      listWrites += 1;
+      if (timeOutListWrite) throw new DOMException('Request timed out.', 'TimeoutError');
+      if (u.endsWith('/delete')) { storedLists = []; body = { ok: true }; }
+      else {
+        const list = { id: 7, name: options.body.get('name'), handles: options.body.get('handles').split(',') };
+        storedLists = [list]; body = { list };
+      }
+    } else if (holdListReads) {
+      const snapshot = [...storedLists];
+      return new Promise(resolve => heldListReads.push(() => resolve({ ok: true, status: 200, json: async () => ({ lists: snapshot }) })));
+    } else body = { lists: storedLists };
+  }
   else if (u.includes('/api/admin/me')) body = { role: 'admin', email: 'user03@example.com' };
   return { ok: true, status: 200, headers: { get: (key) => String(key).toLowerCase() === 'etag' && u.includes('/manifest') ? '"desktop-smoke"' : null }, json: async () => body, text: async () => JSON.stringify(body) };
 };
@@ -96,6 +112,32 @@ const el = document.getElementById('root') || document.body.appendChild(document
   const click = async (node) => { if (!node) return; await act(async () => { node.dispatchEvent(new window.MouseEvent('click', { bubbles: true })); }); };
   const press = async (key, opts = {}) => { await act(async () => { document.dispatchEvent(new window.KeyboardEvent('keydown', { key, bubbles: true, ...opts })); }); };
   const inter = {};
+
+  // Confirmed list mutations must not wait on the follow-up roster read.
+  holdListReads = true;
+  await click(q('[aria-label="Create a custom list"]'));
+  await act(async () => {
+    const input = q('.list-editor .modal-field input');
+    Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(input, 'Release research');
+    input.dispatchEvent(new window.Event('input', { bubbles: true }));
+  });
+  await click(q('.list-editor input[type="checkbox"]'));
+  timeOutListWrite = true;
+  await click(q('.list-editor .primary-button'));
+  inter['list timeout stays editable with actionable feedback'] = /timed out.*Check your lists/.test(q('.list-editor [role="alert"]')?.textContent || '') && !q('.list-editor .primary-button').disabled && listWrites === 1;
+  timeOutListWrite = false;
+  await click(q('.list-editor .primary-button'));
+  inter['confirmed list save closes without waiting for a stalled roster refresh'] = !q('.list-editor') && q('.group-tab-active')?.textContent === 'Release research' && listWrites === 2;
+  await click(q('.group-tab-edit'));
+  await click(q('.list-editor .danger'));
+  await click(q('.list-editor .danger'));
+  inter['confirmed list delete closes and removes the tab despite a stalled refresh'] = !q('.list-editor') && !qa('.group-tab').some(node => node.textContent === 'Release research') && listWrites === 3;
+  await act(async () => { heldListReads[1]?.(); await Promise.resolve(); });
+  inter['stale roster refresh cannot resurrect a confirmed deletion'] = !qa('.group-tab').some(node => node.textContent === 'Release research');
+  inter['list writes and roster refreshes have abort deadlines'] = listSignals.length >= 6 && listSignals.every(signal => signal && typeof signal.addEventListener === 'function');
+  holdListReads = false;
+  await act(async () => { heldListReads.forEach(release => release()); await Promise.resolve(); });
+
 
   const typeTrigger = qa('.filter-trigger').find((b) => /Type/.test(b.textContent));
   inter['Type trigger exists'] = Boolean(typeTrigger);
@@ -224,7 +266,7 @@ const el = document.getElementById('root') || document.body.appendChild(document
   inter['download button in rail'] = Boolean(dl);
   inter['download button labelled'] = /Download media/.test(dl?.textContent || '');
 
-  const selectedShortcode = q('.selected-post-link')?.href.match(/\/(?:p|reel)\/([^/]+)/)?.[1];
+  const selectedShortcode = q('.obs-open-original')?.href.match(/\/(?:p|reel)\/([^/]+)/)?.[1];
   const captionButton = qa('button').find((button) => /Generate similar caption/.test(button.textContent));
   await click(captionButton);
   const captionSelect = q('.caption-generator-modal select');

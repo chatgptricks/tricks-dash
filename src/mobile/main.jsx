@@ -2,7 +2,7 @@ import TopicStack from '../TopicStack';
 import { useTopicGroups } from '../useTopicGroups';
 import { editorialStates } from '../topicGroups';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import ReactDOM from 'react-dom/client';
+import { mountApp } from '../mountApp';
 import {
   AlertCircle, ArrowLeft, ArrowUpRight, BarChart3, Bell, CalendarDays, Check, CheckCircle2,
   ChevronLeft, ChevronRight, Clock3, Download, ExternalLink, Filter, Flame, Heart, Home,
@@ -624,4 +624,4 @@ function UserEditSheet({ user, onClose, onSaved }) {
   return <Sheet title={t('users')} onClose={onClose}><form className="m-form" onSubmit={submit}><label>{t('displayName')}<input required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></label><label>{t('role')}<select value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value })}>{['pd', 'vc', 'sales', 'trainee'].map((role) => <option key={role} value={role}>{role.toUpperCase()}</option>)}</select></label><label>{t('slackId')}<input value={form.slack} onChange={(event) => setForm({ ...form, slack: event.target.value.toUpperCase() })} /></label><label className="m-toggle"><input type="checkbox" checked={form.admin} onChange={(event) => setForm({ ...form, admin: event.target.checked })} /><span>{t('admin')}</span></label><Notice type="error">{notice}</Notice><button className="m-primary" disabled={busy}>{busy ? t('loading') : t('save')}</button></form></Sheet>;
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<React.StrictMode><PrefsProvider><MobileApp /></PrefsProvider></React.StrictMode>);
+mountApp(<React.StrictMode><PrefsProvider><MobileApp /></PrefsProvider></React.StrictMode>);

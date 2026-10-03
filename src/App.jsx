@@ -53,9 +53,7 @@ import { PrefsProvider, usePrefs } from './prefsContext';
 import { ACCENT_CHOICES, accentHex } from './prefs';
 import { API_BASE, apiFetch } from './api';
 import { mergeUserDrafts, saveUserProfile, userProfileDraft as userDraft } from './userAdmin';
-import { readDashboardSnapshot, writeDashboardSnapshot } from './dashboardCache';
-// Read durable storage alongside authentication, rather than after it.
-const initialDashboardSnapshot = readDashboardSnapshot().catch(() => null);
+import { clearDashboardSnapshot, readDashboardSnapshot, writeDashboardSnapshot } from './dashboardCache';
 import { DashboardCatalogueError, loadCompleteDashboardCatalogue } from './dashboardCatalogue';
 import { followQueueLive } from './queueLive';
 import { decodeRouteState, encodeRouteState } from './urlCodec';
@@ -777,11 +775,15 @@ const ROLE_SWITCHER_DEFAULTS = Object.freeze({
   'user05@example.com': ['sales', 'pd', 'vc', 'trainee', 'admin'],
 });
 const ACTIVE_ROLE_PREVIEWS = new Set(['sales', 'pd', 'vc', 'trainee', 'admin']);
-const hasActiveRolePreview = () => ACTIVE_ROLE_PREVIEWS.has(window.sessionStorage.getItem('sentient.queueRolePreview') || '');
+const readRolePreview = () => {
+  try { return window.sessionStorage.getItem('sentient.queueRolePreview') || ''; }
+  catch { return ''; }
+};
+const hasActiveRolePreview = () => ACTIVE_ROLE_PREVIEWS.has(readRolePreview());
 
 export function DevRolePreview({ isDev, canSwitchRoles = false, availableRoles = [] }) {
   const [open, setOpen] = useState(false);
-  const requestedRole = window.sessionStorage.getItem('sentient.queueRolePreview') || '';
+  const requestedRole = readRolePreview();
   const options = [...new Set((isDev ? ROLE_SWITCHER_DEFAULTS[DEV_EMAIL] : availableRoles).filter((role) => ['sales', 'pd', 'vc', 'trainee', 'admin'].includes(role)))];
   const active = options.includes(requestedRole) ? requestedRole : '';
   if (!isDev && !canSwitchRoles) return null;
@@ -801,7 +803,7 @@ function openToolTab(event, url, windowName) {
   if (tab) tab.focus();
 }
 
-function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
+function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, sessionVersionRef, onSignOut, onUnauthorized }) {
   const homeView = false;
   const knownRoleSwitcher = Object.prototype.hasOwnProperty.call(ROLE_SWITCHER_DEFAULTS, String(userEmail || '').trim().toLowerCase());
   const knownDev = String(userEmail || '').trim().toLowerCase() === DEV_EMAIL;
@@ -816,11 +818,11 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
   // Two-tier roles: everyone allowlisted sees the dashboard, only admins see
   // Settings. This is purely a UI convenience -- the backend rejects
   // /api/admin/* for non-admins regardless of what this flag says.
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [operatingRole, setOperatingRole] = useState('sales');
-  const [operatingRoles, setOperatingRoles] = useState(['sales']);
-  const [isDev, setIsDev] = useState(knownDev);
-  const [canSelfAssign, setCanSelfAssign] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(Boolean(initialAccess.is_admin));
+  const [operatingRole, setOperatingRole] = useState(initialAccess.operating_role || 'sales');
+  const [operatingRoles, setOperatingRoles] = useState(initialAccess.operating_roles || [initialAccess.operating_role || 'sales']);
+  const [isDev, setIsDev] = useState(Boolean(initialAccess.is_dev) || knownDev);
+  const [canSelfAssign, setCanSelfAssign] = useState(Boolean(initialAccess.can_self_assign));
   const [canSwitchRoles, setCanSwitchRoles] = useState(knownRoleSwitcher);
   const [availableRoles, setAvailableRoles] = useState(() => ROLE_SWITCHER_DEFAULTS[String(userEmail || '').trim().toLowerCase()] || []);
   const [queuePendingCount, setQueuePendingCount] = useState(0);
@@ -842,7 +844,19 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
   const dashboardAccountsRef = useRef([]);
   const dashboardCatalogueRevisionRef = useRef('');
   const dashboardFlightRef = useRef(null);
-  const requestedRolePreview = window.sessionStorage.getItem('sentient.queueRolePreview') || '';
+  const dashboardAliveRef = useRef(true);
+  const dashboardUserRef = useRef(firebaseAuth.currentUser);
+  const ownsDashboardSession = useCallback(() => dashboardAliveRef.current
+    && firebaseAuth.currentUser === dashboardUserRef.current
+    && sessionVersionRef.current === sessionVersion, [sessionVersionRef, sessionVersion]);
+  useEffect(() => {
+    dashboardAliveRef.current = true;
+    return () => {
+      dashboardAliveRef.current = false;
+      dashboardRequestVersionRef.current += 1;
+    };
+  }, []);
+  const requestedRolePreview = readRolePreview();
   const activeRolePreview = ACTIVE_ROLE_PREVIEWS.has(requestedRolePreview) ? requestedRolePreview : '';
   const rolePreviewActive = Boolean(activeRolePreview);
   // Apply the chosen preview synchronously. `/api/dashboard/me` remains the
@@ -945,12 +959,15 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
   const loadAccess = useCallback(async (signal) => {
     try {
       const response = await apiFetch(`${API_BASE}/api/dashboard/me`, { signal });
-      if (response.ok) applyAccess(await response.json());
+      if (response.ok) {
+        const access = await response.json();
+        if (ownsDashboardSession() && !signal?.aborted) applyAccess(access);
+      }
     } catch {
       // The dashboard retains any last successful role state. A transient
       // access check must never hide an already-authorized workspace.
     }
-  }, [applyAccess]);
+  }, [applyAccess, ownsDashboardSession]);
   const quickAddToPool = useCallback(async (post) => {
     try {
       const body = new FormData();
@@ -1011,13 +1028,14 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
   }, [effectiveIsAdmin, effectiveOperatingRoles, refreshQueueSummary]);
 
   const loadDashboard = useCallback(async (signal, { silent = false } = {}) => {
+    if (!ownsDashboardSession()) return;
     // Returning to a tab must not supersede the full catalogue already loading.
     if (dashboardFlightRef.current && !dashboardFlightRef.current.signal?.aborted) return;
     const flight = { signal };
     dashboardFlightRef.current = flight;
     const requestVersion = dashboardRequestVersionRef.current + 1;
     dashboardRequestVersionRef.current = requestVersion;
-    const isCurrentRequest = () => requestVersion === dashboardRequestVersionRef.current && !signal?.aborted;
+    const isCurrentRequest = () => ownsDashboardSession() && requestVersion === dashboardRequestVersionRef.current && !signal?.aborted;
     let loaded = false;
     try {
       if (!silent) {
@@ -1034,7 +1052,6 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
         }),
         apiFetch(`${API_BASE}/api/dashboard/accounts`, { signal }).then(async (accountsResponse) => {
           if (accountsResponse.status === 401 || accountsResponse.status === 403) {
-            onUnauthorized();
             throw new DashboardCatalogueError('Sign in required.', accountsResponse.status);
           }
           if (!accountsResponse.ok) throw new Error(`HTTP ${accountsResponse.status}`);
@@ -1047,7 +1064,6 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
       ]);
       // A manual refresh, reconnect, or tab return can start another request
       // while this one is in flight. Only the newest response owns the UI.
-      if (!isCurrentRequest()) return;
       if (!isCurrentRequest()) return;
       // The server has confirmed that the catalog has not changed. Keep the
       // current cards, selection and scroll intact while still accepting the
@@ -1090,7 +1106,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
           catalogueComplete: true,
           catalogueRevision: catalogue.revision,
           catalogueSources: dashboardSourcesRef.current,
-        }).catch(() => {});
+        }, userEmail).catch(() => {});
       if (!isCurrentRequest()) return;
       setDashboard({ posts: catalogue.posts, summary: catalogue.summary || {} });
       setAccounts(resolvedAccounts.accounts);
@@ -1131,7 +1147,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
       // alarming database-error page.
       if (isCurrentRequest() && loaded) setLoading(false);
     }
-  }, [loadAccess, onUnauthorized]);
+  }, [loadAccess, onUnauthorized, ownsDashboardSession, userEmail]);
 
   dashboardLoader.current = loadDashboard;
 
@@ -1151,12 +1167,12 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
         // older dashboard build. Cache access is an acceleration, never a
         // prerequisite for the live library: fall through to the API quickly
         // instead of leaving the entire page on Loading indefinitely.
-        const restore = initialDashboardSnapshot.then((snapshot) => {
+        const restore = readDashboardSnapshot(userEmail).then((snapshot) => {
         const isCompleteSnapshot = snapshot?.catalogueComplete
           && Array.isArray(snapshot.posts)
           && snapshot.posts.length > 0
           && Array.isArray(snapshot.accounts);
-        if (active && isCompleteSnapshot && !dashboardPostsRef.current.length) {
+        if (active && ownsDashboardSession() && isCompleteSnapshot && !dashboardPostsRef.current.length) {
           dashboardPostsRef.current = snapshot.posts;
           dashboardSourcesRef.current = Array.isArray(snapshot.catalogueSources) ? snapshot.catalogueSources : [];
           dashboardSummaryRef.current = snapshot.summary || {};
@@ -1181,7 +1197,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
       if (active) loadDashboard(controller.signal, { silent: dashboardPostsRef.current.length > 0 });
     })();
     return () => { active = false; controller.abort(); };
-  }, [loadDashboard]);
+  }, [loadDashboard, ownsDashboardSession, userEmail]);
 
   useEffect(() => () => {
     if (reconnectTimer.current) window.clearTimeout(reconnectTimer.current);
@@ -1770,12 +1786,14 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
     setDateTo(preset?.to ?? '');
   }, [datePresets]);
 
+  const listsRequestRef = useRef(0);
   const loadLists = useCallback(async () => {
+    const request = ++listsRequestRef.current;
     try {
-      const response = await apiFetch(`${API_BASE}/api/dashboard/lists`);
+      const response = await apiFetch(`${API_BASE}/api/dashboard/lists`, { signal: AbortSignal.timeout(30000) });
       if (!response.ok) return;
       const data = await response.json();
-      if (Array.isArray(data.lists)) setCustomLists(data.lists);
+      if (request === listsRequestRef.current && Array.isArray(data.lists)) setCustomLists(data.lists);
     } catch {
       // Lists are an enhancement -- never block the dashboard on them.
     }
@@ -1783,6 +1801,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
 
   useEffect(() => {
     loadLists();
+    return () => { listsRequestRef.current += 1; };
   }, [loadLists]);
 
   const saveList = useCallback(async (draft) => {
@@ -1790,26 +1809,49 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
     body.append('name', draft.name);
     body.append('handles', draft.handles.join(','));
     if (draft.id) body.append('list_id', String(draft.id));
-    const response = await apiFetch(`${API_BASE}/api/dashboard/lists`, { method: 'POST', body });
-    if (!response.ok) {
-      const detail = await response.json().catch(() => ({}));
-      throw new Error(detail.detail || `HTTP ${response.status}`);
+    try {
+      const response = await apiFetch(`${API_BASE}/api/dashboard/lists`, { method: 'POST', body, signal: AbortSignal.timeout(30000) });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || `Could not save that list (HTTP ${response.status}).`);
+      if (!data.list?.id) throw new Error('Could not confirm the saved list. Check your lists before trying again.');
+      // Commit the confirmed result immediately. A slow roster refresh must
+      // never trap the user in a disabled editor or resurrect an older list.
+      listsRequestRef.current += 1;
+      setCustomLists((current) => [...current.filter((list) => String(list.id) !== String(data.list.id)), data.list]);
+      setActiveGroup(`list:${data.list.id}`);
+      void loadLists();
+      return data.list;
+    } catch (error) {
+      if (error.name === 'TimeoutError' || error.name === 'AbortError') {
+        void loadLists();
+        throw new Error('Saving the list timed out. Check your lists before trying again.', { cause: error });
+      }
+      throw error;
     }
-    const data = await response.json();
-    await loadLists();
-    setActiveGroup(`list:${data.list.id}`);
-    return data.list;
   }, [loadLists]);
 
   const deleteList = useCallback(async (listId) => {
     const body = new FormData();
     body.append('list_id', String(listId));
-    const response = await apiFetch(`${API_BASE}/api/dashboard/lists/delete`, { method: 'POST', body });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    // Fall back to All rather than leaving the user on a tab that no longer
-    // exists (which would render an empty grid with no way to tell why).
-    setActiveGroup('all');
-    await loadLists();
+    try {
+      const response = await apiFetch(`${API_BASE}/api/dashboard/lists/delete`, { method: 'POST', body, signal: AbortSignal.timeout(30000) });
+      if (!response.ok) {
+        const detail = await response.json().catch(() => ({}));
+        throw new Error(detail.detail || `Could not delete that list (HTTP ${response.status}).`);
+      }
+      listsRequestRef.current += 1;
+      setCustomLists((current) => current.filter((list) => String(list.id) !== String(listId)));
+      // Fall back to All once deletion is confirmed, even if refreshing the
+      // remaining lists fails or hangs.
+      setActiveGroup('all');
+      void loadLists();
+    } catch (error) {
+      if (error.name === 'TimeoutError' || error.name === 'AbortError') {
+        void loadLists();
+        throw new Error('Deleting the list timed out. Check whether it still exists before trying again.', { cause: error });
+      }
+      throw error;
+    }
   }, [loadLists]);
 
   // Counted across the whole library, not the current filters: the badge is
@@ -1827,6 +1869,7 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
   // posts, so re-fetching the whole thing to reflect a single flag would be
   // both slow and visually jarring (scroll position, image reloads).
   const patchPost = useCallback((account, shortcode, patch) => {
+    if (!ownsDashboardSession()) return;
     const applyPatch = (items) => items.map((post) =>
       post.account === account && post.shortcode === shortcode ? { ...post, ...patch } : post,
     );
@@ -1847,10 +1890,11 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
       catalogueComplete: true,
       catalogueRevision: dashboardCatalogueRevisionRef.current,
       catalogueSources: dashboardSourcesRef.current,
-    }).catch(() => {});
-  }, []);
+    }, userEmail).catch(() => {});
+  }, [ownsDashboardSession, userEmail]);
 
   const applyStackResult = useCallback((result) => {
+    if (!ownsDashboardSession()) return;
     dashboardPostsRef.current = applyStackMembershipResult(dashboardPostsRef.current, result);
     setDashboard((current) => ({ ...current, posts: applyStackMembershipResult(current.posts, result) }));
     void writeDashboardSnapshot({
@@ -1860,8 +1904,8 @@ function Dashboard({ userEmail, userPhoto, onSignOut, onUnauthorized }) {
       catalogueComplete: true,
       catalogueRevision: dashboardCatalogueRevisionRef.current,
       catalogueSources: dashboardSourcesRef.current,
-    }).catch(() => {});
-  }, []);
+    }, userEmail).catch(() => {});
+  }, [ownsDashboardSession, userEmail]);
 
   const setPostFlags = useCallback(async (post, flags) => {
     if ('is_promo' in flags && post.group !== 'sentient') throw new Error('Promo is only available for Ours accounts.');
@@ -2741,33 +2785,65 @@ function DashboardSkeleton({ label = 'Loading the post library' }) {
 
 // Create/edit a custom account list. Kept as a small modal rather than a
 // wizard: a list is just a name plus a set of handles.
-function ListEditor({ draft, accounts, onSave, onDelete, onClose }) {
+export function ListEditor({ draft, accounts, onSave, onDelete, onClose }) {
   const [name, setName] = useState(draft.name);
   const [picked, setPicked] = useState(() => new Set(draft.handles));
   const [search, setSearch] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const dialogRef = useRef(null);
+  const operationRef = useRef(false);
+  const busy = saving || deleting;
+  const dismiss = () => { if (!operationRef.current) onClose(); };
 
+  useEffect(() => {
+    const previous = document.activeElement;
+    const backdrop = dialogRef.current.parentElement;
+    const background = [...backdrop.parentElement.children].filter((node) => node !== backdrop && !node.inert);
+    const overflow = document.body.style.overflow;
+    background.forEach((node) => { node.inert = true; });
+    document.body.style.overflow = 'hidden';
+    dialogRef.current.querySelector('input')?.focus();
+    return () => {
+      background.forEach((node) => { node.inert = false; });
+      document.body.style.overflow = overflow;
+      if (previous?.isConnected) previous.focus?.({ preventScroll: true });
+    };
+  }, []);
+
+  const onKeyDown = (event) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!operationRef.current) {
+        if (confirmDelete) setConfirmDelete(false);
+        else onClose();
+      }
+    }
+    if (event.key !== 'Tab') return;
+    const nodes = [...dialogRef.current.querySelectorAll('button:not(:disabled),input:not(:disabled)')];
+    if (!nodes.length) { event.preventDefault(); dialogRef.current.focus(); return; }
+    const first = nodes[0], last = nodes.at(-1);
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+    if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+  };
   const term = search.trim().toLowerCase();
   const visible = term
-    ? accounts.filter(
-        (a) => a.handle.toLowerCase().includes(term) || (a.label || '').toLowerCase().includes(term),
-      )
+    ? accounts.filter((account) => account.handle.toLowerCase().includes(term) || (account.label || '').toLowerCase().includes(term))
     : accounts;
-
-  const toggle = (handle) => {
-    setPicked((current) => {
-      const next = new Set(current);
-      if (next.has(handle)) next.delete(handle);
-      else next.add(handle);
-      return next;
-    });
-  };
-
+  const toggle = (handle) => setPicked((current) => {
+    const next = new Set(current);
+    if (next.has(handle)) next.delete(handle); else next.add(handle);
+    return next;
+  });
   const submit = async () => {
+    if (operationRef.current) return;
     setError('');
     if (!name.trim()) return setError('Give the list a name.');
     if (!picked.size) return setError('Pick at least one account.');
+    operationRef.current = true;
     setSaving(true);
     try {
       await onSave({ id: draft.id, name: name.trim(), handles: [...picked] });
@@ -2775,87 +2851,59 @@ function ListEditor({ draft, accounts, onSave, onDelete, onClose }) {
     } catch (exc) {
       setError(exc.message || 'Could not save that list.');
     } finally {
+      operationRef.current = false;
       setSaving(false);
+    }
+  };
+  const remove = async () => {
+    if (operationRef.current) return;
+    operationRef.current = true;
+    setDeleting(true);
+    setError('');
+    try {
+      await onDelete(draft.id);
+      onClose();
+    } catch (exc) {
+      setError(exc.message || 'Could not delete that list. Try again.');
+    } finally {
+      operationRef.current = false;
+      setDeleting(false);
     }
   };
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal list-editor" onClick={(event) => event.stopPropagation()}>
+    <div className="modal-backdrop" onClick={dismiss}>
+      <div ref={dialogRef} className="modal list-editor" tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="list-editor-title" aria-busy={busy} onKeyDown={onKeyDown} onClick={(event) => event.stopPropagation()}>
         <div className="modal-header">
-          <h2>{draft.id ? 'Edit list' : 'New list'}</h2>
-          <button className="icon-button" onClick={onClose} aria-label="Close">
-            <X size={16} />
-          </button>
+          <h2 id="list-editor-title">{draft.id ? 'Edit list' : 'New list'}</h2>
+          <button type="button" className="icon-button" onClick={dismiss} aria-label="Close" disabled={busy}><X size={16} /></button>
         </div>
-
         <label className="modal-field">
           <span>Name</span>
-          <input
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            placeholder="e.g. AI news, Spanish, Competitors to watch"
-            autoFocus
-          />
+          <input value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. AI news, Spanish, Competitors to watch" disabled={busy || confirmDelete} />
         </label>
-
         <div className="list-editor-picker">
           <div className="account-multiselect-search">
             <Search size={14} />
-            <input
-              type="search"
-              value={search}
-              placeholder="Search accounts"
-              onChange={(event) => setSearch(event.target.value)}
-            />
+            <input type="search" value={search} placeholder="Search accounts" aria-label="Search accounts" onChange={(event) => setSearch(event.target.value)} disabled={busy || confirmDelete} />
           </div>
           <div className="account-multiselect-list account-multiselect-grid list-editor-grid">
             {visible.map((account) => (
-              <label
-                key={account.handle}
-                className={
-                  picked.has(account.handle)
-                    ? 'account-multiselect-item account-multiselect-item-on'
-                    : 'account-multiselect-item'
-                }
-              >
-                <input
-                  type="checkbox"
-                  checked={picked.has(account.handle)}
-                  onChange={() => toggle(account.handle)}
-                />
+              <label key={account.handle} className={picked.has(account.handle) ? 'account-multiselect-item account-multiselect-item-on' : 'account-multiselect-item'}>
+                <input type="checkbox" checked={picked.has(account.handle)} onChange={() => toggle(account.handle)} disabled={busy || confirmDelete} />
                 <AccountAvatar handle={account.handle} hasAvatar={account.has_avatar} />
-                <span className="account-multiselect-name">
-                  <strong>{account.label}</strong>
-                  <em>@{account.handle}</em>
-                </span>
+                <span className="account-multiselect-name"><strong>{account.label}</strong><em>@{account.handle}</em></span>
               </label>
             ))}
           </div>
         </div>
-
-        {error ? <p className="modal-error">{error}</p> : null}
-
+        {error ? <p className="modal-error" role="alert">{error}</p> : null}
+        {confirmDelete ? <p role="status">Delete “{draft.name}”? The accounts and their posts will be kept.</p> : null}
         <div className="modal-actions list-editor-actions">
-          {draft.id ? (
-            <button
-              type="button"
-              className="ghost-button danger"
-              onClick={async () => {
-                await onDelete(draft.id);
-                onClose();
-              }}
-            >
-              Delete list
-            </button>
-          ) : null}
+          {draft.id ? <button type="button" className="ghost-button danger" disabled={busy} onClick={() => { if (confirmDelete) remove(); else { setError(''); setConfirmDelete(true); } }}>{deleting ? 'Deleting…' : confirmDelete ? 'Confirm delete' : 'Delete list'}</button> : null}
           <span className="list-editor-count">{picked.size} selected</span>
-          <button type="button" className="ghost-button" onClick={onClose}>
-            Cancel
-          </button>
-          <button type="button" className="primary-button" onClick={submit} disabled={saving}>
-            {saving ? 'Saving...' : 'Save list'}
-          </button>
+          <button type="button" className="ghost-button" onClick={confirmDelete ? () => { setConfirmDelete(false); setError(''); } : dismiss} disabled={busy}>{confirmDelete ? 'Keep list' : 'Cancel'}</button>
+          {!confirmDelete ? <button type="button" className="primary-button" onClick={submit} disabled={busy}>{saving ? 'Saving...' : 'Save list'}</button> : null}
         </div>
       </div>
     </div>
@@ -6196,6 +6244,11 @@ function App() {
   const [authUser, setAuthUser] = useState(undefined); // undefined = loading, null = signed out
   const [unauthorized, setUnauthorized] = useState(false);
   const [authNotice, setAuthNotice] = useState('');
+  const [authorization, setAuthorization] = useState(null);
+  const [accessError, setAccessError] = useState('');
+  const [accessAttempt, setAccessAttempt] = useState(0);
+  const authVersion = useRef(0);
+  const previousEmail = useRef('');
   // Whether we've finished trying the cross-subdomain SSO cookie -- gates the
   // login screen so a returning visitor never sees a flash of "sign in" while
   // the silent signInWithCustomToken() exchange is still in flight.
@@ -6218,16 +6271,61 @@ function App() {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(firebaseAuth, (user) => {
+      const version = ++authVersion.current;
+      if (previousEmail.current && previousEmail.current !== user?.email) {
+        void clearDashboardSnapshot(previousEmail.current).catch(() => {});
+      }
+      previousEmail.current = user?.email || '';
       setAuthUser(user);
       setUnauthorized(false);
+      setAuthorization(null);
+      setAccessError('');
+      window.__firebaseIdToken = null;
       if (user) {
-        user.getIdToken().then((token) => { window.__firebaseIdToken = token; }).catch(() => {});
-      } else {
-        window.__firebaseIdToken = null;
+        user.getIdToken().then((token) => {
+          if (authVersion.current === version) window.__firebaseIdToken = token;
+        }).catch(() => {});
       }
     });
     return unsubscribe;
   }, []);
+
+  // Firebase verifies identity; Cortex verifies workspace access. Never mount
+  // Research (including its durable cache) until both checks have succeeded.
+  useEffect(() => {
+    if (!authUser) return undefined;
+    const controller = new AbortController();
+    const version = authVersion.current;
+    setAccessError('');
+    const timeout = window.setTimeout(() => {
+      if (authVersion.current !== version) return;
+      setAccessError('The workspace connection timed out. Please try again.');
+      controller.abort();
+    }, 30_000);
+    (async () => {
+      try {
+        const response = await apiFetch(`${API_BASE}/api/dashboard/me`, { signal: controller.signal });
+        if (controller.signal.aborted || authVersion.current !== version) return;
+        if (response.status === 401 || response.status === 403) {
+          void clearDashboardSnapshot(authUser.email).catch(() => {});
+          setUnauthorized(true);
+          return;
+        }
+        if (!response.ok) throw new Error('Could not verify workspace access.');
+        const access = await response.json();
+        if (!controller.signal.aborted && authVersion.current === version) {
+          setAuthorization({ user: authUser, access, version });
+        }
+      } catch (error) {
+        if (!controller.signal.aborted && authVersion.current === version && error?.name !== 'AbortError') {
+          setAccessError('We could not connect to your workspace. Check your connection and try again.');
+        }
+      } finally {
+        window.clearTimeout(timeout);
+      }
+    })();
+    return () => { window.clearTimeout(timeout); controller.abort(); };
+  }, [authUser, accessAttempt]);
 
   // Keeps the shared SSO cookie fresh for as long as this tab stays signed in.
   useEffect(() => {
@@ -6235,14 +6333,24 @@ function App() {
     return startSsoRefresh();
   }, [authUser]);
 
-  const handleSignOut = useCallback(() => {
-    clearSsoCookie();
-    signOut(firebaseAuth);
-  }, []);
+  const handleSignOut = useCallback(async () => {
+    const version = ++authVersion.current;
+    setAuthorization(null);
+    setUnauthorized(false);
+    window.__firebaseIdToken = null;
+    void clearDashboardSnapshot(authUser?.email).catch(() => {});
+    try {
+      clearSsoCookie();
+      await signOut(firebaseAuth);
+    } catch {
+      if (authVersion.current === version) setAccessError('Could not sign out. Check your connection and try again.');
+    }
+  }, [authUser]);
 
   const handleUnauthorized = useCallback(() => {
+    void clearDashboardSnapshot(authUser?.email).catch(() => {});
     setUnauthorized(true);
-  }, []);
+  }, [authUser]);
 
   if (authUser === undefined || (!authUser && !ssoChecked)) {
     return <div className="auth-screen" />;
@@ -6253,7 +6361,10 @@ function App() {
   if (unauthorized) {
     return <NotAuthorizedScreen email={authUser.email} onSignOut={handleSignOut} />;
   }
-  return <Dashboard userEmail={authUser.email} userPhoto={authUser.photoURL || ''} onSignOut={handleSignOut} onUnauthorized={handleUnauthorized} />;
+  if (authorization?.user !== authUser) {
+    return <div className="auth-screen"><div className="auth-card" role="status"><h1><Wordmark /></h1><p>{accessError || 'Checking workspace access…'}</p>{accessError ? <button type="button" className="ghost-button" onClick={() => setAccessAttempt((attempt) => attempt + 1)}>Try again</button> : null}<button type="button" className="ghost-button" onClick={handleSignOut}>Sign out</button></div></div>;
+  }
+  return <Dashboard key={authUser.uid || authUser.email} userEmail={authUser.email} userPhoto={authUser.photoURL || ''} initialAccess={authorization.access} sessionVersion={authorization.version} sessionVersionRef={authVersion} onSignOut={handleSignOut} onUnauthorized={handleUnauthorized} />;
 }
 
 // Language and theme wrap the whole app, including the sign-in gate -- the

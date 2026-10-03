@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import ReactDOM from 'react-dom/client';
+import { mountApp } from './mountApp';
 import { browserPopupRedirectResolver, getRedirectResult, onAuthStateChanged, signOut } from 'firebase/auth';
 import { DevRolePreview, SettingsPanel } from './App';
 import { API_BASE, apiFetch } from './api';
@@ -151,7 +151,7 @@ function SettingsApp() {
   </>;
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(
+mountApp(
   <React.StrictMode>
     <PrefsProvider><SettingsApp /></PrefsProvider>
   </React.StrictMode>,

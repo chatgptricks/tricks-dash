@@ -2,7 +2,7 @@ import QueuePostInspector, { captureQueueCardOrigin } from './QueuePostInspector
 import { returnCardFromSide } from './card-flight';
 import ProductHeader from './ProductHeader';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import ReactDOM from 'react-dom/client';
+import { mountApp } from './mountApp';
 import { createPortal } from 'react-dom';
 import { AlertTriangle, Archive, ArrowLeft, Ban, BarChart3, BellRing, CalendarDays, CalendarPlus, Check, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Clock3, Copy, Coffee, Download, History, Image as ImageIcon, Layers, Lightbulb, Link2, LoaderCircle, LocateFixed, LogOut, Maximize2, Moon, Paperclip, Pencil, Play, Plus, Radio, Search, Send, Settings, Sun, TimerReset, WifiOff, X } from 'lucide-react';
 import { browserPopupRedirectResolver, getRedirectResult, onAuthStateChanged, signOut } from 'firebase/auth';
@@ -879,6 +879,8 @@ function AdminAssignmentTable({ tasks, onOpen, onBatchClose, headingKey = 'allAs
   const [selectedIds, setSelectedIds] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [contextMenu, setContextMenu] = useState(null);
+  const [closing, setClosing] = useState(false);
+  const closePendingRef = useRef(false);
   const orderedTasks = useMemo(() => [...tasks].sort((a, b) => taskRecency(b) - taskRecency(a) || Number(b.id || 0) - Number(a.id || 0)), [tasks]);
   const visibleTasks = useMemo(() => {
     const query = searchQuery.trim().toLocaleLowerCase();
@@ -909,10 +911,17 @@ function AdminAssignmentTable({ tasks, onOpen, onBatchClose, headingKey = 'allAs
     setSelectedIds((current) => current.includes(value) ? current.filter((id) => id !== value) : [...current, value]);
   };
   const closeSelected = async () => {
-    if (!selectedIds.length || !onBatchClose) return;
+    if (!selectedIds.length || !onBatchClose || closePendingRef.current) return;
+    closePendingRef.current = true;
+    setClosing(true);
     setContextMenu(null);
-    await onBatchClose(selectedIds.map(Number));
-    setSelectedIds([]);
+    try {
+      const closed = await onBatchClose(selectedIds.map(Number));
+      if (Array.isArray(closed)) setSelectedIds((current) => current.filter((id) => !closed.includes(Number(id))));
+    } finally {
+      closePendingRef.current = false;
+      setClosing(false);
+    }
   };
   const selectEligible = () => setSelectedIds((current) => current.length === selectableIds.length ? [] : selectableIds);
   const row = (task) => {
@@ -927,9 +936,9 @@ function AdminAssignmentTable({ tasks, onOpen, onBatchClose, headingKey = 'allAs
         onOpen(task);
       }
     };
-    return <button type="button" role="row" key={task.id} className={`queue-admin-assignment-row state-${task.status} ${priorityClass(task.priority)}${hotClass(task)}${task.isDraft ? ' is-draft' : ''}`} data-context-type="task" data-context-request-id={task.id} data-context-duplicate="true" onClick={() => onOpen(task)} onContextMenu={openContext}><span className="queue-admin-assignment-post">{cover(task) ? <img src={cover(task)} alt="" /> : <span className="queue-admin-assignment-empty">@</span>}<span><b>{task.post.title || accountMention(task.post.account) || t('post')}</b><small>{task.post.account ? accountMention(task.post.account) : t('accountToSelect')} · {task.brief || task.post.caption || t('post')}</small>{task.recommendedAccounts?.length ? <em>{task.recommendedAccounts.map((account) => `@${account}`).join(' · ')}</em> : null}{isHotTask(task) ? <i className="queue-hot-badge">🔥 {hotText(task)}</i> : null}</span></span><span className="queue-admin-assignment-designer"><b>{task.designerEmail ? displayName(task.designerEmail) : '—'}</b><small>{task.designerEmail || ''}</small></span><span className="queue-admin-assignment-time"><b>{task.scheduledDate ? displayDate(task.scheduledDate, language) : '—'}</b><small>{task.scheduledStartMinutes == null ? '—' : `${time(task.scheduledStartMinutes)} · ${task.durationMinutes} ${t('minutes')}`}</small></span><span className="queue-admin-assignment-priority"><PriorityBadge priority={task.priority} /></span><span className="queue-admin-assignment-pp"><b>{task.productionPoints} PP</b><small>{task.tags?.filter((tag) => tag !== 'hot').slice(0, 2).join(' · ') || t('noTags')}</small></span><span className="queue-admin-assignment-status"><i>{statusCopy(task.status, t, task.isDraft)}</i></span>{isAdmin ? <span className="queue-admin-assignment-select-cell">{canSelect ? <input className="queue-admin-select" type="checkbox" checked={selected} aria-label={`${t('selectForForceClose')} ${task.post.title || accountMention(task.post.account) || t('post')}`} onClick={(event) => toggleSelected(event, task.id)} onChange={() => {}} /> : <span aria-hidden="true">—</span>}</span> : null}</button>;
+    return <button type="button" role="row" key={task.id} className={`queue-admin-assignment-row state-${task.status} ${priorityClass(task.priority)}${hotClass(task)}${task.isDraft ? ' is-draft' : ''}`} data-context-type="task" data-context-request-id={task.id} data-context-duplicate="true" onClick={() => onOpen(task)} onContextMenu={openContext}><span className="queue-admin-assignment-post">{cover(task) ? <img src={cover(task)} alt="" /> : <span className="queue-admin-assignment-empty">@</span>}<span><b>{task.post.title || accountMention(task.post.account) || t('post')}</b><small>{task.post.account ? accountMention(task.post.account) : t('accountToSelect')} · {task.brief || task.post.caption || t('post')}</small>{task.recommendedAccounts?.length ? <em>{task.recommendedAccounts.map((account) => `@${account}`).join(' · ')}</em> : null}{isHotTask(task) ? <i className="queue-hot-badge">🔥 {hotText(task)}</i> : null}</span></span><span className="queue-admin-assignment-designer"><b>{task.designerEmail ? displayName(task.designerEmail) : '—'}</b><small>{task.designerEmail || ''}</small></span><span className="queue-admin-assignment-time"><b>{task.scheduledDate ? displayDate(task.scheduledDate, language) : '—'}</b><small>{task.scheduledStartMinutes == null ? '—' : `${time(task.scheduledStartMinutes)} · ${task.durationMinutes} ${t('minutes')}`}</small></span><span className="queue-admin-assignment-priority"><PriorityBadge priority={task.priority} /></span><span className="queue-admin-assignment-pp"><b>{task.productionPoints} PP</b><small>{task.tags?.filter((tag) => tag !== 'hot').slice(0, 2).join(' · ') || t('noTags')}</small></span><span className="queue-admin-assignment-status"><i>{statusCopy(task.status, t, task.isDraft)}</i></span>{isAdmin ? <span className="queue-admin-assignment-select-cell">{canSelect ? <input className="queue-admin-select" type="checkbox" disabled={closing} checked={selected} aria-label={`${t('selectForForceClose')} ${task.post.title || accountMention(task.post.account) || t('post')}`} onClick={(event) => toggleSelected(event, task.id)} onChange={() => {}} /> : <span aria-hidden="true">—</span>}</span> : null}</button>;
   };
-  return <section className="queue-admin-assignments"><header><div><p className="scheduler-eyebrow">{t(headingKey)}</p><h3>{tasks.length} {t(countKey)}</h3></div><div className="queue-admin-table-tools"><label className="queue-admin-search"><Search size={14} aria-hidden="true" /><span className="sr-only">{t('searchUpcoming')}</span><input type="search" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder={t('searchUpcomingPlaceholder')} aria-label={t('searchUpcoming')} /></label>{onBatchClose && selectableIds.length ? <div className="queue-admin-batch-actions"><button type="button" className="scheduler-secondary" onClick={selectEligible}>{t('selectForceClose')}</button>{selectedIds.length ? <span className="queue-admin-selection-count">{selectedIds.length} {t('selected')}</span> : null}</div> : null}</div></header>{tasks.length ? visibleTasks.length ? <div className={`queue-admin-assignment-table${isAdmin ? ' is-admin' : ''}`} role="table"><div className="queue-admin-assignment-head" role="row"><span>{t('post')}</span><span>{t('designer')}</span><span>{t('scheduled')}</span><span>{t('priority')}</span><span>{t('productionPoints')}</span><span>{t('status')}</span>{isAdmin ? <span>{t('selection')}</span> : null}</div>{visibleTasks.map(row)}</div> : <p className="queue-admin-assignment-empty-state">{t('noSearchResults')}</p> : <p className="queue-admin-assignment-empty-state">{t('noAssignedPosts')}</p>}{contextMenu ? createPortal(<><button type="button" className="scheduler-context-backdrop" onClick={() => setContextMenu(null)} aria-label={t('close')} /><div className="scheduler-context-menu queue-admin-force-menu" role="menu" style={{ left: Math.min(window.innerWidth - 230, Math.max(8, contextMenu.x)), top: Math.min(window.innerHeight - 100, Math.max(8, contextMenu.y)) }}><button type="button" className="is-danger" onClick={closeSelected}>{t('forceClose')} ({selectedIds.length})</button><button type="button" onClick={() => { setSelectedIds([]); setContextMenu(null); }}>{t('clearSelection')}</button></div></>, document.body) : null}</section>;
+  return <section className="queue-admin-assignments"><header><div><p className="scheduler-eyebrow">{t(headingKey)}</p><h3>{tasks.length} {t(countKey)}</h3></div><div className="queue-admin-table-tools"><label className="queue-admin-search"><Search size={14} aria-hidden="true" /><span className="sr-only">{t('searchUpcoming')}</span><input type="search" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder={t('searchUpcomingPlaceholder')} aria-label={t('searchUpcoming')} /></label>{onBatchClose && selectableIds.length ? <div className="queue-admin-batch-actions"><button type="button" className="scheduler-secondary" disabled={closing} onClick={selectEligible}>{closing ? <LoaderCircle size={14} className="queue-spin" /> : null}{t('selectForceClose')}</button>{selectedIds.length ? <span className="queue-admin-selection-count">{selectedIds.length} {t('selected')}</span> : null}</div> : null}</div></header>{tasks.length ? visibleTasks.length ? <div className={`queue-admin-assignment-table${isAdmin ? ' is-admin' : ''}`} role="table"><div className="queue-admin-assignment-head" role="row"><span>{t('post')}</span><span>{t('designer')}</span><span>{t('scheduled')}</span><span>{t('priority')}</span><span>{t('productionPoints')}</span><span>{t('status')}</span>{isAdmin ? <span>{t('selection')}</span> : null}</div>{visibleTasks.map(row)}</div> : <p className="queue-admin-assignment-empty-state">{t('noSearchResults')}</p> : <p className="queue-admin-assignment-empty-state">{t('noAssignedPosts')}</p>}{contextMenu ? createPortal(<><button type="button" className="scheduler-context-backdrop" onClick={() => setContextMenu(null)} aria-label={t('close')} /><div className="scheduler-context-menu queue-admin-force-menu" role="menu" style={{ left: Math.min(window.innerWidth - 230, Math.max(8, contextMenu.x)), top: Math.min(window.innerHeight - 100, Math.max(8, contextMenu.y)) }}><button type="button" className="is-danger" disabled={closing} onClick={closeSelected}>{t('forceClose')} ({selectedIds.length})</button><button type="button" onClick={() => { setSelectedIds([]); setContextMenu(null); }}>{t('clearSelection')}</button></div></>, document.body) : null}</section>;
 }
 
 /* The Queue shell is intentionally built from the production scheduler's
@@ -1542,19 +1551,54 @@ function Scheduler({ data, draft, setDraft, onDraftChange, onConfirmDraft, onCan
 
 
 function QueueStackModal({ posts, onClose }) {
+  const { t } = useQueuePreferences();
+  const dialogRef = useRef(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
   const ranked = [...posts].sort((a, b) => Number(b.likes || 0) - Number(a.likes || 0));
-  const noop = () => {};
-  return createPortal(<div className="post-stack-modal" role="dialog" aria-modal="true" aria-label="Posts in this stack" onClick={onClose}><div className="post-stack-modal-inner" onClick={(event) => event.stopPropagation()}><div className="post-stack-heading"><span><b>{ranked.length} posts</b><small>Choose a version</small></span></div><div className="post-stack-grid">{ranked.map((post, index) => <div key={`${post.account}:${post.shortcode}`} className={index === 0 ? 'stack-champion' : ''}>{index === 0 ? <span className="stack-champion-label">👑 Champion · Most likes</span> : null}<PostCard post={{ ...post, postDate: post.postDate || post.publishedAt, timestamp: Date.parse(post.postDate || post.publishedAt || '') }} priority={index < 4} selected={false} onSelect={noop} onFlags={noop} onReload={noop} onAssign={noop} onQuickAdd={noop} hideCaption /></div>)}</div></div></div>, document.body);
+  useEffect(() => {
+    const modal = dialogRef.current;
+    const previous = document.activeElement;
+    const background = [...document.body.children].filter((node) => node !== modal && !node.inert);
+    background.forEach((node) => { node.inert = true; });
+    modal.querySelector('button')?.focus({ preventScroll: true });
+    const onKey = (event) => {
+      if (event.defaultPrevented || modal.querySelector('.post-menu-panel')) return;
+      if (event.key === 'Escape') { event.preventDefault(); closeRef.current(); }
+      if (event.key !== 'Tab') return;
+      const nodes = [...modal.querySelectorAll('button:not(:disabled),a[href],[tabindex="0"]')].filter((node) => !node.closest('[inert]'));
+      const first = nodes[0], last = nodes.at(-1);
+      if (event.shiftKey && (document.activeElement === first || !modal.contains(document.activeElement))) { event.preventDefault(); last?.focus(); }
+      if (!event.shiftKey && (document.activeElement === last || !modal.contains(document.activeElement))) { event.preventDefault(); first?.focus(); }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      background.forEach((node) => { node.inert = false; });
+      if (previous?.isConnected) previous.focus?.({ preventScroll: true });
+    };
+  }, []);
+  const researchUrl = (post) => `/index.html?r=${encodeRouteState({ post: post.postKey || `${post.account}:${post.shortcode}` })}`;
+  return createPortal(<div ref={dialogRef} className="post-stack-modal" role="dialog" aria-modal="true" aria-label={t('Posts in this stack')} onClick={onClose}>
+    <div className="post-stack-modal-inner" onClick={(event) => event.stopPropagation()}>
+      <div className="post-stack-heading"><span><b>{ranked.length} {t('posts')}</b><small>{t('Open a version in Research')}</small></span><div className="obs-deck-controls"><button type="button" aria-label={t('Close stack')} onClick={onClose}><X size={16} /></button></div></div>
+      <div className="post-stack-grid">{ranked.map((post, index) => <div key={`${post.account}:${post.shortcode}`} className={index === 0 ? 'stack-champion' : ''}>
+        {index === 0 ? <span className="stack-champion-label">👑 {t('Champion · Most likes')}</span> : null}
+        <PostCard post={{ ...post, postDate: post.postDate || post.publishedAt, timestamp: Date.parse(post.postDate || post.publishedAt || '') }} priority={index < 4} selected={false} onSelect={() => window.open(researchUrl(post), 'sentient-dashboard')} readOnly animateSelection={false} hideCaption />
+        <a className="ghost-button" href={researchUrl(post)} target="sentient-dashboard">{t('View in Research')} ↗</a>
+      </div>)}</div>
+    </div>
+  </div>, document.body);
 }
 
-function PickModal({ requests, hotFallback = false, busy, onClose, onAssign }) {
+function PickModal({ requests, hotFallback = false, busy, error, onClose, onAssign }) {
   const { t } = useQueuePreferences();
   const [index, setIndex] = useState(0);
   const candidate = requests[index % Math.max(1, requests.length)];
-  if (!candidate) return <div className="queue-pick-backdrop" role="presentation"><section className="queue-pick-modal" role="dialog" aria-modal="true" aria-label={t('pickTitle')}><header><div><p className="scheduler-eyebrow">{t('pick')}</p><h2>{t('pickTitle')}</h2></div><button type="button" onClick={onClose} aria-label={t('close')}><X size={16} /></button></header><div className="queue-pick-empty"><ClipboardList size={24} /><p>{t('noPickRequests')}</p></div></section></div>;
+  if (!candidate) return <div className="queue-pick-backdrop" role="presentation"><section className="queue-pick-modal" role="dialog" aria-modal="true" aria-label={t('pickTitle')}><header><div><p className="scheduler-eyebrow">{t('pick')}</p><h2>{t('pickTitle')}</h2></div><button type="button" onClick={onClose} disabled={busy} aria-label={t('close')}><X size={16} /></button></header><div className="queue-pick-empty"><ClipboardList size={24} /><p>{t('noPickRequests')}</p></div></section></div>;
   const thumbnail = cover(candidate);
   const hotMultiplier = Number(candidate.hotMultiplier);
-  return <div className="queue-pick-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) onClose(); }}><section className="queue-pick-modal" role="dialog" aria-modal="true" aria-label={t('pickTitle')}><header><div><p className="scheduler-eyebrow">{t('pick')}</p><h2>{t('pickTitle')}</h2><small>{hotFallback ? t('hotPickHelp') : t('pickHelp')} · {index + 1}/{requests.length}</small></div><button type="button" onClick={onClose} aria-label={t('close')}><X size={16} /></button></header><article className={`queue-pick-card ${priorityClass(candidate.priority)}${hotClass(candidate)}`}>{thumbnail ? <img src={thumbnail} alt="" /> : <span className="queue-pick-empty-image">@</span>}<div className="queue-pick-content"><div className="queue-pick-account"><b>@{candidate.post.account}</b><PriorityBadge priority={candidate.priority} />{isHotTask(candidate) ? <span className="queue-hot-badge">🔥 {hotText(candidate)}</span> : null}</div><p>{candidate.brief || candidate.post.caption || t('post')}</p><div className="queue-pick-meta"><span>{candidate.productionPoints} PP</span><span>{candidate.durationMinutes} {t('minutes')}</span>{candidate.tags?.filter((tag) => tag !== 'hot').slice(0, 3).map((tag) => <i key={tag}>{tag}</i>)}</div></div></article><footer><button type="button" className="scheduler-secondary" disabled={busy || requests.length < 2} onClick={() => setIndex((current) => (current + 1) % requests.length)}><ChevronRight size={14} />{t('nextRequest')}</button><button type="button" className="scheduler-primary" disabled={busy} onClick={() => onAssign(candidate)}>{busy ? <LoaderCircle className="queue-spin" size={14} /> : <Check size={14} />}{t('assignRequest')}</button></footer></section></div>;
+  return <div className="queue-pick-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) onClose(); }}><section className="queue-pick-modal" role="dialog" aria-modal="true" aria-label={t('pickTitle')}><header><div><p className="scheduler-eyebrow">{t('pick')}</p><h2>{t('pickTitle')}</h2><small>{hotFallback ? t('hotPickHelp') : t('pickHelp')} · {index + 1}/{requests.length}</small></div><button type="button" onClick={onClose} disabled={busy} aria-label={t('close')}><X size={16} /></button></header><article className={`queue-pick-card ${priorityClass(candidate.priority)}${hotClass(candidate)}`}>{thumbnail ? <img src={thumbnail} alt="" /> : <span className="queue-pick-empty-image">@</span>}<div className="queue-pick-content"><div className="queue-pick-account"><b>@{candidate.post.account}</b><PriorityBadge priority={candidate.priority} />{isHotTask(candidate) ? <span className="queue-hot-badge">🔥 {hotText(candidate)}</span> : null}</div><p>{candidate.brief || candidate.post.caption || t('post')}</p><div className="queue-pick-meta"><span>{candidate.productionPoints} PP</span><span>{candidate.durationMinutes} {t('minutes')}</span>{candidate.tags?.filter((tag) => tag !== 'hot').slice(0, 3).map((tag) => <i key={tag}>{tag}</i>)}</div></div></article>{error ? <p className="queue-create-error" role="alert">{error}</p> : null}<footer><button type="button" className="scheduler-secondary" disabled={busy || requests.length < 2} onClick={() => setIndex((current) => (current + 1) % requests.length)}><ChevronRight size={14} />{t('nextRequest')}</button><button type="button" className="scheduler-primary" disabled={busy} onClick={() => onAssign(candidate)}>{busy ? <LoaderCircle className="queue-spin" size={14} /> : <Check size={14} />}{t('assignRequest')}</button></footer></section></div>;
 }
 
 function QueueApp({ user }) {
@@ -1597,6 +1641,8 @@ function QueueApp({ user }) {
   const [ticketsError, setTicketsError] = useState('');
   const [pickOpen, setPickOpen] = useState(false);
   const [pickBusy, setPickBusy] = useState(false);
+  const [pickError, setPickError] = useState('');
+  const pickActionRef = useRef(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [createSeed, setCreateSeed] = useState(null);
   const [suggestOpen, setSuggestOpen] = useState(Boolean(decodeRouteState(new URLSearchParams(window.location.search).get('r'))?.suggest));
@@ -2146,25 +2192,34 @@ function QueueApp({ user }) {
     return scheduled;
   }, []);
   const pickRequest = async (task) => {
+    if (pickActionRef.current) return null;
+    pickActionRef.current = true;
     saveQuietly();
     setPickBusy(true);
+    setPickError('');
     try {
       const now = new Date();
       const placement = { scheduled_date: DAY(now, QUEUE_TIME_ZONE), scheduled_start_minutes: String(Math.min(1430, Math.ceil(currentMinutes(now, QUEUE_TIME_ZONE) / 10) * 10)) };
-      const localPlacement = { designerEmail: data?.viewer?.email || '', scheduledDate: placement.scheduled_date, scheduledStartMinutes: Number(placement.scheduled_start_minutes) };
-      if (!task.isHotCandidate) showScheduledLocally(task, localPlacement);
-      setPickOpen(false);
       const body = task.isHotCandidate
         ? new URLSearchParams({ hot_account: task.post.account, hot_shortcode: task.post.shortcode, ...placement })
         : new URLSearchParams({ request_id: String(task.id), ...placement });
-      const result = await json('/api/dashboard/queue/v2/pick', { method: 'POST', body });
+      const result = await json('/api/dashboard/queue/v2/pick', { method: 'POST', body, signal: AbortSignal.timeout(30000) });
+      if (!result.request?.id) throw new Error(t('scheduleRefreshFailed'));
+      // A rejected pick must remain available in Pool. Only the durable
+      // response can establish its assignee and final scheduled position.
+      mutationGenerationRef.current += 1;
       showScheduledLocally(result.request, { designerEmail: result.request.designerEmail, scheduledDate: result.request.scheduledDate, scheduledStartMinutes: result.request.scheduledStartMinutes });
+      setPickOpen(false);
       notify(t('pickedRequest'));
       return result;
     } catch (err) {
-      notify(err.message || t('draftSyncFailed'), 'error');
+      setPickError(err.name === 'TimeoutError' ? t('scheduleRefreshFailed') : err.message || t('draftSyncFailed'));
       return null;
-    } finally { setPickBusy(false); }
+    } finally {
+      pickActionRef.current = false;
+      setPickBusy(false);
+      loadRef.current?.({ silent: true }).catch(() => {});
+    }
   };
   const submit = async (requestId) => {
     if (draftActionRef.current) return false;
@@ -2305,18 +2360,22 @@ function QueueApp({ user }) {
     return saved && !deferred;
   };
   const batchClose = async (requestIds) => {
-    if (!requestIds?.length) return;
+    if (!requestIds?.length) return null;
     saveQuietly();
-    const now = new Date().toISOString();
-    requestIds.forEach((requestId) => patchQueueTask(requestId, { status: 'closed', finalPermalink: '', finalPermalinks: [], closedAt: now, updatedAt: now }));
-    try {
-      const result = await json('/api/dashboard/queue/v2/requests/batch-close', { method: 'POST', body: new URLSearchParams({ request_ids: JSON.stringify(requestIds) }) });
+    let closed = [];
+    const saved = await runItemAction('batch-close', async (signal) => {
+      const result = await json('/api/dashboard/queue/v2/requests/batch-close', { method: 'POST', signal, body: new URLSearchParams({ request_ids: JSON.stringify(requestIds) }) });
+      if (!Array.isArray(result.closed)) throw new Error(t('scheduleRefreshFailed'));
+      closed = result.closed.map(Number).filter((id) => requestIds.includes(id));
+      const now = new Date().toISOString();
+      const patch = { status: 'closed', finalPermalink: '', finalPermalinks: [], closedAt: now, updatedAt: now };
+      // Partial batches explicitly report skipped requests. Keep those rows
+      // intact even if the following schedule refresh is unavailable.
+      closed.forEach((requestId) => patchQueueTask(requestId, patch));
+      setOverview((current) => current ? { ...current, assignedPosts: (current.assignedPosts || []).map((task) => closed.includes(task.id) ? { ...task, ...patch } : task) } : current);
       notify(result.skipped?.length ? t('batchCloseSkipped') : t('batchCloseDone'), result.skipped?.length ? 'warning' : 'success');
-      await loadRef.current?.({ silent: true });
-    } catch (err) {
-      notify(err.message, 'error');
-      await loadRef.current?.({ silent: true }).catch(() => {});
-    }
+    });
+    return saved ? closed : null;
   };
   const cancel = (reason) => {
     const target = open;
@@ -2516,7 +2575,7 @@ function QueueApp({ user }) {
           {coordinator ? <button type="button" className="scheduler-add-time" onClick={() => setAddTimeNonce((value) => value + 1)}><CalendarPlus size={13} />{t('addTime')}</button> : null}
           {coordinator ? <button type="button" className={`queue-overview-button${overviewOpen ? ' is-active' : ''}`} onClick={toggleOverview}><BarChart3 size={14} />{t('adminOverview')}</button> : null}
           {data?.viewer ? <button type="button" className={`queue-ticket-button${ticketsOpen ? ' is-active' : ''}`} onClick={toggleTickets}><ClipboardList size={14} />{t('tickets')}{data.pendingTicketCount ? <b>{data.pendingTicketCount}</b> : null}</button> : null}
-          {pickAvailable ? <button type="button" className={`queue-pick-button${pickOpen ? ' is-active' : ''}`} onClick={() => setPickOpen(true)}><Check size={14} />{t('pick')}</button> : null}
+          {pickAvailable ? <button type="button" className={`queue-pick-button${pickOpen ? ' is-active' : ''}`} onClick={() => { setPickError(''); setPickOpen(true); }}><Check size={14} />{t('pick')}</button> : null}
         </div>
     </ProductHeader>
     {incomingUpdate ? <span className="queue-sync-announcement" role="status">{t('updatingQueue')}</span> : null}
@@ -2534,7 +2593,7 @@ function QueueApp({ user }) {
       </> : null}
     </> : null}
     {ticketsOpen && data?.viewer ? <TicketPanel tickets={tickets} loading={ticketsLoading} error={ticketsError} onClose={() => setTicketsOpen(false)} onReview={reviewTicket} onContinueSuggestion={(ticket) => { setCreateSeed({ sourceUrl: ticket.title, reason: ticket.reason }); setTicketsOpen(false); setCreateOpen(true); }} isDev={effectiveDevAccess} canReview={Boolean(coordinator)} /> : null}
-    {pickOpen ? <PickModal requests={pickPool} hotFallback={pickHotFallback} busy={pickBusy} onClose={() => setPickOpen(false)} onAssign={pickRequest} /> : null}
+    {pickOpen ? <PickModal requests={pickPool} hotFallback={pickHotFallback} busy={pickBusy} error={pickError} onClose={() => { if (!pickActionRef.current) setPickOpen(false); }} onAssign={pickRequest} /> : null}
     {suggestOpen && !coordinator && !canSelfAssign && data?.viewer?.operatingRoles?.includes('pd') ? <SuggestPostModal initialUrl={decodeRouteState(new URLSearchParams(window.location.search).get('r'))?.suggest || ''} onClose={() => setSuggestOpen(false)} onCreated={createSuggestion} /> : null}
     {createOpen ? <CreatePostModal tags={data?.tags || []} initial={createSeed} onClose={() => { setCreateOpen(false); setCreateSeed(null); }} onCreated={(request) => { saveQuietly(); setData((current) => current ? { ...current, requests: [request, ...(current.requests || []).filter((task) => task.id !== request.id)], pickRequests: [request, ...(current.pickRequests || []).filter((task) => task.id !== request.id)] } : current); setCreateOpen(false); setCreateSeed(null); notify(t('postCreated')); }} /> : null}
     {multiAssignRequest ? <AssignMultipleAccountsModal key={multiAssignRequest.id} task={multiAssignRequest} accounts={data?.accounts || []} designers={data?.schedulerUsers || data?.designers || []} busy={multiAssignBusy} onClose={() => { if (!multiAssignBusy) setMultiAssignRequest(null); }} onSubmit={(selectedAccounts) => assignToMultipleAccounts(multiAssignRequest.id, selectedAccounts)} /> : null}
@@ -2598,4 +2657,4 @@ function Root() {
   return <QueuePreferencesContext.Provider value={value}><PrefsProvider lang={language} theme={theme}>{content}</PrefsProvider></QueuePreferencesContext.Provider>;
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<React.StrictMode><Root /></React.StrictMode>);
+mountApp(<React.StrictMode><Root /></React.StrictMode>);

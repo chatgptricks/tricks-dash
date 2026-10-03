@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import ReactDOM from "react-dom/client";
+import { mountApp } from "./mountApp";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import {
   Bookmark,
@@ -830,8 +830,9 @@ function HookLab() {
   );
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(
+mountApp(
   <PrefsProvider lang="en" theme="dark">
     <HookLab />
   </PrefsProvider>,
+  { lang: 'en' },
 );

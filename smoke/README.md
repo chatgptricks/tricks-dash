@@ -1,47 +1,56 @@
-# Smoke test
+# Local release validation
 
-Renders the real `<App />` in jsdom with Firebase and `fetch` stubbed, then
-asserts the header, filters and favicons actually work. `vite build` only
-proves the code parses; this proves it runs.
-
-It exists because a past change shipped a blank page: a TDZ error
-(`Cannot access 'Tn' before initialization`) that built cleanly and only
-failed at render.
-
-## Run
+Run the complete frontend release gate before marking a candidate ready:
 
 ```bash
-npm i -D jsdom esbuild     # first time only
-node smoke/run.mjs         # exits non-zero on any FAIL or console error
-node smoke/favicons.mjs    # emoji favicon per section
+npm ci                             # first setup, or after dependencies change
+npx playwright install chromium    # when Chrome is not installed
+npm run check:release
 ```
 
-## What it covers
+`check:release` runs lint, the regression suite, a production build including
+static pages and PWA assets, then the Chromium workflow checks. It does not
+deploy, push, or write to the live backend. GitHub Actions runs this same gate
+with Playwright Chromium and then audits production dependencies.
 
-- Header renders: search field, results count, tool links, account menu
-- Tracker and Insights carry `target="_blank"`
-- Six filter popovers open, portal to `document.body`, and close on Escape
-- Choosing a filter marks its trigger active and adds an active chip
-- Clicking a chip clears just that filter
-- Search adds a chip; the clear button replaces the ⌘K hint
-- ⌘K focuses the search box
-- Sign out only reachable through the account menu
-- Account list renders inline in its popover, not behind a second trigger
-- Favicon and title follow the subdomain (`hot.` → 🔥, `archive.` → 📦, …)
-- No `filter-group-card` / "Dash explorer" left over from the old header
+## Focused checks
 
-## Notes
+| Command | Coverage |
+| --- | --- |
+| `npm test` | All unit and jsdom checks below, plus static pages, Tracker, Insights, and sign-in policy |
+| `npm run test:product` | Topic grouping, stack operations, real Research cards, account filters, menus, and cover recovery |
+| `npm run test:stacks` | Exact stack-member selection, bounded batch operations, partial failures, and membership updates |
+| `npm run test:queue` | Queue planner rules plus coalesced refreshes, trailing reads, and failure recovery |
+| `npm run test:queue-refresh` | Concurrent Queue refresh regression in isolation |
+| `npm run test:resilience` | Retry rules, session changes, idempotent requests, catalogue refreshes and cache isolation |
+| `npm run test:catalogue` | Bounded append reads, source changes, rolled-back watermarks and updated revisions |
+| `npm run test:auth-cache` | Account-owned snapshots, denied access, account switches, sign-out races, access timeout and retry |
+| `npm run test:users` | User-management payloads and role rules |
+| `npm run smoke:recovery` | Render/effect crash recovery, cleanup, safe diagnostics, EN/ES copy, and retained drafts/preferences |
+| `npm run smoke:research` | Full Research rendering, filters, list editing, caption generation, media actions, and preferences |
+| `npm run smoke:queue` | Queue rendering, rejected/partial mutations, and nested stack keyboard interactions |
+| `npm run smoke:settings` | Settings rendering and account-management interactions |
+| `npm run smoke:mobile` | Mobile routing, touch workflows, and role-aware controls |
+| `npm run smoke:roles` | Shared navigation, role previews, and access controls |
+| `npm run smoke:hooks` | Private Hooks workflow and restricted-role rejection |
+| `npm run smoke:vault` | Vault load/add/priority/discard/restore, failed mutations, and restricted-role rejection |
+| `npm run smoke:visual` | Research and Queue workflows in a real browser |
 
-`smoke/stub-firebase-*.js` replace the real SDK via an esbuild alias, so no
-network or real project is touched. `entry.jsx` stubs `globalThis.fetch` **and**
-`window.fetch` — `apiFetch` calls `window.fetch`, and stubbing only the former
-makes every request fail and the app render its error state instead of the
-dashboard.
+The jsdom runners render actual React components with Firebase and fetch
+stubbed. They catch runtime crashes that a successful Vite build cannot.
+Keep both `globalThis.fetch` and `window.fetch` mocked: shared API calls use
+`window.fetch`.
 
-## Visual release gate
+## Browser gate
 
-Run `npm run smoke:visual` (it starts its own Vite server).
-This exercises the actual Research and Queue pages in Chromium with Firebase
-and backend responses mocked, including nested dialogs, narrow viewports,
-Light/Dark panels, full stack covers, and the closing shuffle. It does not write
-to the live backend. It uses Chrome when installed (or `CHROME_PATH`), otherwise Playwright's Chromium.
+`smoke:visual` starts and stops its own local Vite server. It uses installed
+Chrome (or `CHROME_PATH`) when available, otherwise Playwright Chromium.
+Firebase and backend responses are mocked. Coverage includes nested dialogs,
+Research stack selection, caption-generation errors, Queue detail and clipboard
+actions, cover retries, scroll locking, dark/light panels, and narrow layouts.
+It also deliberately crashes a page with an inert background to verify recovery
+focus, retained browser storage, and a successful user-triggered reload.
+
+These local checks validate frontend behavior against fixtures. Real Firebase
+sign-in, backend compatibility, and deployment propagation still require a
+separately authorized release verification.

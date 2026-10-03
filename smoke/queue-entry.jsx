@@ -1,4 +1,5 @@
 import { act } from 'react';
+import { decodeRouteState } from '../src/urlCodec';
 
 window.localStorage.setItem('sentient.queueGuide.v1', 'completed');
 
@@ -46,6 +47,8 @@ const payload = {
 };
 window.sessionStorage.setItem('sentient.queueSnapshot.v1:user03@example.com', JSON.stringify({ version: 1, date: day, archive: false, savedAt: Date.now(), data: payload }));
 
+let releasePick, rejectPick = false, pickCalls = 0, failQueueRefresh = false;
+let releaseBatchClose, rejectBatchClose = false, batchCloseCalls = 0, partiallyClose = false;
 let releaseInitialQueueFetch;
 let holdInitialQueueFetch = true;
 const initialQueueFetch = new Promise((resolve) => { releaseInitialQueueFetch = resolve; });
@@ -97,6 +100,9 @@ const stubFetch = async (url, options = {}) => {
   }
   if (value.includes('/api/dashboard/queue/v2/tickets')) return response({ tickets });
   if (value.includes('/api/dashboard/queue/v2/pick')) {
+    pickCalls += 1;
+    await new Promise(resolve => { releasePick = resolve; });
+    if (rejectPick) return { ok: false, status: 409, json: async () => ({ detail: 'This post was picked by another designer.' }) };
     const picked = { ...pool, status: 'scheduled', designerEmail: 'user03@example.com', scheduledDate: day, scheduledStartMinutes: 600 };
     payload.requests = [picked, ...payload.requests.filter((task) => task.id !== picked.id)];
     payload.pickRequests = [];
@@ -141,14 +147,28 @@ const stubFetch = async (url, options = {}) => {
     started = true;
     return response({ ok: true, deferred: true, scheduledDate: day, scheduledStartMinutes: 600 });
   }
+  if (value.includes('/api/dashboard/queue/v2/requests/batch-close')) {
+    batchCloseCalls += 1;
+    await new Promise(resolve => { releaseBatchClose = resolve; });
+    if (rejectBatchClose) return { ok: false, status: 409, json: async () => ({ detail: 'Could not close the selected requests.' }) };
+    const ids = JSON.parse(options.body.get('request_ids'));
+    const closed = partiallyClose ? ids.slice(0, 1) : ids;
+    for (const key of ['requests', 'planningRequests', 'assignedRequests']) payload[key] = payload[key].map(task => closed.includes(task.id) ? { ...task, status: 'closed' } : task);
+    return response({ ok: true, closed, skipped: ids.filter(id => !closed.includes(id)).map(id => ({ id, reason: 'Request is still in progress.' })) });
+  }
   if (/\/requests\/\d+\/complete/.test(value)) {
     const id = Number(value.match(/requests\/(\d+)/)[1]);
     for (const key of ['requests', 'planningRequests', 'assignedRequests']) payload[key] = payload[key].map(task => task.id === id ? { ...task, status: 'completed', completedAt: new Date().toISOString() } : task);
     return response({ ok: true });
   }
+  if (value.includes('/api/dashboard/stacks/')) return response({ posts: [
+    { ...scheduled.post, postKey: 'chatgptricks:NEXT1', likes: 100, postDate: '2026-09-03' },
+    { ...scheduled.post, account: 'another', shortcode: 'VERSION2', postKey: 'another:VERSION2', likes: 40, postDate: '2026-09-02' },
+  ] });
   if (value.includes('/history')) return response({ events: [] });
   if (value.includes('/api/dashboard/me')) return response({ email: 'user03@example.com', is_dev: true });
   if (value.includes('/api/dashboard/queue/v2')) {
+    if (failQueueRefresh) return { ok: false, status: 400, json: async () => ({ detail: 'Schedule is temporarily unavailable.' }) };
     if (holdInitialQueueFetch) {
       await initialQueueFetch;
       holdInitialQueueFetch = false;
@@ -204,6 +224,17 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     await click(document.querySelector('.queue-account-setup-modal .scheduler-primary'));
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 50)); });
     checks['Account setup persists selection'] = payload.accountOnboarding.completed && payload.accountOnboarding.selectedAccounts.includes('chatgptricks') && !document.querySelector('.queue-account-setup-modal');
+    rejectPick = true;
+    await click(document.querySelector('.queue-pick-button'));
+    await click(document.querySelector('.queue-pick-modal .scheduler-primary'));
+    checks['Pending Pick preserves Pool and the existing schedule'] = pickCalls === 1 && document.querySelectorAll('.queue-pool-card').length === 1 && document.querySelectorAll('.scheduler-block').length === 2 && document.querySelector('.queue-pick-modal .scheduler-primary').disabled;
+    await click(document.querySelector('.queue-pick-modal .scheduler-primary'));
+    checks['Pick cannot submit twice while pending'] = pickCalls === 1;
+    failQueueRefresh = true;
+    await act(async () => { releasePick(); await new Promise(resolve => setTimeout(resolve, 50)); });
+    checks['Rejected Pick keeps the candidate available even when refresh fails'] = document.querySelectorAll('.queue-pool-card').length === 1 && document.querySelectorAll('.scheduler-block').length === 2 && document.querySelector('.queue-pick-modal [role="alert"]')?.textContent.includes('another designer') && !document.querySelector('.queue-pick-modal .scheduler-primary').disabled;
+    failQueueRefresh = false;
+    await click(document.querySelector('.queue-pick-modal header > button'));
     const schedulerTimeRows = [...document.querySelectorAll('.scheduler-time-zone-row')];
     checks['Costa Rica and Colombia hourly labels render'] = schedulerTimeRows.length === 2
       && schedulerTimeRows.every((row) => row.querySelectorAll('b').length === 24);
@@ -334,6 +365,24 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
       && researchLink.getAttribute('href')?.startsWith('/?r=')
       && researchLink.getAttribute('target') === 'sentient-research';
     checks['Assignment detail uses the current Settings name'] = document.querySelector('.queue-request-rail').textContent.includes('User 03 Current');
+    const stackButton = document.querySelector('.queue-request-rail [title="Open stack"]');
+    stackButton.focus();
+    await click(stackButton);
+    const stack = document.querySelector('.post-stack-modal');
+    const closeStack = stack?.querySelector('[aria-label="Close stack"]');
+    checks['Queue stack provides a focused close control and locks the background'] = Boolean(closeStack) && document.activeElement === closeStack && document.querySelector('#root').inert;
+    checks['Queue stack shows real Research links without fake mutation menus'] = stack?.querySelectorAll('a[href^="/index.html?r="]').length === 2 && !stack.querySelector('.post-menu');
+    const stackLinks = stack.querySelectorAll('a[href]');
+    await act(async () => closeStack.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true })));
+    checks['Queue stack traps reverse Tab'] = document.activeElement === stackLinks[stackLinks.length - 1];
+    await act(async () => document.activeElement.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true })));
+    checks['Queue stack traps forward Tab'] = document.activeElement === closeStack;
+    let researchTarget = null;
+    window.open = (url, target) => { researchTarget = { url, target }; return null; };
+    await click(stack.querySelectorAll('.post-card')[1]);
+    checks['Queue version selection opens the exact Research post without replacing assignment'] = researchTarget?.target === 'sentient-dashboard' && decodeRouteState(new URL(researchTarget.url, window.location.origin).searchParams.get('r')).post === 'another:VERSION2' && document.querySelector('.queue-request-rail')?.textContent.includes('chatgptricks source post');
+    await act(async () => document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })));
+    checks['Escape closes only the nested stack and restores its opener'] = !document.querySelector('.post-stack-modal') && Boolean(document.querySelector('.queue-request-rail')) && document.activeElement === stackButton && !document.querySelector('#root').inert;
     const start = [...document.querySelectorAll('.queue-detail-actions button')].find((node) => /Start work|Empezar trabajo/.test(node.textContent));
     failNextStart = true;
     await click(start);
@@ -420,6 +469,35 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     await click(document.querySelector('.scheduler-block.state-in_progress'));
     await click([...document.querySelectorAll('.queue-detail-actions button')].find(node => /Mark complete|Marcar como completado/.test(node.textContent)));
     checks['Completing closes sidebar and updates state'] = !document.querySelector('.queue-request-rail') && Boolean(document.querySelector('.scheduler-block.state-completed'));
+    payload.viewer.isAdmin = true;
+    for (const key of ['requests', 'planningRequests', 'assignedRequests']) payload[key] = payload[key].map(task => [2, 3].includes(task.id) ? { ...task, status: 'completed' } : task);
+    await click(document.querySelector('[aria-label="Next day"]'));
+    await click(document.querySelector('[aria-label="Previous day"]'));
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 50)); });
+    await click(document.querySelector('.queue-admin-batch-actions .scheduler-secondary'));
+    const batchSelected = () => [...document.querySelectorAll('.queue-admin-select')].filter(node => node.checked);
+    const beginBatchClose = async () => {
+      const selected = batchSelected()[0];
+      await act(async () => selected.closest('.queue-admin-assignment-row').dispatchEvent(new window.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 100, clientY: 100 })));
+      await click(document.querySelector('.queue-admin-force-menu .is-danger'));
+    };
+    rejectBatchClose = true;
+    await beginBatchClose();
+    checks['Batch close preserves visible requests until confirmed'] = batchCloseCalls === 1 && document.querySelectorAll('.queue-admin-assignment-row.state-completed').length === 2 && batchSelected().every(node => node.disabled);
+    failQueueRefresh = true;
+    await act(async () => { releaseBatchClose(); await new Promise(resolve => setTimeout(resolve, 50)); });
+    checks['Rejected batch close preserves requests and selection even when refresh fails'] = document.querySelectorAll('.queue-admin-assignment-row.state-completed').length === 2 && batchSelected().length === 2 && batchSelected().every(node => !node.disabled) && document.querySelector('.queue-toast')?.textContent.includes('Could not close');
+    rejectBatchClose = false;
+    partiallyClose = true;
+    await beginBatchClose();
+    await act(async () => { releaseBatchClose(); await new Promise(resolve => setTimeout(resolve, 50)); });
+    checks['Partial batch closes only confirmed IDs and retains skipped selection'] = document.querySelectorAll('.queue-admin-assignment-row.state-completed').length === 1 && batchSelected().length === 1;
+    failQueueRefresh = false;
+    rejectPick = false;
+    await click(document.querySelector('.queue-pick-button'));
+    await click(document.querySelector('.queue-pick-modal .scheduler-primary'));
+    await act(async () => { releasePick(); await new Promise(resolve => setTimeout(resolve, 50)); });
+    checks['Successful Pick closes the modal and schedules the confirmed request'] = !document.querySelector('.queue-pick-modal') && !document.querySelector('.queue-pool-card') && Boolean(document.querySelector('.scheduler-block.state-scheduled')) && payload.assignedRequests.some(task => task.id === 1 && task.status === 'scheduled');
     checks['No render or console errors'] = errors.length === 0;
 
     console.log('\n=== QUEUE SMOKE ===');

@@ -35,11 +35,14 @@ export function useInspectorModal(open, close, { inertSiblings = false } = {}) {
       : [document.querySelector('.left-pane,.obs-preview-grid')].filter(node => node && !node.inert);
     background.forEach(node => { node.inert = true; });
     lockPageScroll();
-    const frame = requestAnimationFrame(() => modal?.querySelector('button')?.focus({preventScroll:true}));
+    const frame = requestAnimationFrame(() => {
+      // A nested dialog can open before the inspector's first frame.
+      if (!modal?.closest('[inert]') && !document.querySelector('.post-stack-modal')) modal?.querySelector('button')?.focus({preventScroll:true});
+    });
     const onKey = event => {
       // Download, caption and assignment dialogs sit above the inspector, and an
       // open card menu inside it closes itself on Escape.
-      const childDialog = [...document.querySelectorAll('.media-modal-backdrop,.queue-modal-backdrop,.modal-backdrop,.queue-create-backdrop,.obs-inspector .post-menu-panel')].some(node => node.getClientRects().length && getComputedStyle(node).visibility !== 'hidden');
+      const childDialog = document.querySelector('.post-stack-modal') || [...document.querySelectorAll('.media-modal-backdrop,.queue-modal-backdrop,.modal-backdrop,.queue-create-backdrop,.obs-inspector .post-menu-panel')].some(node => node.getClientRects().length && getComputedStyle(node).visibility !== 'hidden');
       if (event.defaultPrevented || childDialog) return;
       if (event.key === 'Escape') { event.preventDefault(); closeRef.current(); }
       if (event.key !== 'Tab' || !modal) return;

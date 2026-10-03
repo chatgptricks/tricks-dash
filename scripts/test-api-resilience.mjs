@@ -3,7 +3,7 @@ import { build } from 'esbuild';
 
 const bundle = await build({
   stdin: {
-    contents: "export { apiFetch } from './src/api.js'; export { followQueueLive } from './src/queueLive.js';",
+    contents: "export { apiFetch } from './src/api.js'; export { followQueueLive } from './src/queueLive.js'; export { firebaseAuth } from './src/firebase.js';",
     resolveDir: process.cwd(),
   },
   bundle: true,
@@ -19,7 +19,7 @@ const bundle = await build({
     },
   }],
 });
-const { apiFetch, followQueueLive } = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString('base64')}`);
+const { apiFetch, followQueueLive, firebaseAuth } = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString('base64')}`);
 const delays = [];
 globalThis.window = {
   sessionStorage: { getItem: () => null },
@@ -34,6 +34,35 @@ let calls = 0;
 window.fetch = async () => new Response('', { status: ++calls < 3 ? 503 : 200 });
 assert.equal((await apiFetch('https://api.test/read')).status, 200);
 assert.equal(calls, 3);
+
+Object.defineProperty(window, 'sessionStorage', {
+  configurable: true,
+  get() { throw new DOMException('Storage denied.', 'SecurityError'); },
+});
+calls = 0;
+window.fetch = async () => { calls += 1; return new Response(''); };
+assert.equal((await apiFetch('https://api.test/read')).status, 200);
+assert.equal(calls, 1, 'blocked preference storage must not prevent API requests');
+Object.defineProperty(window, 'sessionStorage', { configurable: true, value: { getItem: () => null } });
+
+let resolveToken;
+firebaseAuth.currentUser = { getIdToken: () => new Promise((resolve) => { resolveToken = resolve; }) };
+window.__firebaseIdToken = null;
+calls = 0;
+const oldTokenRequest = apiFetch('https://api.test/read');
+firebaseAuth.currentUser = null;
+resolveToken('previous-user-token');
+await assert.rejects(oldTokenRequest, { name: 'AbortError' });
+assert.equal(calls, 0, 'sign-out during token acquisition must stop the request');
+assert.equal(window.__firebaseIdToken, null, 'a late token must not restore the signed-out session');
+
+firebaseAuth.currentUser = { getIdToken: async () => 'first-user-token' };
+window.fetch = async () => {
+  firebaseAuth.currentUser = { getIdToken: async () => 'second-user-token' };
+  return new Response('{}');
+};
+await assert.rejects(apiFetch('https://api.test/read'), { name: 'AbortError' }, 'late responses must not cross accounts');
+firebaseAuth.currentUser = null;
 
 for (const method of ['POST', 'PATCH', 'DELETE']) {
   calls = 0;

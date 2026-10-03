@@ -23,12 +23,21 @@ const SAFE_READ_RETRY_ATTEMPTS = 8;
 // hits the network to refresh it when it's actually close to expiring, so
 // this doesn't add a round-trip to normal usage.
 export async function apiFetch(url, options = {}) {
+  const requestUser = firebaseAuth.currentUser;
+  const assertCurrentSession = () => {
+    if (options.signal?.aborted || firebaseAuth.currentUser !== requestUser) {
+      throw new DOMException('Request aborted.', 'AbortError');
+    }
+  };
+  assertCurrentSession();
   const headers = new Headers(options.headers || {});
   // Role previews belong to the current top-level browsing context. Using
   // sessionStorage keeps two Queue windows independent while still sharing
   // the selected role between dashboard.html and queue.html in one window.
-  const previewRole = window.sessionStorage.getItem('sentient.queueRolePreview');
-  if (previewRole) headers.set('X-Queue-Role-Preview', previewRole);
+  try {
+    const previewRole = window.sessionStorage.getItem('sentient.queueRolePreview');
+    if (previewRole) headers.set('X-Queue-Role-Preview', previewRole);
+  } catch { /* A blocked preference store must not block authenticated requests. */ }
   // Queue uses each person's local production clock. Send the browser's
   // canonical IANA zone with authenticated requests so a Colombian teammate
   // is recognized automatically (America/Bogota) without a manual toggle.
@@ -39,9 +48,10 @@ export async function apiFetch(url, options = {}) {
     }
   } catch { /* unavailable in a non-browser test environment */ }
   const refreshAuthToken = async (forceRefresh = false) => {
-    if (!firebaseAuth.currentUser) return false;
+    if (!requestUser) return false;
     try {
-      const token = await firebaseAuth.currentUser.getIdToken(forceRefresh);
+      const token = await requestUser.getIdToken(forceRefresh);
+      assertCurrentSession();
       headers.set('Authorization', `Bearer ${token}`);
       // Mirrors tracker.html/insights.html: keeps a live token on window so
       // ad-hoc admin/debug calls against this API (e.g. from devtools) don't
@@ -50,12 +60,14 @@ export async function apiFetch(url, options = {}) {
       window.__firebaseIdToken = token;
       return true;
     } catch (error) {
+      if (error?.name === 'AbortError') throw error;
       // Fall through and let the request go out unauthenticated -- the
       // backend will bounce it with a 401 and the login gate will catch it.
       return false;
     }
   };
   await refreshAuthToken();
+  assertCurrentSession();
   // Render can briefly return a gateway error while it swaps a service
   // instance. Retrying safe reads here keeps every tool resilient without
   // repeating mutations such as Queue assignments or imports. The Users
@@ -75,9 +87,10 @@ export async function apiFetch(url, options = {}) {
   const retryAttempts = isIdempotentUserUpsert ? USER_UPSERT_RETRY_ATTEMPTS : (isIdempotentPostRefresh ? POST_REFRESH_RETRY_ATTEMPTS : (canRetry ? SAFE_READ_RETRY_ATTEMPTS : 1));
   let lastError;
   for (let attempt = 0; attempt < retryAttempts; attempt += 1) {
-    if (options.signal?.aborted) throw new DOMException('Request aborted.', 'AbortError');
+    assertCurrentSession();
     try {
       const response = await window.fetch(url, { ...options, headers });
+      assertCurrentSession();
       const refreshMayRecoverUnauthorizedMutation = canRetryMutation && response.status === 401;
       if ((!canRetry && !canRetryMutation) || (!TRANSIENT_GATEWAY_STATUSES.has(response.status) && !refreshMayRecoverUnauthorizedMutation) || attempt === retryAttempts - 1) return response;
       lastError = new Error(`HTTP ${response.status}`);

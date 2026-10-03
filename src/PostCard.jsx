@@ -293,7 +293,7 @@ const FreshnessRing = memo(function FreshnessRing({ timestamp }) {
   );
 });
 
-export const PostCard = memo(function PostCard({ post, goldenNugget, priority, selected, onSelect, onFlags, onReload, onAssign, onQuickAdd, onQuickAddSuccess, canPool, canSuggest, draggable, onDragStart, onDragOver, onDrop, hideCaption = false }) {
+export const PostCard = memo(function PostCard({ post, goldenNugget, priority, selected, onSelect, onFlags, onReload, onAssign, onQuickAdd, onQuickAddSuccess, canPool, canSuggest, draggable, onDragStart, onDragOver, onDrop, hideCaption = false, readOnly = false, animateSelection = true }) {
   const [avatarFailed, setAvatarFailed] = useState(false);
   const { t } = usePrefs();
   // Posts created from scratch in Queue have no source account; never
@@ -302,13 +302,14 @@ export const PostCard = memo(function PostCard({ post, goldenNugget, priority, s
   const accountLabel = post.account || (manual ? t('Manual post') : IG_HANDLE);
   const handleClick = (event) => {
     if (event.target.closest('button,a,input,select,textarea,[role="menu"],.post-menu')) return;
-    sendCardToSide(event.currentTarget, post.postKey); onSelect(post.postKey);
+    if (animateSelection) sendCardToSide(event.currentTarget, post.postKey);
+    onSelect(post.postKey);
   };
   const handleKeyDown = (event) => {
     if (event.target !== event.currentTarget) return;
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
-      sendCardToSide(event.currentTarget, post.postKey);
+      if (animateSelection) sendCardToSide(event.currentTarget, post.postKey);
       onSelect(post.postKey);
     }
   };
@@ -371,7 +372,7 @@ export const PostCard = memo(function PostCard({ post, goldenNugget, priority, s
         </div>
         <div className="post-header-actions">
           <FreshnessRing timestamp={post.timestamp} />
-          <PostMenu post={post} isPromo={isPromo} onFlags={onFlags} onReload={onReload} onAssign={onAssign} onQuickAdd={onQuickAdd} onQuickAddSuccess={onQuickAddSuccess} canPool={canPool} canSuggest={canSuggest} />
+          {!readOnly ? <PostMenu post={post} isPromo={isPromo} onFlags={onFlags} onReload={onReload} onAssign={onAssign} onQuickAdd={onQuickAdd} onQuickAddSuccess={onQuickAddSuccess} canPool={canPool} canSuggest={canSuggest} /> : null}
         </div>
       </div>
 

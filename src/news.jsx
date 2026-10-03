@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import ReactDOM from 'react-dom/client';
+import { mountApp } from './mountApp';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { apiFetch, API_BASE } from './api';
 import { firebaseAuth, startGoogleSignIn, describeSignInError } from './firebase';
@@ -225,4 +225,4 @@ function NewsApp() {
   </main>;
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<PrefsProvider lang="en" theme="dark"><NewsApp /></PrefsProvider>);
+mountApp(<PrefsProvider lang="en" theme="dark"><NewsApp /></PrefsProvider>, { lang: 'en' });

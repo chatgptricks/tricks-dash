@@ -2,7 +2,7 @@ import React, { act, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { CoverImage } from '../src/postDetail';
 import TopicStack from '../src/TopicStack';
-import { AccountMultiSelect } from '../src/App';
+import { AccountMultiSelect, ListEditor } from '../src/App';
 import { PostCard } from '../src/PostCard';
 import { StackActions } from '../src/StackActions';
 import { useTopicGroups } from '../src/useTopicGroups';
@@ -15,6 +15,23 @@ globalThis.fetch = window.fetch = async () => ({ ok: true, status: 200, json: as
 const el = document.body.appendChild(document.createElement('div')); const root = createRoot(el);
 const galleryCards = () => [...el.querySelectorAll('.test-card')].filter(card => !card.closest('[inert]'));
 try {
+  let deleteCalls = 0, editorClosed = false, rejectDelete, resolveDelete;
+  const deleteList = () => { deleteCalls += 1; return new Promise((resolve, reject) => { resolveDelete = resolve; rejectDelete = reject; }); };
+  await act(async () => root.render(<ListEditor draft={{ id: 9, name: 'AI research', handles: ['alpha'] }} accounts={[{ handle: 'alpha', label: 'Alpha' }]} onSave={async () => {}} onDelete={deleteList} onClose={() => { editorClosed = true; }} />));
+  const deleteButton = () => el.querySelector('.list-editor .danger');
+  await act(async () => deleteButton().click());
+  if (deleteCalls || !el.textContent.includes('Confirm delete') || !el.textContent.includes('their posts will be kept')) throw new Error('Deleting a list must require an explicit confirmation');
+  await act(async () => [...el.querySelectorAll('button')].find(node => node.textContent === 'Keep list').click());
+  if (deleteCalls || !el.textContent.includes('Save list')) throw new Error('Keep list must cancel deletion without changing the list');
+  await act(async () => deleteButton().click());
+  await act(async () => deleteButton().click());
+  if (deleteCalls !== 1 || !deleteButton().disabled || !el.querySelector('[aria-label="Close"]').disabled) throw new Error('Pending deletion must prevent duplicate requests and dismissal');
+  await act(async () => { el.querySelector('.modal-backdrop').click(); rejectDelete(new Error('Could not delete this list. Try again.')); await Promise.resolve(); });
+  if (editorClosed || !el.querySelector('[role="alert"]')?.textContent.includes('Try again') || deleteButton().disabled) throw new Error('Failed deletion must stay open and offer a visible retry');
+  await act(async () => deleteButton().click());
+  await act(async () => { resolveDelete(); await Promise.resolve(); });
+  if (deleteCalls !== 2 || !editorClosed) throw new Error('A successful retry must close the list editor');
+  console.log('PASS list deletion confirmation, pending protection, failure feedback and retry');
   let accountSelection = [];
   function AccountSearchHarness() {
     const [selected, setSelected] = useState(new Set(['alpha', 'beta', 'gamma']));

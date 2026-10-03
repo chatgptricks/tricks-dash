@@ -156,4 +156,62 @@ payload.accountOnboarding.completed=true; window.__queueFixture=payload;`;
  console.log('PASS browser Queue: real scheduler/detail, long caption and 15 history entries, desktop/mobile layout, clean return');
  assert.deepEqual(errors,[]);
  console.log('PASS browser Research: live components, menus, nested dialogs, themes, responsive detail, full covers and opaque closing shuffle');
+ // Exercise the shared mount with an actual render failure, then fix the
+ // served module so the user's Reload action can demonstrably recover.
+ let crash = true;
+ await page.route('**/src/main.jsx*', async route=>{
+  const original=await (await route.fetch()).text();
+  const reactPath=original.match(/from\s+["']([^"']*\/react\.js[^"']*)["']/)?.[1];
+  assert.ok(reactPath,'Resolve the same React instance Vite uses for the shared mount');
+  return route.fulfill({contentType:'text/javascript',body:`
+  import React from ${JSON.stringify(reactPath)};
+  import { mountApp } from '/src/mountApp.jsx';
+  function BrokenChild() { throw new Error('PRIVATE_RESPONSE_TOKEN'); }
+  function Page() {
+   const [failed,setFailed]=React.useState(false);
+   React.useEffect(()=>{
+    if(!${crash}) return;
+    document.getElementById('root').inert=true;
+    const timer=setTimeout(()=>setFailed(true),0);
+    return()=>{clearTimeout(timer);document.getElementById('root').inert=false;};
+   },[]);
+   return failed ? React.createElement(BrokenChild) : React.createElement('h1', null, 'Recovered successfully');
+  }
+  mountApp(React.createElement(Page), { lang: 'en' });
+ `});});
+ await page.evaluate(()=>{localStorage.setItem('recovery-draft','Keep my draft');sessionStorage.setItem('recovery-preview','pd');});
+ await page.goto(`${base}/index.html?desktop=1`);
+ await page.getByRole('heading',{name:'This page couldn’t load',exact:true}).waitFor();
+ assert.equal(await page.locator('#root').evaluate(e=>e.inert),false,'Crashed modal cleanup restores root interaction');
+ assert.equal(await page.locator('#app-recovery-title').evaluate(e=>e===document.activeElement),true);
+ assert.equal(await page.getByRole('link',{name:'Open home',exact:true}).getAttribute('href'),'/');
+ assert.equal((await page.locator('.app-recovery').textContent()).includes('PRIVATE_RESPONSE_TOKEN'),false);
+ for(const theme of ['dark','light']){
+  await page.evaluate(value=>{document.documentElement.dataset.theme=value;},theme);
+  for(const width of [1440,390,320]){
+   await page.setViewportSize({width,height:844});
+   const layout=await page.locator('.app-recovery').evaluate(e=>{
+    const card=e.querySelector('.app-recovery-card').getBoundingClientRect();
+    return {overflow:e.scrollWidth-e.clientWidth,left:card.left,right:card.right,bg:getComputedStyle(e).backgroundColor};
+   });
+   assert.ok(layout.overflow<=1&&layout.left>=0&&layout.right<=width);
+   assert.equal(layout.bg,theme==='light'?'rgb(244, 245, 247)':'rgb(16, 18, 21)');
+   if((theme==='dark'&&width===1440)||(theme==='light'&&width===390)){
+    fs.mkdirSync('work/qa',{recursive:true});
+    await page.screenshot({path:`work/qa/recovery-${theme}-${width===1440?'desktop':'mobile'}.png`});
+   }
+  }
+ }
+ let automaticNavigations=0;
+ const observeNavigation=frame=>{if(frame===page.mainFrame())automaticNavigations++;};
+ page.on('framenavigated',observeNavigation);
+ await page.waitForTimeout(350);
+ assert.equal(automaticNavigations,0,'Recovery must wait for the user rather than reload in a loop');
+ page.off('framenavigated',observeNavigation);
+ crash=false;
+ await Promise.all([page.waitForEvent('load'),page.getByRole('button',{name:'Reload page',exact:true}).click()]);
+ await page.getByRole('heading',{name:'Recovered successfully',exact:true}).waitFor();
+ assert.deepEqual(await page.evaluate(()=>[localStorage.getItem('recovery-draft'),sessionStorage.getItem('recovery-preview')]),['Keep my draft','pd']);
+ assert.deepEqual(errors,[]);
+ console.log('PASS browser recovery: focused private-safe fallback, dark/light responsive layout, deliberate reload and preserved storage');
 } finally { await browser.close(); await server.close(); }
