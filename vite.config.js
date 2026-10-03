@@ -20,11 +20,12 @@ export default defineConfig(({ command }) => ({
   publicDir: process.env.VITE_SKIP_PUBLIC === '1' ? false : 'public',
   plugins: [react()],
   server: {
-    host: '0.0.0.0',
+    // Firebase authorizes localhost, not the literal 127.0.0.1 hostname.
+    host: 'localhost',
     port: 4175,
   },
   preview: {
-    host: '0.0.0.0',
+    host: 'localhost',
     port: 4175,
   },
   build: {

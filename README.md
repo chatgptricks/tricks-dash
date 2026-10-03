@@ -17,7 +17,8 @@ npm ci
 npm run dev
 ```
 
-Open `http://localhost:4175`. To point at a local Cortex backend, set
+Open `http://localhost:4175`. Use `localhost`, not `127.0.0.1`: Firebase's
+authorized domains treat them as different hosts. To point at a local Cortex backend, set
 `VITE_API_BASE` in `.env.local` before starting Vite. Without that setting,
 the app uses the live Cortex API: running the frontend locally does not
 make its data or mutations local. The automated checks below mock authentication
