@@ -4,7 +4,7 @@ const fixture = [
   { id:'a', title:'First idea', url:'https://example.com/a', priority:0, discarded:0, tweet_text:'Readable tweet '+ 'text '.repeat(130), tweet_image:'https://pbs.twimg.com/media/test.jpg', source:'User 05', shared_at:'2026-09-25T10:00:00Z', slack_url:'https://example.com/slack' },
   { id:'b', title:'Second idea', url:'https://example.com/b', priority:1, discarded:0, source:'User 05', shared_at:'2026-09-24T10:00:00Z', slack_url:'' },
 ];
-let items = structuredClone(fixture), writes = [], fail = false;
+let items = structuredClone(fixture), writes = [], fail = false, failList = false, deferredBody = null;
 window.fetch = async (url, options={}) => {
   const path = String(url), method = options.method || 'GET';
   let body;
@@ -17,8 +17,12 @@ window.fetch = async (url, options={}) => {
     body = Object.assign(items.find(item => item.id === id), update);
   } else if (method === 'POST') {
     const input = JSON.parse(options.body); body = {...fixture[0], ...input, id:'c', priority:-1}; items.push(body);
-  } else body = {items};
-  return {ok:true,status:200,json:async()=>structuredClone(body)};
+  } else {
+    if (failList) return {ok:false,status:403,json:async()=>({detail:'Vault temporarily unavailable'})};
+    body = {items};
+  }
+  const pending = method === 'PATCH' ? deferredBody : null;
+  return {ok:true,status:200,json:async()=>{ if (pending) await pending; return structuredClone(body); }};
 };
 const tick = () => new Promise(resolve => setTimeout(resolve,10));
 const click = async element => { assert.ok(element); await act(async()=>{ element.click(); await tick(); }); };
@@ -30,6 +34,9 @@ try {
     console.log('PASS Vault: restricted role blocked'); process.exit(0);
   }
   assert.equal(document.querySelectorAll('.vault-card').length, 2);
+  await act(async()=>{ const input = document.querySelector('[aria-label="Search links"]'); Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value').set.call(input,'Second'); input.dispatchEvent(new window.Event('input',{bubbles:true})); });
+  assert.equal(document.querySelectorAll('.vault-card').length, 1);
+  await act(async()=>{ const input = document.querySelector('[aria-label="Search links"]'); Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value').set.call(input,''); input.dispatchEvent(new window.Event('input',{bubbles:true})); });
   assert.match(document.querySelector('.vault-tweet p').textContent,/Readable tweet/);
   assert.ok(document.querySelector('.vault-media-link img'));
   await click(document.querySelector('.vault-read-more'));
@@ -68,5 +75,20 @@ try {
   await click(document.querySelector('.vault-discard'));
   assert.equal(document.querySelectorAll('.vault-card').length,3);
   assert.match(document.querySelector('[role=alert]').textContent,/Access denied/);
-  console.log('PASS Vault: load, priority, discard, restore, add and failed mutation'); process.exit(0);
+  fail = false;
+  let finishMutation;
+  deferredBody = new Promise(resolve => { finishMutation = resolve; });
+  await click(document.querySelector('.vault-discard'));
+  await act(async()=>{ items = []; globalThis.__setToolTestUser('another-dev@example.com'); await tick(); });
+  await act(async()=>{ finishMutation(); await tick(); });
+  assert.equal(document.querySelectorAll('.vault-card').length, 0, 'A previous account response must not repopulate Vault');
+  assert.equal(document.querySelector('[role=alert]'), null);
+  deferredBody = null; failList = true;
+  await act(async()=>{ globalThis.__setToolTestUser('third-dev@example.com'); await tick(); });
+  assert.match(document.querySelector('.vault-empty').textContent,/could not be loaded/);
+  assert.match(document.querySelector('[role=alert]').textContent,/Vault temporarily unavailable/);
+  failList = false; items = structuredClone(fixture);
+  await click(document.querySelector('[role=alert] button'));
+  assert.equal(document.querySelectorAll('.vault-card').length, 2);
+  console.log('PASS Vault: search, priority, discard, restore, add, failures, retry and session isolation'); process.exit(0);
 } catch(error) { console.error(error); process.exit(1); }

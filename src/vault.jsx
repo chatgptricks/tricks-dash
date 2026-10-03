@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { mountApp } from './mountApp';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { apiFetch, API_BASE } from './api';
@@ -21,13 +21,14 @@ async function request(url, options) {
   return response.json();
 }
 function Vault() {
+  const session = useRef(0), mutationBusy = useRef(false);
   const [user, setUser] = useState(undefined), [viewer, setViewer] = useState(null), [items, setItems] = useState([]);
   const [error, setError] = useState(''), [busy, setBusy] = useState(false), [loaded, setLoaded] = useState(false);
   const [expanded, setExpanded] = useState({});
   const [query, setQuery] = useState(''), [filter, setFilter] = useState('All'), [view, setView] = useState('collection');
   const discarded = view === 'discarded';
   const [adding, setAdding] = useState(false), [url, setUrl] = useState(''), [title, setTitle] = useState(''), [revision, setRevision] = useState(0);
-  useEffect(() => { trySsoSignIn().catch(() => {}); return onAuthStateChanged(firebaseAuth, value => { setUser(value || null); setViewer(null); setItems([]); setLoaded(false); }); }, []);
+  useEffect(() => { trySsoSignIn().catch(() => {}); const unsubscribe = onAuthStateChanged(firebaseAuth, value => { session.current += 1; mutationBusy.current = false; setUser(value || null); setViewer(null); setItems([]); setLoaded(false); setBusy(false); setError(''); setAdding(false); setUrl(''); setTitle(''); setExpanded({}); setQuery(''); setFilter('All'); setView('collection'); }); return () => { session.current += 1; unsubscribe(); }; }, []);
   useEffect(() => user ? startSsoRefresh() : undefined, [user]);
   useEffect(() => {
     if (!user) return; let active = true; setError(''); setLoaded(false);
@@ -39,9 +40,12 @@ function Vault() {
     return () => { active = false; };
   }, [user, revision]);
   async function mutate(path, method, body) {
+    if (mutationBusy.current) return null;
+    const owner = session.current;
+    mutationBusy.current = true;
     setBusy(true); setError('');
-    try { const item = await request(endpoint + path, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); setItems(rows => [...rows.filter(row => row.id !== item.id), item]); return item; }
-    catch (reason) { setError(reason.message); return null; } finally { setBusy(false); }
+    try { const item = await request(endpoint + path, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); if (owner !== session.current) return null; setItems(rows => [...rows.filter(row => row.id !== item.id), item]); return item; }
+    catch (reason) { if (owner === session.current) setError(reason.message); return null; } finally { if (owner === session.current) { mutationBusy.current = false; setBusy(false); } }
   }
   async function add(event) { event.preventDefault(); const item = await mutate('', 'POST', { url: url.trim(), title: title.trim() }); if (item) { setAdding(false); setUrl(''); setTitle(''); setQuery(''); setFilter('All'); setView(item.discarded ? 'discarded' : item.done ? 'done' : 'collection'); } }
   const ordered = [...items].sort((a, b) => a.priority - b.priority || b.shared_at.localeCompare(a.shared_at) || a.id.localeCompare(b.id));
@@ -71,7 +75,7 @@ function Vault() {
       <div className="vault-card-body"><div className="vault-author-row">{safeUrl(item.tweet_avatar) ? <img className="vault-avatar" src={safeUrl(item.tweet_avatar)} alt="" loading="lazy" referrerPolicy="no-referrer" onError={e => { e.currentTarget.style.display = 'none'; }} /> : <span className="vault-avatar-placeholder">{site === 'X' ? '𝕏' : '↗'}</span>}<div><span className="vault-eyebrow">{site === 'X' ? item.title.replace('Post by ', '') : site}</span><h2><a href={safeUrl(item.url)} target="_blank" rel="noopener noreferrer">{item.tweet_author || item.title}</a></h2></div></div>{item.tweet_text ? <div className="vault-tweet"><p>{expanded[item.id] || item.tweet_text.length <= 600 ? item.tweet_text : `${item.tweet_text.slice(0, 600)}…`}</p>{item.tweet_text.length > 600 && <button className="vault-read-more" aria-expanded={Boolean(expanded[item.id])} onClick={() => setExpanded(current => ({ ...current, [item.id]: !current[item.id] }))}>{expanded[item.id] ? 'Show less' : 'Read more'}</button>}{item.tweet_author && <span className="vault-tweet-author">— {item.tweet_author}</span>}</div> : isTweet(item.url) && <div className="vault-tweet-unavailable"><p>{item.text_status === 'unavailable' ? 'X could not provide this tweet’s text.' : 'Tweet text has not been loaded yet.'}</p><button disabled={busy} onClick={() => mutate(`/${item.id}/text`, 'POST', {})}>{busy ? 'Loading…' : item.text_status === 'unavailable' ? 'Retry text' : 'Load tweet text'}</button></div>}<p className="vault-url">{item.url}</p><div className="vault-meta">{item.source ? `From ${item.source} · ` : ''}{new Date(item.shared_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</div><div className="vault-links"><a href={safeUrl(item.url)} target="_blank" rel="noopener noreferrer">Open link ↗</a>{safeUrl(item.slack_url) && <a href={safeUrl(item.slack_url)} target="_blank" rel="noopener noreferrer">Slack ↗</a>}</div></div>
       <footer>{view === 'collection' && <div className="vault-order-actions"><button aria-label={`Move ${item.title} up`} disabled={busy || rank === 0} onClick={() => move(item, -1)}>↑</button><button aria-label={`Move ${item.title} down`} disabled={busy || rank === activeItems.length - 1} onClick={() => move(item, 1)}>↓</button></div>}{!discarded && <div className="vault-workflow-actions"><button className="vault-done" disabled={busy} onClick={() => mutate(`/${item.id}`, 'PATCH', { done: !item.done })}>{item.done ? 'Undo Done' : '✓ Done!'}</button>{item.pool_request_id ? <a className="vault-in-pool" href={`/queue.html?r=${encodeRouteState({ task: item.pool_request_id })}`} target="sentient-queue">✓ In Queue ↗</a> : <button className="vault-to-pool" disabled={busy} onClick={() => mutate(`/${item.id}/pool`, 'POST', {})}>Send to Pool ↗</button>}</div>}<button className="vault-discard" disabled={busy} onClick={() => mutate(`/${item.id}`, 'PATCH', { discarded: !discarded })}>{discarded ? 'Restore' : 'Discard'}</button></footer>
     </article>; })}</section>
-    {!rows.length && <p className="vault-empty">{!loaded ? 'Loading your links…' : query || filter !== 'All' ? 'No matching links. Try another search or source.' : discarded ? 'No discarded links.' : view === 'done' ? 'No completed links yet. Mark a card Done! to move it here.' : 'Your collection is ready. Add your first link.'}</p>}
+    {!rows.length && <p className="vault-empty">{!loaded ? error ? 'Your links could not be loaded. Use Reload to retry.' : 'Loading your links…' : query || filter !== 'All' ? 'No matching links. Try another search or source.' : discarded ? 'No discarded links.' : view === 'done' ? 'No completed links yet. Mark a card Done! to move it here.' : 'Your collection is ready. Add your first link.'}</p>}
   </main>;
 }
 mountApp(<PrefsProvider lang="en" theme="dark"><Vault /></PrefsProvider>, { lang: 'en' });

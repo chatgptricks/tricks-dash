@@ -82,6 +82,7 @@ rw.__onInsightsUnauthorized = () => { signedOut = true; };
 rw.API = 'https://example.test';
 rw.SUMMARY = { accounts: [] };
 rw.DETAIL_CACHE = {};
+rw.TRACKER_SESSION = 0;
 rw.render = () => {};
 rw.fetch = async (url, options = {}) => respond(String(url), options);
 const reply = (status, body, headers = {}) => ({ ok: status < 400, status, json: async () => body, headers: { get: name => headers[name] ?? null } });

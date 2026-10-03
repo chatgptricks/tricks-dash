@@ -2,7 +2,8 @@
 
 ## 1.0.0 — local release candidate (2026-10-03)
 
-This release focuses on trustworthy Research and Queue workflows. It has not
+This release focuses on trustworthy core workflows across Research, Queue, Promos,
+Tracker, Insights, Vault and Hooks. It has not
 been published or tagged; production still runs the existing release.
 
 ### Reliability
@@ -28,6 +29,28 @@ been published or tagged; production still runs the existing release.
 - Nested Queue stack dialogs can be closed with the keyboard and return focus
   to the underlying inspector.
 
+### Promos and individual tools
+
+- Preserve the original Promos cards and automatic stacks. Group loaded posts by
+  known brand and topic without changing their individual classifications.
+- Review exact evidence, compare related posts, correct brand/product/classification,
+  and save a decision before advancing. Failed saves retain the draft.
+- Reconnect to scans after a reload; keep pagination and filtered results consistent
+  across delayed requests, account changes and completed scans.
+- Tracker rejects stale account navigation and resets user data on session changes.
+- Insights preserves empty account selections, distinguishes access errors, offers
+  retry recovery, and safely rebuilds charts when sorting the account table.
+- Static tool navigation refreshes role visibility when the signed-in user changes.
+- Tracker tables and Insights heatmaps scroll within their own containers on mobile,
+  rather than widening the page.
+- Hooks updates saved drafts instead of duplicating them, retains selected sources
+  across searches, and protects current edits from delayed generation responses.
+- Vault and Hooks reject stale session updates and enforce DEV/preview access.
+- Related detector changes are committed locally in the Cortex/Predict checkout:
+  fewer editorial/negation false positives, better sponsor extraction, conservative
+  same-brand corroboration, and preserved human corrections during rescans.
+  The configured remote API still uses its deployed detector until separately released.
+
 ### Release validation
 
 - `npm run check:release` combines lint, regression tests, the full build and
@@ -35,9 +58,10 @@ been published or tagged; production still runs the existing release.
 - Queue refresh, stack operations and Vault access tests are included in the
   standard suite, alongside the new failure and recovery regressions.
 - Local verification on 2026-10-03: `npm run check:release` passed (lint:
-  zero errors, 50 existing warnings; regression tests; full production build;
-  Chromium desktop/mobile checks). `npm audit --omit=dev --audit-level=high`
-  reported zero vulnerabilities.
+  zero errors, 47 existing warnings; regression tests; full production build;
+  Chromium desktop/mobile checks, including Promos and individual-tool fixtures). `npm audit --omit=dev --audit-level=high`
+  reported zero vulnerabilities. The local backend detector/review suite passed
+  64 tests using isolated synthetic records; live PostgreSQL was not exercised.
 
 ### Before publishing
 

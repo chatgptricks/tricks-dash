@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { mountApp } from "./mountApp";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import {
@@ -113,7 +113,7 @@ function Login({ error }) {
   );
 }
 
-function HookCard({ item, index, selected, onUse, onToggleSave }) {
+function HookCard({ item, index, selected, onUse, onToggleSave, saving }) {
   return (
     <article className={`hook-card ${selected ? "is-selected" : ""}`}>
       <div className="hook-card-rank">{String(index + 1).padStart(2, "0")}</div>
@@ -162,6 +162,7 @@ function HookCard({ item, index, selected, onUse, onToggleSave }) {
           <button
             className={item.saved ? "is-saved" : ""}
             aria-pressed={item.saved}
+            disabled={saving}
             onClick={() => onToggleSave(item)}
           >
             <Bookmark size={15} fill={item.saved ? "currentColor" : "none"} />
@@ -209,7 +210,8 @@ function DraftList({ drafts, activeId, onOpen, onDelete }) {
                   onDelete(draft);
                 }}
                 onKeyDown={(event) => {
-                  if (event.key === "Enter") {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
                     event.stopPropagation();
                     onDelete(draft);
                   }
@@ -231,10 +233,14 @@ function DraftList({ drafts, activeId, onOpen, onDelete }) {
 }
 
 function HookLab() {
+  const session = useRef(0), searchSequence = useRef(0), draftsSequence = useRef(0), editorRevision = useRef(0);
+  const savingSourceIds = useRef(new Set());
   const [user, setUser] = useState(undefined);
   const [viewer, setViewer] = useState(null);
   const [authError, setAuthError] = useState("");
   const [query, setQuery] = useState("");
+  const [searchedQuery, setSearchedQuery] = useState("");
+  const [savingSources, setSavingSources] = useState([]);
   const [results, setResults] = useState([]);
   const [status, setStatus] = useState({
     total: 0,
@@ -249,6 +255,7 @@ function HookLab() {
   const [loading, setLoading] = useState(false);
   const [categorizing, setCategorizing] = useState(false);
   const [selected, setSelected] = useState([]);
+  const [sourceSnapshots, setSourceSnapshots] = useState({});
   const [brief, setBrief] = useState("");
   const [editor, setEditor] = useState("");
   const [rewriteInstruction, setRewriteInstruction] = useState("");
@@ -257,14 +264,22 @@ function HookLab() {
   const [copied, setCopied] = useState(false);
   const [drafts, setDrafts] = useState([]);
   const [activeDraft, setActiveDraft] = useState(null);
+  const [savedDraftText, setSavedDraftText] = useState("");
   const [savingDraft, setSavingDraft] = useState(false);
 
   useEffect(() => {
     trySsoSignIn().catch(() => {});
-    return onAuthStateChanged(firebaseAuth, (value) => {
+    const unsubscribe = onAuthStateChanged(firebaseAuth, (value) => {
+      session.current += 1;
       setUser(value || null);
       setViewer(null);
+      setQuery(""); setSearchedQuery(""); setResults([]); setStatus({}); setWarning(""); setError("");
+      savingSourceIds.current.clear(); setSavingSources([]);
+      setSelected([]); setSourceSnapshots({}); setBrief(""); setEditor("");
+      setRewriteInstruction(""); setVariants([]); setDrafts([]); setActiveDraft(null);
+      setSavedDraftText(""); setLoading(false); setGenerating(false); setSavingDraft(false); setCategorizing(false); setCopied(false);
     });
+    return () => { session.current += 1; unsubscribe(); };
   }, []);
   useEffect(() => (user ? startSsoRefresh() : undefined), [user]);
   useEffect(() => {
@@ -283,16 +298,19 @@ function HookLab() {
   }, [user]);
 
   const loadDrafts = useCallback(async () => {
+    const owner = session.current, sequence = ++draftsSequence.current;
     try {
       const data = await request("/api/dashboard/hooks/drafts");
+      if (owner !== session.current || sequence !== draftsSequence.current) return;
       setDrafts(data.drafts || []);
     } catch (reason) {
-      setError(reason.message);
+      if (owner === session.current && sequence === draftsSequence.current) setError(reason.message);
     }
   }, []);
 
   const search = useCallback(
     async (nextQuery = query) => {
+      const owner = session.current, sequence = ++searchSequence.current;
       setLoading(true);
       setError("");
       try {
@@ -302,33 +320,36 @@ function HookLab() {
           limit: "30",
         });
         const data = await request(`/api/dashboard/hooks?${params}`);
+        if (owner !== session.current || sequence !== searchSequence.current) return;
         setResults(data.results || []);
+        setSearchedQuery(nextQuery.trim());
         setStatus(data.status || {});
         setWarning(data.warning || "");
       } catch (reason) {
-        setError(reason.message || "Unable to search hooks.");
+        if (owner === session.current && sequence === searchSequence.current) setError(reason.message || "Unable to search hooks.");
       } finally {
-        setLoading(false);
+        if (owner === session.current && sequence === searchSequence.current) setLoading(false);
       }
     },
     [query],
   );
 
   useEffect(() => {
-    if (!user || !viewer?.is_dev) return;
+    if (!user || !viewer?.is_dev || viewer?.queue_role_preview_active) return;
     search("");
     loadDrafts();
-  }, [user, viewer?.is_dev]);
+  }, [user, viewer?.is_dev, viewer?.queue_role_preview_active]);
 
   const selectedItems = useMemo(
     () =>
       selected
-        .map((id) => results.find((item) => item.id === id))
-        .filter(Boolean),
-    [selected, results],
+        .map((id) => sourceSnapshots[id] || results.find((item) => item.id === id) || { id, source_kind: 'source', hook_text: `Saved source (${id})` }),
+    [selected, results, sourceSnapshots],
   );
 
   function useHook(item) {
+    editorRevision.current += 1;
+    setSourceSnapshots(current => ({ ...current, [item.id]: item }));
     setSelected((current) =>
       current.includes(item.id) ? current : [...current.slice(-2), item.id],
     );
@@ -341,6 +362,10 @@ function HookLab() {
   }
 
   async function toggleSave(item) {
+    if (savingSourceIds.current.has(item.id)) return;
+    savingSourceIds.current.add(item.id);
+    setSavingSources([...savingSourceIds.current]);
+    const owner = session.current;
     const next = !item.saved;
     setResults((current) =>
       current.map((row) =>
@@ -357,16 +382,20 @@ function HookLab() {
         },
       );
     } catch (reason) {
+      if (owner !== session.current) return;
       setResults((current) =>
         current.map((row) =>
           row.id === item.id ? { ...row, saved: !next } : row,
         ),
       );
       setError(reason.message);
+    } finally {
+      if (owner === session.current) { savingSourceIds.current.delete(item.id); setSavingSources([...savingSourceIds.current]); }
     }
   }
 
   async function generate(rewrite = false) {
+    const owner = session.current, revision = editorRevision.current;
     if (rewrite && !editor.trim()) {
       setError("Choose or write a hook before generating rewrite versions.");
       return;
@@ -392,30 +421,35 @@ function HookLab() {
           count: 6,
         }),
       });
+      if (owner !== session.current) return;
       setVariants(data.hooks || []);
       setWarning(data.warning || "");
-      if (data.hooks?.[0]) {
+      if (data.hooks?.[0] && revision === editorRevision.current) {
+        editorRevision.current += 1;
         setEditor(data.hooks[0]);
         setActiveDraft(null);
       }
     } catch (reason) {
-      setError(reason.message);
+      if (owner === session.current) setError(reason.message);
     } finally {
-      setGenerating(false);
+      if (owner === session.current) setGenerating(false);
     }
   }
 
   async function copy() {
+    const owner = session.current, revision = editorRevision.current;
     try {
       await navigator.clipboard.writeText(editor);
+      if (owner !== session.current || revision !== editorRevision.current) return;
       setCopied(true);
-      window.setTimeout(() => setCopied(false), 1500);
+      window.setTimeout(() => { if (owner === session.current) setCopied(false); }, 1500);
     } catch {
-      setError("Copy failed. Select the hook text and copy it manually.");
+      if (owner === session.current) setError("Copy failed. Select the hook text and copy it manually.");
     }
   }
 
   async function saveDraft() {
+    const owner = session.current, revision = editorRevision.current;
     if (!editor.trim()) {
       setError("Write or select a hook before saving.");
       return;
@@ -445,39 +479,44 @@ function HookLab() {
           }),
         });
       }
-      setActiveDraft(saved.id);
+      if (owner !== session.current) return;
+      if (revision === editorRevision.current) { setActiveDraft(saved.id); setSavedDraftText(editor); }
       await loadDrafts();
     } catch (reason) {
-      setError(reason.message);
+      if (owner === session.current) setError(reason.message);
     } finally {
-      setSavingDraft(false);
+      if (owner === session.current) setSavingDraft(false);
     }
   }
 
   async function deleteDraft(draft) {
+    const owner = session.current;
     try {
       await request(`/api/dashboard/hooks/drafts/${draft.id}`, {
         method: "DELETE",
       });
-      if (activeDraft === draft.id) setActiveDraft(null);
+      if (owner !== session.current) return;
+      setActiveDraft(current => current === draft.id ? null : current);
       await loadDrafts();
     } catch (reason) {
-      setError(reason.message);
+      if (owner === session.current) setError(reason.message);
     }
   }
 
   async function categorize() {
+    const owner = session.current;
     setCategorizing(true);
     setError("");
     try {
       await request("/api/dashboard/hooks/categorize?limit=8", {
         method: "POST",
       });
+      if (owner !== session.current) return;
       await search();
     } catch (reason) {
-      setError(reason.message);
+      if (owner === session.current) setError(reason.message);
     } finally {
-      setCategorizing(false);
+      if (owner === session.current) setCategorizing(false);
     }
   }
 
@@ -519,7 +558,7 @@ function HookLab() {
         </section>
       </main>
     );
-  if (viewer && !viewer.is_dev)
+  if (viewer && (!viewer.is_dev || viewer.queue_role_preview_active))
     return (
       <main className="hooks-gate">
         <section>
@@ -654,7 +693,7 @@ function HookLab() {
             <div>
               <span>PROVEN LIBRARY</span>
               <h2>
-                {query ? `Results for “${query}”` : "Best-performing hooks"}
+                {searchedQuery ? `Results for “${searchedQuery}”` : "Best-performing hooks"}
               </h2>
             </div>
             <b>{results.length}</b>
@@ -668,13 +707,14 @@ function HookLab() {
                 selected={selected.includes(item.id)}
                 onUse={useHook}
                 onToggleSave={toggleSave}
+                saving={savingSources.includes(item.id)}
               />
             ))
           ) : (
             <div className="hooks-empty">
-              <strong>No hooks matched this search.</strong>
+              <strong>{loading ? "Searching your hook library…" : error ? "Hook results could not be loaded." : "No hooks matched this search."}</strong>
               <span>
-                Try a shorter phrase or a broader description of the topic.
+                {loading ? "Matching words and context." : error ? "Search again to retry. Your drafts remain available." : "Try a shorter phrase or a broader description of the topic."}
               </span>
             </div>
           )}
@@ -744,14 +784,15 @@ function HookLab() {
                 <span>EDITABLE DRAFT</span>
                 <h2>Your hook</h2>
               </div>
-              {activeDraft && <em>Saved</em>}
+              {activeDraft && <em>{editor === savedDraftText ? "Saved" : "Unsaved changes"}</em>}
             </header>
             <textarea
               aria-label="Editable hook"
               value={editor}
               onChange={(event) => {
                 setEditor(event.target.value);
-                setActiveDraft(null);
+                editorRevision.current += 1;
+                setCopied(false);
               }}
               placeholder="Select a proven hook, choose a generated version, or write your own opening here."
             />
@@ -802,6 +843,7 @@ function HookLab() {
                   className={variant === editor ? "active" : ""}
                   key={`${variant}-${index}`}
                   onClick={() => {
+                    editorRevision.current += 1;
                     setEditor(variant);
                     setActiveDraft(null);
                   }}
@@ -817,7 +859,9 @@ function HookLab() {
             drafts={drafts}
             activeId={activeDraft}
             onOpen={(draft) => {
+              editorRevision.current += 1;
               setEditor(draft.text);
+              setSavedDraftText(draft.text);
               setQuery(draft.topic || "");
               setActiveDraft(draft.id);
               setSelected(draft.sourceHookIds || []);

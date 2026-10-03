@@ -60,7 +60,7 @@ a{color:inherit}
 
 /* --- Social Blade-style shell: account rail on the left --------------- */
 .tracker-shell{display:grid;grid-template-columns:290px minmax(0,1fr);gap:18px;align-items:start}
-@media (max-width:900px){.tracker-shell{grid-template-columns:1fr}}
+@media (max-width:900px){.tracker-shell{grid-template-columns:minmax(0,1fr)}}
 
 .tracker-sidebar{position:sticky;top:14px;max-height:calc(100vh - 28px);overflow-y:auto;
   padding:10px;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
@@ -440,7 +440,22 @@ const dt = s => s ? new Date(s).toLocaleString(undefined,{dateStyle:'medium',tim
 let SUMMARY = null;
 let DETAIL_CACHE = {};
 let CHARTS = [];
+let TRACKER_SESSION = 0, DETAIL_REQUEST = 0;
 function destroyCharts(){ CHARTS.forEach(c=>{try{c.destroy()}catch(e){}}); CHARTS=[]; }
+window.__resetToolSession = () => {
+  TRACKER_SESSION += 1;
+  DETAIL_REQUEST += 1;
+  SUMMARY = null;
+  DETAIL_CACHE = {};
+  REFRESH_READY_AT = 0;
+  REFRESH_UNLIMITED = false;
+  REFRESH_WINDOW_MS = 0;
+  destroyCharts();
+  $('#sidebar').textContent = '';
+  $('#app').innerHTML = '<div class="loading">Loading Tracker data…</div>';
+  $('#app').setAttribute('aria-busy', 'true');
+  window.__resetToolSettings?.();
+};
 
 Chart.defaults.color='#8a8a8a';
 Chart.defaults.font.family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,sans-serif";
@@ -485,13 +500,20 @@ async function shareLink(){
 }
 
 async function boot(){
-  $('#shareBtn').addEventListener('click', shareLink);
-  window.addEventListener('popstate', render);
+  const session = TRACKER_SESSION;
+  $('#shareBtn').onclick = shareLink;
+  window.onpopstate = render;
+  $('#app').setAttribute('aria-busy', 'true');
   try{
     await loadSummary();
+    if(session !== TRACKER_SESSION) return;
     render();
   }catch(e){
-    $('#app').innerHTML = '<div class="empty">Could not load the tracker.<br><small>'+escapeHtml(e.message || 'Connection failed.')+'</small></div>';
+    if(session !== TRACKER_SESSION) return;
+    $('#app').innerHTML = '<div class="empty" role="alert">Could not load the tracker.<br><small>'+escapeHtml(e.message || 'Connection failed.')+'</small><br><button class="linkbtn" id="retryTracker">Retry</button></div>';
+    $('#retryTracker').onclick = boot;
+  }finally{
+    if(session === TRACKER_SESSION) $('#app').setAttribute('aria-busy', 'false');
   }
 }
 
@@ -499,6 +521,7 @@ const trackerDelay = ms => new Promise(resolve => setTimeout(resolve, ms));
 const RETRYABLE_TRACKER_STATUS = new Set([502, 503, 504]);
 
 async function authedFetch(path){
+  const session = TRACKER_SESSION;
   let lastError = null;
   // A Render restart or an expired Firebase token should not strand one user
   // on a blank Tracker while everyone else is working. Refresh the token and
@@ -506,9 +529,11 @@ async function authedFetch(path){
   for(let attempt = 0; attempt < 3; attempt += 1){
     try{
       if(window.__refreshFirebaseIdToken) await window.__refreshFirebaseIdToken(attempt > 0);
+      if(session !== TRACKER_SESSION) throw Object.assign(new Error('Session changed.'), {final:true});
       const headers = window.__sentientRolePreviewHeaders ? window.__sentientRolePreviewHeaders() : {};
       if(window.__firebaseIdToken) headers.Authorization = 'Bearer '+window.__firebaseIdToken;
       const r = await fetch(API+path, {headers});
+      if(session !== TRACKER_SESSION) throw Object.assign(new Error('Session changed.'), {final:true});
       if(r.status===403){
         // A permission answer is not an expired session: never sign out.
         let detail = 'You do not have access to this Tracker action.';
@@ -532,7 +557,9 @@ async function authedFetch(path){
         }
         throw lastError;
       }
-      return r.json();
+      const data = await r.json();
+      if(session !== TRACKER_SESSION) throw Object.assign(new Error('Session changed.'), {final:true});
+      return data;
     }catch(error){
       lastError = error;
       if(error?.final) throw error;
@@ -562,9 +589,10 @@ async function authedPost(path){
   return r.json();
 }
 
-async function waitForTrackerRefresh(job){
+async function waitForTrackerRefresh(job, session = TRACKER_SESSION){
   if(!job?.job_id) return job;
   for(let attempt=0; attempt<300; attempt+=1){
+    if(session !== TRACKER_SESSION) throw new Error('Session changed.');
     const current = await authedFetch('/api/tracker/refresh-jobs/'+encodeURIComponent(job.job_id));
     if(current.status === 'done') return current.result || {};
     if(current.status === 'error') throw new Error(current.error || 'Tracker refresh failed.');
@@ -622,6 +650,7 @@ function refreshErrorMessage(error, fallback){
    refresh deliberately asks Instagram again and upserts today's one row, so
    the number visibly updates without creating duplicate same-day history. */
 async function refreshAccountNow(handle, btn){
+  const session = TRACKER_SESSION;
   // Spins just the &#8635; glyph, not the whole element -- the leaderboard's
   // button IS the glyph, but the detail page's button also has a "Refresh"
   // label next to it that shouldn't spin along with the icon.
@@ -630,8 +659,10 @@ async function refreshAccountNow(handle, btn){
   if(icon){ icon.classList.add('is-spinning'); }
   try{
     const job = await authedPost('/api/tracker/accounts/'+encodeURIComponent(handle)+'/refresh');
+    if(session !== TRACKER_SESSION) return;
     startRefreshCooldown();
-    const result = await waitForTrackerRefresh(job);
+    const result = await waitForTrackerRefresh(job, session);
+    if(session !== TRACKER_SESSION) return;
     const row = SUMMARY.accounts.find(r=>r.handle===handle);
     if(row){
       row.followers = result.followers ?? result.followers_count;
@@ -647,7 +678,7 @@ async function refreshAccountNow(handle, btn){
     delete DETAIL_CACHE[handle];
     render();
   }catch(e){
-    alert(refreshErrorMessage(e, 'Could not refresh @'+handle+': '));
+    if(session === TRACKER_SESSION) alert(refreshErrorMessage(e, 'Could not refresh @'+handle+': '));
   }finally{
     if(btn){ btn.disabled = false; delete btn.dataset.running; }
     if(icon){ icon.classList.remove('is-spinning'); }
@@ -656,16 +687,19 @@ async function refreshAccountNow(handle, btn){
 }
 
 async function refreshAllAccountsNow(btn){
+  const session = TRACKER_SESSION;
   if(btn){ btn.disabled = true; btn.dataset.running = '1'; btn.dataset.label = btn.textContent; btn.textContent = 'Refreshing all…'; }
   try{
     const job = await authedPost('/api/tracker/snapshot-now');
+    if(session !== TRACKER_SESSION) return;
     startRefreshCooldown();
-    await waitForTrackerRefresh(job);
+    await waitForTrackerRefresh(job, session);
+    if(session !== TRACKER_SESSION) return;
     DETAIL_CACHE = {};
     await loadSummary();
     render();
   }catch(e){
-    alert(refreshErrorMessage(e, 'Could not refresh accounts: '));
+    if(session === TRACKER_SESSION) alert(refreshErrorMessage(e, 'Could not refresh accounts: '));
   }finally{
     if(btn){ btn.disabled = false; delete btn.dataset.running; btn.textContent = btn.dataset.label || '↻ Refresh all'; }
     applyRefreshAllowance();
@@ -673,7 +707,9 @@ async function refreshAllAccountsNow(btn){
 }
 
 async function loadSummary(){
-  SUMMARY = await authedFetch('/api/tracker/summary');
+  const session = TRACKER_SESSION;
+  const summary = await authedFetch('/api/tracker/summary');
+  if(session === TRACKER_SESSION) SUMMARY = summary;
 }
 
 /* ---------------- Favourites + sidebar ----------------
@@ -812,6 +848,8 @@ function renderSidebar(){
 }
 
 function render(){
+  if(!SUMMARY) return;
+  DETAIL_REQUEST += 1;
   const acc = readAcc();
   renderSidebar();
   if(acc) renderDetail(acc);
@@ -1079,19 +1117,24 @@ function renderHistoricalStats(dayRows){
 
 /* ---------------- Account detail ---------------- */
 async function renderDetail(handle){
+  const request = ++DETAIL_REQUEST, session = TRACKER_SESSION;
+  const current = () => session === TRACKER_SESSION && request === DETAIL_REQUEST && readAcc() === handle;
   destroyCharts();
   $('#app').innerHTML = '<div class="loading">Loading @'+escapeHtml(handle)+'…</div>';
   let detail;
   try{
     detail = DETAIL_CACHE[handle] || await authedFetch('/api/tracker/accounts/'+encodeURIComponent(handle));
+    if(!current()) return;
     DETAIL_CACHE[handle] = detail;
   }catch(e){
-    $('#app').innerHTML = '<div class="empty">Could not load @'+escapeHtml(handle)+'.<br><small>'+escapeHtml(e.message || 'Connection failed.')+'</small></div>';
+    if(!current()) return;
+    $('#app').innerHTML = '<div class="empty" role="alert">Could not load @'+escapeHtml(handle)+'.<br><small>'+escapeHtml(e.message || 'Connection failed.')+'</small><br><button class="linkbtn" id="retryTrackerDetail">Retry</button></div>';
+    $('#retryTrackerDetail').onclick = () => renderDetail(handle);
     return;
   }
 
   const row = SUMMARY.accounts.find(r=>r.handle===handle) || {};
-  const hist = detail.followers_history;
+  const hist = Array.isArray(detail.followers_history) ? detail.followers_history : [];
   const first = hist[0], last = hist[hist.length-1];
   const totalGrowth = (first && last && first.followers!=null && last.followers!=null) ? last.followers-first.followers : null;
   // One point per day, not one per snapshot -- see collapseToLastPerDay's
@@ -1113,7 +1156,7 @@ async function renderDetail(handle){
           ${row.rank_by_followers ? ' <span>rank #'+row.rank_by_followers+' by followers</span>' : ''}
         </div>
       </div>
-      <button type="button" class="linkbtn refresh-btn" id="detailRefreshBtn" title="Refresh @${handle}&#39;s real follower count now"><span class="refresh-icon">&#8635;</span> Refresh</button>
+      <button type="button" class="linkbtn refresh-btn" id="detailRefreshBtn" title="Refresh @${escapeAttribute(handle)}&#39;s real follower count now"><span class="refresh-icon">&#8635;</span> Refresh</button>
     </div>
 
     <div class="kpis">
@@ -1164,7 +1207,7 @@ async function renderDetail(handle){
     $('#cFollowers').parentElement.innerHTML = '<div class="empty">No snapshots yet.</div>';
   }
 
-  const eng = detail.engagement_weekly;
+  const eng = Array.isArray(detail.engagement_weekly) ? detail.engagement_weekly : [];
   if(eng.length){
     CHARTS.push(new Chart($('#cEngagement'),{type:'bar',
       data:{labels:eng.map(w=>w.week_start),
@@ -1260,6 +1303,7 @@ const gate = document.getElementById('authGate');
 const gateText = document.getElementById('authGateText');
 const gateBtn = document.getElementById('authGateBtn');
 let booted = false;
+let sessionUid = null, authTurn = 0;
 
 window.__onInsightsUnauthorized = () => {
   gateText.textContent = (auth.currentUser?.email || 'This Google account') + ' isn’t authorized for sentientdash.app.';
@@ -1291,18 +1335,32 @@ async function runSignIn() {
 }
 
 onAuthStateChanged(auth, async (user) => {
-  if (!user) {
+  const turn = ++authTurn;
+  const uid = user?.uid || '';
+  if(uid !== sessionUid){
+    sessionUid = uid;
     booted = false;
+    window.__firebaseIdToken = '';
+    window.__signedInEmail = '';
+    window.__refreshFirebaseIdToken = undefined;
+    window.__resetToolSession?.();
+    window.dispatchEvent(new CustomEvent('sentient-auth-changed'));
+  }
+  if (!user) {
     showSignInGate();
     return;
   }
   window.__refreshFirebaseIdToken = async (forceRefresh = false) => {
-    const token = await auth.currentUser?.getIdToken(forceRefresh);
+    const token = await user.getIdToken(forceRefresh);
+    if(auth.currentUser?.uid !== uid) return '';
     if (token) window.__firebaseIdToken = token;
     return token || '';
   };
-  await window.__refreshFirebaseIdToken();
+  try{ await window.__refreshFirebaseIdToken(); }
+  catch(error){ if(turn === authTurn){ showSignInGate(); gateText.textContent = describeSignInError(error); } return; }
+  if(turn !== authTurn || auth.currentUser?.uid !== uid) return;
   window.__signedInEmail = user.email || '';
+  window.dispatchEvent(new CustomEvent('sentient-auth-changed'));
   window.SentientPreferences?.load({ email: user.email || '' });
   if (typeof loadRefreshAllowance === 'function') loadRefreshAllowance();
   setSettingsAvatar(user);
@@ -1467,7 +1525,7 @@ window.addEventListener('sentient-preferences', (event) => {
   if (preferences.theme === 'dark' || preferences.theme === 'light') setTheme(preferences.theme);
   if (preferences.language === 'en' || preferences.language === 'es') setLang(preferences.language);
   if (preferences.accent) setAccent(preferences.accent);
-  if (Array.isArray(preferences.trackerFavorites) && typeof renderSidebar === 'function') { try { renderSidebar(); renderLeaderboard(); } catch { /* data not loaded yet */ } }
+  if (Array.isArray(preferences.trackerFavorites) && typeof render === 'function') { try { render(); } catch { /* data not loaded yet */ } }
 });
 
 const settingsMenu = document.getElementById('settingsMenu');
@@ -1491,16 +1549,26 @@ function closeSettings() {
   settingsTrigger.setAttribute('aria-expanded', 'false');
 }
 let adminChecked = false;
+window.__resetToolSettings = () => {
+  adminChecked = false;
+  document.getElementById('settingsAdmin').classList.remove('is-visible');
+  document.getElementById('settingsEmail').textContent = '';
+  closeSettings();
+  setSettingsAvatar(null);
+};
 function checkAdminForSettings() {
   // Deferred until the panel is actually opened (rather than on page load)
   // so this never races the sign-in flow and fires __onInsightsUnauthorized
   // before Firebase has produced a token.
   if (adminChecked || !window.__firebaseIdToken) return;
+  const session = TRACKER_SESSION;
   adminChecked = true;
   authedFetch('/api/dashboard/me').then((me) => {
-    const isAdmin = Boolean(me && (me.is_admin || me.is_dev || (Array.isArray(me.operating_roles) && me.operating_roles.includes('admin')) || me.operating_role === 'admin'));
+    if(session !== TRACKER_SESSION) return;
+    const preview = sessionStorage.getItem('sentient.queueRolePreview');
+    const isAdmin = ['sales','pd','vc','trainee','admin'].includes(preview) ? preview === 'admin' : Boolean(me && (me.is_admin || me.is_dev || (Array.isArray(me.operating_roles) && me.operating_roles.includes('admin')) || me.operating_role === 'admin'));
     document.getElementById('settingsAdmin').classList.toggle('is-visible', isAdmin);
-  }).catch(() => { adminChecked = false; });
+  }).catch(() => { if(session === TRACKER_SESSION) adminChecked = false; });
 }
 function openSettings() {
   document.getElementById('settingsEmail').textContent = window.__signedInEmail || '';
@@ -1523,13 +1591,6 @@ document.getElementById('settingsSignOut').addEventListener('click', () => {
   closeSettings();
   window.__signOut && window.__signOut();
 });
-
-// Admin-only "Open full settings" link -- best-effort: if the check fails
-// (offline, not booted yet) the section just stays hidden.
-authedFetch('/api/dashboard/me').then((me) => {
-  const isAdmin = Boolean(me && (me.is_admin || me.is_dev || (Array.isArray(me.operating_roles) && me.operating_roles.includes('admin')) || me.operating_role === 'admin'));
-  document.getElementById('settingsAdmin').classList.toggle('is-visible', isAdmin);
-}).catch(() => {});
 
 </script>
 <script type="module" src="/product-static.js?v=20260928-tracker"></script>

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { mountApp } from './mountApp';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { apiFetch, API_BASE } from './api';
@@ -6,108 +6,282 @@ import { firebaseAuth, startGoogleSignIn, describeSignInError } from './firebase
 import { clearSsoCookie, startSsoRefresh, trySsoSignIn } from './sso';
 import ProductHeader from './ProductHeader';
 import TopicStack from './TopicStack';
+import PromoReviewDialog from './PromoReviewDialog';
 import { SettingsMenu } from './App';
 import { PrefsProvider } from './prefsContext';
+import { CLASSIFICATION_LABELS, promoKey, safeExternalUrl, selectPromos, groupPromos } from './promosIntelligence';
 import './styles.css';
 import './promos.css';
 
-const EMPTY = { items: [], next_cursor: null };
-
-function Login({ error }) {
-  const [busy, setBusy] = useState(false);
-  async function login() { setBusy(true); try { const issue = await startGoogleSignIn(); if (issue) window.alert(describeSignInError(issue)); } finally { setBusy(false); } }
-  return <main className="promo-auth"><section><span className="promo-kicker">Sentient Dash · hidden tool</span><h1>Promos</h1><p>Sign in with an authorized Sentient account to review competitor promotion signals.</p><button className="promo-primary" onClick={login} disabled={busy}>{busy ? 'Signing in…' : 'Sign in with Google'}</button>{error && <p className="promo-error">{error}</p>}</section></main>;
+const EMPTY = { items: [], next_cursor: null, hasTail: false };
+const INITIAL_FILTERS = { search: '', classification: '', review: 'new', focus: 'all', sort: 'priority', account: '' };
+const ROOT = '/api/admin/promos';
+const detailPath = item => `${ROOT}/${encodeURIComponent(item.account)}/${encodeURIComponent(item.shortcode)}`;
+const isRunning = job => job && ['starting', 'queued', 'running', 'reconnecting'].includes(job.status);
+const jobStorageKey = user => `sentient.promos.job:${user.uid || user.email}`;
+function restoreJob(user) {
+  if (!user) return null;
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(jobStorageKey(user)) || 'null');
+    return saved && typeof saved.id === 'string' && ['rules', 'jev'].includes(saved.kind) ? { ...saved, status: 'queued', error: '' } : null;
+  } catch { return null; }
 }
 
-function Badge({ value }) { return <span className={`promo-badge ${value}`}>{value === 'disclosed' ? 'Disclosed promotion' : value === 'likely' ? 'Likely promotion' : 'Needs review'}</span>; }
+async function request(path, { signal, timeout = 45000, ...options } = {}) {
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  if (signal?.aborted) controller.abort();
+  signal?.addEventListener('abort', abort, { once: true });
+  const timer = setTimeout(abort, timeout);
+  try {
+    const response = await apiFetch(`${API_BASE}${path}`, { ...options, signal: controller.signal });
+    let body;
+    try { body = await response.json(); } catch (error) { throw new Error(`Promos returned an unreadable response (${response.status}). Please retry.`, { cause: error }); }
+    if (!response.ok) {
+      const detail = typeof body.detail === 'string' ? body.detail : body.detail?.message;
+      throw new Error(detail || (response.status === 403 ? 'Your account does not have Promos access.' : `Promos request failed (${response.status}).`));
+    }
+    return body;
+  } catch (error) {
+    if (controller.signal.aborted && !signal?.aborted) throw new Error('The request timed out. Refresh before retrying an action; it may have completed.', { cause: error });
+    throw error;
+  } finally { clearTimeout(timer); signal?.removeEventListener('abort', abort); }
+}
+const jsonOptions = (method, payload) => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+function dateLabel(value) {
+  const date = new Date(value || '');
+  return Number.isNaN(date.getTime()) ? 'Date unavailable' : date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
 
-function formatPromoDate(value) {
-  if (!value) return 'Date unavailable';
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? 'Date unavailable' : new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(date);
+function Login() {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  async function login() {
+    setBusy(true); setError('');
+    try { const issue = await startGoogleSignIn(); if (issue) setError(describeSignInError(issue)); }
+    catch (issue) { setError(describeSignInError(issue)); }
+    finally { setBusy(false); }
+  }
+  return <main className="promo-auth"><section><span className="promo-kicker">Sentient Dash</span><h1>Promos</h1><p>Review promotion signals, check the evidence, and improve detection together.</p><button className="promo-primary" onClick={login} disabled={busy}>{busy ? 'Signing in…' : 'Sign in with Google'}</button>{error && <p className="promo-error" role="alert">{error}</p>}</section></main>;
 }
 
 function PromoCover({ item }) {
-  const primary = item.cover_url ? (item.cover_url.startsWith('http') ? item.cover_url : `${API_BASE}${item.cover_url}`) : item.cover_source_url;
-  const fallback = item.cover_url && item.cover_source_url && item.cover_source_url !== primary ? item.cover_source_url : null;
+  const primary = safeExternalUrl(item.cover_url?.startsWith('/') ? `${API_BASE}${item.cover_url}` : item.cover_url) || safeExternalUrl(item.cover_source_url);
+  const fallback = safeExternalUrl(item.cover_source_url);
   const [source, setSource] = useState(primary);
-  const [failed, setFailed] = useState(false);
-  if (!source || failed) return <span>◎</span>;
-  return <img src={source} alt="" loading="lazy" decoding="async" onError={() => { if (fallback && source !== fallback) setSource(fallback); else setFailed(true); }} />;
+  useEffect(() => setSource(primary), [primary]);
+  return source ? <img src={source} alt="" loading="lazy" decoding="async" onError={() => setSource(source !== fallback ? fallback : '')} /> : <span aria-hidden="true">◎</span>;
 }
 
-function Card({ item, onSelect }) {
-  const evidence = item.evidence?.[0]?.text || item.signals?.join(' · ') || 'No evidence excerpt';
+function PromoCard({ item, onSelect }) {
+  const evidence = item.evidence?.[0]?.text || item.jev_review?.contextExcerpt || 'No evidence excerpt';
   const client = item.client || 'Unknown client';
-  return <article className="promo-card" onClick={() => onSelect(item)}>
+  return <article className="promo-card" data-promo-key={promoKey(item)} role="button" tabIndex={0} aria-label={`Review ${item.client || 'unknown brand'} on @${item.account}`} onClick={() => onSelect(item)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onSelect(item); } }}>
     <div className="promo-cover"><PromoCover item={item} /></div>
     <div className="promo-card-body"><div className="promo-card-top"><Badge value={item.classification} /><span className="promo-review">{item.classification_source === 'jev_semantic_scan' ? 'JEV candidate' : item.jev_review ? 'JEV checked' : item.review_status}</span></div>
-      <h2 className="promo-opportunity-title"><strong>{client}</strong> <span>is posting on</span> <em>@{item.account}</em></h2><p className="promo-date">{formatPromoDate(item.published_at || item.first_detected_at)}</p>{item.stack_size > 1 && <p className="promo-stack-context">Promo cluster · {item.stack_size} related posts</p>}<p className="promo-product"><span>Product</span> {item.product || 'Not specified'}</p>
-      <dl><div><dt>Signal</dt><dd>{item.classification === 'disclosed' ? 'Disclosed promotion' : item.classification === 'likely' ? 'Likely promotion' : 'Needs review'}</dd></div><div><dt>Detected</dt><dd>{formatPromoDate(item.first_detected_at)}</dd></div></dl>
+      <h2 className="promo-opportunity-title"><strong>{client}</strong> <span>on</span> <em>@{item.account}</em></h2><p className="promo-date">{dateLabel(item.published_at || item.first_detected_at)}</p>{item.stack_size > 1 && <p className="promo-stack-context">Topic stack · {item.stack_size} related posts</p>}<p className="promo-product"><span>Product</span> {item.product || 'Not specified'}</p>
+      <dl><div><dt>Signal</dt><dd>{CLASSIFICATION_LABELS[item.classification] || 'Needs review'}</dd></div><div><dt>Detected</dt><dd>{dateLabel(item.first_detected_at)}</dd></div></dl>
       <p className="promo-evidence">“{evidence}”</p><div className="promo-card-foot">{item.cta?.keyword ? `Keyword: ${item.cta.keyword}` : item.promo_code ? `Code: ${item.promo_code}` : item.links?.length ? 'Commercial link found' : 'Open details'}<span>↗</span></div>
     </div></article>;
 }
 
-function Detail({ item, onClose, onUpdate }) {
-  const [saving, setSaving] = useState(false);
-  const [jevBusy, setJevBusy] = useState(false);
-  const [jevError, setJevError] = useState('');
-  async function update(payload) { setSaving(true); try { const response = await apiFetch(`${API_BASE}/api/admin/promos/${encodeURIComponent(item.account)}/${encodeURIComponent(item.shortcode)}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); if (response.ok) onUpdate(await response.json()); } finally { setSaving(false); } }
-  async function reviewWithJev() {
-    setJevBusy(true); setJevError('');
-    try {
-      const response = await apiFetch(`${API_BASE}/api/admin/promos/${encodeURIComponent(item.account)}/${encodeURIComponent(item.shortcode)}/jev-review`, { method: 'POST' });
-      if (!response.ok) { let detail = ''; try { const body = await response.json(); detail = body.detail?.message || body.detail || ''; } catch {} throw new Error(detail || `JEV review failed (${response.status}).`); }
-      onUpdate(await response.json());
-    } catch (error) { setJevError(error.message || 'JEV review failed.'); }
-    finally { setJevBusy(false); }
-  }
-  const relationshipLabels = { paid_sponsorship: 'Sponsored or paid-placement language', affiliate_offer: 'Affiliate or referral offer', gifted_or_brand_relationship: 'Gifted product or brand relationship', own_product_or_service: 'Own product or service', organic_recommendation: 'Organic recommendation', editorial_mention: 'Editorial mention without an offer', unclear: 'Unclear relationship' };
-  const jev = item.jev_review;
-  return <div className="promo-modal" role="dialog" aria-modal="true"><div className="promo-dialog"><button className="promo-close" onClick={onClose}>×</button><Badge value={item.classification} /><h2 className="promo-opportunity-title"><strong>{item.client || 'Unknown client'}</strong> <span>is posting on</span> <em>@{item.account}</em></h2><p className="promo-date">{formatPromoDate(item.published_at)}</p>{item.stack_size > 1 && <p className="promo-stack-context">Promo cluster · {item.stack_size} related posts in the same stack</p>}<p className="promo-product"><span>Product</span> {item.product || 'Not specified'}</p><div className="promo-by">@{item.account} · {item.account_group_label || item.account_group || 'Competitor account'} · {item.published_at ? new Date(item.published_at).toLocaleString() : 'date unavailable'}</div><div className="promo-caption">{item.caption || 'Caption unavailable.'}</div><div className="promo-evidence-list">{(item.evidence || []).map((e, index) => <div key={`${e.rule}-${index}`}><strong>{e.rule}</strong><span>{e.text}</span></div>)}</div><section className="promo-jev" aria-live="polite"><div><strong>{jev?.source === 'jev_semantic_scan' ? 'JEV discovery result' : 'JEV semantic check'}</strong><span>Checks the caption and stored post context. It does not prove payment or change a rules-based label.</span></div><button disabled={jevBusy} onClick={reviewWithJev}>{jevBusy ? 'Reviewing with JEV…' : jev ? 'Run JEV again' : 'Review with JEV'}</button>{jevError && <p className="promo-error" role="alert">{jevError}</p>}{jev && <div className={`promo-jev-result ${jev.recommendation}`}><strong>{jev.recommendation === 'possible_missed_promotion' ? 'Possible missed promotion' : jev.recommendation === 'conflicting_evidence' ? 'Mixed semantic signal' : jev.recommendation === 'human_review' ? 'Needs a closer look' : jev.recommendation === 'no_promotion_signal' ? 'No promo signal found' : 'Assessment saved'} · {Math.round((jev.semanticPromo || 0) * 100)}% JEV support</strong><span>Relationship reading: {relationshipLabels[jev.commercialRelationship] || 'Unclear relationship'}</span><span>{jev.guidance}</span>{jev.contextExcerpt && <blockquote><strong>JEV reviewed: {jev.contextSource || "stored post text"}</strong><br />“{jev.contextExcerpt}”</blockquote>}<small>JEV is assessing commercial intent in the available text; it cannot verify payment. Compare its result with the original post and visible rule evidence.</small></div>}</section>{item.cta?.keyword && <p><strong>Automation keyword:</strong> {item.cta.keyword}</p>}{item.links?.map(link => <a key={link.url} href={link.url} target="_blank" rel="noreferrer">{link.url}</a>)}<div className="promo-actions"><button disabled={saving} onClick={() => update({ review_status: 'reviewed' })}>Mark reviewed</button><button disabled={saving} onClick={() => update({ review_status: 'dismissed' })}>Dismiss</button><a className="promo-primary" href={item.permalink} target="_blank" rel="noreferrer">Open post</a></div></div></div>;
-}
-
-function promoGroups(items) {
-  const groups = new Map();
-  items.forEach(item => {
-    const isStack = Boolean(item.stack_id && item.stack_size > 1);
-    const key = isStack ? `stack:${item.stack_id}` : `post:${item.account}:${item.shortcode}`;
-    if (!groups.has(key)) groups.set(key, { key, isStack, stackSize: isStack ? item.stack_size : 1, items: [] });
-    groups.get(key).items.push(item);
-  });
-  return [...groups.values()].sort((a, b) => String(b.items[0]?.first_detected_at || '').localeCompare(String(a.items[0]?.first_detected_at || '')));
-}
+function Badge({ value }) { return <span className={`promo-badge ${value}`}>{CLASSIFICATION_LABELS[value] || 'Needs review'}</span>; }
 
 function PromoResults({ items, onSelect }) {
-  const groups = promoGroups(items);
-  return <section className="promo-grid promo-grid-stacks">
+  const groups = groupPromos(items);
+  return <section className="promo-grid promo-grid-stacks" aria-label="Promotion review results">
     {groups.map(group => {
       const posts = group.items.map(item => ({ ...item, postDate: item.published_at || item.first_detected_at, publishedAt: item.published_at || item.first_detected_at, timestamp: Date.parse(item.published_at || item.first_detected_at || '') || 0 }));
-      if (group.isStack && posts.length > 1) return <div className="promo-result-stack" key={group.key}><TopicStack posts={posts} visiblePosts={posts} total={posts.length} renderCard={post => <Card item={post} onSelect={onSelect} />} /></div>;
-      return <div className="promo-result-single" key={group.key}><Card item={posts[0]} onSelect={onSelect} />{group.isStack && <p className="promo-stack-context">Stack · {group.stackSize} related posts</p>}</div>;
+      return <div className={posts.length > 1 ? 'promo-result-stack' : 'promo-result-single'} key={group.key}>
+        {posts.length > 1 ? <TopicStack posts={posts} visiblePosts={posts} total={posts.length} renderLayer={() => <div className="promo-stack-layer" />} renderCard={post => <PromoCard item={post} onSelect={onSelect} />} /> : <PromoCard item={posts[0]} onSelect={onSelect} />}
+        {posts.length > 1 && <p className="promo-stack-context">{group.kind === 'brand' ? group.label : 'Same topic'} · {posts.length} loaded posts</p>}
+      </div>;
     })}
   </section>;
 }
 
+function DetectionTools({ job, onStart, onReconnect }) {
+  const [limit, setLimit] = useState('500');
+  const running = isRunning(job);
+  return <details className="promo-detection-tools"><summary>Detection tools <span>Scan stored posts and find missed signals</span></summary><div className="promo-detection-body"><p>Rule scans analyze the last 30 days of stored competitor posts. JEV discovery checks stored candidates using AI. Existing human corrections are kept.</p><label>Maximum posts <select value={limit} onChange={e => setLimit(e.target.value)} disabled={running}><option value="100">100 posts</option><option value="500">500 posts</option><option value="2000">2,000 posts</option></select></label><div className="promo-tool-actions"><button disabled={running} onClick={() => onStart('rules', Number(limit))}>Scan with rules</button><button disabled={running} onClick={() => onStart('jev', Number(limit))}>Find missed promos with JEV</button></div></div>{job && <div className="promo-job" role="status"><strong>{job.kind === 'jev' ? 'JEV discovery' : 'Rule scan'} · {job.status === 'done' ? 'Complete' : job.status === 'failed' ? 'Failed' : job.status === 'reconnecting' ? 'Status unavailable' : 'In progress'}</strong><span>{job.error || `${job.processed || 0}${job.total ? ` / ${job.total}` : ''} posts checked${job.found != null ? ` · ${job.found} candidates found` : ''}`}</span>{job.status === 'reconnecting' && <button onClick={onReconnect}>Reconnect to this scan</button>}</div>}</details>;
+}
+
 function PromosApp() {
-  const [user, setUser] = useState(undefined); const [viewer, setViewer] = useState(null); const [authError, setAuthError] = useState(''); const [data, setData] = useState(EMPTY); const dataRef = useRef(data); const [selected, setSelected] = useState(null); const [filters, setFilters] = useState({ search: '', classification: '', review: 'new' }); const [loading, setLoading] = useState(false); const [loadingMore, setLoadingMore] = useState(false); const [scanBusy, setScanBusy] = useState(false); const [error, setError] = useState(''); const [jobNotice, setJobNotice] = useState('');
-  useEffect(() => { dataRef.current = data; }, [data]);
-  useEffect(() => { trySsoSignIn().catch(() => {}); return onAuthStateChanged(firebaseAuth, value => { setUser(value || null); setViewer(null); }); }, []);
+  const [user, setUser] = useState(undefined);
+  const [viewer, setViewer] = useState(null);
+  const [accessError, setAccessError] = useState('');
+  const [accessAttempt, setAccessAttempt] = useState(0);
+  const [data, setData] = useState(EMPTY);
+  const dataRef = useRef(EMPTY);
+  const [filters, setFilters] = useState(INITIAL_FILTERS);
+  const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [selected, setSelected] = useState(null);
+  const [opening, setOpening] = useState(false);
+  const [job, setJob] = useState(null);
+  const [pollAttempt, setPollAttempt] = useState(0);
+  const listRequest = useRef(null);
+  const detailRequest = useRef(null);
+  const session = useRef(0);
+  const jobStarting = useRef(false);
+  const mutationBusy = useRef(false);
+  const updateData = useCallback(next => { dataRef.current = typeof next === 'function' ? next(dataRef.current) : next; setData(dataRef.current); }, []);
+
+  useEffect(() => {
+    trySsoSignIn().catch(() => {});
+    return onAuthStateChanged(firebaseAuth, value => {
+      session.current += 1; listRequest.current?.abort(); detailRequest.current?.abort();
+      setUser(value || null); setViewer(null); setAccessError(''); updateData(EMPTY); setSelected(null); setJob(restoreJob(value)); setNotice(''); setError(''); setOpening(false); jobStarting.current = false; mutationBusy.current = false;
+    });
+  }, []);
   useEffect(() => user ? startSsoRefresh() : undefined, [user]);
-  useEffect(() => { if (!user) return undefined; let active = true; apiFetch(`${API_BASE}/api/dashboard/me`).then(async response => { if (!response.ok) throw new Error('Unable to verify account access.'); return response.json(); }).then(next => { if (active) setViewer(next); }).catch(() => { if (active) setViewer({}); }); return () => { active = false; }; }, [user]);
-  const load = useCallback(async ({ cursor = null, append = false, preserveTail = false } = {}) => { if (!user) return; if (append) setLoadingMore(true); else setLoading(true); setError(''); try { const params = new URLSearchParams({ limit: '100' }); if (cursor) params.set('cursor', cursor); if (filters.classification) params.set('classification', filters.classification); if (filters.review) params.set('review', filters.review); const response = await apiFetch(`${API_BASE}/api/admin/promos?${params}`); if (!response.ok) throw new Error(response.status === 403 ? 'Your account does not have Promos access.' : `Unable to load Promos (${response.status}).`); const page = await response.json(); setData(current => { if (!append && !preserveTail) return page; const merged = new Map(current.items.map(item => [`${item.account}:${item.shortcode}`, item])); for (const item of page.items) merged.set(`${item.account}:${item.shortcode}`, item); return { items: [...merged.values()], next_cursor: page.next_cursor || (preserveTail ? current.next_cursor : null) }; }); } catch (e) { setError(e.message); } finally { setLoading(false); setLoadingMore(false); } }, [user, filters.classification, filters.review]);
-  useEffect(() => { load(); const timer = document.visibilityState === 'visible' ? setInterval(() => load({ preserveTail: true }), 45000) : null; return () => timer && clearInterval(timer); }, [load]);
-  async function openDetail(item) { try { const response = await apiFetch(`${API_BASE}/api/admin/promos/${encodeURIComponent(item.account)}/${encodeURIComponent(item.shortcode)}`); if (!response.ok) throw new Error(`Unable to load opportunity (${response.status}).`); setSelected(await response.json()); } catch (e) { setError(e.message); } }
-  async function scanStoredPosts() { setJobNotice('Starting stored-post scan…'); try { const from = new Date(Date.now() - 30 * 86400000).toISOString(); const response = await apiFetch(`${API_BASE}/api/admin/promos/backfill`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ from_date: from, limit: 2000 }) }); if (!response.ok) throw new Error(`Unable to start scan (${response.status}).`); const { job_id: jobId } = await response.json(); setJobNotice('Scanning stored competitor posts…'); const poll = async () => { const statusResponse = await apiFetch(`${API_BASE}/api/admin/promos/jobs/${jobId}`); if (!statusResponse.ok) throw new Error(`Unable to read scan status (${statusResponse.status}).`); const status = await statusResponse.json(); if (status.status === 'done') { setJobNotice(`Stored-post scan complete · ${status.processed} posts analyzed.`); await load(); return; } if (status.status === 'failed') throw new Error(status.error || 'Stored-post scan failed.'); setJobNotice(`Scanning stored competitor posts · ${status.processed || 0}/${status.total || '…'}`); window.setTimeout(poll, 1500); }; await poll(); } catch (e) { setJobNotice(''); setError(e.message); } }
-  async function discoverPromosWithJev() { setScanBusy(true); setError(''); setJobNotice('Queueing JEV discovery across stored competitor posts…'); try { const response = await apiFetch(`${API_BASE}/api/admin/promos/jev-scan`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ limit: 2000 }) }); if (!response.ok) throw new Error(`Unable to start JEV discovery (${response.status}).`); const { job_id: jobId } = await response.json(); const poll = async () => { const statusResponse = await apiFetch(`${API_BASE}/api/admin/promos/jobs/${jobId}`); if (!statusResponse.ok) throw new Error(`Unable to read JEV scan status (${statusResponse.status}).`); const status = await statusResponse.json(); if (status.status === 'done') { setJobNotice(`JEV checked ${status.processed} posts · ${status.found || 0} candidates for human review.`); await load(); return; } if (status.status === 'failed') throw new Error(status.error || 'JEV discovery failed.'); setJobNotice(`JEV checking stored posts · ${status.processed || 0}/${status.total || '…'} checked · ${status.found || 0} candidates so far`); window.setTimeout(poll, 2000); }; await poll(); } catch (e) { setJobNotice(''); setError(e.message); } finally { setScanBusy(false); } }
-  function handleUpdated(next) { setSelected(next.review_status === 'dismissed' || (filters.review && next.review_status !== filters.review) ? null : next); setData(current => ({ ...current, items: current.items.filter(item => item.account !== next.account || item.shortcode !== next.shortcode || !filters.review || filters.review === next.review_status).map(item => item.account === next.account && item.shortcode === next.shortcode ? next : item) })); }
-  const items = useMemo(() => data.items.filter(item => !filters.search || `${item.client || ''} ${item.product || ''} ${item.account} ${item.caption || ''}`.toLowerCase().includes(filters.search.toLowerCase())), [data.items, filters.search]);
-  if (user === undefined) return <main className="promo-loading">Loading Promos…</main>; if (!user) return <Login error={authError} />;
-  const handleSignOut = () => { clearSsoCookie(); signOut(firebaseAuth); };
-  // Every authenticated teammate can use Promos. Coordinator remains limited
-  // to the separate Insights/Queue controls in the shared header.
-  const isCoordinator = Boolean(viewer?.is_admin || viewer?.isAdmin || viewer?.is_dev || viewer?.isDev || viewer?.operating_roles?.includes('vc'));
-  return <main className="promo-shell"><ProductHeader current="promos" coordinator={isCoordinator} account={<SettingsMenu email={user.email} avatarUrl={user.photoURL || viewer?.avatar_url || viewer?.avatarUrl} isAdmin={Boolean(viewer?.is_admin || viewer?.isAdmin)} isDev={Boolean(viewer?.is_dev || viewer?.isDev)} onSignOut={handleSignOut} />}><h1>Promos</h1><span className="promo-header-subtitle">Paid partnership and promotion signals</span><button className="promo-jev-scan" disabled={scanBusy} onClick={discoverPromosWithJev}>{scanBusy ? 'JEV scan running…' : 'Find missed promos with JEV'}</button><button className="promo-scan" onClick={scanStoredPosts}>Scan stored posts</button></ProductHeader>{jobNotice && <div className="promo-job">{jobNotice}</div>}<section className="promo-toolbar"><input placeholder="Search client, product, page…" value={filters.search} onChange={e => setFilters({ ...filters, search: e.target.value })} /><select value={filters.classification} onChange={e => setFilters({ ...filters, classification: e.target.value })}><option value="">All signals</option><option value="disclosed">Disclosed</option><option value="likely">Likely</option><option value="needs_review">Needs review</option></select><select value={filters.review} onChange={e => setFilters({ ...filters, review: e.target.value })}><option value="">All reviews</option><option value="new">New</option><option value="reviewed">Reviewed</option><option value="dismissed">Dismissed</option></select><span className="promo-count">{items.length} loaded opportunities</span></section>{error && <div className="promo-alert">{error}<button onClick={() => load()}>Retry</button></div>}{loading && !data.items.length ? <div className="promo-empty">Loading opportunity signals…</div> : items.length ? <PromoResults items={items} onSelect={openDetail} /> : <div className="promo-empty"><strong>No promotion signals yet.</strong><span>New competitor posts will appear here after ingestion and analysis.</span></div>}{data.next_cursor && <button className="promo-load-more" disabled={loadingMore} onClick={() => load({ cursor: dataRef.current.next_cursor, append: true })}>{loadingMore ? 'Loading more…' : `Load more opportunities (${data.items.length} shown)`}</button>}{selected && <Detail item={selected} onClose={() => setSelected(null)} onUpdate={handleUpdated} />}</main>;
+  useEffect(() => {
+    if (!user) return;
+    const controller = new AbortController(); setAccessError('');
+    request('/api/dashboard/me', { signal: controller.signal }).then(setViewer).catch(issue => { if (!controller.signal.aborted) setAccessError(issue.message); });
+    return () => controller.abort();
+  }, [user, accessAttempt]);
+
+  const load = useCallback(async ({ append = false, refresh = false } = {}) => {
+    if (!user || !viewer || mutationBusy.current) return;
+    // Background refresh cannot cancel a page the reviewer explicitly requested.
+    if (refresh && listRequest.current) return;
+    listRequest.current?.abort();
+    const controller = new AbortController(); listRequest.current = controller;
+    append ? setLoadingMore(true) : setLoading(true); setError('');
+    const cursor = append ? dataRef.current.next_cursor : null;
+    try {
+      const params = new URLSearchParams({ limit: '100' });
+      if (cursor) params.set('cursor', cursor);
+      if (filters.classification) params.set('classification', filters.classification);
+      if (filters.review) params.set('review', filters.review);
+      const page = await request(`${ROOT}?${params}`, { signal: controller.signal });
+      if (controller.signal.aborted) return;
+      if (!Array.isArray(page.items)) throw new Error('Promos returned an invalid list. Please retry.');
+      updateData(current => {
+        const previousKeys = new Set(current.items.map(promoKey));
+        const disconnectedHead = refresh && page.items.length >= 100 && !page.items.some(item => previousKeys.has(promoKey(item)));
+        if (!append && (!refresh || !current.hasTail || disconnectedHead)) return { items: page.items, next_cursor: page.next_cursor || null, hasTail: false };
+        const merged = new Map(current.items.map(item => [promoKey(item), item]));
+        page.items.forEach(item => merged.set(promoKey(item), item));
+        return { items: [...merged.values()], next_cursor: refresh ? current.next_cursor : page.next_cursor || null, hasTail: append || current.hasTail };
+      });
+    } catch (issue) { if (!controller.signal.aborted) setError(issue.message); }
+    finally { if (listRequest.current === controller) { listRequest.current = null; setLoading(false); setLoadingMore(false); } }
+  }, [user, viewer, filters.classification, filters.review]);
+  const currentLoad = useRef(load);
+  currentLoad.current = load;
+  useEffect(() => {
+    updateData(EMPTY); setSelected(null); detailRequest.current?.abort(); setOpening(false); load();
+    const refresh = () => { if (document.visibilityState === 'visible') load({ refresh: true }); };
+    const timer = setInterval(refresh, 45000);
+    document.addEventListener('visibilitychange', refresh);
+    return () => { clearInterval(timer); document.removeEventListener('visibilitychange', refresh); listRequest.current?.abort(); };
+  }, [load]);
+  useEffect(() => () => { session.current += 1; listRequest.current?.abort(); detailRequest.current?.abort(); }, []);
+
+  const items = useMemo(() => selectPromos(data.items, filters), [data.items, filters]);
+  const accounts = useMemo(() => [...new Set(data.items.map(item => item.account))].sort(), [data.items]);
+  const position = selected ? items.findIndex(item => promoKey(item) === promoKey(selected)) : -1;
+  const openDetail = async (item, { throwOnError = false } = {}) => {
+    detailRequest.current?.abort();
+    const controller = new AbortController(); detailRequest.current = controller; setOpening(true); setError('');
+    try {
+      const detail = await request(detailPath(item), { signal: controller.signal });
+      if (!controller.signal.aborted) setSelected(detail);
+    } catch (issue) { if (!controller.signal.aborted) { if (throwOnError) throw issue; setError(`Unable to open this post. ${issue.message}`); } }
+    finally { if (detailRequest.current === controller) setOpening(false); }
+  };
+  function closeDetail() { detailRequest.current?.abort(); setOpening(false); setSelected(null); }
+  function applyUpdated(next) {
+    updateData(current => ({ ...current, items: current.items.flatMap(item => {
+      if (promoKey(item) !== promoKey(next)) return [item];
+      if ((filters.review && next.review_status !== filters.review) || (filters.classification && next.classification !== filters.classification)) return [];
+      return [next];
+    }) }));
+    setSelected(next);
+  }
+  async function mutateSelected(path, options, { advance = false } = {}) {
+    if (mutationBusy.current) throw new Error('A review action is already in progress.');
+    const token = session.current;
+    const nextItem = items[position + 1] || items.slice(0, Math.max(position, 0)).find(item => promoKey(item) !== promoKey(selected));
+    mutationBusy.current = true; listRequest.current?.abort();
+    try {
+      const next = await request(path, options);
+      if (token !== session.current) return;
+      applyUpdated(next); setNotice(path.endsWith('/jev-review') ? 'JEV assessment updated.' : 'Review saved.');
+      if (advance) {
+        if (nextItem) {
+          try { await openDetail(nextItem, { throwOnError: true }); }
+          catch (issue) { throw new Error(`Your review was saved, but the next post could not load. ${issue.message}`, { cause: issue }); }
+        }
+        else { setSelected(null); setNotice('Review saved. You have reached the end of this view.'); }
+      }
+    } finally { if (token === session.current) mutationBusy.current = false; }
+  }
+
+  useEffect(() => {
+    if (!user || !job?.id) return;
+    try {
+      if (['done', 'failed'].includes(job.status)) sessionStorage.removeItem(jobStorageKey(user));
+      else sessionStorage.setItem(jobStorageKey(user), JSON.stringify({ id: job.id, kind: job.kind }));
+    } catch { /* Status polling still works when browser storage is unavailable. */ }
+  }, [job, user]);
+
+  async function startJob(kind, limit) {
+    if (jobStarting.current || isRunning(job)) return;
+    const token = session.current; jobStarting.current = true;
+    setJob({ kind, status: 'starting' }); setError('');
+    try {
+      const payload = kind === 'rules' ? { limit, from_date: new Date(Date.now() - 30 * 86400000).toISOString() } : { limit };
+      const result = await request(`${ROOT}/${kind === 'rules' ? 'backfill' : 'jev-scan'}`, jsonOptions('POST', payload));
+      if (token !== session.current) return;
+      if (!result.job_id) throw new Error('The scan did not return a job ID. Refresh before starting another scan.');
+      setJob({ kind, id: result.job_id, status: 'queued', processed: 0 });
+    } catch (issue) { if (token === session.current) setJob({ kind, status: 'failed', error: issue.message }); }
+    finally { if (token === session.current) jobStarting.current = false; }
+  }
+  useEffect(() => {
+    if (!job?.id || !['queued', 'running'].includes(job.status)) return;
+    const controller = new AbortController(); let timer;
+    const poll = async () => {
+      try {
+        const status = await request(`${ROOT}/jobs/${encodeURIComponent(job.id)}`, { signal: controller.signal });
+        if (controller.signal.aborted) return;
+        if (!['queued', 'running', 'done', 'failed'].includes(status.status)) throw new Error('The scan returned an unknown status.');
+        setJob(current => current?.id === job.id ? { ...current, ...status, id: job.id } : current);
+        if (status.status === 'done') currentLoad.current();
+        else if (status.status !== 'failed') timer = setTimeout(poll, 2000);
+      } catch (issue) { if (!controller.signal.aborted) setJob(current => ({ ...current, status: 'reconnecting', error: `The scan may still be running. ${issue.message}` })); }
+    };
+    poll();
+    return () => { controller.abort(); clearTimeout(timer); };
+  }, [job?.id, pollAttempt, user]);
+
+  if (user === undefined) return <main className="promo-loading">Loading Promos…</main>;
+  if (!user) return <Login />;
+  const coordinator = Boolean(viewer?.is_admin || viewer?.isAdmin || viewer?.is_dev || viewer?.isDev || viewer?.operating_roles?.includes('vc'));
+  const setFilter = (name, value) => setFilters(current => ({ ...current, [name]: value }));
+  return <main className="promo-shell"><ProductHeader current="promos" coordinator={coordinator} account={<SettingsMenu email={user.email} avatarUrl={user.photoURL || viewer?.avatar_url || viewer?.avatarUrl} isAdmin={Boolean(viewer?.is_admin || viewer?.isAdmin)} isDev={Boolean(viewer?.is_dev || viewer?.isDev)} onSignOut={() => { clearSsoCookie(); signOut(firebaseAuth); }} />}><h1>Promos</h1><span className="promo-header-subtitle">Paid partnership and promotion signals</span><button className="promo-scan" onClick={() => openDetail(items[0])} disabled={!items.length || opening}>{opening ? 'Opening…' : 'Review next'}</button></ProductHeader>
+    {accessError ? <div className="promo-alert" role="alert">{accessError}<button onClick={() => setAccessAttempt(value => value + 1)}>Retry access check</button></div> : !viewer ? <div className="promo-empty">Checking account access…</div> : <>
+      <DetectionTools job={job} onStart={startJob} onReconnect={() => { setJob(current => ({ ...current, status: 'running', error: '' })); setPollAttempt(value => value + 1); }} />
+      <section className="promo-toolbar" aria-label="Filter promotion reviews">
+        <label className="promo-search"><span>Search loaded posts</span><input aria-label="Search loaded posts" type="search" placeholder="Brand, account, keyword or evidence…" value={filters.search} onChange={e => setFilter('search', e.target.value)} /></label>
+        <label><span>Review status</span><select aria-label="Review status" value={filters.review} onChange={e => setFilter('review', e.target.value)}><option value="new">New</option><option value="reviewed">Reviewed</option><option value="dismissed">Dismissed</option><option value="">All reviews</option></select></label>
+        <label><span>Classification</span><select aria-label="Classification" value={filters.classification} onChange={e => setFilter('classification', e.target.value)}><option value="">All classifications</option>{Object.entries(CLASSIFICATION_LABELS).map(([key, label]) => <option value={key} key={key}>{label}</option>)}</select></label>
+        <label><span>Account · loaded</span><select aria-label="Account · loaded" value={filters.account} onChange={e => setFilter('account', e.target.value)}><option value="">All accounts</option>{accounts.map(account => <option key={account} value={account}>@{account}</option>)}</select></label>
+        <label><span>Review focus</span><select aria-label="Review focus" value={filters.focus} onChange={e => setFilter('focus', e.target.value)}><option value="all">All posts</option><option value="conflicts">Conflicting signals</option><option value="needs_review">Needs classification</option><option value="missing_client">Missing brand</option><option value="weak_evidence">Indirect evidence</option><option value="multi_brand">Multiple brand candidates</option><option value="related">Related posts</option><option value="unreviewed_jev">No JEV check</option></select></label>
+        <label><span>Sort by</span><select aria-label="Sort by" value={filters.sort} onChange={e => setFilter('sort', e.target.value)}><option value="priority">Review priority</option><option value="newest">Newest post</option><option value="oldest">Oldest post</option></select></label>
+      </section>
+      <div className="promo-results-heading"><div><strong>{items.length} {items.length === 1 ? 'post' : 'posts'}</strong><span className="promo-scope-note">{data.items.length} loaded · Grouped automatically by topic or brand{data.next_cursor ? ' · More available' : ''}</span></div><button disabled={loading || loadingMore} onClick={() => load()}>{loading ? 'Refreshing…' : 'Refresh'}</button></div>
+      {notice && <p className="promo-notice" role="status">{notice}</p>}{opening && <p className="promo-notice" role="status">Loading full post evidence…</p>}{error && <div className="promo-alert" role="alert">{error}<button onClick={() => load()}>Reload queue</button></div>}
+      {loading && !data.items.length ? <div className="promo-empty" role="status">Loading promotion signals…</div> : items.length ? <PromoResults items={items} onSelect={openDetail} /> : <div className="promo-empty"><strong>{data.items.length ? 'No loaded posts match these filters.' : 'No posts in this review queue.'}</strong><span>{data.items.length ? 'Try another focus or search, or load more posts.' : 'Change the review status or scan stored posts to look for promotion signals.'}</span><button onClick={() => setFilters(INITIAL_FILTERS)}>Reset filters</button></div>}
+      {data.next_cursor && <button className="promo-load-more" disabled={loadingMore || loading} onClick={() => load({ append: true })}>{loadingMore ? 'Loading more…' : `Load more posts · ${data.items.length} loaded`}</button>}
+    </>}
+    {selected && <PromoReviewDialog item={selected} relatedItems={data.items} onClose={closeDetail} onSave={(payload, options) => mutateSelected(detailPath(selected), jsonOptions('PATCH', payload), options)} onJevReview={() => mutateSelected(`${detailPath(selected)}/jev-review`, { method: 'POST', timeout: 90000 })} onSelect={item => openDetail(item, { throwOnError: true })} position={{ index: position, total: items.length }} onPrevious={!opening && position > 0 ? () => openDetail(items[position - 1], { throwOnError: true }) : undefined} onNext={!opening && position >= 0 && position < items.length - 1 ? () => openDetail(items[position + 1], { throwOnError: true }) : undefined} />}
+  </main>;
 }
 
 mountApp(<PrefsProvider><PromosApp /></PrefsProvider>);

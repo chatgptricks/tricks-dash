@@ -8,7 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint .",
-    "test": "npm run test:product && npm run test:queue && npm run test:resilience && npm run test:users && npm run smoke:recovery && npm run smoke:research && npm run smoke:queue && npm run smoke:settings && npm run smoke:mobile && npm run smoke:roles && npm run smoke:hooks && npm run smoke:vault && node smoke/static-pages.mjs && node smoke/tracker.mjs && node smoke/insights-extras.mjs && node smoke/sign-in.mjs",
+    "test": "npm run test:product && npm run test:queue && npm run test:resilience && npm run test:users && npm run smoke:recovery && npm run smoke:research && npm run smoke:queue && npm run smoke:settings && npm run smoke:mobile && npm run smoke:roles && npm run smoke:hooks && npm run smoke:vault && node smoke/static-pages.mjs && node smoke/tracker.mjs && node smoke/insights-extras.mjs && node smoke/sign-in.mjs && npm run test:promos && npm run smoke:tool-reliability",
     "test:product": "node scripts/test-topics.mjs && npm run test:stacks && node smoke/run-product.mjs",
     "test:stacks": "node scripts/test-stack-operations.mjs",
     "test:queue": "node scripts/test-queue.mjs && npm run test:queue-refresh",
@@ -23,10 +23,14 @@
     "smoke:mobile": "node scripts/test-mobile-routing.mjs && node smoke/run-mobile.mjs",
     "smoke:roles": "node smoke/roles.mjs",
     "smoke:vault": "node smoke/run-vault.mjs && node smoke/run-vault.mjs admin && node smoke/run-vault.mjs preview",
-    "smoke:hooks": "node smoke/run-hooks.mjs && node smoke/run-hooks.mjs admin",
+    "smoke:hooks": "node smoke/run-hooks.mjs && node smoke/run-hooks.mjs admin && node smoke/run-hooks.mjs preview",
     "smoke:visual": "node smoke/visual-release.mjs",
-    "check:release": "npm run lint && npm test && npm run build && npm run smoke:visual",
-    "test:auth-cache": "node scripts/test-dashboard-cache.mjs && node smoke/auth-cache.mjs"
+    "check:release": "npm run lint && npm test && npm run build && npm run smoke:visual && npm run smoke:promos && npm run smoke:tool-browser",
+    "test:auth-cache": "node scripts/test-dashboard-cache.mjs && node smoke/auth-cache.mjs",
+    "test:promos": "node scripts/test-promos-intelligence.mjs",
+    "smoke:promos": "node smoke/promos-review.mjs",
+    "smoke:tool-reliability": "node smoke/tracker-insights-reliability.mjs && node smoke/static-session-navigation.mjs",
+    "smoke:tool-browser": "node smoke/tracker-insights-browser.mjs"
   },
   "overrides": {
     "@firebase/firestore": {

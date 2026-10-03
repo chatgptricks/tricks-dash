@@ -3,6 +3,15 @@
   const API = 'https://cortex-api-db2e.onrender.com';
   const ALL_ROLES = ['sales', 'pd', 'vc', 'trainee', 'admin'];
   const LABELS = { sales: 'Sales', pd: 'Post Designer', vc: 'Viral Coordinator', trainee: 'Trainee', admin: 'Admin' };
+  let mountRun = 0, mountedRoot = null, mountedStyle = null, outsideHandler = null, navTimer = null;
+  const clearMount = () => {
+    mountedRoot?.remove(); mountedRoot = null;
+    mountedStyle?.remove(); mountedStyle = null;
+    if (outsideHandler) document.removeEventListener('click', outsideHandler);
+    outsideHandler = null;
+    if (navTimer) window.clearInterval(navTimer);
+    navTimer = null;
+  };
 
   window.__sentientRolePreviewHeaders = (input = {}) => {
     const headers = { ...input };
@@ -11,16 +20,19 @@
     return headers;
   };
 
-  const waitForToken = async () => {
+  const waitForToken = async (run) => {
     for (let attempt = 0; attempt < 120; attempt += 1) {
+      if (run !== mountRun) return '';
       if (window.__firebaseIdToken) return window.__firebaseIdToken;
       await new Promise((resolve) => window.setTimeout(resolve, 250));
     }
     return '';
   };
 
-  const mount = async () => {
-    const token = await waitForToken();
+  const mount = async (wait = false) => {
+    const run = ++mountRun;
+    clearMount();
+    const token = wait ? await waitForToken(run) : window.__firebaseIdToken;
     if (!token) return;
     const headers = window.__sentientRolePreviewHeaders({ Authorization: `Bearer ${token}` });
     let viewer;
@@ -31,6 +43,7 @@
     } catch {
       return;
     }
+    if (run !== mountRun || token !== window.__firebaseIdToken) return;
     const isDev = Boolean(viewer.is_dev);
     if (!isDev && !viewer.can_role_switch) return;
     const allowed = isDev ? ALL_ROLES : (viewer.available_operating_roles || viewer.operating_roles || []);
@@ -42,6 +55,7 @@
     // coordinator-only, including when the page builds its header
     // asynchronously after this script has mounted.
     const applyCoordinatorNavigation = () => {
+      if (run !== mountRun) return;
       const activeRole = window.sessionStorage.getItem(ROLE_KEY) || '';
       const effectiveCoordinator = activeRole
         ? ['vc', 'admin'].includes(activeRole)
@@ -65,8 +79,9 @@
     // The standalone page creates its header after the data bootstrap. Poll
     // briefly instead of relying on MutationObserver, which is unavailable in
     // a few embedded browser contexts used by the static pages.
-    const navTimer = window.setInterval(applyCoordinatorNavigation, 250);
-    window.setTimeout(() => window.clearInterval(navTimer), 30000);
+    const timer = window.setInterval(applyCoordinatorNavigation, 250);
+    navTimer = timer;
+    window.setTimeout(() => window.clearInterval(timer), 30000);
 
     const style = document.createElement('style');
     style.textContent = `
@@ -81,6 +96,7 @@
       .sentient-role-preview-panel select{width:100%;height:32px;border:1px solid var(--line);border-radius:7px;background:var(--panel-2);color:var(--text);font-size:12px;font-family:inherit;text-transform:none;letter-spacing:normal}
     `;
     document.head.append(style);
+    mountedStyle = style;
 
     const root = document.createElement('div');
     root.className = 'sentient-role-preview';
@@ -102,15 +118,18 @@
       const open = root.classList.toggle('is-open');
       button.setAttribute('aria-expanded', String(open));
     });
-    document.addEventListener('click', (event) => {
+    outsideHandler = (event) => {
       if (root.contains(event.target)) return;
       root.classList.remove('is-open');
       button.setAttribute('aria-expanded', 'false');
-    });
+    };
+    document.addEventListener('click', outsideHandler);
     root.append(button, panel);
     document.body.append(root);
+    mountedRoot = root;
   };
 
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount, { once: true });
-  else mount();
+  window.addEventListener('sentient-auth-changed', () => mount());
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => mount(true), { once: true });
+  else mount(true);
 })();
