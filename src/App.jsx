@@ -6,6 +6,7 @@ import { StackActions } from './StackActions';
 import { applyStackMembershipResult, resolveResearchPost } from './stackOperations';
 import { useTopicGroups } from './useTopicGroups';
 import ProductHeader from './ProductHeader';
+import GenerateCaptionModal from './GenerateCaptionModal';
 import { Fragment, startTransition, useCallback, useDeferredValue, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
@@ -840,6 +841,8 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
   const [queuePendingCount, setQueuePendingCount] = useState(0);
   const [assignmentPost, setAssignmentPost] = useState(null);
   const [captionPost, setCaptionPost] = useState(null);
+  // Scoped to this signed-in Research session; closing the editor keeps drafts.
+  const captionDrafts = useRef(new Map());
   const [goldenNuggets, setGoldenNuggets] = useState({});
   const reconnectTimer = useRef(null);
   const reconnectAttempt = useRef(0);
@@ -2485,6 +2488,8 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
 
       {captionPost ? (
         <GenerateCaptionModal
+          key={`${captionPost.account}:${captionPost.shortcode}`}
+          draftStore={captionDrafts.current}
           post={captionPost}
           accounts={accounts}
           onClose={() => setCaptionPost(null)}
@@ -2565,124 +2570,6 @@ function DevJevTools({ post, onGoldenNugget }) {
           {result ? <div className="dev-jev-result"><small>{result.action}</small>{result.action === 'golden-nugget' ? <><strong>{result.data.label === 'golden_nugget' ? 'Golden nugget candidate' : result.data.label === 'promising' ? 'Promising idea' : 'Not a priority yet'}</strong><span>Account: {result.data.targetAccount ? `@${result.data.targetAccount}` : 'none'} · score {Math.round(Number(result.data.score || 0) * 100)}%</span><span>{result.data.strongSignalCount}/7 strong signals · confidence {Math.round(Number(result.data.confidence || 0) * 100)}%</span><span>Strongest: {result.data.strengths.join(', ')}</span></> : result.action === 'classify' ? <><strong>{result.data.label}</strong><pre>{JSON.stringify(result.data.scores, null, 2)}</pre></> : result.action === 'queue-suggestions' ? <><strong>{result.data.needsQueue ? 'Queue recommended' : 'No Queue needed'}</strong><span>{result.data.tag} · {result.data.urgent ? 'urgent' : 'normal'}</span></> : result.action === 'promo-review' ? <><strong>{result.data.needsReview ? 'Human review recommended' : 'Classification clear'}</strong><span>Semantic promo: {Math.round(Number(result.data.semanticPromo || 0) * 100)}%</span></> : result.action === 'audit-stack' ? <><strong>{result.data.members.filter((item) => !item.sameStack).length} possible outliers</strong><span>{result.data.members.length} members checked</span></> : <><strong>{result.data.results.length} relevant results</strong>{result.data.results.slice(0, 5).map((item) => <span key={item.postKey}>{item.postKey} · {Math.round(item.score * 100)}%</span>)}</>}</div> : null}
         </section>
       ) : null}
-    </div>
-  );
-}
-
-function GenerateCaptionModal({ post, accounts, onClose }) {
-  const { t } = usePrefs();
-  const destinations = accounts.filter((account) => account.group === 'sentient' && account.is_active !== false);
-  const [targetAccount, setTargetAccount] = useState('');
-  const [outputLanguage, setOutputLanguage] = useState('');
-  const [removeManychat, setRemoveManychat] = useState(false);
-  const [caption, setCaption] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const [copied, setCopied] = useState(false);
-  const [review, setReview] = useState('');
-
-  useEffect(() => {
-    const onKey = (event) => {
-      if (event.key === 'Escape' && !busy) onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [busy, onClose]);
-
-  const generate = async (event) => {
-    event.preventDefault();
-    if (!targetAccount) {
-      setError(t('Choose the account this caption is for.'));
-      return;
-    }
-    if (!outputLanguage) {
-      setError(t('Choose the language for the generated caption.'));
-      return;
-    }
-    setBusy(true);
-    setError('');
-    setCopied(false);
-    setReview('');
-    try {
-      const body = new FormData();
-      body.append('source_account', post.account);
-      body.append('shortcode', post.shortcode);
-      body.append('target_account', targetAccount);
-      body.append('output_language', outputLanguage);
-      body.append('remove_manychat_automation', String(removeManychat));
-      if (caption) body.append('previous_caption', caption);
-      const response = await apiFetch(`${API_BASE}/api/dashboard/posts/generate-caption`, { method: 'POST', body });
-      const data = await response.json().catch(() => ({}));
-      // Jev rejections carry an object detail ({ message, verification }).
-      const detail = typeof data.detail === 'string' ? data.detail : data.detail?.message;
-      if (!response.ok) throw new Error(detail ? t(detail) : t('Could not generate a caption right now.'));
-      setCaption(String(data.caption || '').trim());
-      // Jev review is advisory: a flagged caption is still returned for editing.
-      if (data.jevWarning) setReview(t(data.jevWarning));
-    } catch (reason) {
-      setError(reason.message || t('Could not generate a caption right now.'));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(caption);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1800);
-    } catch {
-      setError(t('Could not copy the caption.'));
-    }
-  };
-
-  return (
-    <div className="queue-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) onClose(); }}>
-      <form className="queue-assign-modal caption-generator-modal" onSubmit={generate} aria-labelledby="caption-generator-title">
-        <div className="queue-assign-head">
-          <div>
-            <p className="section-label">{t('AI caption')}</p>
-            <h2 id="caption-generator-title">{t('Generate a similar caption')}</h2>
-          </div>
-          <button type="button" className="icon-button" onClick={onClose} aria-label={t('Close caption generator')} disabled={busy}><X size={16} /></button>
-        </div>
-        <div className="queue-assign-post caption-generator-source">
-          <div>
-            <strong>{t('Inspired by')} @{post.account}</strong>
-            <p>{post.caption || post.headline || post.excerpt || 'Instagram post'}</p>
-          </div>
-        </div>
-        <label className="caption-generator-field">
-          <span>{t('Which account is this for?')}</span>
-          <select value={targetAccount} onChange={(event) => { setTargetAccount(event.target.value); setCaption(''); setError(''); }} disabled={busy} autoFocus>
-            <option value="">{t('Choose a Sentient account…')}</option>
-            {destinations.map((account) => <option key={account.handle} value={account.handle}>{account.label || account.handle} · @{account.handle}</option>)}
-          </select>
-          <small>{t("The result follows that account's recent tone, language, CTAs, and formatting.")}</small>
-        </label>
-        <label className="caption-generator-field">
-          <span>{t('What language should the result use?')}</span>
-          <select value={outputLanguage} onChange={(event) => { setOutputLanguage(event.target.value); setCaption(''); setError(''); }} disabled={busy}>
-            <option value="">{t('Choose a language…')}</option>
-            <option value="same">{t('Same as original')}</option>
-            <option value="en">English</option>
-            <option value="es">Español</option>
-            <option value="pt">Português</option>
-          </select>
-        </label>
-        <label className="caption-generator-manychat">
-          <input type="checkbox" checked={removeManychat} onChange={(event) => { setRemoveManychat(event.target.checked); setCaption(''); setError(''); }} disabled={busy} />
-          <span><strong>{t('Remove ManyChat automation')}</strong><small>{t('Remove comment or DM keywords and promises to send links, prompts, codes, guides, or lists.')}</small></span>
-        </label>
-        {caption ? <label className="caption-generator-field caption-generator-result"><span>{t('Generated caption · editable')}</span><textarea value={caption} onChange={(event) => setCaption(event.target.value)} /></label> : null}
-        {caption && review ? <p className="caption-generator-review" role="status">{review}</p> : null}
-        {error ? <p className="queue-assign-error" role="alert">{error}</p> : null}
-        <div className="queue-assign-actions caption-generator-actions">
-          <button type="button" className="ghost-button" onClick={onClose} disabled={busy}>{t('Cancel')}</button>
-          {caption ? <button type="button" className="ghost-button" onClick={copy}><Check size={14} />{copied ? t('Copied') : t('Copy caption')}</button> : null}
-          <button type="submit" className="primary-button" disabled={busy || !targetAccount || !outputLanguage}><Sparkles size={14} />{busy ? t('Generating…') : caption ? t('Regenerate') : t('Generate caption')}</button>
-        </div>
-      </form>
     </div>
   );
 }
