@@ -1,7 +1,6 @@
 // Pointer tilt and foil for gallery cards. Plain handlers shared by every card:
 // no per-card hooks or animation state, and nothing runs until a pointer moves.
 // The inline transform is eased by the `.obs-card` CSS transition.
-import { updateHotFoilLight } from './hot-foil';
 const reduceMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 let activeCard = null;
 let pendingFrame = 0;
@@ -14,7 +13,6 @@ function reset(card) {
   card.style.removeProperty('transform');
   card.style.removeProperty('--foil-x');
   card.style.removeProperty('--foil-y');
-  delete card.dataset.foilActive;
   if (activeCard === card) activeCard = null;
 }
 
@@ -42,7 +40,6 @@ function paintTilt() {
   card.style.transform = `perspective(1000px) rotateX(${((0.5 - v) * angle).toFixed(2)}deg) rotateY(${((u - 0.5) * angle).toFixed(2)}deg)`;
   card.style.setProperty('--foil-x', `${(u * 100).toFixed(1)}%`);
   card.style.setProperty('--foil-y', `${(v * 100).toFixed(1)}%`);
-  updateHotFoilLight(card, u, v);
 }
 
 export const obsidianCardHandlers = {

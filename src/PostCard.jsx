@@ -377,7 +377,7 @@ export const PostCard = memo(function PostCard({ post, goldenNugget, priority, s
       </div>
 
       <CoverImage className={`post-media ${posterTheme(post.type)}${post.isVideo && post.showsHotBadge ? ' has-video-hot' : ''}`} post={post} priority={priority}>
-        {!post.showsHotBadge ? <span className="obs-soft-glare" aria-hidden="true" /> : null}
+        {post.showsHotBadge ? <><span className="obs-metal" aria-hidden="true" /><span className="obs-foil" aria-hidden="true" /><span className="obs-glare" aria-hidden="true" /></> : <span className="obs-soft-glare" aria-hidden="true" />}
         {post.isDeleted ? <div className="post-deleted-overlay" title="Deleted from Instagram" aria-label="Deleted from Instagram"><Trash2 size={42} strokeWidth={2.4} /></div> : null}
         {post.isVideo ? (
           <div className="media-badge">
