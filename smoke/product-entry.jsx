@@ -2,7 +2,7 @@ import React, { act, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { CoverImage } from '../src/postDetail';
 import TopicStack from '../src/TopicStack';
-import { AccountMultiSelect, ListEditor } from '../src/App';
+import { AccountMultiSelect, FilterPopover, ListEditor } from '../src/App';
 import { PostCard } from '../src/PostCard';
 import { StackActions } from '../src/StackActions';
 import { useTopicGroups } from '../src/useTopicGroups';
@@ -56,6 +56,53 @@ try {
   if (accountSelection.join(',') !== 'beta') throw new Error('Account search must replace selection with matching accounts');
   if (el.querySelectorAll('.account-multiselect-item').length !== 1 || !el.textContent.includes('Beta AI')) throw new Error('Account search must hide non-matching accounts');
   console.log('PASS account search selects only visible results');
+  const savedWidth = Object.getOwnPropertyDescriptor(window, 'innerWidth');
+  const savedHeight = Object.getOwnPropertyDescriptor(window, 'innerHeight');
+  const SavedResizeObserver = globalThis.ResizeObserver;
+  let measurePopover, observerDisconnected = false;
+  globalThis.ResizeObserver = class {
+    constructor(callback) { measurePopover = callback; }
+    observe() {}
+    disconnect() { observerDisconnected = true; }
+  };
+  try {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 430 });
+    await act(async () => root.render(<FilterPopover id="viewport-test" label="Accounts" width={700}><div>Available accounts</div></FilterPopover>));
+    const trigger = el.querySelector('.filter-trigger');
+    let triggerBounds = { left: 320, top: 320, bottom: 354 };
+    trigger.getBoundingClientRect = () => triggerBounds;
+    await act(async () => trigger.click());
+    const panel = document.getElementById('filter-popover-viewport-test');
+    let contentHeight = 600;
+    Object.defineProperties(panel, {
+      scrollHeight: { get: () => contentHeight },
+      offsetHeight: { get: () => 102 },
+      clientHeight: { get: () => 100 },
+    });
+    const resized = async () => act(async () => { window.dispatchEvent(new Event('resize')); await new Promise(requestAnimationFrame); });
+    await resized();
+    if (panel.style.width !== '374px' || panel.style.left !== '8px' || panel.style.top !== '8px' || panel.style.maxHeight !== '306px') throw new Error('A wide filter must fit a narrow viewport and flip upward within available height');
+    if (panel.style.overflowY !== 'auto' || panel.style.visibility !== 'visible') throw new Error('A constrained filter must expose scrollable visible content');
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1440 });
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 1000 });
+    triggerBounds = { left: 1000, top: 100, bottom: 134 };
+    await resized();
+    if (panel.style.width !== '700px' || panel.style.left !== '732px' || panel.style.top !== '140px') throw new Error('A resized desktop filter must keep its requested width and anchor below when it fits');
+    triggerBounds = { left: 1000, top: 650, bottom: 684 };
+    await resized();
+    if (Number.parseFloat(panel.style.top) >= triggerBounds.top) throw new Error('A tall filter must prefer available space above the trigger');
+    contentHeight = 80;
+    await act(async () => { measurePopover(); await new Promise(requestAnimationFrame); });
+    if (panel.style.top !== '690px') throw new Error('Shrinking filter content must remeasure and use available space below');
+    await act(async () => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
+    if (document.getElementById('filter-popover-viewport-test') || document.activeElement !== trigger || !observerDisconnected) throw new Error('Escape must close the placed filter, restore focus and stop observation');
+  } finally {
+    Object.defineProperty(window, 'innerWidth', savedWidth);
+    Object.defineProperty(window, 'innerHeight', savedHeight);
+    globalThis.ResizeObserver = SavedResizeObserver;
+  }
+  console.log('PASS filter viewport width, upward placement, content remeasurement, resize and Escape focus');
   let chosen = null;
   const variants = [{postKey:'a',likes:12,timestamp:300},{postKey:'b',likes:97,timestamp:100},{postKey:'c',likes:30,timestamp:200}];
   await act(async () => root.render(<TopicStack posts={variants} renderCard={(post, expand) => <button className="test-card" onClick={expand || (() => { chosen = post.postKey; })}>{post.postKey}</button>} />));

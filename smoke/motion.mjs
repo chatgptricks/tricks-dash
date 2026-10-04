@@ -230,7 +230,19 @@ try{
     await modalPage.locator('.promo-review-dialog').waitFor({state:'attached'});
     if(mode==='dynamic-off')await modalPage.evaluate(()=>document.documentElement.dataset.effects='off');
     if(mode==='dynamic-reduced')await modalPage.emulateMedia({reducedMotion:'reduce'});
-    await modalPage.waitForTimeout(mode==='normal'?500:100);
+    // Media changes and pending WAAPI starts settle on browser frames, not a
+    // fixed wall-clock delay. Wait only for lifecycle completion; the separate
+    // assertions below must still catch a settled but invisible/stuck modal.
+    await modalPage.waitForFunction(mode=>{
+      if(matchMedia('(prefers-reduced-motion: reduce)').matches!==(mode==='dynamic-reduced'))return false;
+      if(document.documentElement.dataset.effects!==(mode==='dynamic-off'?'off':'immersive'))return false;
+      const modal=document.querySelector('.promo-review-modal');
+      if(!modal)return false;
+      return modal.getAnimations({subtree:true}).every(animation=>{
+        if(!Number.isFinite(animation.effect?.getComputedTiming().endTime))return true;
+        return !animation.pending&&['finished','idle'].includes(animation.playState);
+      });
+    },mode,{timeout:1800});
     await assertVisibleAndStable(modalPage,'.promo-review-dialog',`Promos ${mode} modal`);
     await assertNoTransform(modalPage,'.promo-review-dialog',`Promos ${mode} settled modal`);
     if(mode!=='normal')await assertNoMotion(modalPage,'.promo-review-dialog',`Promos ${mode}`);

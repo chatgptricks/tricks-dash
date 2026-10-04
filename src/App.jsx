@@ -6,7 +6,7 @@ import { StackActions } from './StackActions';
 import { applyStackMembershipResult, resolveResearchPost } from './stackOperations';
 import { useTopicGroups } from './useTopicGroups';
 import ProductHeader from './ProductHeader';
-import { Fragment, startTransition, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, startTransition, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   ArrowUpDown,
@@ -2929,7 +2929,7 @@ export function ListEditor({ draft, accounts, onSave, onDelete, onClose }) {
 // bounding rect, the same approach AccountMultiSelect already uses: the
 // trigger lives inside a flex row that may clip, so an absolutely-positioned
 // panel would be cut off rather than floating over the gallery.
-function FilterPopover({ id, icon, label, summary, isActive, width = 300, children }) {
+export function FilterPopover({ id, icon, label, summary, isActive, width = 300, children }) {
   const [open, setOpen] = useState(false);
   const [rect, setRect] = useState(null);
   const triggerRef = useRef(null);
@@ -2957,26 +2957,56 @@ function FilterPopover({ id, icon, label, summary, isActive, width = 300, childr
     };
   }, [open]);
 
-  useEffect(() => {
-    if (!open) return undefined;
+  useLayoutEffect(() => {
+    if (!open) { setRect(null); return undefined; }
+    let frame = 0;
+    const viewport = window.visualViewport;
     const place = () => {
-      const trigger = triggerRef.current;
-      if (!trigger) return;
+      frame = 0;
+      const trigger = triggerRef.current, panel = panelRef.current;
+      if (!trigger || !panel) return;
       const bounds = trigger.getBoundingClientRect();
-      // Right-align to the trigger when a left-aligned panel would run off
-      // screen -- these triggers sit in the right-hand column, so most of
-      // them are closer to the right edge than the panel is wide.
-      const left = Math.max(8, Math.min(bounds.left, window.innerWidth - width - 8));
-      setRect({ top: bounds.bottom + 6, left });
+      const inset = 8, gap = 6;
+      const minLeft = (viewport?.offsetLeft || 0) + inset;
+      const minTop = (viewport?.offsetTop || 0) + inset;
+      const right = minLeft + (viewport?.width || window.innerWidth) - inset * 2;
+      const bottom = minTop + (viewport?.height || window.innerHeight) - inset * 2;
+      const panelWidth = Math.max(0, Math.min(width, right - minLeft));
+      // Measure at the final width so wrapped content determines which side fits.
+      panel.style.width = `${panelWidth}px`;
+      const contentHeight = panel.scrollHeight + panel.offsetHeight - panel.clientHeight;
+      const belowTop = Math.max(minTop, Math.min(bounds.bottom + gap, bottom));
+      const aboveBottom = Math.max(minTop, Math.min(bounds.top - gap, bottom));
+      const below = bottom - belowTop, above = aboveBottom - minTop;
+      const flip = contentHeight > below && above > below;
+      const maxHeight = Math.max(0, flip ? above : below);
+      const next = {
+        top: flip ? aboveBottom - Math.min(contentHeight, maxHeight) : belowTop,
+        left: Math.max(minLeft, Math.min(bounds.left, right - panelWidth)),
+        width: panelWidth,
+        maxHeight,
+      };
+      setRect(previous => previous && Object.keys(next).every(key => previous[key] === next[key]) ? previous : next);
     };
+    const schedule = () => { if (!frame) frame = requestAnimationFrame(place); };
+    const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(schedule) : null;
+    observer?.observe(triggerRef.current);
+    observer?.observe(panelRef.current);
+    [...(panelRef.current?.children || [])].forEach(child => observer?.observe(child));
     place();
-    window.addEventListener('resize', place);
-    window.addEventListener('scroll', place, true);
+    window.addEventListener('resize', schedule);
+    window.addEventListener('scroll', schedule, true);
+    viewport?.addEventListener('resize', schedule);
+    viewport?.addEventListener('scroll', schedule);
     return () => {
-      window.removeEventListener('resize', place);
-      window.removeEventListener('scroll', place, true);
+      cancelAnimationFrame(frame);
+      observer?.disconnect();
+      window.removeEventListener('resize', schedule);
+      window.removeEventListener('scroll', schedule, true);
+      viewport?.removeEventListener('resize', schedule);
+      viewport?.removeEventListener('scroll', schedule);
     };
-  }, [open, width]);
+  }, [open, width, children]);
 
   const panelId = `filter-popover-${id}`;
 
@@ -2995,7 +3025,7 @@ function FilterPopover({ id, icon, label, summary, isActive, width = 300, childr
         {summary ? <span className="filter-trigger-summary">{summary}</span> : null}
         <ChevronDown size={13} className={open ? 'chevron chevron-open' : 'chevron'} />
       </button>
-      {open && rect
+      {open
         ? createPortal(
             <div
               id={panelId}
@@ -3003,7 +3033,7 @@ function FilterPopover({ id, icon, label, summary, isActive, width = 300, childr
               className="filter-popover-panel"
               role="group"
               aria-label={label}
-              style={{ top: rect.top, left: rect.left, width }}
+              style={{ top: rect?.top || 0, left: rect?.left || 0, width: rect?.width ?? width, maxWidth: 'calc(100vw - 16px)', maxHeight: rect?.maxHeight, overflowY: 'auto', overflowX: 'hidden', overscrollBehavior: 'contain', boxSizing: 'border-box', visibility: rect ? 'visible' : 'hidden' }}
             >
               <p className="filter-popover-title">{label}</p>
               {children}

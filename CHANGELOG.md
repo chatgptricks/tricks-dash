@@ -53,6 +53,14 @@ been published or tagged; production still runs the existing release.
 
 ### Visual polish and motion
 
+- Refine Research search, tab typography, active filters and caption details in
+  dark and light themes while preserving card sizes, stacks and HOT/gold treatments.
+- Keep Research filter panels inside narrow or short windows, with upward
+  placement and scrolling when needed; retain keyboard focus and Escape behavior.
+- Align caption Copy with its heading, improve metric readability and keep
+  expanded DEV tools within the inspector's layout.
+- Add fixture-only Research visual checks for both themes, viewport bounds,
+  search, sorting, caption copying and inspector cleanup.
 - Add shared spring easing, responsive press feedback, keyboard focus rings and
   short menu/form arrivals while preserving existing layouts and Promos grouping.
 - Keep stack choreography bounded even for large groups, speed up card travel,
@@ -71,6 +79,8 @@ been published or tagged; production still runs the existing release.
   browser workflow and motion checks. CI runs the same command.
 - Queue refresh, stack operations and Vault access tests are included in the
   standard suite, alongside the new failure and recovery regressions.
+- Research has a dedicated browser visual gate; motion checks wait for animation
+  completion before asserting visibility, avoiding fixed-delay timing failures.
 - Local verification on 2026-10-03: `npm run check:release` passed (lint:
   zero errors, 47 existing warnings; regression tests; full production build;
   Chromium desktop/mobile checks, including Promos and individual-tool fixtures). `npm audit --omit=dev --audit-level=high`
