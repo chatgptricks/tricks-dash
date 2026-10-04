@@ -53,6 +53,10 @@ been published or tagged; production still runs the existing release.
 
 ### Visual polish and motion
 
+- HOT foil derives surface normals from the loaded cover's brightness and edges,
+  replacing rainbow gradients and scan lines with image-shaped specular highlights.
+  Only the hovered card's light moves; cover retries, physical card transfers,
+  reduced motion and Effects Off retain their existing behavior.
 - Refine Research search, tab typography, active filters and caption details in
   dark and light themes while preserving card sizes, stacks and HOT/gold treatments.
 - Keep Research filter panels inside narrow or short windows, with upward

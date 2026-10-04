@@ -5,7 +5,8 @@
 // surfaces show and do exactly the same things for a post, with one place to
 // fix bugs or add features instead of two copies drifting apart.
 import { createPortal } from 'react-dom';
-import { memo, useEffect, useMemo, useState } from 'react';
+import { memo, useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import { ensureHotFoilFilters } from './hot-foil';
 import { Check, Copy, Download, ExternalLink, Eye, Flame, Layers, Music2, Video, X } from 'lucide-react';
 import { usePrefs } from './prefsContext';
 import { API_BASE, IG_HANDLE, apiFetch } from './api';
@@ -171,8 +172,14 @@ export const CoverImage = memo(function CoverImage({ className, post, priority =
   const activeSource = sources[sourceIndex] ? `${sources[sourceIndex]}${sources[sourceIndex].includes('?') ? '&' : '?'}cover_attempt=${retry}` : '';
   const imageLoaded = Boolean(activeSource) && loadedSource === activeSource;
 
+  useLayoutEffect(() => {
+    // Install before loading: a flight clone can finish its image after this
+    // card unmounts, and it must still resolve the shared filter definition.
+    if (post.showsHotBadge) ensureHotFoilFilters();
+  }, [post.showsHotBadge]);
+
   return (
-    <div className={className}>
+    <div className={className} data-hot-foil={post.showsHotBadge ? 'true' : undefined}>
       {activeSource ? (
         <>
           {!imageLoaded ? <span className="cover-image-skeleton" aria-hidden="true" /> : null}
@@ -248,7 +255,6 @@ export function Metric({ label, value }) {
 export const SelectedPost = memo(function SelectedPost({ post }) {
   const preview = (
     <CoverImage className={`selected-post-media ${posterTheme(post.type)}`} post={post} priority>
-      {post.showsHotBadge ? <><span className="obs-foil" aria-hidden="true" /><span className="obs-glare" aria-hidden="true" /></> : null}
       {post.isVideo ? (
         <div className="media-badge">
           <Video size={13} />

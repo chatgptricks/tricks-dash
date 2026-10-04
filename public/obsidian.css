@@ -9,7 +9,6 @@
   --product-bg:var(--obs-glass); --product-soft:rgba(236,240,255,.05); --product-text:var(--text); --product-muted:var(--muted-strong); --product-line:var(--line); --product-accent:var(--accent-text);
   --panel-2:var(--surface-3); --muted-2:var(--muted-strong);
   --radius-xl:18px; --radius-lg:16px; --radius-md:12px; --radius-sm:8px;
-  --obs-foil-strength:.32;
 }
 :root[data-theme='light'] {
   color-scheme:light;
@@ -53,17 +52,17 @@ body::before { content:''; position:fixed; inset:0; pointer-events:none; z-index
 .obs-card .hot-border { display:none; }
 .obs-card-hot { box-shadow:inset 0 0 0 1px rgba(169,143,255,.34),0 10px 30px rgba(117,80,215,.09); }
 .obs-card-hot:hover { box-shadow:inset 0 0 0 1px rgba(197,174,255,.55),0 20px 48px rgba(103,74,208,.24); }
-.obs-foil,.obs-glare,.obs-soft-glare { position:absolute; inset:0; z-index:1; pointer-events:none; transition:opacity .4s; }
-.obs-foil {
-  background:repeating-linear-gradient(115deg,rgba(255,125,215,.6) 0%,rgba(118,94,255,.7) 12%,rgba(105,236,255,.7) 24%,rgba(255,239,160,.6) 36%,rgba(255,125,215,.6) 48%);
-  background-size:240% 240%; background-position:var(--foil-x,50%) var(--foil-y,50%);
-  mix-blend-mode:color-dodge; opacity:var(--obs-foil-strength);
-  mask-image:linear-gradient(135deg,rgba(0,0,0,.2),#000 50%,rgba(0,0,0,.25));
+.obs-soft-glare { position:absolute; inset:0; z-index:1; pointer-events:none; transition:opacity .4s; }
+/* The real cover supplies its relief; no rainbow, scanlines or generic wash. */
+:root [data-hot-foil] > .cover-image.is-loaded { filter:url('#hot-foil-rest'); }
+:root .obs-card[data-foil-active='true']:not(.obs-card-front):not(.obs-return-cover) [data-hot-foil] > .cover-image.is-loaded { filter:url('#hot-foil-active'); }
+:root[data-effects='subtle'] [data-hot-foil] > .cover-image.is-loaded { filter:url('#hot-foil-subtle'); }
+:root[data-effects='subtle'] .obs-card[data-foil-active='true']:not(.obs-card-front):not(.obs-return-cover) [data-hot-foil] > .cover-image.is-loaded { filter:url('#hot-foil-active-subtle'); }
+:root[data-effects='off'] [data-hot-foil] > .cover-image.is-loaded { filter:none !important; }
+@media (prefers-reduced-motion:reduce), (hover:none) {
+  :root .obs-card[data-foil-active='true']:not(.obs-card-front):not(.obs-return-cover) [data-hot-foil] > .cover-image.is-loaded { filter:url('#hot-foil-rest'); }
+  :root[data-effects='subtle'] .obs-card[data-foil-active='true']:not(.obs-card-front):not(.obs-return-cover) [data-hot-foil] > .cover-image.is-loaded { filter:url('#hot-foil-subtle'); }
 }
-.obs-foil::after { content:''; position:absolute; inset:0; background:repeating-linear-gradient(0deg,transparent 0 2px,rgba(255,255,255,.16) 2px 3px); mix-blend-mode:overlay; }
-.obs-glare { background:radial-gradient(ellipse at var(--foil-x,50%) var(--foil-y,50%),rgba(255,255,255,.5),transparent 55%); mix-blend-mode:soft-light; opacity:.2; }
-.obs-card-hot:hover .obs-foil { opacity:calc(var(--obs-foil-strength) + .15); }
-.obs-card-hot:hover .obs-glare { opacity:.65; }
 .obs-soft-glare { background:radial-gradient(ellipse at var(--foil-x,50%) var(--foil-y,50%),rgba(255,255,255,.18),transparent 60%); opacity:0; }
 .obs-card:hover .obs-soft-glare { opacity:1; }
 :is(.obs-card,.selected-post) .hot-badge { z-index:4; background:rgba(22,18,36,.82); color:#f0dfff; border:1px solid rgba(197,158,255,.32); box-shadow:0 5px 18px rgba(0,0,0,.24); backdrop-filter:blur(14px); transform:none; animation:none; border-radius:999px; }
@@ -80,8 +79,7 @@ body::before { content:''; position:fixed; inset:0; pointer-events:none; z-index
 .post-stack-modal { background:rgba(var(--shade),.65); backdrop-filter:blur(18px); }
 .auth-screen,.promo-auth,.vault-gate,.news-auth,#authGate,.m-auth { background:transparent !important; }
 .auth-card,#authGate .card { background:var(--obs-glass); border:1px solid var(--line); border-radius:24px; backdrop-filter:blur(30px); box-shadow:0 24px 80px rgba(var(--shade),.24); }
-:root[data-effects='subtle'] { --obs-foil-strength:.15; }
-:root[data-effects='off'] .obs-foil,:root[data-effects='off'] .obs-glare,:root[data-effects='off'] .obs-soft-glare { display:none; }
+:root[data-effects='off'] .obs-soft-glare { display:none; }
 :root[data-effects='off'] body::before { animation:none; }
 :root[data-effects='off'] .obs-card { transform:none !important; }
 :root[data-effects='off'] .post-stack::before,:root[data-effects='off'] .post-stack::after { transform:none !important; }
@@ -91,7 +89,7 @@ body::before { content:''; position:fixed; inset:0; pointer-events:none; z-index
 @keyframes obs-ambient { from { opacity:.65; transform:scale(1); } to { opacity:1; transform:scale(1.12); } }
 @keyframes obs-pop { from { opacity:0; translate:0 8px; } to { opacity:1; translate:0 0; } }
 @media(max-width:700px) { .shell { padding:12px; } .app-layout { height:calc(100dvh - 24px); } .product-header { padding:14px; } }
-@media(prefers-reduced-motion:reduce) { body::before { animation:none; } .obs-card { transform:none !important; } .obs-foil,.obs-glare,.obs-soft-glare { transition:none; } .post-stack::before,.post-stack::after { transition:none; transform:none !important; } .filter-popover,.right-rail .panel,.settings-menu-panel,.post-menu-panel { animation:none; } }
+@media(prefers-reduced-motion:reduce) { body::before { animation:none; } .obs-card { transform:none !important; } .obs-soft-glare { transition:none; } .post-stack::before,.post-stack::after { transition:none; transform:none !important; } .filter-popover,.right-rail .panel,.settings-menu-panel,.post-menu-panel { animation:none; } }
 
 .obs-preview {position:relative;max-width:1350px;margin:auto;padding:70px 52px 110px;height:100dvh;overflow:auto;} .obs-preview header {display:flex;justify-content:space-between;align-items:center;gap:24px;margin-bottom:44px;} .obs-preview header p,.obs-preview-label {font-size:10px;letter-spacing:.16em;color:var(--muted-strong);} .obs-preview h1 {font-size:42px;letter-spacing:-.05em;font-weight:500;margin:16px 0;} .obs-preview header span {color:var(--muted-strong);font-size:13px;} .obs-preview header a {font-size:12px;color:var(--text);border:1px solid var(--line);border-radius:999px;padding:12px 18px;white-space:nowrap;} .obs-preview-grid {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:28px;} .obs-preview-grid .post-card {width:100%;} .obs-preview-grid .post-media {aspect-ratio:700/760;} .obs-preview-label {margin:0 0 24px;} .obs-preview footer {color:var(--muted);font-size:11px;margin-top:30px;} @media(max-width:700px){.obs-preview{padding:30px 18px 100px}.obs-preview header{display:block}.obs-preview header a{display:inline-block;margin-top:20px}.obs-preview h1{font-size:30px}.obs-preview-grid{grid-template-columns:1fr;gap:30px}}
 
@@ -211,16 +209,14 @@ body::before { content:''; position:fixed; inset:0; pointer-events:none; z-index
 
 .post-stack-modal-inner { width:min(calc(var(--deck-visible,3) * 276px + 28px),920px,100%); }
 
-/* Rate-driven brushed metal, under the existing holographic foil. */
+/* Rate-driven metal remains on the card frame and badge, outside the artwork. */
 .obs-card-hot {
   border:1px solid rgba(var(--metal-light,232,207,140),.58);
   background:linear-gradient(125deg,rgba(var(--metal-rgb,178,111,58),.24),transparent 36%,rgba(var(--metal-rgb,178,111,58),.12)),var(--panel-bg,#17171d);
   box-shadow:inset 0 1px 0 rgba(var(--metal-light,232,207,140),.4),inset 0 -1px 0 rgba(var(--metal-rgb,178,111,58),.45),0 10px 30px rgba(var(--metal-rgb,178,111,58),.12);
 }
 .obs-card-hot:hover { box-shadow:inset 0 0 0 1px rgba(var(--metal-light,232,207,140),.65),0 18px 42px rgba(var(--metal-rgb,178,111,58),.23); }
-.obs-metal { position:absolute; inset:0; z-index:1; pointer-events:none; background:linear-gradient(115deg,rgba(var(--metal-rgb),.38),transparent 28%,rgba(var(--metal-light),.5) 48%,transparent 65%,rgba(var(--metal-rgb),.32)); background-size:220% 220%; background-position:var(--foil-x,50%) var(--foil-y,50%); mix-blend-mode:soft-light; }
 .obs-card-hot .hot-badge { background:linear-gradient(135deg,rgba(var(--metal-rgb),.95),rgba(var(--metal-light),.95)); color:#21180f; border:1px solid rgba(var(--metal-light),.8); box-shadow:0 3px 14px rgba(var(--metal-rgb),.28); }
-:root[data-effects='off'] .obs-metal { display:none; }
 
 /* A physical two-sided card: the front is never mirrored onto the back. */
 .obs-card-turn.obs-persistent-card { overflow:visible; transform-style:preserve-3d; background:transparent; border:0; box-shadow:none; }
