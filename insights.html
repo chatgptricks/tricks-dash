@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-tool="insights">
   <head>
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; connect-src 'self' https://cortex-api-db2e.onrender.com https://*.googleapis.com https://*.firebaseio.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://www.gstatic.com;">
 <meta charset="utf-8" />
@@ -41,17 +41,7 @@ body{margin:0;background:var(--bg);color:var(--text);
   font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,sans-serif;
   font-size:13px;-webkit-font-smoothing:antialiased}
 a{color:inherit}
-/* Full width, matching the tracker and the dashboard. */
-.wrap{max-width:none;margin:0;padding:18px 24px 80px}
-
-/* topbar */
-.top{display:flex;align-items:center;justify-content:space-between;gap:18px;
-  padding:14px 18px;border:1px solid var(--line);border-radius:12px;background:var(--panel);margin-bottom:14px}
-.brand small{display:block;color:var(--muted);font-size:9px;font-weight:800;
-  letter-spacing:.16em;text-transform:uppercase;margin-bottom:3px}
-.brand h1{margin:0;font-size:23px;font-weight:800;letter-spacing:-.02em}
-.brand h1 span{color:var(--accent-text)}
-.top-actions{display:flex;gap:8px;align-items:center}
+/* Shared page and header geometry live in product-layout.css. */
 .linkbtn{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 13px;
   border:1px solid var(--line);border-radius:8px;background:var(--panel-2);color:var(--muted-2);
   font-size:11px;font-weight:700;text-decoration:none;cursor:pointer}
@@ -120,6 +110,7 @@ tbody tr:hover{background:rgba(var(--edge),.03)}
 .cloud-h{font-size:11px;color:var(--muted);margin:0 0 9px;text-transform:uppercase;letter-spacing:.08em}
 
 /* heatmap */
+#heat{overflow-x:auto}
 .heat{display:grid;grid-template-columns:38px repeat(24,1fr);gap:2px;font-size:8px}
 .heat div{border-radius:2px}
 .heat .lbl{color:var(--muted);font-weight:700;display:flex;align-items:center;justify-content:flex-end;
@@ -227,6 +218,8 @@ tbody tr:hover{background:rgba(var(--edge),.03)}
 </style>
 <link rel="stylesheet" href="/product-shell.css?v=20260905c">
 <link rel="stylesheet" href="/obsidian.css?v=20260928-visual1">
+<link rel="stylesheet" href="/product-motion.css?v=20261003-motion1">
+<link rel="stylesheet" href="/product-layout.css?v=20261004-shell1">
 <script src="/visual-effects.js?v=20260928-visual1" defer></script>
 </head>
 <body>
@@ -237,16 +230,18 @@ tbody tr:hover{background:rgba(var(--edge),.03)}
     <button id="authGateBtn" type="button">Sign in with Google</button>
   </div>
 </div>
-<div class="wrap">
-  <div class="top">
-    <div class="brand">
-      <small>Sentient</small>
-      <h1>Insights<span>.</span></h1>
+<div class="wrap product-page">
+  <header class="product-header" data-section="insights">
+    <a class="product-brand" href="/index.html" target="sentient-dashboard" aria-label="Sentient home">sentient<span>dash</span><small>.app</small></a>
+    <div class="product-toolbar">
+      <h1>Insights</h1>
+      <span id="scope" style="color:var(--muted);font-size:11px"></span>
     </div>
-    <div class="top-actions">
+    <nav class="product-nav" aria-label="Sentient tools"></nav>
+    <div class="product-account">
       <div class="settings-menu" id="settingsMenu">
-        <button type="button" class="settings-menu-trigger" id="settingsTrigger" aria-label="Settings" aria-expanded="false" title="Settings"><span>?</span></button>
-        <div class="settings-menu-panel" id="settingsPanel" role="dialog" aria-label="Settings">
+        <button type="button" class="settings-menu-trigger" id="settingsTrigger" aria-label="Settings" aria-expanded="false" aria-haspopup="dialog" aria-controls="settingsPanel" title="Settings"><span>?</span></button>
+        <div class="settings-menu-panel" id="settingsPanel" role="dialog" aria-label="Settings" tabindex="-1">
           <div class="settings-menu-section">
             <span data-i18n="Accent color">Accent color</span>
             <div class="settings-accent-picker" id="settingsAccentPicker">
@@ -260,8 +255,8 @@ tbody tr:hover{background:rgba(var(--edge),.03)}
           <div class="settings-menu-section">
             <span data-i18n="Theme">Theme</span>
             <div class="settings-menu-segment" id="settingsThemeSegment">
-              <button type="button" data-theme-choice="dark">🌙 <span data-i18n="Dark">Dark</span></button>
-              <button type="button" data-theme-choice="light">☀️ <span data-i18n="Light">Light</span></button>
+              <button type="button" data-theme-choice="dark"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-moon" aria-hidden="true" focusable="false"><path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"></path></svg><span data-i18n="Dark">Dark</span></button>
+              <button type="button" data-theme-choice="light"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-sun" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.41 1.41"></path><path d="m19.07 4.93-1.41 1.41"></path></svg><span data-i18n="Light">Light</span></button>
             </div>
           </div>
           <div class="settings-menu-section">
@@ -271,23 +266,21 @@ tbody tr:hover{background:rgba(var(--edge),.03)}
               <button type="button" class="lang-option" data-lang="es">ES</button>
             </div>
           </div>
-          <div class="settings-menu-admin" id="settingsAdmin">
+          <div class="settings-menu-section settings-menu-admin" id="settingsAdmin">
             <span>Command center</span>
-            <a class="settings-menu-link" href="./settings.html" target="sentient-settings">⚙ <span data-i18n="Settings">Settings</span></a>
+            <a class="settings-menu-link" href="./settings.html" target="sentient-settings"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-settings" aria-hidden="true" focusable="false"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"></path><circle cx="12" cy="12" r="3"></circle></svg><span data-i18n="Settings">Settings</span></a>
           </div>
           <div class="settings-menu-footer">
             <small id="settingsEmail"></small>
-            <button type="button" class="settings-menu-signout" id="settingsSignOut">⎋ <span data-i18n="Sign out">Sign out</span></button>
+            <button type="button" class="settings-menu-signout" id="settingsSignOut"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-log-out" aria-hidden="true" focusable="false"><path d="m16 17 5-5-5-5"></path><path d="M21 12H9"></path><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path></svg><span data-i18n="Sign out">Sign out</span></button>
           </div>
         </div>
       </div>
-      <span id="scope" style="color:var(--muted);font-size:11px"></span>
-      <button class="linkbtn" id="shareBtn" title="Copy a link to this exact view">Copy link</button>
-      <button class="linkbtn" id="pdfBtn" title="Download a PDF of the current selection">Export PDF</button>
-      <a class="linkbtn" href="./tracker.html" target="sentient-tracker">Tracker</a>
-      <a class="linkbtn" href="./queue.html" target="sentient-queue">Queue</a>
-      <a class="linkbtn" href="./index.html" target="sentient-dashboard">← Dashboard</a>
     </div>
+  </header>
+  <div class="product-page-controls product-page-actions" role="group" aria-label="Insights actions">
+    <button class="linkbtn" id="shareBtn" title="Copy a link to this exact view">Copy link</button>
+    <button class="linkbtn" id="pdfBtn" title="Download a PDF of the current selection">Export PDF</button>
   </div>
 
   <div class="filters">
@@ -346,6 +339,19 @@ const escapeHtml = value => String(value ?? '').replace(/&/g,'&amp;').replace(/<
 const safeUrl = value => { try { const url = new URL(String(value || '')); return /^https?:$/.test(url.protocol) ? url.href : ''; } catch { return ''; } };
 
 let RAW=[], ACCOUNTS=[], SEL=new Set(), CHARTS=[], FOLLOWER_GROWTH=null, FOLLOWER_GROWTH_ERROR='';
+let INSIGHTS_SESSION=0, INSIGHTS_BOOT=0;
+window.__resetToolSession = () => {
+  INSIGHTS_SESSION += 1;
+  INSIGHTS_BOOT += 1;
+  RAW=[]; ACCOUNTS=[]; SEL=new Set(); FOLLOWER_GROWTH=null; FOLLOWER_GROWTH_ERROR='';
+  NAME_WORDS_BY_ACCOUNT={}; BASE={};
+  destroyCharts();
+  $('#accChips').textContent='';
+  $('#scope').textContent='';
+  $('#app').innerHTML='<div class="empty">Loading Insights data…</div>';
+  $('#app').setAttribute('aria-busy', 'true');
+  window.__resetToolSettings?.();
+};
 
 // Every account's handle/label shows up as a watermark on its own covers, so
 // without this the "topics" cloud is dominated by page names instead of
@@ -385,7 +391,7 @@ const WORD_ALIASES={openal:'openai'};
 // it exactly for someone else. Defaults are omitted so a plain view keeps a
 // plain URL. Accounts are only written when the selection is a real subset.
 // ---------------------------------------------------------------------------
-const URL_DEFAULTS = {acc:'', from:'', to:'', preset:'', ftype:'', metric:'l'};
+const URL_DEFAULTS = {acc:'', selection:'', from:'', to:'', preset:'', ftype:'', metric:'l'};
 
 function encodeRoute(state){
   try{
@@ -419,6 +425,7 @@ function writeUrl(){
   const isAll = all.length>0 && SEL.size===all.length && all.every(h=>SEL.has(h));
   const state = {
     acc: isAll ? '' : [...SEL].join(','),
+    selection: SEL.size === 0 ? 'none' : '',
     from: $('#from').value, to: $('#to').value,
     preset: $('#preset').value, ftype: $('#ftype').value, metric: $('#metric').value,
   };
@@ -473,16 +480,25 @@ function destroyCharts(){ CHARTS.forEach(c=>{try{c.destroy()}catch(e){}}); CHART
 const insightsDelay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const INSIGHTS_RETRYABLE = new Set([502, 503, 504]);
 async function insightsGet(path){
+  const session=INSIGHTS_SESSION;
   let lastError = null;
   for(let attempt=0; attempt<4; attempt+=1){
     try{
       if(window.__refreshFirebaseIdToken) await window.__refreshFirebaseIdToken(attempt>0);
+      if(session!==INSIGHTS_SESSION) throw Object.assign(new Error('Session changed.'), {final:true});
       const headers = window.__sentientRolePreviewHeaders ? window.__sentientRolePreviewHeaders() : {};
       if(window.__firebaseIdToken) headers.Authorization = 'Bearer '+window.__firebaseIdToken;
       const response = await fetch(API+path, {headers});
-      if(response.status===401||response.status===403){
+      if(session!==INSIGHTS_SESSION) throw Object.assign(new Error('Session changed.'), {final:true});
+      if(response.status===403){
+        let detail='You do not have access to this Insights action.';
+        try{ const body=await response.json(); if(typeof body?.detail==='string') detail=body.detail; }catch{}
+        throw Object.assign(new Error(detail), {status:403,final:true});
+      }
+      if(response.status===401){
+        if(attempt<3){ await insightsDelay(350*(attempt+1)); continue; }
         window.__onInsightsUnauthorized && window.__onInsightsUnauthorized();
-        throw new Error('unauthorized');
+        throw Object.assign(new Error('unauthorized'), {final:true});
       }
       if(!response.ok){
         lastError = new Error('HTTP '+response.status);
@@ -490,12 +506,12 @@ async function insightsGet(path){
           await insightsDelay(700*(2**attempt));
           continue;
         }
-        throw lastError;
+        throw Object.assign(lastError, {final:true});
       }
       return response;
     }catch(error){
       lastError = error;
-      if(error?.message==='unauthorized') throw error;
+      if(error?.final) throw error;
       if(attempt<3){ await insightsDelay(700*(2**attempt)); continue; }
     }
   }
@@ -503,15 +519,21 @@ async function insightsGet(path){
 }
 
 async function boot(){
+  const session=INSIGHTS_SESSION, request=++INSIGHTS_BOOT;
+  const current=()=>session===INSIGHTS_SESSION && request===INSIGHTS_BOOT;
+  $('#app').setAttribute('aria-busy','true');
+  FOLLOWER_GROWTH_ERROR='';
   try{
     const [r, growth] = await Promise.all([
       insightsGet('/api/insights/posts'),
       insightsGet('/api/insights/follower-growth').then(response=>response.json()).catch(error=>{
-        FOLLOWER_GROWTH_ERROR=error?.message || 'Follower-growth signals are temporarily unavailable.';
+        if(current()) FOLLOWER_GROWTH_ERROR=error?.message || 'Follower-growth signals are temporarily unavailable.';
         return null;
       }),
     ]);
     const data = await r.json();
+    if(!current()) return;
+    if(!Array.isArray(data.posts) || !Array.isArray(data.accounts)) throw new Error('Insights returned incomplete data. Please retry.');
     FOLLOWER_GROWTH = growth;
     RAW = data.posts.map(p=>{
       const t = p.d ? new Date(p.d).getTime() : NaN;
@@ -526,7 +548,7 @@ async function boot(){
     const u = readUrl();
     const known = new Set(ACCOUNTS.map(a=>a.handle));
     const wanted = u.acc.split(',').map(h=>h.trim()).filter(h=>known.has(h));
-    SEL = wanted.length ? new Set(wanted) : new Set(known);
+    SEL = u.selection==='none' ? new Set() : wanted.length ? new Set(wanted) : new Set(known);
     $('#from').value = u.from;
     $('#to').value = u.to;
     $('#preset').value = u.preset;
@@ -534,22 +556,42 @@ async function boot(){
     $('#metric').value = u.metric;
 
     buildChips();
-    ['from','to','ftype','metric'].forEach(id=>$('#'+id).addEventListener('change',render));
-    $('#preset').addEventListener('change',applyPreset);
-    $('#shareBtn').addEventListener('click',shareLink);
+    ['from','to','ftype','metric'].forEach(id=>$('#'+id).onchange=render);
+    $('#preset').onchange=applyPreset;
+    $('#shareBtn').onclick=shareLink;
     // A preset in the URL already came with its own from/to, so re-running
     // applyPreset would recompute them off today's date and quietly shift the
     // window a shared link was pointing at.
     render();
   }catch(e){
-    $('#app').innerHTML = '<div class="empty">Could not load the data.<br><small>'+escapeHtml(e.message || 'Connection failed.')+'</small></div>';
+    if(!current()) return;
+    $('#app').innerHTML = '<div class="empty" role="alert">Could not load the data.<br><small>'+escapeHtml(e.message || 'Connection failed.')+'</small><br><button class="linkbtn" id="retryInsights">Retry</button></div>';
+    $('#retryInsights').onclick=boot;
+  }finally{
+    if(current()) $('#app').setAttribute('aria-busy','false');
   }
+}
+
+async function retryFollowerGrowth(){
+  const session=INSIGHTS_SESSION, request=INSIGHTS_BOOT;
+  FOLLOWER_GROWTH_ERROR='';
+  render();
+  try{
+    const response=await insightsGet('/api/insights/follower-growth');
+    const growth=await response.json();
+    if(session!==INSIGHTS_SESSION || request!==INSIGHTS_BOOT) return;
+    FOLLOWER_GROWTH=growth;
+  }catch(error){
+    if(session!==INSIGHTS_SESSION || request!==INSIGHTS_BOOT) return;
+    FOLLOWER_GROWTH_ERROR=error?.message || 'Follower-growth signals are temporarily unavailable.';
+  }
+  render();
 }
 
 function buildChips(){
   const box = $('#accChips');
   box.innerHTML='';
-  const mk=(label,handler,on)=>{const s=document.createElement('span');s.className='chip'+(on?' on':'');
+  const mk=(label,handler,on)=>{const s=document.createElement('button');s.type='button';s.className='chip'+(on?' on':'');s.setAttribute('aria-pressed',String(Boolean(on)));
     s.textContent=label;s.onclick=handler;box.appendChild(s);return s;};
   mk('All',()=>{SEL=new Set(ACCOUNTS.map(a=>a.handle));buildChips();render()},SEL.size===ACCOUNTS.length);
   // Deselecting everything is a real state, not an error: it is how you
@@ -725,9 +767,9 @@ function followerGrowthRecommendations(peaks, coverage){
 function sectionFollowerGrowth(){
   if(!FOLLOWER_GROWTH){
     const message=FOLLOWER_GROWTH_ERROR
-      ? 'Post performance is available; follower signals will retry automatically when the Tracker source reconnects.'
+      ? 'Post performance is available; follower signals could not load. Retry to reconnect to the Tracker source.'
       : 'Loading the daily follower signal…';
-    return `<section><h2>Follower intelligence <span class="tag">strategy</span></h2><p class="sub">${message}</p></section>`;
+    return `<section><h2>Follower intelligence <span class="tag">strategy</span></h2><p class="sub">${message}</p>${FOLLOWER_GROWTH_ERROR?'<button class="linkbtn" data-retry-follower-growth>Retry follower signals</button>':''}</section>`;
   }
   const peaks=followerPeakRows();
   const coverage=followerGrowthCoverage();
@@ -886,7 +928,12 @@ function drawAccounts(P){
       pace:g.length/days, hot:g.filter(p=>p.hot).length};
   }).filter(Boolean);
 
-  rows.sort((a,b)=>((b[accSort.k]??-1)-(a[accSort.k]??-1))*(accSort.dir<0?1:-1));
+  rows.sort((a,b)=>{
+    if(accSort.k==='h') return a.h.localeCompare(b.h)*accSort.dir;
+    if(a[accSort.k]==null) return b[accSort.k]==null ? a.h.localeCompare(b.h) : 1;
+    if(b[accSort.k]==null) return -1;
+    return (a[accSort.k]-b[accSort.k])*accSort.dir || a.h.localeCompare(b.h);
+  });
   const maxL=maxOf(rows.map(r=>r.likes))||1;
   const cols=[['h','Account'],['n','Posts'],['likes','Avg likes'],['views','Avg views'],
               ['com','Comments'],['er','Eng./view'],['pace','Posts/day'],['hot','HOT']];
@@ -898,8 +945,10 @@ function drawAccounts(P){
       <td>${fmt(r.n)}</td><td>${fmt(r.likes)}</td><td>${r.views==null?'—':fmt(r.views)}</td>
       <td>${fmt(r.com)}</td><td>${pct(r.er)}</td><td>${r.pace.toFixed(1)}</td><td>${r.hot}</td></tr>`).join('')+'</tbody>';
   $('#tAcc').querySelectorAll('th').forEach(th=>th.onclick=()=>{
-    const k=th.dataset.k; accSort={k, dir: accSort.k===k?-accSort.dir:-1}; drawAccounts(P);});
+    const k=th.dataset.k; accSort={k, dir: accSort.k===k?-accSort.dir:k==='h'?1:-1}; drawAccounts(P);});
 
+  const previousChart=CHARTS.find(chart=>chart.canvas===$('#cAcc'));
+  if(previousChart){ previousChart.destroy(); CHARTS=CHARTS.filter(chart=>chart!==previousChart); }
   CHARTS.push(new Chart($('#cAcc'),{type:'bubble',
     data:{datasets:rows.filter(r=>r.views!=null&&r.er!=null).map(r=>({label:'@'+r.h,
       data:[{x:r.views,y:r.er,r:Math.max(5,Math.min(26,Math.sqrt(r.n)*1.6))}],
@@ -1086,6 +1135,7 @@ function sectionTop(P){
 }
 
 document.addEventListener('click', event => {
+  if(event.target.closest('[data-retry-follower-growth]')){ retryFollowerGrowth(); return; }
   const row = event.target.closest('.insight-post-row[data-url]');
   const url = row?.dataset.url;
   if(url) window.open(url, '_blank', 'noopener');
@@ -1173,6 +1223,7 @@ const gate = document.getElementById('authGate');
 const gateText = document.getElementById('authGateText');
 const gateBtn = document.getElementById('authGateBtn');
 let booted = false;
+let sessionUid = null, authTurn = 0;
 
 window.__onInsightsUnauthorized = () => {
   gateText.textContent = (auth.currentUser?.email || 'This Google account') + ' isn’t authorized for Sentient Dash.';
@@ -1204,18 +1255,32 @@ async function runSignIn() {
 }
 
 onAuthStateChanged(auth, async (user) => {
-  if (!user) {
+  const turn = ++authTurn;
+  const uid = user?.uid || '';
+  if(uid !== sessionUid){
+    sessionUid = uid;
     booted = false;
+    window.__firebaseIdToken = '';
+    window.__signedInEmail = '';
+    window.__refreshFirebaseIdToken = undefined;
+    window.__resetToolSession?.();
+    window.dispatchEvent(new CustomEvent('sentient-auth-changed'));
+  }
+  if (!user) {
     showSignInGate();
     return;
   }
   window.__refreshFirebaseIdToken = async (forceRefresh = false) => {
-    const token = await auth.currentUser?.getIdToken(forceRefresh);
+    const token = await user.getIdToken(forceRefresh);
+    if(auth.currentUser?.uid !== uid) return '';
     if(token) window.__firebaseIdToken = token;
     return token || '';
   };
-  await window.__refreshFirebaseIdToken();
+  try{ await window.__refreshFirebaseIdToken(); }
+  catch(error){ if(turn === authTurn){ showSignInGate(); gateText.textContent = describeSignInError(error); } return; }
+  if(turn !== authTurn || auth.currentUser?.uid !== uid) return;
   window.__signedInEmail = user.email || '';
+  window.dispatchEvent(new CustomEvent('sentient-auth-changed'));
   window.SentientPreferences?.load({ email: user.email || '' });
   setSettingsAvatar(user);
   gate.classList.add('hidden');
@@ -1404,6 +1469,7 @@ function setTheme(next) {
   document.documentElement.setAttribute('data-theme', theme);
   document.querySelectorAll('#settingsThemeSegment button').forEach((b) => {
     b.classList.toggle('is-on', b.dataset.themeChoice === theme);
+    b.setAttribute('aria-pressed', String(b.dataset.themeChoice === theme));
   });
   // Chart.js bakes colours in at construction, so a live chart keeps the old
   // palette until it is rebuilt.
@@ -1447,6 +1513,7 @@ function applyI18n() {
   });
   document.querySelectorAll('.lang-option').forEach((b) => {
     b.classList.toggle('is-on', b.dataset.lang === lang);
+    b.setAttribute('aria-pressed', String(b.dataset.lang === lang));
   });
 }
 window.__applyI18n = applyI18n;
@@ -1512,6 +1579,7 @@ function setAccent(next) {
   root.style.setProperty('--accent-soft', `rgba(${rgb.join(', ')}, .15)`);
   document.querySelectorAll('#settingsAccentPicker button').forEach((b) => {
     b.classList.toggle('is-on', b.dataset.accentChoice === normalized);
+    b.setAttribute('aria-pressed', String(b.dataset.accentChoice === normalized));
   });
   const custom = document.getElementById('settingsCustomColor');
   if (custom) custom.value = accentHex(normalized);
@@ -1550,27 +1618,35 @@ function setSettingsAvatar(user) {
     settingsTrigger.append(image);
   } else settingsTrigger.append(Object.assign(document.createElement('span'), { textContent: initial }));
 }
-function closeSettings() {
+function closeSettings({ restoreFocus = false } = {}) {
+  const wasOpen = settingsPanel.classList.contains('is-open');
   settingsPanel.classList.remove('is-open');
   settingsTrigger.classList.remove('is-active');
   settingsTrigger.setAttribute('aria-expanded', 'false');
+  if (wasOpen && restoreFocus) settingsTrigger.focus();
 }
 function openSettings() {
   document.getElementById('settingsEmail').textContent = window.__signedInEmail || '';
   settingsPanel.classList.add('is-open');
   settingsTrigger.classList.add('is-active');
   settingsTrigger.setAttribute('aria-expanded', 'true');
+  (settingsPanel.querySelector('button:not([disabled]), input:not([disabled]), a[href]') || settingsPanel).focus();
   checkAdminForSettings();
 }
 settingsTrigger.addEventListener('click', (e) => {
   e.stopPropagation();
   if (settingsPanel.classList.contains('is-open')) closeSettings(); else openSettings();
 });
-document.addEventListener('click', (e) => {
+document.addEventListener('mousedown', (e) => {
   if (!settingsMenu.contains(e.target)) closeSettings();
 });
+settingsMenu.addEventListener('focusout', (event) => {
+  if (event.relatedTarget && !settingsMenu.contains(event.relatedTarget)) closeSettings();
+});
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') closeSettings();
+  if (e.key !== 'Escape' || !settingsPanel.classList.contains('is-open')) return;
+  e.preventDefault();
+  closeSettings({ restoreFocus: true });
 });
 document.getElementById('settingsSignOut').addEventListener('click', () => {
   closeSettings();
@@ -1582,20 +1658,30 @@ document.getElementById('settingsSignOut').addEventListener('click', () => {
 // __onInsightsUnauthorized before Firebase has produced a token. Best-effort:
 // if the check fails (offline, not booted yet) the section just stays hidden.
 let adminChecked = false;
+window.__resetToolSettings = () => {
+  adminChecked = false;
+  document.getElementById('settingsAdmin').classList.remove('is-visible');
+  settingsPanel.classList.remove('is-admin');
+  document.getElementById('settingsEmail').textContent = '';
+  closeSettings();
+  setSettingsAvatar(null);
+};
 function checkAdminForSettings() {
   if (adminChecked || !window.__firebaseIdToken) return;
+  const session = INSIGHTS_SESSION;
   adminChecked = true;
-  fetch(API + '/api/dashboard/me', { headers: window.__sentientRolePreviewHeaders
-    ? window.__sentientRolePreviewHeaders({ Authorization: 'Bearer ' + window.__firebaseIdToken })
-    : { Authorization: 'Bearer ' + window.__firebaseIdToken } })
-    .then((r) => (r.ok ? r.json() : null))
+  insightsGet('/api/dashboard/me')
+    .then((r) => r.json())
     .then((me) => {
-      const isAdmin = Boolean(me && (me.is_admin || me.is_dev || (Array.isArray(me.operating_roles) && me.operating_roles.includes('admin')) || me.operating_role === 'admin'));
+      if(session !== INSIGHTS_SESSION) return;
+      const preview = sessionStorage.getItem('sentient.queueRolePreview');
+      const isAdmin = ['sales','pd','vc','trainee','admin'].includes(preview) ? preview === 'admin' : Boolean(me && (me.is_admin || me.is_dev || (Array.isArray(me.operating_roles) && me.operating_roles.includes('admin')) || me.operating_role === 'admin'));
       document.getElementById('settingsAdmin').classList.toggle('is-visible', isAdmin);
+    settingsPanel.classList.toggle('is-admin', isAdmin);
     })
-    .catch(() => { adminChecked = false; });
+    .catch(() => { if(session === INSIGHTS_SESSION) adminChecked = false; });
 }
 </script>
-<script type="module" src="/product-static.js?v=20260928-tracker"></script>
+<script type="module" src="/product-static.js?v=20261004-shell1"></script>
 </body>
 </html>

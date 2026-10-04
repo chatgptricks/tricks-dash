@@ -1,0 +1,161 @@
+/* Research's final visual layer. The entry marker also scopes body portals. */
+:root[data-tool='research'] .product-header[data-section='research'] .topbar-search {
+  height: 36px;
+  border-color: rgba(var(--ink), .15);
+  background: rgba(var(--ink), .035);
+}
+:root[data-tool='research'] .product-header[data-section='research'] .topbar-search:focus-within {
+  border-color: rgba(var(--accent-rgb), .55);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), .1);
+}
+:root[data-tool='research'] .topbar-search input::placeholder { color: var(--muted-strong); }
+:root[data-tool='research'] .product-header[data-section='research'] .results-count {
+  color: var(--muted-strong);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width:1399px) {
+  :root[data-tool='research'] .product-header[data-section='research'] .topbar-search { max-width: none; }
+}
+
+/* Keep the compact toolbar, with readable labels and a clear active state. */
+:root[data-tool='research'] .research-dashboard .group-tab {
+  font-size: 12px;
+  font-weight: 550;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--muted-strong);
+}
+:root[data-tool='research'] .research-dashboard .filter-trigger {
+  color: var(--muted-strong);
+  border-color: rgba(var(--ink), .14);
+}
+:root[data-tool='research'] .research-dashboard .filter-trigger:is(:hover, [aria-expanded='true']) {
+  color: var(--text-strong);
+  border-color: rgba(var(--ink), .3);
+  background: rgba(var(--ink), .06);
+}
+:root[data-tool='research'] .research-dashboard .filter-trigger-active {
+  color: var(--accent-text);
+  border-color: rgba(var(--accent-rgb), .5);
+  background: rgba(var(--accent-rgb), .1);
+}
+:root[data-tool='research'] .research-dashboard .filter-trigger-active:is(:hover, [aria-expanded='true']) {
+  color: var(--accent-text);
+  border-color: rgba(var(--accent-rgb), .7);
+  background: rgba(var(--accent-rgb), .16);
+}
+:root[data-tool='research'] .filter-trigger-summary { opacity: 1; }
+:root[data-tool='research'] .research-dashboard .pagination {
+  color: var(--muted-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Card geometry, media, HOT finishes and gold ink keep their existing owners. */
+:root[data-tool='research'] :is(.obs-card, .obs-card-front):not(.post-card-golden-nugget) .post-user-copy > span,
+:root[data-tool='research'] .gallery-grid .post-card:not(.post-card-golden-nugget) .post-footer {
+  color: var(--muted-strong);
+}
+
+/* The actual rendered filter class is a body portal, not a toolbar child. */
+:root[data-tool='research'] .filter-popover-panel {
+  box-sizing: border-box;
+  padding: 16px;
+  border: 1px solid rgba(var(--ink), .18);
+  border-radius: 16px;
+  background: var(--surface-2);
+  box-shadow: 0 16px 48px rgba(var(--shade), .28), inset 0 1px 0 rgba(var(--ink), .035);
+  overscroll-behavior: contain;
+  animation: research-filter-in var(--motion-base) var(--ease-out);
+}
+:root[data-tool='research'][data-theme='light'] .filter-popover-panel { color-scheme: light; }
+:root[data-tool='research'] .filter-popover-panel .filter-popover-title {
+  color: var(--text-strong);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  margin-bottom: 12px;
+}
+:root[data-tool='research'] .filter-popover-panel :is(.select-field, .date-field, .number-field, .range-field) > span {
+  color: var(--muted-strong);
+}
+:root[data-tool='research'] .filter-popover-panel :is(button, input, select):focus-visible {
+  outline: 2px solid var(--accent-text);
+  outline-offset: 2px;
+}
+:root[data-tool='research'] .filter-popover-panel .account-multiselect-search:focus-within {
+  border-color: rgba(var(--accent-rgb), .6);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), .1);
+}
+:root[data-tool='research'] .filter-popover-panel .account-multiselect-search input:focus-visible { outline: none; }
+:root[data-tool='research'] :is(.results-scroll, .obs-inspector-info, .filter-popover-panel) {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(var(--ink), .24) transparent;
+}
+
+/* Keep caption actions beside their label and give the reading text contrast. */
+:root[data-tool='research'] .obs-inspector-info .caption-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px 12px;
+  align-items: start;
+}
+:root[data-tool='research'] .obs-inspector-info .caption-panel > * { grid-column: 1 / -1; min-width: 0; }
+:root[data-tool='research'] .obs-inspector-info .caption-panel > .caption-header {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: center;
+}
+:root[data-tool='research'] .obs-inspector-info .caption-panel > .caption-copy-row {
+  grid-column: 2;
+  grid-row: 1;
+  margin: 0;
+  justify-content: flex-end;
+}
+:root[data-tool='research'] .obs-inspector-info .caption-panel > p {
+  font-size: 13px;
+  line-height: 1.75;
+  color: var(--text);
+}
+:root[data-tool='research'] .obs-inspector-info .caption-header .section-label {
+  color: var(--muted-strong);
+  font-size: 11px;
+  letter-spacing: .06em;
+}
+:root[data-tool='research'] .obs-inspector-info .stats-panel .metric span { font-size: 10px; }
+:root[data-tool='research'] .obs-inspector-info .stats-panel .metric strong {
+  font-size: 14px;
+  line-height: 1.4;
+  font-weight: 550;
+  font-variant-numeric: tabular-nums;
+  white-space: normal;
+}
+:root[data-tool='research'] .obs-inspector-heading small { color: var(--muted-strong); }
+
+/* Expanded DEV details take space in the reading surface rather than clipping. */
+:root[data-tool='research'] .obs-inspector-info .dev-jev-tools:has(.dev-jev-panel) {
+  display: flex;
+  flex: 1 1 100%;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+:root[data-tool='research'] .obs-inspector-info .dev-jev-panel {
+  position: static;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  box-shadow: none;
+}
+@keyframes research-filter-in {
+  from { opacity: 0; translate: 0 4px; }
+  to { opacity: 1; translate: 0 0; }
+}
+:root[data-tool='research'][data-effects='off'] .filter-popover-panel { animation: none; }
+:root[data-tool='research'][data-effects='off'] :is(.group-tab, .filter-popover-panel .chip):hover { transform: none; }
+@media (prefers-reduced-motion:reduce), (hover:none) {
+  :root[data-tool='research'] .filter-popover-panel { animation: none; }
+  :root[data-tool='research'] :is(.group-tab, .filter-popover-panel .chip):hover { transform: none; }
+}

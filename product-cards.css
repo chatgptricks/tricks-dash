@@ -1,0 +1,66 @@
+/* Research is the common card and gallery reference for the product. */
+.gallery-grid,
+.product-card-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  align-items: start;
+  gap: 20px;
+  padding: 14px 8px 24px;
+  perspective: 1400px;
+}
+/* Match the gallery panel and scrolling pane around Research's grid. */
+.product-card-grid { margin-inline: 14px; padding-right: 16px; }
+.product-card-grid > * { min-width: 0; }
+@media (max-width: 1280px) {
+  .gallery-grid, .product-card-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (max-width: 1120px) { .product-card-grid { padding-right: 8px; } }
+@media (max-width: 960px) {
+  .gallery-grid, .product-card-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 700px) {
+  .gallery-grid, .product-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 460px) {
+  .gallery-grid, .product-card-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+.product-card.post-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-radius: 16px;
+  color: var(--text);
+  cursor: default;
+  box-shadow: inset 0 0 0 1px rgba(var(--ink), .08), 0 12px 30px rgba(var(--shade), .18);
+  transition: box-shadow .3s ease, transform .18s ease-out;
+}
+.product-card.post-card:hover {
+  transform: translateY(-2px);
+  box-shadow: inset 0 0 0 1px rgba(var(--ink), .17), 0 20px 44px rgba(var(--shade), .32);
+}
+.product-card .post-header { padding: 4px 10px; }
+.product-card .post-user { gap: 8px; }
+.product-card .post-avatar { width: 30px; height: 30px; font-size: 10px; }
+.product-card .post-user-copy { overflow: hidden; }
+.product-card .post-user-copy strong { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.product-card .post-user-copy strong a { color: inherit; text-decoration: none; }
+.product-card .post-user-copy > span { margin-top: 2px; font-size: 10px; color: var(--muted-strong); }
+.product-card .post-header-actions { flex: 0 0 auto; gap: 6px; }
+.product-card .product-card-media { aspect-ratio: 3 / 4; flex: 0 0 auto; width: 100%; background: var(--surface-3); }
+.product-card .product-card-image { display: block; width: 100%; height: 100%; position: absolute; inset: 0; object-fit: contain; object-position: center; filter: none; transform: none; }
+.product-card .product-card-placeholder { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 24px; color: var(--muted-strong); font-size: 11px; text-align: center; }
+.product-card .product-card-actions { gap: 5px; padding: 10px; }
+.product-card .product-card-actions :is(button, a) { display: inline-flex; align-items: center; gap: 4px; min-height: 0; padding: 6px 8px; border: 1px solid var(--line); border-radius: 999px; background: rgba(var(--ink), .035); color: var(--text); font: inherit; font-size: 11px; font-weight: 500; line-height: normal; text-decoration: none; cursor: pointer; }
+.product-card .product-card-actions .editorial-primary { color: var(--product-accent); border-color: var(--product-accent); }
+.product-card .product-card-actions button:disabled { opacity: .45; cursor: default; }
+.product-card .product-card-body { padding: 14px; min-width: 0; }
+.product-card .product-card-body h2 { margin: 0 0 6px; font-size: 13px; line-height: 1.4; font-weight: 600; color: var(--text-strong); overflow-wrap: anywhere; }
+.product-card .product-card-body p { margin: 3px 0 5px; font-size: 11px; line-height: 1.35; }
+.product-card .product-card-footer { gap: 8px; margin-top: 12px; font-size: 10px; color: var(--muted-strong); }
+.product-card :is(button, a, summary):focus-visible { outline: 2px solid var(--accent-text); outline-offset: 2px; }
+:root[data-effects='off'] .product-card.post-card { transition: none; }
+@media (prefers-reduced-motion: reduce), (hover: none) {
+  .product-card.post-card { transition: none; }
+  .product-card.post-card:hover { transform: none; }
+}

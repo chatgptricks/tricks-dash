@@ -271,10 +271,10 @@ body::before { content:''; position:fixed; inset:0; pointer-events:none; z-index
 }
 
 /* Blur follows the cards rather than appearing instantly. */
-.sidebar-backdrop,.obs-modal-backdrop { animation:obs-focus-in 850ms ease both; }
-.post-stack-modal { animation:obs-deck-focus-in 850ms ease both; }
-.sidebar-backdrop.obs-backdrop-closing,.obs-modal-backdrop.obs-backdrop-closing { animation:obs-focus-out 950ms ease both; }
-.post-stack-modal[data-closing='true'] { animation:obs-deck-focus-out 1200ms ease both; }
+.sidebar-backdrop,.obs-modal-backdrop { animation:obs-focus-in 360ms ease both; }
+.post-stack-modal { animation:obs-deck-focus-in 360ms ease both; }
+.sidebar-backdrop.obs-backdrop-closing,.obs-modal-backdrop.obs-backdrop-closing { animation:obs-focus-out 360ms ease both; }
+.post-stack-modal[data-closing='true'] { animation:obs-deck-focus-out 780ms ease both; }
 @keyframes obs-focus-in { from { background:rgba(var(--shade),0); -webkit-backdrop-filter:blur(0px); backdrop-filter:blur(0px); } to { background:rgba(var(--shade),.55); -webkit-backdrop-filter:blur(20px); backdrop-filter:blur(20px); } }
 @keyframes obs-focus-out { from { background:rgba(var(--shade),.55); -webkit-backdrop-filter:blur(20px); backdrop-filter:blur(20px); } to { background:rgba(var(--shade),0); -webkit-backdrop-filter:blur(0px); backdrop-filter:blur(0px); } }
 @keyframes obs-deck-focus-in { from { background:rgba(var(--shade),0); -webkit-backdrop-filter:blur(0px); backdrop-filter:blur(0px); } to { background:rgba(var(--shade),.35); -webkit-backdrop-filter:blur(18px); backdrop-filter:blur(18px); } }
@@ -310,10 +310,10 @@ body::before { content:''; position:fixed; inset:0; pointer-events:none; z-index
 /* No fallback flash or duplicated deck during the return. */
 [data-obs-closing='true'] .obs-inspector-info,[data-obs-closing='true'] .obs-inspector-heading,[data-obs-closing='true'] .rail-close-button,[data-obs-closing='true'] .obs-preview-close { opacity:0; pointer-events:none; transition:opacity .18s; }
 .obs-stack-open > .stack-card-shell,.obs-stack-open > .post-card,.obs-stack-open > .obs-deck-layer,.obs-stack-open > .post-stack-trigger,.obs-stack-open > .obs-deck-overflow { visibility:hidden; }
-.post-stack-modal[data-closing='true'] { animation-duration:var(--deck-exit-duration,1200ms); }
+.post-stack-modal[data-closing='true'] { animation-duration:var(--deck-exit-duration,780ms); }
 .post-stack-modal[data-closing='true'] .post-stack-heading { opacity:0; transition:opacity .18s; }
 
-.post-stack-modal[data-handoff='true'] { animation:obs-deck-focus-out var(--deck-exit-duration,1200ms) ease both; }
+.post-stack-modal[data-handoff='true'] { animation:obs-deck-focus-out var(--deck-exit-duration,780ms) ease both; }
 
 /* Let long account handles shrink before they push the card controls. */
 .obs-card .post-header { display:flex; gap:10px; }
@@ -493,21 +493,7 @@ body::before { content:''; position:fixed; inset:0; pointer-events:none; z-index
   .post-stack-modal .post-stack-grid { grid-template-columns:minmax(0,300px); }
 }
 
-/* Compact Research chrome; leave the shared tools' headers independent. */
-.product-header[data-section='research'] { padding:10px 16px; gap:10px 16px; margin-bottom:10px; border-radius:16px; }
-.product-header[data-section='research'] .product-toolbar { padding-top:8px; gap:10px; }
-.product-header[data-section='research'] .topbar-search { height:34px; }
-.product-header[data-section='research'] .results-count { margin-top:0; margin-bottom:0; white-space:nowrap; }
-.product-header[data-section='research'] .product-nav a { padding:6px 11px; }
-@media(min-width:1400px) {
-  .product-header[data-section='research'] { display:grid; grid-template-columns:auto minmax(250px,1fr) auto auto; gap:20px; }
-  .product-header[data-section='research'] .product-brand { grid-column:1; grid-row:1; font-size:21px; }
-  .product-header[data-section='research'] .product-toolbar { grid-column:2; grid-row:1; border:0; padding:0; flex-wrap:nowrap; }
-  .product-header[data-section='research'] .product-nav { grid-column:3; grid-row:1; flex-wrap:nowrap; }
-  .product-header[data-section='research'] .product-account { grid-column:4; grid-row:1; }
-  .product-header[data-section='research'] .topbar-search { min-width:0; max-width:560px; }
-  .product-header[data-section='research'] .results-count { font-size:11px; }
-}
+/* Product layout and header geometry live in product-layout.css. */
 
 /* White inspector: one glass surface, without nested white slabs. */
 :root[data-theme='light'] .obs-inspector-info { background:rgba(238,239,242,.82); border-color:rgba(40,44,52,.14); box-shadow:inset 0 1px 0 rgba(255,255,255,.55),0 16px 40px rgba(20,24,30,.12); }
@@ -538,7 +524,7 @@ body::before { content:''; position:fixed; inset:0; pointer-events:none; z-index
 .obs-stack-open.obs-stack-settling > .post-card,
 .obs-stack-open.obs-stack-settling > .m-post-card,
 .obs-stack-open.obs-stack-settling > .obs-deck-layer,
-.obs-stack-open.obs-stack-settling > .post-stack-trigger { visibility:visible; animation:obs-deck-return .42s ease-out .12s both; }
+.obs-stack-open.obs-stack-settling > .post-stack-trigger { visibility:visible; animation:obs-deck-return 240ms ease-out both; }
 @keyframes obs-deck-return { from { opacity:0; } to { opacity:1; } }
 .post-stack-modal[data-handoff='true'] .post-stack-grid > div { will-change:transform,opacity,filter; }
 @media(prefers-reduced-motion:reduce) { .obs-stack-open.obs-stack-settling > * { animation:none; } }
