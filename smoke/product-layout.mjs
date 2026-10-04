@@ -239,7 +239,7 @@ try {
         if (cardsOnly) {
           await page.locator('.gallery-grid .post-card, .product-card-grid .post-card').first().waitFor();
           cards = await readCards(page);
-          const columns = width <= 460 ? 1 : width <= 700 ? 2 : width <= 960 ? 3 : width <= 1280 ? 4 : 5;
+          const columns = width <= 460 ? 1 : width <= 700 ? 2 : width <= 960 ? 3 : width <= 1280 ? 4 : 6;
           check(cards?.columns === columns, `${label}: expected ${columns} columns, got ${cards?.columns}`);
           check(cards?.cards.length === 6, `${label}: all six fixture cards must remain visible`);
           check(cards?.gap === '20px', `${label}: Research grid gap`);

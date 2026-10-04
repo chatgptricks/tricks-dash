@@ -93,7 +93,7 @@ try {
   assert.equal(await first.locator('img.product-card-image').evaluate(node => getComputedStyle(node).objectFit), 'contain');
   assert.equal(await first.locator('img.product-card-image').evaluate(node => getComputedStyle(node).filter), 'none');
   assert.equal(await first.getByRole('link', { name: titles[0], exact: true }).getAttribute('href'), items[0].link);
-  for (const [width, columns] of [[1440, 5], [1280, 4], [900, 3], [600, 2], [390, 1]]) {
+  for (const [width, columns] of [[1440, 6], [1280, 4], [900, 3], [600, 2], [390, 1]]) {
     await page.setViewportSize({ width, height: 1100 });
     const layout = await page.locator('.news-results').evaluate(node => ({ columns: getComputedStyle(node).gridTemplateColumns.split(' ').length, scrollWidth: document.documentElement.scrollWidth, viewport: innerWidth }));
     assert.equal(layout.columns, columns, `${width}px uses ${columns} columns`);
@@ -106,7 +106,7 @@ try {
   await page.evaluate(() => window.dispatchEvent(new Event('resize')));
   await page.waitForTimeout(200);
   await page.screenshot({ path: path.join(output, 'news-desktop.png') });
-  console.log('PASS News uses shared Research cards, five-column desktop, responsive geometry, fixed theme and image fallbacks');
+  console.log('PASS News uses shared Research cards, six-column desktop, responsive geometry, fixed theme and image fallbacks');
 
   await first.getByRole('button', { name: 'Save', exact: true }).click();
   await first.getByRole('button', { name: 'Saved', exact: true }).waitFor();

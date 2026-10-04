@@ -2,7 +2,7 @@
 .gallery-grid,
 .product-card-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   align-items: start;
   gap: 20px;
   padding: 14px 8px 24px;
