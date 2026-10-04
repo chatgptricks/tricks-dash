@@ -17,11 +17,45 @@ const queue = {
 const tracker = { tracking_since: day, accounts: [{ handle: 'chatgptricks', label: 'ChatGPTricks', followers: 100000, delta_1d: { delta: 120 }, delta_7d: { delta: 1200 }, avg_likes_30d: 2200 }] };
 const post = { account: 'chatgptricks', shortcode: 'ONE', caption: 'Useful AI workflow', ocrText: 'A better prompt', type: 'Carousel', coverUrl: '', permalink: 'https://instagram.com/p/ONE/', likes: 4200, comments: 32, postDate: `${day}T12:00:00`, group: 'sentient', isHot: true, hotMultiplier: 3.4 };
 const ok = (body, headers = {}) => ({ ok: true, status: 200, headers: { get: (key) => headers[String(key).toLowerCase()] || null }, json: async () => body, text: async () => JSON.stringify(body), blob: async () => new Blob(['x']) });
-const fetchStub = async (url) => {
+const mediaRequests = [];
+const downloads = [];
+const downloadBlobs = new Map();
+let mediaMode = 'carousel';
+let mediaAborted = false;
+const anchorClick = window.HTMLAnchorElement.prototype.click;
+window.HTMLAnchorElement.prototype.click = function () {
+  if (this.download) downloads.push({ name: this.download, blob: downloadBlobs.get(this.href) });
+  else anchorClick.call(this);
+};
+URL.createObjectURL = (blob) => {
+  const url = `blob:mobile-download-${downloadBlobs.size + 1}`;
+  downloadBlobs.set(url, blob);
+  return url;
+};
+URL.revokeObjectURL = () => {};
+const fetchStub = async (url, options = {}) => {
   const value = String(url);
   if (value.includes('/api/dashboard/me')) return ok({ email: 'user03@example.com', is_admin: true, is_dev: true, operating_role: 'vc', operating_roles: ['vc', 'pd'] });
   if (value.includes('/api/dashboard/posts/manifest')) return ok({ revision: 'mobile-smoke', sources: [{ source: 'canonical', upperBound: 1 }, { source: 'dashboard', upperBound: 0 }] }, { etag: '"mobile-smoke"' });
   if (value.includes('/api/dashboard/posts/page')) return ok({ source: 'canonical', afterId: 0, nextCursor: 1, done: true, upperBound: 1, revision: 'mobile-smoke', posts: [post] });
+  if (value.includes('/api/dashboard/posts/media')) {
+    const params = new URL(value).searchParams;
+    mediaRequests.push(params);
+    if (params.get('list') === '1') return ok({ source: 'instagram', items: mediaMode === 'single-video'
+      ? [{ index: 2, kind: 'video' }]
+      : [{ index: 1, kind: 'image', filename: '01.jpg' }, { index: 2, kind: 'video' }] });
+    if (mediaMode === 'pending') return new Promise((resolve, reject) => {
+      const abort = () => { mediaAborted = true; reject(new DOMException('Download cancelled.', 'AbortError')); };
+      if (options.signal?.aborted) abort();
+      else options.signal?.addEventListener('abort', abort, { once: true });
+    });
+    const video = params.get('only') === '2';
+    const type = video ? 'video/mp4' : 'image/jpeg';
+    return {
+      ...ok({}, { 'content-type': type, ...(video ? {} : { 'content-disposition': 'attachment; filename="slide-one.jpg"' }) }),
+      blob: async () => new Blob([video ? 'video bytes' : 'image bytes'], { type }),
+    };
+  }
   if (value.includes('/api/dashboard/posts')) return ok({ posts: [post], summary: {} });
   if (value.includes('/api/dashboard/accounts')) return ok({ accounts: [{ handle: 'chatgptricks', label: 'ChatGPTricks', group: 'sentient' }] });
   if (value.includes('/api/dashboard/queue/v2/admin-report')) return ok({ totals: {}, designers: [], assignedPosts: [task] });
@@ -56,6 +90,30 @@ const click = async (node) => act(async () => { node.dispatchEvent(new window.Mo
 
     const nav = [...document.querySelectorAll('.m-bottom-nav button')];
     checks['Independent Dashboard renders'] = document.querySelectorAll('.m-post-card').length === 1;
+    await click(document.querySelector('.m-post-card'));
+    const downloadButton = document.querySelector('.m-post-detail .m-action-grid button');
+    checks['Mobile media download action renders'] = /Download media/.test(downloadButton?.textContent || '');
+    await click(downloadButton);
+    checks['Mobile carousel downloads original image and video separately'] = downloads.length === 2
+      && downloads[0].blob?.type === 'image/jpeg' && downloads[1].blob?.type === 'video/mp4';
+    checks['Mobile media retains response filename and uses MIME fallback'] = downloads[0]?.name === 'slide-one.jpg'
+      && /\.mp4$/i.test(downloads[1]?.name || '');
+    checks['Mobile media uses listed item indexes, never the ZIP endpoint'] = mediaRequests.length === 3
+      && mediaRequests[0].get('list') === '1'
+      && mediaRequests.slice(1).map((params) => params.get('only')).join('|') === '1|2'
+      && downloads.every(({ name }) => !/\.zip$/i.test(name));
+    mediaMode = 'single-video';
+    await click(downloadButton);
+    checks['Mobile single video downloads one MP4'] = downloads.length === 3
+      && downloads[2].blob?.type === 'video/mp4' && /\.mp4$/i.test(downloads[2].name)
+      && mediaRequests.slice(-2).map((params) => params.get('list') || params.get('only')).join('|') === '1|2';
+    mediaMode = 'pending';
+    await click(downloadButton);
+    checks['Mobile prevents overlapping media downloads'] = downloadButton.disabled;
+    await click(document.querySelector('.m-sheet > header button'));
+    checks['Closing the mobile post aborts its download without saving a file'] = mediaAborted
+      && downloads.length === 3 && !document.querySelector('.m-post-detail');
+    mediaMode = 'carousel';
     await click(document.querySelector('.m-search-row > button'));
     checks['Research advanced filters render'] = /Media/.test(document.body.textContent) && /Minimum likes/.test(document.body.textContent) && /Period/.test(document.body.textContent);
     await click(document.querySelector('.m-sheet > header button'));
@@ -90,6 +148,7 @@ const click = async (node) => act(async () => { node.dispatchEvent(new window.Mo
     const nested = Array.isArray(error?.errors) ? error.errors : [error];
     errors.push(...nested.map((item) => item?.stack || String(item)));
   }
+  window.HTMLAnchorElement.prototype.click = anchorClick;
   console.error = oldError;
   console.log(JSON.stringify({ checks, errors }, null, 2));
   process.exit(Object.values(checks).every(Boolean) && !errors.length ? 0 : 1);

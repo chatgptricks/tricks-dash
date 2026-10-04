@@ -5,10 +5,11 @@
 // surfaces show and do exactly the same things for a post, with one place to
 // fix bugs or add features instead of two copies drifting apart.
 import { createPortal } from 'react-dom';
-import { memo, useEffect, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Check, Copy, Download, ExternalLink, Eye, Flame, Layers, Music2, Video, X } from 'lucide-react';
 import { usePrefs } from './prefsContext';
 import { API_BASE, IG_HANDLE, apiFetch } from './api';
+import { downloadPostMedia, listPostMedia } from './mediaDownload';
 
 // Small, self-contained duplicates of formatting helpers that also live in
 // App.jsx (used pervasively there for filters/sorting, not just this panel).
@@ -395,11 +396,13 @@ export function SlideDownload({ post, leadingAction = null }) {
   const [picked, setPicked] = useState(() => new Set());
   const [state, setState] = useState('idle'); // idle | listing | working | error
   const [note, setNote] = useState('');
+  const mediaRequest = useRef(null);
 
   // A new post invalidates everything the modal was showing.
   useEffect(() => {
     setOpen(false); setItems(null); setPicked(new Set()); setState('idle'); setNote('');
-  }, [post.postKey]);
+    return () => { mediaRequest.current?.abort(); mediaRequest.current = null; };
+  }, [post.postKey, post.account, post.shortcode]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -408,53 +411,45 @@ export function SlideDownload({ post, leadingAction = null }) {
     return () => document.removeEventListener('keydown', onKey);
   }, [open]);
 
-  const mediaUrl = (extra = '') =>
-    `${API_BASE}/api/dashboard/posts/media`
-    + `?account=${encodeURIComponent(post.account || IG_HANDLE)}`
-    + `&shortcode=${encodeURIComponent(post.shortcode)}${extra}`;
-
-  const readError = async (response) => {
-    try { return (await response.json())?.detail || `HTTP ${response.status}`; }
-    catch { return `HTTP ${response.status}`; }
-  };
-
   const openPicker = async () => {
     setOpen(true);
-    if (items) return;
+    if (items || mediaRequest.current) return;
+    const controller = new AbortController();
+    mediaRequest.current = controller;
     setState('listing'); setNote('');
     try {
-      const response = await apiFetch(mediaUrl('&list=1'));
-      if (!response.ok) throw new Error(await readError(response));
-      const body = await response.json();
+      const body = await listPostMedia(post, { signal: controller.signal });
+      if (controller.signal.aborted) return;
       setItems(body.items || []);
       setPicked(new Set((body.items || []).map((i) => i.index)));
       setState('idle');
       if (body.source === 'apify') setNote(t('Fetched via Apify'));
     } catch (error) {
+      if (controller.signal.aborted || error.name === 'AbortError') return;
       setState('error'); setNote(error.message || t('Could not list the media'));
+    } finally {
+      if (mediaRequest.current === controller) mediaRequest.current = null;
     }
   };
 
   const download = async (indexes) => {
+    if (mediaRequest.current) return;
+    const controller = new AbortController();
+    mediaRequest.current = controller;
     setState('working'); setNote('');
     try {
-      const list = indexes && indexes.length ? indexes : null;
-      const response = await apiFetch(mediaUrl(list ? `&only=${list.join(',')}` : ''));
-      if (!response.ok) throw new Error(await readError(response));
-      const blob = await response.blob();
-      const disposition = response.headers.get('Content-Disposition') || '';
-      const named = /filename="([^"]+)"/.exec(disposition);
-      const href = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = href;
-      link.download = named ? named[1] : `${post.account || IG_HANDLE}-${post.shortcode}.zip`;
-      document.body.appendChild(link); link.click(); link.remove();
-      // Revoking immediately can cancel the download in some browsers.
-      setTimeout(() => URL.revokeObjectURL(href), 30000);
+      const count = await downloadPostMedia({ post, items, indexes, signal: controller.signal,
+        onProgress: (done, total) => setNote(`${t('Downloading…')} ${done}/${total}`),
+      });
+      if (controller.signal.aborted) return;
       setState('idle');
-      setNote(`${t('Downloaded')} ${list ? list.length : (items?.length ?? '')} ${t(((list ? list.length : items?.length) === 1) ? 'file' : 'files')}`);
+      setNote(`${t('Downloaded')} ${count} ${t(count === 1 ? 'file' : 'files')}`);
     } catch (error) {
-      setState('error'); setNote(error.message || t('Download failed'));
+      if (controller.signal.aborted || error.name === 'AbortError') return;
+      const partial = error.downloadedCount ? `${t('Downloaded')} ${error.downloadedCount}/${error.totalCount} ${t('files')}. ` : '';
+      setState('error'); setNote(`${partial}${error.message || t('Download failed')}`);
+    } finally {
+      if (mediaRequest.current === controller) mediaRequest.current = null;
     }
   };
 

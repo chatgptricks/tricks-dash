@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { browserPopupRedirectResolver, getRedirectResult, onAuthStateChanged, signOut } from 'firebase/auth';
 import { API_BASE, apiFetch } from '../api';
+import { downloadPostMedia } from '../mediaDownload';
 import { loadCompleteDashboardCatalogue } from '../dashboardCatalogue';
 import { authPersistenceReady, describeSignInError, firebaseAuth, startGoogleSignIn } from '../firebase';
 import { onServerPreferences, savePreference, syncUserPreferences } from '../userPreferences';
@@ -432,6 +433,15 @@ function DashboardView() {
 function PostSheet({ post, onClose }) {
   const { t, language } = usePrefs(); const [busy, setBusy] = useState(false); const [notice, setNotice] = useState('');
   const [videoPoster, setVideoPoster] = useState('');
+  const downloadController = useRef(null);
+  useEffect(() => {
+    setBusy(false);
+    setNotice('');
+    return () => {
+      downloadController.current?.abort();
+      downloadController.current = null;
+    };
+  }, [post.account, post.shortcode]);
   useEffect(() => {
     if (!(post.video === 'Yes' || String(post.type || '').toLowerCase().startsWith('video')) || !post.shortcode) return undefined;
     let active = true;
@@ -441,8 +451,20 @@ function PostSheet({ post, onClose }) {
     return () => { active = false; };
   }, [post.account, post.shortcode, post.type, post.video]);
   const download = async () => {
+    if (downloadController.current) return;
+    const controller = new AbortController();
+    downloadController.current = controller;
     setBusy(true); setNotice('');
-    try { const response = await apiFetch(`${API_BASE}/api/dashboard/posts/media?account=${encodeURIComponent(post.account)}&shortcode=${encodeURIComponent(post.shortcode)}`); if (!response.ok) throw new Error((await response.json().catch(() => ({}))).detail || 'Download failed.'); const blob = await response.blob(); const href = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = href; link.download = `${post.account}-${post.shortcode}.zip`; document.body.appendChild(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(href), 30000); } catch (error) { setNotice(error.message); } finally { setBusy(false); }
+    try {
+      await downloadPostMedia({ post, signal: controller.signal });
+    } catch (error) {
+      if (!controller.signal.aborted) setNotice(error.message || 'Download failed.');
+    } finally {
+      if (downloadController.current === controller) {
+        downloadController.current = null;
+        setBusy(false);
+      }
+    }
   };
   return <Sheet title={`@${post.account}`} onClose={onClose} wide><article className="m-post-detail"><Cover src={post.coverUrl} fallbackSrc={videoPoster} /><div className="m-detail-kicker"><span>{post.type}</span><span>{dateLabel(post.postDate, language)}</span></div><div className="m-detail-metrics"><span><Heart size={16} />{fmt(post.likes)} {t('likes')}</span><span><MessageCircle size={16} />{fmt(post.comments)} {t('comments')}</span></div>{post.title ? <h3>{post.title}</h3> : null}<p>{post.caption}</p>{post.queueState ? <Notice>{t('queue')}: {editorialStates[post.queueState] || post.queueState}</Notice> : null}<Notice>{t('researchMobileSupport')}</Notice><Notice type="error">{notice}</Notice><div className="m-action-grid"><a className="m-secondary" href={post.permalink} target="_blank" rel="noreferrer"><ExternalLink size={16} />{t('viewPost')}</a><button className="m-secondary" onClick={download} disabled={busy}><Download size={16} />{t('downloadMedia')}</button><a className="m-primary" href="/?desktop=1"><ExternalLink size={16} />{t('desktop')}</a></div></article></Sheet>;
 }

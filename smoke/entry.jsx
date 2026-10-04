@@ -296,7 +296,10 @@ const el = document.getElementById('root') || document.body.appendChild(document
   await click(q('.caption-generator-modal [aria-label="Close caption generator"]'));
 
   const realFetch = globalThis.fetch;
-  let listedUrl = null, zipUrl = null;
+  let listedUrl = null;
+  const mediaRequests = [], downloadedNames = [];
+  const anchorClick = window.HTMLAnchorElement.prototype.click;
+  window.HTMLAnchorElement.prototype.click = function () { downloadedNames.push(this.download); };
   const stubbed = async (u, o) => {
     const str = String(u);
     if (str.includes('/posts/media') && str.includes('list=1')) {
@@ -309,10 +312,12 @@ const el = document.getElementById('root') || document.body.appendChild(document
       return { ok: true, status: 200, json: async () => body };
     }
     if (str.includes('/posts/media')) {
-      zipUrl = str;
+      mediaRequests.push(str);
+      const only = new URL(str).searchParams.get('only');
+      const type = only === '1' ? 'video/mp4' : 'image/jpeg';
       return { ok: true, status: 200,
-        blob: async () => new (window.Blob || Blob)(['zip']),
-        headers: { get: (k) => (k === 'Content-Disposition' ? 'attachment; filename="x.zip"' : null) } };
+        blob: async () => new (window.Blob || Blob)([only === '1' ? 'video bytes' : 'image bytes'], { type }),
+        headers: { get: (key) => String(key).toLowerCase() === 'content-type' ? type : null } };
     }
     return realFetch(u, o);
   };
@@ -325,7 +330,7 @@ const el = document.getElementById('root') || document.body.appendChild(document
   await click(dl);
   await act(async () => { await new Promise(r => setTimeout(r, 300)); });
   inter['opens a modal'] = Boolean(q('.media-modal'));
-  inter['asks for the list first'] = Boolean(listedUrl) && !zipUrl;
+  inter['asks for the list first'] = Boolean(listedUrl) && mediaRequests.length === 0;
   inter['shows one cell per item'] = qa('.media-cell').length === 3;
   inter['all picked by default'] = qa('.media-cell.is-picked').length === 3;
   inter['labels video vs image'] = /Video/.test(qa('.media-cell-tag')[0]?.textContent || '')
@@ -338,22 +343,25 @@ const el = document.getElementById('root') || document.body.appendChild(document
   inter['selected count in the button'] = /\(2\)/.test(selBtn?.textContent || '');
   await click(selBtn);
   await act(async () => { await new Promise(r => setTimeout(r, 250)); });
-  inter['downloads only the ticked ones'] = /only=1,3/.test(zipUrl || '');
+  inter['downloads only the ticked ones as individual files'] = mediaRequests.map(url => new URL(url).searchParams.get('only')).join(',') === '1,3';
+  inter['preserves video and image extensions without a disposition header'] = /\.mp4$/i.test(downloadedNames[0] || '') && /\.jpe?g$/i.test(downloadedNames[1] || '');
 
-  zipUrl = null;
+  mediaRequests.length = 0;
   await click(qa('.media-cell')[2]?.querySelector('.media-cell-action'));
   await act(async () => { await new Promise(r => setTimeout(r, 250)); });
-  inter['per-item button asks for that one'] = /only=3/.test(zipUrl || '') && !/only=3,/.test(zipUrl || '');
+  inter['per-item button asks for that one'] = mediaRequests.length === 1 && new URL(mediaRequests[0]).searchParams.get('only') === '3';
 
-  zipUrl = null;
+  mediaRequests.length = 0;
   await click(qa('.media-modal-actions button').find(b => /Download all/.test(b.textContent)));
   await act(async () => { await new Promise(r => setTimeout(r, 250)); });
-  inter['download all sends no only='] = Boolean(zipUrl) && !/only=/.test(zipUrl);
+  inter['download all requests each original file separately'] = mediaRequests.map(url => new URL(url).searchParams.get('only')).join(',') === '1,2,3';
+  inter['media download never creates a ZIP filename'] = downloadedNames.length === 6 && downloadedNames.every(name => !/\.zip$/i.test(name));
 
   await press('Escape');
   inter['Escape closes the modal'] = !q('.media-modal');
 
   globalThis.fetch = realFetch; window.fetch = realFetch;
+  window.HTMLAnchorElement.prototype.click = anchorClick;
 
 
   // ---- language + theme (both live in the gear-icon Settings menu now,
