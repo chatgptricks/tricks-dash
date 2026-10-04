@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-tool="tracker">
   <head>
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; connect-src 'self' https://cortex-api-db2e.onrender.com https://*.googleapis.com https://*.firebaseio.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://www.gstatic.com;">
 <meta charset="utf-8" />
@@ -40,19 +40,7 @@ body{margin:0;background:var(--bg);color:var(--text);
   font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,sans-serif;
   font-size:13px;-webkit-font-smoothing:antialiased}
 a{color:inherit}
-/* Full width: a 1200px cap left ~350px of dead margin on each side of a
-   1920 screen, which squeezed a table that has eight numeric columns
-   into the middle third of the display. */
-.wrap{max-width:none;margin:0;padding:18px 24px 80px}
-
-/* topbar */
-.top{display:flex;align-items:center;justify-content:space-between;gap:18px;
-  padding:14px 18px;border:1px solid var(--line);border-radius:12px;background:var(--panel);margin-bottom:14px}
-.brand small{display:block;color:var(--muted);font-size:9px;font-weight:800;
-  letter-spacing:.16em;text-transform:uppercase;margin-bottom:3px}
-.brand h1{margin:0;font-size:23px;font-weight:800;letter-spacing:-.02em}
-.brand h1 span{color:var(--accent-text)}
-.top-actions{display:flex;gap:8px;align-items:center}
+/* Shared page and header geometry live in product-layout.css. */
 .linkbtn{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 13px;
   border:1px solid var(--line);border-radius:8px;background:var(--panel-2);color:var(--muted-2);
   font-size:11px;font-weight:700;text-decoration:none;cursor:pointer}
@@ -313,6 +301,7 @@ table.hist-table td{text-align:left;padding:11px 8px;white-space:nowrap}
 <link rel="stylesheet" href="/product-shell.css?v=20260905c">
 <link rel="stylesheet" href="/obsidian.css?v=20260928-visual1">
 <link rel="stylesheet" href="/product-motion.css?v=20261003-motion1">
+<link rel="stylesheet" href="/product-layout.css?v=20261004-shell1">
 <script src="/visual-effects.js?v=20260928-visual1" defer></script>
 </head>
 <body>
@@ -323,16 +312,17 @@ table.hist-table td{text-align:left;padding:11px 8px;white-space:nowrap}
     <button id="authGateBtn" type="button">Sign in with Google</button>
   </div>
 </div>
-<div class="wrap">
-  <div class="top">
-    <div class="brand">
-      <small>Sentient</small>
-      <h1>Tracker<span>.</span></h1>
+<div class="wrap product-page">
+  <header class="product-header" data-section="tracker">
+    <a class="product-brand" href="/index.html" target="sentient-dashboard" aria-label="Sentient home">sentient<span>dash</span><small>.app</small></a>
+    <div class="product-toolbar">
+      <h1>Tracker</h1>
     </div>
-    <div class="top-actions">
+    <nav class="product-nav" aria-label="Sentient tools"></nav>
+    <div class="product-account">
       <div class="settings-menu" id="settingsMenu">
-        <button type="button" class="settings-menu-trigger" id="settingsTrigger" aria-label="Settings" aria-expanded="false" title="Settings"><span>?</span></button>
-        <div class="settings-menu-panel" id="settingsPanel" role="dialog" aria-label="Settings">
+        <button type="button" class="settings-menu-trigger" id="settingsTrigger" aria-label="Settings" aria-expanded="false" aria-haspopup="dialog" aria-controls="settingsPanel" title="Settings"><span>?</span></button>
+        <div class="settings-menu-panel" id="settingsPanel" role="dialog" aria-label="Settings" tabindex="-1">
           <div class="settings-menu-section">
             <span data-i18n="Accent color">Accent color</span>
             <div class="settings-accent-picker" id="settingsAccentPicker">
@@ -346,8 +336,8 @@ table.hist-table td{text-align:left;padding:11px 8px;white-space:nowrap}
           <div class="settings-menu-section">
             <span data-i18n="Theme">Theme</span>
             <div class="settings-menu-segment" id="settingsThemeSegment">
-              <button type="button" data-theme-choice="dark">🌙 <span data-i18n="Dark">Dark</span></button>
-              <button type="button" data-theme-choice="light">☀️ <span data-i18n="Light">Light</span></button>
+              <button type="button" data-theme-choice="dark"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-moon" aria-hidden="true" focusable="false"><path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"></path></svg><span data-i18n="Dark">Dark</span></button>
+              <button type="button" data-theme-choice="light"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-sun" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.41 1.41"></path><path d="m19.07 4.93-1.41 1.41"></path></svg><span data-i18n="Light">Light</span></button>
             </div>
           </div>
           <div class="settings-menu-section">
@@ -357,21 +347,20 @@ table.hist-table td{text-align:left;padding:11px 8px;white-space:nowrap}
               <button type="button" class="lang-option" data-lang="es">ES</button>
             </div>
           </div>
-          <div class="settings-menu-admin" id="settingsAdmin">
+          <div class="settings-menu-section settings-menu-admin" id="settingsAdmin">
             <span>Command center</span>
-            <a class="settings-menu-link" href="./settings.html" target="sentient-settings">⚙ <span data-i18n="Settings">Settings</span></a>
+            <a class="settings-menu-link" href="./settings.html" target="sentient-settings"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-settings" aria-hidden="true" focusable="false"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"></path><circle cx="12" cy="12" r="3"></circle></svg><span data-i18n="Settings">Settings</span></a>
           </div>
           <div class="settings-menu-footer">
             <small id="settingsEmail"></small>
-            <button type="button" class="settings-menu-signout" id="settingsSignOut">⎋ <span data-i18n="Sign out">Sign out</span></button>
+            <button type="button" class="settings-menu-signout" id="settingsSignOut"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-log-out" aria-hidden="true" focusable="false"><path d="m16 17 5-5-5-5"></path><path d="M21 12H9"></path><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path></svg><span data-i18n="Sign out">Sign out</span></button>
           </div>
         </div>
       </div>
-      <button class="linkbtn" id="shareBtn" title="Copy a link to this exact view">Copy link</button>
-      <a class="linkbtn" href="./insights.html" target="sentient-insights">Insights</a>
-      <a class="linkbtn" href="./queue.html" target="sentient-queue">Queue</a>
-      <a class="linkbtn" href="./index.html" target="sentient-dashboard">← Dashboard</a>
     </div>
+  </header>
+  <div class="product-page-controls product-page-actions" role="group" aria-label="Tracker actions">
+    <button class="linkbtn" id="shareBtn" title="Copy a link to this exact view">Copy link</button>
   </div>
 
   <div class="tracker-shell">
@@ -1397,6 +1386,7 @@ function setTheme(next) {
   document.documentElement.setAttribute('data-theme', theme);
   document.querySelectorAll('#settingsThemeSegment button').forEach((b) => {
     b.classList.toggle('is-on', b.dataset.themeChoice === theme);
+    b.setAttribute('aria-pressed', String(b.dataset.themeChoice === theme));
   });
   // Chart.js bakes colours in at construction, so a live chart keeps the old
   // palette until it is rebuilt.
@@ -1440,6 +1430,7 @@ function applyI18n() {
   });
   document.querySelectorAll('.lang-option').forEach((b) => {
     b.classList.toggle('is-on', b.dataset.lang === lang);
+    b.setAttribute('aria-pressed', String(b.dataset.lang === lang));
   });
 }
 window.__applyI18n = applyI18n;
@@ -1505,6 +1496,7 @@ function setAccent(next) {
   root.style.setProperty('--accent-soft', `rgba(${rgb.join(', ')}, .15)`);
   document.querySelectorAll('#settingsAccentPicker button').forEach((b) => {
     b.classList.toggle('is-on', b.dataset.accentChoice === normalized);
+    b.setAttribute('aria-pressed', String(b.dataset.accentChoice === normalized));
   });
   const custom = document.getElementById('settingsCustomColor');
   if (custom) custom.value = accentHex(normalized);
@@ -1544,15 +1536,18 @@ function setSettingsAvatar(user) {
     settingsTrigger.append(image);
   } else settingsTrigger.append(Object.assign(document.createElement('span'), { textContent: initial }));
 }
-function closeSettings() {
+function closeSettings({ restoreFocus = false } = {}) {
+  const wasOpen = settingsPanel.classList.contains('is-open');
   settingsPanel.classList.remove('is-open');
   settingsTrigger.classList.remove('is-active');
   settingsTrigger.setAttribute('aria-expanded', 'false');
+  if (wasOpen && restoreFocus) settingsTrigger.focus();
 }
 let adminChecked = false;
 window.__resetToolSettings = () => {
   adminChecked = false;
   document.getElementById('settingsAdmin').classList.remove('is-visible');
+  settingsPanel.classList.remove('is-admin');
   document.getElementById('settingsEmail').textContent = '';
   closeSettings();
   setSettingsAvatar(null);
@@ -1569,6 +1564,7 @@ function checkAdminForSettings() {
     const preview = sessionStorage.getItem('sentient.queueRolePreview');
     const isAdmin = ['sales','pd','vc','trainee','admin'].includes(preview) ? preview === 'admin' : Boolean(me && (me.is_admin || me.is_dev || (Array.isArray(me.operating_roles) && me.operating_roles.includes('admin')) || me.operating_role === 'admin'));
     document.getElementById('settingsAdmin').classList.toggle('is-visible', isAdmin);
+    settingsPanel.classList.toggle('is-admin', isAdmin);
   }).catch(() => { if(session === TRACKER_SESSION) adminChecked = false; });
 }
 function openSettings() {
@@ -1576,17 +1572,23 @@ function openSettings() {
   settingsPanel.classList.add('is-open');
   settingsTrigger.classList.add('is-active');
   settingsTrigger.setAttribute('aria-expanded', 'true');
+  (settingsPanel.querySelector('button:not([disabled]), input:not([disabled]), a[href]') || settingsPanel).focus();
   checkAdminForSettings();
 }
 settingsTrigger.addEventListener('click', (e) => {
   e.stopPropagation();
   if (settingsPanel.classList.contains('is-open')) closeSettings(); else openSettings();
 });
-document.addEventListener('click', (e) => {
+document.addEventListener('mousedown', (e) => {
   if (!settingsMenu.contains(e.target)) closeSettings();
 });
+settingsMenu.addEventListener('focusout', (event) => {
+  if (event.relatedTarget && !settingsMenu.contains(event.relatedTarget)) closeSettings();
+});
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') closeSettings();
+  if (e.key !== 'Escape' || !settingsPanel.classList.contains('is-open')) return;
+  e.preventDefault();
+  closeSettings({ restoreFocus: true });
 });
 document.getElementById('settingsSignOut').addEventListener('click', () => {
   closeSettings();
@@ -1594,6 +1596,6 @@ document.getElementById('settingsSignOut').addEventListener('click', () => {
 });
 
 </script>
-<script type="module" src="/product-static.js?v=20260928-tracker"></script>
+<script type="module" src="/product-static.js?v=20261004-shell1"></script>
 </body>
 </html>

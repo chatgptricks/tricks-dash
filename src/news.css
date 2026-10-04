@@ -16,17 +16,14 @@ body { overflow-x: hidden; overflow-y: auto; overscroll-behavior-y: contain; }
   --accent-rgb: 0, 172, 128;
   --accent-text: #00ac80;
   --product-accent: #00ac80;
-  width: min(100%, 1500px);
+
   min-height: 100dvh;
-  margin: 0 auto;
-  padding: 14px clamp(16px, 3vw, 42px) 76px;
+
   color: var(--text);
   font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   scroll-padding-top: 30px;
 }
 
-.news-shell .product-header { margin-bottom: 12px; }
-.news-header-subtitle { color: var(--muted); font-size: 12px; }
 .news-refresh,
 .news-story-actions button,
 .news-empty button,
@@ -169,8 +166,6 @@ body { overflow-x: hidden; overflow-y: auto; overscroll-behavior-y: contain; }
   .news-story-image { height: 100px; }
 }
 @media (max-width: 700px) {
-  .news-shell { padding: 10px 14px 52px; }
-  .news-shell .product-header { margin-bottom: 14px; }
   .news-toolbar { padding: 7px; }
   .news-filter-row { align-items: flex-start; flex-direction: column; gap: 2px; }
   .news-result-count { align-self: flex-end; margin-top: -3px; }
@@ -194,7 +189,6 @@ body { overflow-x: hidden; overflow-y: auto; overscroll-behavior-y: contain; }
   .news-signal { min-width: 77px; }
 }
 @media (max-width: 480px) {
-  .news-header-subtitle { display: none; }
   .news-refresh { min-height: 32px; padding: 5px 8px; font-size: 9px; }
   .news-feed-grid { grid-template-columns: 1fr; min-width: 68vw; }
   .news-filter-tabs { width: 100%; margin-right: -7px; }

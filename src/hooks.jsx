@@ -22,6 +22,7 @@ import {
 } from "./firebase";
 import { clearSsoCookie, startSsoRefresh, trySsoSignIn } from "./sso";
 import ProductHeader from "./ProductHeader";
+import { SettingsMenu } from "./App";
 import { PrefsProvider } from "./prefsContext";
 import "./styles.css";
 import "./hooks.css";
@@ -584,29 +585,17 @@ function HookLab() {
     signOut(firebaseAuth);
   };
   return (
-    <main className="hooks-shell">
+    <main className="hooks-shell product-page">
       <ProductHeader
         current="hooks"
         coordinator
         isDev
-        account={
-          <button className="hooks-account" onClick={signOutNow}>
-            <span>
-              {user.photoURL ? (
-                <img src={user.photoURL} alt="" />
-              ) : (
-                user.email?.slice(0, 1).toUpperCase()
-              )}
-            </span>
-            <b>{user.email}</b>
-            <small>Sign out</small>
-          </button>
-        }
+        account={<SettingsMenu email={user.email} avatarUrl={user.photoURL || viewer.avatar_url} isAdmin={Boolean(viewer.is_admin)} isDev onSignOut={signOutNow} />}
       >
         <h1>Hooks</h1>
       </ProductHeader>
 
-      <section className="hooks-toolbar">
+      <section className="hooks-toolbar product-page-controls">
         <form
           onSubmit={(event) => {
             event.preventDefault();

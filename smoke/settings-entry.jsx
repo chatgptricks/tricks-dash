@@ -64,8 +64,8 @@ const clickTab = async (label) => {
       await new Promise((resolve) => setTimeout(resolve, 300));
     });
     checks['Standalone Settings renders'] = Boolean(document.querySelector('.product-header'));
-    // The global header exposes the five supported tools, including Promos.
-    checks['Global tool navigation renders'] = document.querySelectorAll('.product-nav a').length === 5;
+    // Full DEV access exposes the same tools as Research.
+    checks['Global tool navigation renders'] = [...document.querySelectorAll('.product-nav a')].map(link => link.textContent.trim()).join(',') === 'Research,Queue,Tracker,Promos,Vault,Hooks,News,Insights';
     checks['Seven logical tabs render'] = document.querySelectorAll('.settings-tab').length === 7;
     checks['Overview command cards render'] = document.querySelectorAll('.settings-overview-card').length === 6;
     checks['Gear remains available'] = Boolean(document.querySelector('.settings-menu-trigger'));

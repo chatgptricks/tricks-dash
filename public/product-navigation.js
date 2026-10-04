@@ -55,8 +55,25 @@ export function sectionHref(section) {
   }
   return '/' + section.path;
 }
+function previewRole() {
+  let role = '';
+  try { role = sessionStorage.getItem('sentient.queueRolePreview'); } catch { /* Storage can be unavailable in an embedded browser. */ }
+  return ['sales', 'pd', 'vc', 'trainee', 'admin'].includes(role) ? role : '';
+}
+export function devAccessFor(viewer) {
+  return !previewRole() && !viewer?.queue_role_preview_active && !viewer?.queueRolePreviewActive && Boolean(viewer?.is_dev || viewer?.isDev);
+}
+// Scroll only the navigation strip, never the document or an open workspace.
+export function revealCurrentSection(nav) {
+  const current = nav?.querySelector('[aria-current="page"]');
+  if (!current || nav.scrollWidth <= nav.clientWidth) return;
+  const bounds = nav.getBoundingClientRect();
+  const selected = current.getBoundingClientRect();
+  if (selected.left < bounds.left + 5) nav.scrollLeft -= bounds.left + 5 - selected.left;
+  else if (selected.right > bounds.right - 5) nav.scrollLeft += selected.right - bounds.right + 5;
+}
 export function coordinatorFor(viewer) {
-  const role = sessionStorage.getItem('sentient.queueRolePreview');
+  const role = previewRole();
   if (['sales', 'pd', 'vc', 'trainee', 'admin'].includes(role)) return ['vc', 'admin'].includes(role);
-  return Boolean(viewer?.is_dev || viewer?.is_admin || viewer?.operating_roles?.includes('vc'));
+  return Boolean(viewer?.is_dev || viewer?.isDev || viewer?.is_admin || viewer?.isAdmin || (viewer?.operating_roles || viewer?.operatingRoles)?.includes('vc'));
 }

@@ -1,7 +1,7 @@
 import QueuePostInspector, { captureQueueCardOrigin } from './QueuePostInspector';
 import { returnCardFromSide } from './card-flight';
 import ProductHeader from './ProductHeader';
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { mountApp } from './mountApp';
 import { createPortal } from 'react-dom';
 import { AlertTriangle, Archive, ArrowLeft, Ban, BarChart3, BellRing, CalendarDays, CalendarPlus, Check, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Clock3, Copy, Coffee, Download, History, Image as ImageIcon, Layers, Lightbulb, Link2, LoaderCircle, LocateFixed, LogOut, Maximize2, Moon, Paperclip, Pencil, Play, Plus, Radio, Search, Send, Settings, Sun, TimerReset, WifiOff, X } from 'lucide-react';
@@ -353,20 +353,42 @@ function QueueSettings({ isAdmin, isDev, userEmail, avatarUrl, displayLabel, onM
   const { t, language, setLanguage, theme, setTheme } = useQueuePreferences();
   const { accent, setAccent } = usePrefs();
   const [open, setOpen] = useState(false);
+  const menuId = useId();
+  const menuRef = useRef(null);
+  const triggerRef = useRef(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    menuRef.current?.querySelector('.settings-menu-panel button, .settings-menu-panel input, .settings-menu-panel a')?.focus();
+    const outside = (event) => { if (!menuRef.current?.contains(event.target)) setOpen(false); };
+    const escape = (event) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      event.stopPropagation();
+      setOpen(false);
+      triggerRef.current?.focus();
+    };
+    document.addEventListener('pointerdown', outside);
+    document.addEventListener('focusin', outside);
+    document.addEventListener('keydown', escape);
+    return () => {
+      document.removeEventListener('pointerdown', outside);
+      document.removeEventListener('focusin', outside);
+      document.removeEventListener('keydown', escape);
+    };
+  }, [open]);
   const name = displayName(userEmail, displayLabel);
   const avatar = userAvatar(avatarUrl);
-  return <div className="queue-settings">
-    <button type="button" className={`queue-settings-trigger${open ? ' is-active' : ''}`} onClick={() => setOpen((value) => !value)} aria-expanded={open} aria-label={`${t('settings')} · ${name}`} title={`${t('settings')} · ${name}`}><span aria-hidden="true">{initialsFor(name)}</span>{avatar ? <img src={avatar} alt="" referrerPolicy="no-referrer" onError={(event) => { event.currentTarget.hidden = true; }} /> : null}</button>
-    {open ? <><button type="button" className="queue-overlay-backdrop" onClick={() => setOpen(false)} aria-label={t('close')} /><div className="queue-settings-panel" role="dialog" aria-label={t('settings')}>
-      <header><p className="scheduler-eyebrow">{t('settings')}</p><button type="button" onClick={() => setOpen(false)} aria-label={t('close')}><X size={14} /></button></header>
-      <section className="queue-settings-section"><span>{t('accentColor')}</span><div className="queue-accent-picker">{ACCENT_CHOICES.map((value) => <button type="button" key={value} className={`accent-${value}${accent === value ? ' is-on' : ''}`} onClick={() => setAccent(value)} aria-label={`${value} accent`} />)}<label className="queue-custom-color" title={t('customColor')}><input type="color" value={accentHex(accent)} onChange={(event) => setAccent(event.target.value)} aria-label={t('customColor')} /><span>{t('custom')}</span></label></div></section>
-      <section className="queue-settings-section"><span>{t('theme')}</span><div className="queue-settings-segment"><button type="button" className={theme === 'dark' ? 'is-on' : ''} onClick={() => setTheme('dark')}><Moon size={13} />{t('darkTheme')}</button><button type="button" className={theme === 'light' ? 'is-on' : ''} onClick={() => setTheme('light')}><Sun size={13} />{t('lightTheme')}</button></div></section>
-      <section className="queue-settings-section"><span>{t('language')}</span><div className="queue-language" aria-label="Language"><button type="button" className={language === 'en' ? 'is-on' : ''} onClick={() => setLanguage('en')}>EN</button><button type="button" className={language === 'es' ? 'is-on' : ''} onClick={() => setLanguage('es')}>ES</button></div></section>
-      {onManageAccounts ? <section className="queue-settings-section queue-settings-managed"><span>{t('managedAccounts')}</span><button type="button" className="queue-settings-link" onClick={() => { setOpen(false); onManageAccounts(); }}><Settings size={13} />{t('manageAccounts')}</button></section> : null}
-      {onStartGuide ? <section className="queue-settings-section queue-settings-managed"><span>{t('howQueueWorks')}</span><button type="button" className="queue-settings-link" onClick={() => { setOpen(false); onStartGuide(); }}><ClipboardList size={13} />{t('startGuide')}</button></section> : null}
-      {isAdmin || isDev ? <section className="queue-settings-section queue-settings-admin"><span>{t('adminOverview')}</span><a className="queue-settings-link" href={`${import.meta.env.BASE_URL}settings.html`} target="sentient-settings"><Settings size={13} />{t('settings')}</a>{onResetQueue ? <button type="button" className="queue-settings-danger" onClick={() => { setOpen(false); onResetQueue(); }}><TimerReset size={13} />{t('resetQueue')}</button> : null}</section> : null}
-      <footer><small>{t('signedInAs')} {userEmail}</small><button type="button" className="queue-settings-signout" onClick={onSignOut}><LogOut size={13} />{t('signOut')}</button></footer>
-    </div></> : null}
+  return <div className="queue-settings settings-menu" ref={menuRef}>
+    <button ref={triggerRef} type="button" className={`queue-settings-trigger settings-menu-trigger${open ? ' is-active' : ''}`} onClick={() => setOpen((value) => !value)} aria-expanded={open} aria-haspopup="dialog" aria-controls={open ? menuId : undefined} aria-label={`${t('settings')} · ${name}`} title={`${t('settings')} · ${name}`}><span aria-hidden="true">{initialsFor(name)}</span>{avatar ? <img src={avatar} alt="" referrerPolicy="no-referrer" onError={(event) => { event.currentTarget.hidden = true; }} /> : null}</button>
+    {open ? <div id={menuId} className={`queue-settings-panel settings-menu-panel${isAdmin || isDev ? ' is-admin' : ''}`} role="dialog" aria-label={t('settings')}>
+      <section className="settings-menu-section queue-settings-section"><span>{t('accentColor')}</span><div className="queue-accent-picker settings-accent-picker">{ACCENT_CHOICES.map((value) => <button type="button" key={value} className={`accent-${value}${accent === value ? ' is-on' : ''}`} onClick={() => setAccent(value)} aria-label={`${value} accent`} />)}<label className="queue-custom-color settings-custom-color" title={t('customColor')}><input type="color" value={accentHex(accent)} onChange={(event) => setAccent(event.target.value)} aria-label={t('customColor')} /><span>{t('custom')}</span></label></div></section>
+      <section className="settings-menu-section queue-settings-section"><span>{t('theme')}</span><div className="queue-settings-segment settings-menu-segment"><button type="button" className={theme === 'dark' ? 'is-on' : ''} onClick={() => setTheme('dark')}><Moon size={13} />{t('darkTheme')}</button><button type="button" className={theme === 'light' ? 'is-on' : ''} onClick={() => setTheme('light')}><Sun size={13} />{t('lightTheme')}</button></div></section>
+      <section className="settings-menu-section queue-settings-section"><span>{t('language')}</span><div className="queue-language lang-toggle" role="group" aria-label="Language"><button type="button" className={language === 'en' ? 'lang-option is-on' : 'lang-option'} aria-pressed={language === 'en'} onClick={() => setLanguage('en')}>ENG</button><button type="button" className={language === 'es' ? 'lang-option is-on' : 'lang-option'} aria-pressed={language === 'es'} onClick={() => setLanguage('es')}>ES</button></div></section>
+      {onManageAccounts ? <section className="settings-menu-section queue-settings-section queue-settings-managed"><span>{t('managedAccounts')}</span><button type="button" className="queue-settings-link settings-menu-link" onClick={() => { setOpen(false); onManageAccounts(); }}><Settings size={13} />{t('manageAccounts')}</button></section> : null}
+      {onStartGuide ? <section className="settings-menu-section queue-settings-section queue-settings-managed"><span>{t('howQueueWorks')}</span><button type="button" className="queue-settings-link settings-menu-link" onClick={() => { setOpen(false); onStartGuide(); }}><ClipboardList size={13} />{t('startGuide')}</button></section> : null}
+      {isAdmin || isDev ? <section className="settings-menu-section queue-settings-section queue-settings-admin settings-menu-admin"><span>{t('settings')}</span><a className="queue-settings-link settings-menu-link" href={`${import.meta.env.BASE_URL}settings.html`} target="sentient-settings"><Settings size={13} />{t('settings')}</a>{onResetQueue ? <button type="button" className="queue-settings-danger" onClick={() => { setOpen(false); onResetQueue(); }}><TimerReset size={13} />{t('resetQueue')}</button> : null}</section> : null}
+      <footer className="settings-menu-footer"><small>{userEmail}</small><button type="button" className="queue-settings-signout settings-menu-signout" onClick={onSignOut}><LogOut size={13} />{t('signOut')}</button></footer>
+    </div> : null}
   </div>;
 }
 
@@ -2565,9 +2587,10 @@ function QueueApp({ user }) {
     if (/^\d{4}-\d{2}-\d{2}$/.test(next)) setDate(next);
   };
 
-  return <QueuePendingContext.Provider value={pendingItems}><QueueNamesContext.Provider value={displayName}><main className="queue-page scheduler-page" onClickCapture={captureQueueCardOrigin}>
-    <ProductHeader current="queue" coordinator={coordinator} account={<QueueSettings isAdmin={Boolean(data?.viewer?.isAdmin)} isDev={effectiveDevAccess} userEmail={user.email} avatarUrl={user?.photoURL || data?.viewer?.avatarUrl} displayLabel={user?.displayName || data?.viewer?.displayName} onManageAccounts={() => { accountSetupDismissedRef.current = false; setAccountSetupOpen(true); }} onStartGuide={() => { setGuideStep(-1); setGuideOpen(true); }} onResetQueue={(data?.viewer?.isAdmin || effectiveDevAccess) ? () => setResetOpen(true) : null} onSignOut={() => { clearSsoCookie(); signOut(auth); }} />}><h1>{t('productionQueue')}</h1>
-        <div className="queue-actions-group queue-actions-primary">
+  return <QueuePendingContext.Provider value={pendingItems}><QueueNamesContext.Provider value={displayName}><main className="queue-page scheduler-page product-page" onClickCapture={captureQueueCardOrigin}>
+    <ProductHeader current="queue" coordinator={coordinator} isDev={effectiveDevAccess} canAccessNews={Boolean(viewer?.can_access_news || data?.viewer?.canAccessNews)} account={<QueueSettings isAdmin={Boolean(data?.viewer?.isAdmin)} isDev={effectiveDevAccess} userEmail={user.email} avatarUrl={user?.photoURL || data?.viewer?.avatarUrl} displayLabel={user?.displayName || data?.viewer?.displayName} onManageAccounts={() => { accountSetupDismissedRef.current = false; setAccountSetupOpen(true); }} onStartGuide={() => { setGuideStep(-1); setGuideOpen(true); }} onResetQueue={(data?.viewer?.isAdmin || effectiveDevAccess) ? () => setResetOpen(true) : null} onSignOut={() => { clearSsoCookie(); signOut(auth); }} />}><h1>{t('productionQueue')}</h1>
+    </ProductHeader>
+        <div className="queue-actions-group queue-actions-primary product-page-controls" aria-label="Queue actions">
           <span className={`queue-live-status is-${liveStatus}`} title={liveStatus === 'live' ? t('liveConnected') : liveStatus === 'offline' ? t('liveOffline') : t('liveConnecting')}>{liveStatus === 'offline' ? <WifiOff size={12} /> : <Radio size={12} />}<b>{liveStatus === 'live' ? t('liveConnected') : liveStatus === 'offline' ? t('liveOffline') : t('liveConnecting')}</b></span>
           {lateStart ? <button type="button" className="queue-start-warning" onClick={() => setOpen(lateStart)} title="Open the scheduled job"><AlertTriangle size={14} /><span>Current job has not started</span></button> : null}
           {(coordinator || canSelfAssign) ? <button type="button" className="queue-create-button" onClick={() => { setCreateSeed(null); setCreateOpen(true); }}><Plus size={14} />{t('createPost')}</button> : null}
@@ -2577,7 +2600,6 @@ function QueueApp({ user }) {
           {data?.viewer ? <button type="button" className={`queue-ticket-button${ticketsOpen ? ' is-active' : ''}`} onClick={toggleTickets}><ClipboardList size={14} />{t('tickets')}{data.pendingTicketCount ? <b>{data.pendingTicketCount}</b> : null}</button> : null}
           {pickAvailable ? <button type="button" className={`queue-pick-button${pickOpen ? ' is-active' : ''}`} onClick={() => { setPickError(''); setPickOpen(true); }}><Check size={14} />{t('pick')}</button> : null}
         </div>
-    </ProductHeader>
     {incomingUpdate ? <span className="queue-sync-announcement" role="status">{t('updatingQueue')}</span> : null}
     {toast ? <div className={`queue-toast is-${toast.type}`} role="status">{toast.type === 'success' ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}<span>{toast.message}</span><button type="button" onClick={() => setToast(null)}><X size={14} /></button></div> : null}
     {loading && !data ? <QueueSkeleton /> : null}

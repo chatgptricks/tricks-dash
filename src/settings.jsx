@@ -142,6 +142,7 @@ function SettingsApp() {
       userPhoto={user.photoURL || ''}
       isAdmin={Boolean(viewer.is_admin)}
       isDev={effectiveDevAccess}
+      canAccessNews={Boolean(viewer.can_access_news || viewer.canAccessNews)}
       onSignOut={handleSignOut}
       onRefresh={refreshAll}
       refreshing={refreshing}

@@ -43,6 +43,13 @@ Keep both `globalThis.fetch` and `window.fetch` mocked: shared API calls use
 
 ## Browser gate
 
+`smoke:layout` compares the real Research, Queue, Promos, Tracker, Insights,
+Hooks, Vault, News and Settings entrypoints at 1920, 1440, 1280 and 390px in
+dark and light preferences. It checks shared header geometry, page gutters,
+navigation permissions, account-menu behavior and document overflow. Firebase,
+CDNs and every backend request are mocked; screenshots and measurements are
+saved under `work/product-layout/`.
+
 `smoke:visual` starts and stops its own local Vite server. It uses installed
 Chrome (or `CHROME_PATH`) when available, otherwise Playwright Chromium.
 Firebase and backend responses are mocked. Coverage includes nested dialogs,

@@ -6,6 +6,23 @@ This release focuses on trustworthy core workflows across Research, Queue, Promo
 Tracker, Insights, Vault and Hooks. It has not
 been published or tagged; production still runs the existing release.
 
+### Shared Research layout (2026-10-04)
+
+- Research is the shared layout reference for Queue, Tracker, Insights, Promos,
+  Hooks, Vault, News and Settings: full-width pages, 24px desktop / 12px narrow
+  gutters, a compact glass header, identical navigation and account controls.
+- Centralize shell geometry and menu styles in `public/product-layout.css`,
+  loaded by both React and standalone tools. Remove independent page-width caps
+  and header overrides so later adjustments apply to every tool.
+- Keep workflow actions below the header when they need more space; align tool
+  titles, menu placement, focus behavior and responsive navigation. The selected
+  tool remains visible in the scrolling navigation strip.
+- Hooks uses the shared account menu; Queue retains its workflow actions within
+  that same menu surface. DEV and granted News links remain consistent across
+  tools, and navigation follows the selected language.
+- Add `smoke:layout` to the release gate to compare actual page geometry,
+  navigation permissions and account menus against Research with mocked services.
+
 ### Reliability
 
 - Research snapshots belong to the signed-in account and are restored only

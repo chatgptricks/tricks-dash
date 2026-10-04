@@ -52,7 +52,7 @@ try {
   assert.equal(document.querySelectorAll('.vault-card').length,0);
   await click(document.querySelector('.vault-tabs button'));
   assert.equal(document.querySelectorAll('.vault-card').length,2);
-  await click(document.querySelector('.vault-heading button'));
+  await click([...document.querySelectorAll('button')].find(button => button.textContent.trim() === '+ Add link'));
   for (const [input, value] of [[document.querySelector('input[type=url]'),'https://example.com/new'],[document.querySelector('.vault-add input:not([type])'),'New idea']]) {
     await act(async()=>{ Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value').set.call(input,value); input.dispatchEvent(new window.Event('input',{bubbles:true})); });
   }

@@ -5,6 +5,7 @@ import { apiFetch, API_BASE } from './api';
 import { firebaseAuth, startGoogleSignIn, describeSignInError } from './firebase';
 import { clearSsoCookie, startSsoRefresh, trySsoSignIn } from './sso';
 import ProductHeader from './ProductHeader';
+import { coordinatorFor, devAccessFor } from '../public/product-navigation';
 import TopicStack from './TopicStack';
 import PromoReviewDialog from './PromoReviewDialog';
 import { SettingsMenu } from './App';
@@ -262,12 +263,14 @@ function PromosApp() {
 
   if (user === undefined) return <main className="promo-loading">Loading Promos…</main>;
   if (!user) return <Login />;
-  const coordinator = Boolean(viewer?.is_admin || viewer?.isAdmin || viewer?.is_dev || viewer?.isDev || viewer?.operating_roles?.includes('vc'));
+  const coordinator = coordinatorFor(viewer);
+  const isDev = devAccessFor(viewer);
   const setFilter = (name, value) => setFilters(current => ({ ...current, [name]: value }));
-  return <main className="promo-shell"><ProductHeader current="promos" coordinator={coordinator} account={<SettingsMenu email={user.email} avatarUrl={user.photoURL || viewer?.avatar_url || viewer?.avatarUrl} isAdmin={Boolean(viewer?.is_admin || viewer?.isAdmin)} isDev={Boolean(viewer?.is_dev || viewer?.isDev)} onSignOut={() => { clearSsoCookie(); signOut(firebaseAuth); }} />}><h1>Promos</h1><span className="promo-header-subtitle">Paid partnership and promotion signals</span><button className="promo-scan" onClick={() => openDetail(items[0])} disabled={!items.length || opening}>{opening ? 'Opening…' : 'Review next'}</button></ProductHeader>
+  return <main className="promo-shell product-page"><ProductHeader current="promos" coordinator={coordinator} isDev={isDev} canAccessNews={Boolean(viewer?.can_access_news || viewer?.canAccessNews)} account={<SettingsMenu email={user.email} avatarUrl={user.photoURL || viewer?.avatar_url || viewer?.avatarUrl} isAdmin={Boolean(viewer?.is_admin || viewer?.isAdmin)} isDev={isDev} onSignOut={() => { clearSsoCookie(); signOut(firebaseAuth); }} />}><h1>Promos</h1><button className="promo-scan" onClick={() => openDetail(items[0])} disabled={!items.length || opening}>{opening ? 'Opening…' : 'Review next'}</button></ProductHeader>
+    <section className="product-page-heading"><p>Paid partnership and promotion signals</p></section>
     {accessError ? <div className="promo-alert" role="alert">{accessError}<button onClick={() => setAccessAttempt(value => value + 1)}>Retry access check</button></div> : !viewer ? <div className="promo-empty">Checking account access…</div> : <>
       <DetectionTools job={job} onStart={startJob} onReconnect={() => { setJob(current => ({ ...current, status: 'running', error: '' })); setPollAttempt(value => value + 1); }} />
-      <section className="promo-toolbar" aria-label="Filter promotion reviews">
+      <section className="promo-toolbar product-page-controls" aria-label="Filter promotion reviews">
         <label className="promo-search"><span>Search loaded posts</span><input aria-label="Search loaded posts" type="search" placeholder="Brand, account, keyword or evidence…" value={filters.search} onChange={e => setFilter('search', e.target.value)} /></label>
         <label><span>Review status</span><select aria-label="Review status" value={filters.review} onChange={e => setFilter('review', e.target.value)}><option value="new">New</option><option value="reviewed">Reviewed</option><option value="dismissed">Dismissed</option><option value="">All reviews</option></select></label>
         <label><span>Classification</span><select aria-label="Classification" value={filters.classification} onChange={e => setFilter('classification', e.target.value)}><option value="">All classifications</option>{Object.entries(CLASSIFICATION_LABELS).map(([key, label]) => <option value={key} key={key}>{label}</option>)}</select></label>

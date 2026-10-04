@@ -6,7 +6,7 @@ import { StackActions } from './StackActions';
 import { applyStackMembershipResult, resolveResearchPost } from './stackOperations';
 import { useTopicGroups } from './useTopicGroups';
 import ProductHeader from './ProductHeader';
-import { Fragment, startTransition, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, startTransition, useCallback, useDeferredValue, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   ArrowUpDown,
@@ -286,6 +286,9 @@ export function SettingsMenu({ email, avatarUrl, isAdmin, isDev, onSignOut, show
   const [open, setOpen] = useState(false);
   const [avatarFailed, setAvatarFailed] = useState(false);
   const ref = useRef(null);
+  const triggerRef = useRef(null);
+  const panelRef = useRef(null);
+  const panelId = useId();
 
   useEffect(() => { setAvatarFailed(false); }, [avatarUrl]);
 
@@ -295,20 +298,28 @@ export function SettingsMenu({ email, avatarUrl, isAdmin, isDev, onSignOut, show
       if (!ref.current?.contains(event.target)) setOpen(false);
     };
     const onKeyDown = (event) => {
-      if (event.key === 'Escape') setOpen(false);
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setOpen(false);
+        triggerRef.current?.focus();
+      }
     };
-    document.addEventListener('mousedown', onPointerDown);
+    panelRef.current?.querySelector('button, a, input')?.focus();
+    document.addEventListener('pointerdown', onPointerDown);
     document.addEventListener('keydown', onKeyDown);
     return () => {
-      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('pointerdown', onPointerDown);
       document.removeEventListener('keydown', onKeyDown);
     };
   }, [open]);
 
   return (
-    <div className="settings-menu" ref={ref}>
+    <div className="settings-menu" ref={ref} onBlur={(event) => { if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget)) setOpen(false); }}>
       <button
         type="button"
+        ref={triggerRef}
+        aria-haspopup="dialog"
+        aria-controls={open ? panelId : undefined}
         className={open ? 'settings-menu-trigger is-active' : 'settings-menu-trigger'}
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
@@ -318,7 +329,7 @@ export function SettingsMenu({ email, avatarUrl, isAdmin, isDev, onSignOut, show
         {avatarUrl && !avatarFailed ? <img src={avatarUrl} alt="" referrerPolicy="no-referrer" onError={() => setAvatarFailed(true)} /> : <span>{(email || '?').trim().charAt(0).toUpperCase()}</span>}
       </button>
       {open ? (
-        <div className="settings-menu-panel" role="menu">
+        <div id={panelId} ref={panelRef} className={`settings-menu-panel${isAdmin || isDev ? ' is-admin' : ''}`} role="dialog" aria-label={t('Settings')}>
           {!hideAppearanceControls ? <div className="settings-menu-section">
             <span>{t('Accent color')}</span>
             <div className="settings-accent-picker">
@@ -822,6 +833,7 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
   const [operatingRole, setOperatingRole] = useState(initialAccess.operating_role || 'sales');
   const [operatingRoles, setOperatingRoles] = useState(initialAccess.operating_roles || [initialAccess.operating_role || 'sales']);
   const [isDev, setIsDev] = useState(Boolean(initialAccess.is_dev) || knownDev);
+  const [canAccessNews, setCanAccessNews] = useState(Boolean(initialAccess.can_access_news));
   const [canSelfAssign, setCanSelfAssign] = useState(Boolean(initialAccess.can_self_assign));
   const [canSwitchRoles, setCanSwitchRoles] = useState(knownRoleSwitcher);
   const [availableRoles, setAvailableRoles] = useState(() => ROLE_SWITCHER_DEFAULTS[String(userEmail || '').trim().toLowerCase()] || []);
@@ -952,6 +964,7 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
     setOperatingRole(body.operating_role || 'sales');
     setOperatingRoles(body.operating_roles || [body.operating_role || 'sales']);
     setIsDev(Boolean(body.is_dev) || knownDev);
+    setCanAccessNews(Boolean(body.can_access_news));
     setCanSelfAssign(Boolean(body.can_self_assign));
     setCanSwitchRoles(Boolean(body.can_role_switch) || knownRoleSwitcher);
     setAvailableRoles(Array.isArray(body.available_operating_roles) ? body.available_operating_roles : (ROLE_SWITCHER_DEFAULTS[String(userEmail || '').trim().toLowerCase()] || body.operating_roles || []));
@@ -2000,11 +2013,11 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
   const databaseLoading = loading && !homeView;
 
   return (
-    <div className={`shell${homeView ? ' is-home' : ''}${databaseLoading ? ' is-dashboard-loading' : ''}`}>
+    <div className={`shell product-page${homeView ? ' is-home' : ''}${databaseLoading ? ' is-dashboard-loading' : ''}`}>
       <div className="backdrop" />
       <main className="app-layout" aria-busy={databaseLoading || undefined}>
         <section ref={leftPaneRef} className="left-pane">
-          <ProductHeader current={homeView ? 'home' : 'research'} coordinator={coordinatorAccess} isDev={isDev && !rolePreviewActive} count={queuePendingCount} account={<SettingsMenu email={userEmail} avatarUrl={userPhoto} isAdmin={effectiveIsAdmin} isDev={isDev && !rolePreviewActive} onSignOut={onSignOut} />}>
+          <ProductHeader current={homeView ? 'home' : 'research'} coordinator={coordinatorAccess} isDev={isDev && !rolePreviewActive} canAccessNews={canAccessNews} count={queuePendingCount} account={<SettingsMenu email={userEmail} avatarUrl={userPhoto} isAdmin={effectiveIsAdmin} isDev={isDev && !rolePreviewActive} onSignOut={onSignOut} />}>
             {!homeView ? <>
               <div className="topbar-search">
                 <Search size={18} aria-hidden="true" />
@@ -3311,7 +3324,7 @@ const WIZARD_STEPS = ['Account', 'Settings', 'Confirm'];
 // reloading the page discards it.
 export function SettingsPanel({
   accounts = [], onRefresh, refreshing = false, refreshNotice, onAccountsChanged,
-  initialTab, userEmail, userPhoto, isAdmin = false, isDev = false, onSignOut,
+  initialTab, userEmail, userPhoto, isAdmin = false, isDev = false, canAccessNews = false, onSignOut,
 }) {
   const { t } = usePrefs();
   // Firebase roles gate paid operations. The compatibility marker remains
@@ -4375,11 +4388,11 @@ export function SettingsPanel({
   };
 
   return (
-    <div className="admin-page">
-      <ProductHeader current="settings" coordinator account={<SettingsMenu email={userEmail} avatarUrl={userPhoto} isAdmin={isAdmin} isDev={isDev} onSignOut={onSignOut} showSettingsLink={false} />}><h1>{t('Settings')}</h1></ProductHeader>
+    <div className="admin-page product-page">
+      <ProductHeader current="settings" coordinator={isAdmin || isDev} isDev={isDev} canAccessNews={canAccessNews} account={<SettingsMenu email={userEmail} avatarUrl={userPhoto} isAdmin={isAdmin} isDev={isDev} onSignOut={onSignOut} showSettingsLink={false} />}><h1>{t('Settings')}</h1></ProductHeader>
 
-      <div className="admin-page-body">
-        <section className="settings-command-intro">
+      <div className="admin-page-body product-page-content">
+        <section className="settings-command-intro product-page-heading">
           <div>
             <span className="settings-command-kicker">{t('Command center')}</span>
             <h1>{t('Workspace settings')}</h1>

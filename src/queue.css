@@ -92,7 +92,7 @@ body { margin: 0; background: var(--q-bg); color: var(--q-text); font-family: -a
 html, body, #root { height: auto; min-height: 100%; }
 body { overflow-y: auto; overflow-x: hidden; }
 button, input, select, textarea { font: inherit; } button { cursor: pointer; } a { color: inherit; text-decoration: none; }
-.queue-page { min-height: 100vh; padding: 18px; background: radial-gradient(circle at 20% 0%, rgba(var(--accent-rgb,245,255,0), .055), transparent 30%), var(--q-bg); }
+.queue-page { min-height: 100vh;  background: radial-gradient(circle at 20% 0%, rgba(var(--accent-rgb,245,255,0), .055), transparent 30%), var(--q-bg); }
 .queue-topbar, .queue-state { border: 1px solid var(--q-line); background: var(--q-panel); box-shadow: 0 20px 55px rgba(var(--shade,0,0,0), .22); }
 .queue-topbar { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:13px 16px; border-radius:13px; }
 .queue-brand, .queue-actions { display:flex; align-items:center; }
@@ -139,7 +139,7 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
 /* Legacy queue-editor modal removed (superseded by the Detail rail); .queue-error stays, still used by the loading/error state. */
 .queue-error { color:#ff9b9b; font-size:12px; }
 .queue-auth { display:grid; min-height:100vh; place-items:center; padding:20px; background:var(--q-bg); }.queue-auth section { width:min(360px,100%); padding:28px; border:1px solid var(--q-line); border-radius:14px; background:var(--q-panel); text-align:center; }.queue-auth svg { color:var(--q-accent); }.queue-auth h1 { margin:10px 0 7px; font-size:20px; }.queue-auth p { margin:0 0 18px; color:var(--q-muted); font-size:13px; line-height:1.5; }.queue-auth button { width:100%; height:36px; border:1px solid rgba(var(--accent-rgb,245,255,0),.48); border-radius:8px; background:rgba(var(--accent-rgb,245,255,0),.12); color:var(--q-accent); font-weight:800; }
-@media(max-width:620px){.queue-page{padding:10px}.queue-topbar{align-items:flex-start;flex-direction:column}.queue-actions{width:100%;justify-content:space-between}}
+@media(max-width:620px){.queue-topbar{align-items:flex-start;flex-direction:column}.queue-actions{width:100%;justify-content:space-between}}
 
 /* Legacy thumbnail-grid kanban cards, bulk editor, and week-plan view
  * removed: none of these classes are referenced by current queue.jsx

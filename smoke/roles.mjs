@@ -19,7 +19,7 @@ const checks = {
   'Legacy dev preview value keeps full Dev access': files.app.includes('ACTIVE_ROLE_PREVIEWS.has(readRolePreview())')
     && files.queue.includes("ACTIVE_ROLE_PREVIEWS.has(window.sessionStorage.getItem('sentient.queueRolePreview') || '')")
     && files.settings.includes("ACTIVE_ROLE_PREVIEWS.has(window.sessionStorage.getItem('sentient.queueRolePreview') || '')"),
-  'Queue Settings stays Admin or Dev only': files.queue.includes('{isAdmin || isDev ? <section className="queue-settings-section queue-settings-admin">'),
+  'Queue Settings stays Admin or Dev only': /\{isAdmin \|\| isDev \? <section className="[^"\n]*\bqueue-settings-admin\b/.test(files.queue),
   'Pick remains available to every PD-capable user': files.queue.includes('const pickAvailable = Boolean(data?.viewer);'),
   'Settings restricted page retains role switcher': files.settings.includes('<DevRolePreview'),
   'Tracker loads shared role preview': files.tracker.includes('role-preview.js') && files.tracker.includes('defer'),
