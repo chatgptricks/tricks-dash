@@ -4,9 +4,9 @@ Instagram analytics + content-queue dashboard for Sentient Agency, served at
 `sentientdash.app`. React 19 + Vite, single-file-heavy (`src/App.jsx`,
 `src/styles.css`) rather than component-per-file — grep is your friend here.
 
-The frontend is preparing for **1.0.0**. See [CHANGELOG.md](CHANGELOG.md) for
-the release scope and remaining live verification. The current work is local;
-a passing release check does not publish the app.
+The frontend is **1.0.0**. See [CHANGELOG.md](CHANGELOG.md) for the release
+scope and validation. A passing release check does not publish the app;
+production publishing uses the separate workflow below.
 
 Use npm (`package-lock.json` is the single lockfile; CI runs `npm ci`).
 

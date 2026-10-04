@@ -1,10 +1,25 @@
 # Changelog
 
-## 1.0.0 — local release candidate (2026-10-03)
+## 1.0.0 (2026-10-04)
 
 This release focuses on trustworthy core workflows across Research, Queue, Promos,
-Tracker, Insights, Vault and Hooks. It has not
-been published or tagged; production still runs the existing release.
+Tracker, Insights, Vault and Hooks. Production release was authorized on
+2026-10-04, including the related Cortex Promos detector improvements.
+
+### Cards, downloads and caption editing
+
+- Use six desktop columns and the Research card structure across Research,
+  Promos, Vault and News, with responsive layouts for smaller screens.
+- Download photos, videos and carousel selections as individual original
+  media files with native filenames and extensions; never wrap them in a ZIP.
+  Keep partial failures recoverable and support retrying individual files.
+- Compare generated captions with the full original or another draft. Preserve
+  alternative versions and manual edits across setting changes and reopening
+  the editor until Research is reloaded or left.
+- Show JEV feedback on fact fidelity, account fit and unsupported claims;
+  distinguish generated-version feedback from subsequent manual edits.
+- Add character/word counts, restore generated text, clipboard feedback,
+  duplicate-request protection and recoverable generation timeouts.
 
 ### Shared Research layout (2026-10-04)
 
@@ -63,10 +78,10 @@ been published or tagged; production still runs the existing release.
 - Hooks updates saved drafts instead of duplicating them, retains selected sources
   across searches, and protects current edits from delayed generation responses.
 - Vault and Hooks reject stale session updates and enforce DEV/preview access.
-- Related detector changes are committed locally in the Cortex/Predict checkout:
+- Related detector changes are released from the Cortex/Predict checkout:
   fewer editorial/negation false positives, better sponsor extraction, conservative
   same-brand corroboration, and preserved human corrections during rescans.
-  The configured remote API still uses its deployed detector until separately released.
+  The frontend and API remain independently deployed services.
 
 ### Visual polish and motion
 
@@ -99,13 +114,14 @@ been published or tagged; production still runs the existing release.
   standard suite, alongside the new failure and recovery regressions.
 - Research has a dedicated browser visual gate; motion checks wait for animation
   completion before asserting visibility, avoiding fixed-delay timing failures.
-- Local verification on 2026-10-03: `npm run check:release` passed (lint:
-  zero errors, 47 existing warnings; regression tests; full production build;
-  Chromium desktop/mobile checks, including Promos and individual-tool fixtures). `npm audit --omit=dev --audit-level=high`
-  reported zero vulnerabilities. The local backend detector/review suite passed
-  64 tests using isolated synthetic records; live PostgreSQL was not exercised.
+- Release verification on 2026-10-04: `npm run check:release` passed (lint:
+  zero errors and existing warnings; regression tests; full production build;
+  Chromium desktop/mobile workflow, motion, layout, card, media and caption
+  checks). `npm audit --omit=dev --audit-level=high` reported zero vulnerabilities.
+  The related backend detector/API/review suite passed 65 tests using isolated
+  synthetic records; these tests do not exercise live PostgreSQL.
 
-### Before publishing
+### Operational verification
 
 - Verify the candidate with the intended accounts against the live backend,
   including mobile sign-in and role-specific Research/Queue workflows.
