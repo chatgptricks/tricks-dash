@@ -6,8 +6,9 @@ import path from 'node:path';
 import { chromium } from 'playwright';
 import { createServer } from 'vite';
 
+const cardsOnly = process.argv.includes('--cards');
 const before = process.argv.includes('--before');
-const output = path.resolve('work/product-layout');
+const output = path.resolve(cardsOnly ? 'work/product-cards' : 'work/product-layout');
 fs.mkdirSync(output, { recursive: true });
 const server = await createServer({ logLevel: 'error', server: { host: 'localhost', port: 4196 } });
 await server.listen();
@@ -15,19 +16,22 @@ const base = server.resolvedUrls.local[0].replace(/\/$/, '');
 const chrome = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const browser = await chromium.launch({ headless: true, executablePath: process.env.CHROME_PATH || (fs.existsSync(chrome) ? chrome : undefined) });
 const requestedTool = process.argv.find(value => value.startsWith('--tool='))?.split('=')[1];
-const tools = ['research', 'queue', 'promos', 'tracker', 'insights', 'hooks', 'vault', 'news', 'settings'].filter(tool => !requestedTool || tool === 'research' || tool === requestedTool);
+const tools = ['research', 'queue', 'promos', 'tracker', 'insights', 'hooks', 'vault', 'news', 'settings'].filter(tool => (!cardsOnly || ['research', 'promos', 'vault', 'news'].includes(tool)) && (!requestedTool || tool === 'research' || tool === requestedTool));
 const navPaths = ['/index.html', '/queue.html', '/tracker.html', '/promos.html', '/vault.html', '/hooks.html', '/news.html', '/insights.html'];
-const widths = [1920, 1440, 1280, 390];
+const widths = cardsOnly ? [1920, 1440, 1280, 960, 700, 460, 390] : [1920, 1440, 1280, 390];
 const errors = [], violations = [], measurements = [];
 const email = 'user03@example.com';
 const viewer = { email, is_dev: true, is_admin: true, isDev: true, isAdmin: true, operating_roles: ['admin', 'vc'], operatingRoles: ['admin', 'vc'], queue_role_preview_active: false };
 const image = '<svg xmlns="http://www.w3.org/2000/svg" width="600" height="800"><rect width="600" height="800" fill="#22443b"/><text x="40" y="420" fill="white" font-size="35">A useful creative idea</text></svg>';
 const imageUrl = 'https://layout-images.test/cover.svg';
 const accounts = [{ handle: 'alpha', label: 'Alpha Studio', full_name: 'Alpha Studio', group: 'sentient', followers: 1200, active: 1, is_active: true }, { handle: 'beta', label: 'Beta Studio', full_name: 'Beta Studio', group: 'competitors', followers: 2400, active: 1, is_active: true }];
-const posts = accounts.map((account, index) => ({ id: index + 1, postKey: `${account.handle}:LAYOUT${index}`, shortcode: `LAYOUT${index}`, account: account.handle, caption: 'A useful creative idea for the next project.', postType: 'Carousel', type: 'Carousel', likes: 2000, comments: 20, postDate: new Date().toISOString(), coverUrl: imageUrl, permalink: `https://instagram.com/p/LAYOUT${index}/` }));
-const promos = [{ account: 'alpha', shortcode: 'PROMO', client: 'Studio One', product: 'Video editor', classification: 'disclosed', review_status: 'new', published_at: new Date().toISOString(), caption: 'Sponsored by Studio One.', evidence: [{ family: 'explicit', text: 'Sponsored by Studio One.' }], cover_source_url: imageUrl }];
+const posts = Array.from({ length: 6 }, (_, index) => accounts[index % accounts.length]).map((account, index) => ({ id: index + 1, postKey: `${account.handle}:LAYOUT${index}`, shortcode: `LAYOUT${index}`, account: account.handle, caption: 'A useful creative idea for the next project.', postType: 'Carousel', type: 'Carousel', likes: 2000, comments: 20, postDate: new Date().toISOString(), coverUrl: imageUrl, permalink: `https://instagram.com/p/LAYOUT${index}/` }));
+const promoBase = { account: 'alpha', shortcode: 'PROMO', client: 'Studio One', product: 'Video editor', classification: 'disclosed', review_status: 'new', published_at: new Date().toISOString(), caption: 'Sponsored by Studio One.', evidence: [{ family: 'explicit', text: 'Sponsored by Studio One.' }], cover_source_url: imageUrl };
+const promos = Array.from({ length: 6 }, (_, index) => ({ ...promoBase, shortcode: `PROMO${index}`, client: `Studio ${index}`, cover_source_url: index === 5 ? '' : imageUrl }));
 const hooks = [{ id: 'caption:alpha', account: 'alpha', shortcode: 'LAYOUT0', source_kind: 'caption', hook_text: 'These five creative habits save me hours every week.', likes: 2000, categories: [], published_at: new Date().toISOString() }];
-const vault = [{ id: 'layout-link', title: 'A useful creative idea', url: 'https://example.test/idea', priority: 0, discarded: 0, shared_at: new Date().toISOString(), source: 'Creative team', tweet_image: imageUrl, tweet_text: 'A simple example worth keeping for the next project.' }];
+const vaultBase = { id: 'layout-link', title: 'A useful creative idea', url: 'https://example.test/idea', priority: 0, discarded: 0, shared_at: new Date().toISOString(), source: 'Creative team', tweet_image: imageUrl, tweet_text: 'A simple example worth keeping for the next project.' };
+const vault = Array.from({ length: 6 }, (_, index) => ({ ...vaultBase, id: `link-${index}`, priority: index, title: `Creative idea ${index + 1}`, tweet_image: index === 5 ? '' : index === 4 ? 'https://layout-images.test/broken.svg' : imageUrl }));
+const news = Array.from({ length: 6 }, (_, index) => ({ id: `story-${index}`, title: `Research team shares AI discovery ${index + 1}`, description: 'A closer look at the evidence behind a useful new creative workflow, with practical ideas for the next project.', link: `https://example.test/story-${index}`, image: index === 5 ? '' : index === 4 ? 'https://layout-images.test/broken.svg' : imageUrl, published: new Date().toISOString(), publisher: 'Creative Research', source: 'Research news', sourceType: 'news', feedLabel: 'AI research', feedId: 'ow6LmNtmgkH0e876' }));
 const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Costa_Rica' }).format(new Date());
 const queue = { viewer: { ...viewer, displayName: 'User 03', accounts: ['alpha'] }, date: day, requests: [], pickRequests: [], hotPickRequests: [], planningRequests: [], assignedRequests: [], liveDrafts: [], liveRevision: 0, presence: {}, timeBlocks: [], pendingTicketCount: 0, designers: [{ email, accounts: ['alpha'] }], schedulerUsers: [{ email, displayName: 'User 03', roles: ['vc', 'pd'], isQueueDesigner: true, accounts: ['alpha'] }], accounts, accountOnboarding: { completed: true, selectedAccounts: ['alpha'] }, tags: [], priorities: ['low', 'medium', 'high'], hours: { start: 0, end: 1440 } };
 const authSource = fs.readFileSync('smoke/stub-firebase-auth.js', 'utf8').replaceAll('{ email:', "{ uid: 'layout-user', email:");
@@ -52,6 +56,8 @@ async function fixturePage(theme, profile = 'dev') {
   await page.route('**/*', async route => {
     const url = new URL(route.request().url());
     const filename = url.pathname;
+    if (filename.endsWith('/broken.svg')) return route.fulfill({ status: 404, body: '' });
+    if (filename.includes('PROMO5') && route.request().resourceType() === 'image') return route.fulfill({ status: 404, body: '' });
     if (filename.startsWith('/api/')) {
       const method = route.request().method();
       if (method !== 'GET' && !filename.endsWith('/me/preferences') && !filename.endsWith('/presence')) {
@@ -75,7 +81,7 @@ async function fixturePage(theme, profile = 'dev') {
       else if (filename === '/api/dashboard/hooks') data = { results: hooks, status: { total: 1, captions: 1, ocr: 0, categorized: 0, pending: 1, drafts: 0 } };
       else if (filename === '/api/dashboard/hooks/drafts') data = { drafts: [] };
       else if (filename === '/api/dashboard/vault') data = { items: vault };
-      else if (filename === '/api/dashboard/news') data = { items: [], reviews: {}, saved: {} };
+      else if (filename === '/api/dashboard/news') data = { items: news, reviews: {}, saved: {} };
       else if (filename === '/api/tracker/summary') data = { accounts, tracking_since: '2026-09-01' };
       else if (filename.endsWith('/follower-growth')) data = { accounts: [], peaks: [] };
       else if (filename.endsWith('/refresh-allowance')) data = { unlimited: true };
@@ -117,6 +123,33 @@ async function readGeometry(page) {
         }
         return true;
       }).slice(0, 20).map(element => ({ tag: element.tagName, id: element.id, class: element.className, box: rect(element), minWidth: getComputedStyle(element).minWidth })),
+    };
+  });
+}
+
+async function readCards(page) {
+  return page.evaluate(() => {
+    const grid = document.querySelector('.gallery-grid, .product-card-grid');
+    if (!grid) return null;
+    const cards = [...grid.querySelectorAll('.post-card')];
+    const box = element => element.getBoundingClientRect().toJSON();
+    const css = (element, properties) => Object.fromEntries(properties.map(key => [key, getComputedStyle(element)[key]]));
+    return {
+      columns: getComputedStyle(grid).gridTemplateColumns.split(' ').length,
+      gap: getComputedStyle(grid).gap,
+      cards: cards.map(card => {
+        const media = card.querySelector('.post-media');
+        return { box: box(card), media: box(media), radius: getComputedStyle(card).borderRadius,
+          header: css(card.querySelector('.post-header'), ['padding', 'gap']),
+          avatar: box(card.querySelector('.post-avatar')),
+          source: css(card.querySelector('.post-user-copy strong'), ['fontSize', 'fontWeight', 'lineHeight']),
+          body: css(card.querySelector('.post-copy'), ['padding']),
+          actions: css(card.querySelector('.post-editorial-actions'), ['padding', 'gap']),
+          overflow: card.scrollWidth - card.clientWidth,
+          images: [...media.querySelectorAll('img')].map(image => ({ complete: image.complete, loaded: image.naturalWidth > 0, fit: getComputedStyle(image).objectFit, filter: getComputedStyle(image).filter })),
+        };
+      }),
+      placeholders: grid.querySelectorAll('.product-card-placeholder').length,
     };
   });
 }
@@ -202,9 +235,36 @@ try {
           check(geometry.headerCss.borderRadius === '16px', `${label}: Research header retains its 16px radius`);
           check(geometry.headerCss.paddingTop === '10px' && geometry.headerCss.paddingRight === '16px', `${label}: Research header retains compact 10px / 16px padding`);
         }
+        let cards;
+        if (cardsOnly) {
+          await page.locator('.gallery-grid .post-card, .product-card-grid .post-card').first().waitFor();
+          cards = await readCards(page);
+          const columns = width <= 460 ? 1 : width <= 700 ? 2 : width <= 960 ? 3 : width <= 1280 ? 4 : 5;
+          check(cards?.columns === columns, `${label}: expected ${columns} columns, got ${cards?.columns}`);
+          check(cards?.cards.length === 6, `${label}: all six fixture cards must remain visible`);
+          check(cards?.gap === '20px', `${label}: Research grid gap`);
+          const cardReference = expected?.cards?.cards[0];
+          for (const card of cards?.cards || []) {
+            near(card.media.width / card.media.height, .75, `${label}: portrait media ratio`, .005);
+            check(card.overflow <= 1, `${label}: card controls and copy must fit`);
+            if (cardReference) {
+              near(card.box.width, cardReference.box.width, `${label}: card width matches Research`);
+              near(card.avatar.width, cardReference.avatar.width, `${label}: avatar width matches Research`);
+              check(card.radius === cardReference.radius, `${label}: card radius matches Research`);
+              for (const part of ['header', 'source', 'body', 'actions']) check(JSON.stringify(card[part]) === JSON.stringify(cardReference[part]), `${label}: ${part} matches Research (${JSON.stringify(card[part])} vs ${JSON.stringify(cardReference[part])})`);
+            }
+            if (tool !== 'research') for (const image of card.images) check(image.fit === 'contain' && image.filter === 'none', `${label}: source media stays complete and unfiltered`);
+          }
+          if (width === 390 && tool !== 'research') {
+            await page.locator('.product-card').last().scrollIntoViewIfNeeded();
+            await page.waitForFunction(() => document.querySelector('.product-card-grid .product-card-placeholder'));
+            check((await readCards(page)).placeholders >= 1, `${label}: missing media keeps a useful card placeholder`);
+            await page.evaluate(() => scrollTo(0, 0));
+          }
+        }
         const menu = await checkMenu(page, label, expected?.menu);
-        measurements.push({ tool, theme, width, geometry, menu });
-        if (tool === 'research') reference.set(width, { geometry, menu });
+        measurements.push({ tool, theme, width, geometry, menu, cards });
+        if (tool === 'research') reference.set(width, { geometry, menu, cards });
         if (width === 1440 || width === 390) await page.screenshot({ path: path.join(output, `${tool}-${theme}-${width}.png`) });
       }
       console.log(`Checked ${tool}: ${theme}, ${widths.join('/')}px`);
@@ -213,7 +273,7 @@ try {
   }
   // Identical chrome must not accidentally broaden navigation permissions.
   // Every accessible workspace uses the same links for the same viewer.
-  for (const profile of requestedTool ? [] : ['pd', 'vc', 'news']) {
+  for (const profile of requestedTool || cardsOnly ? [] : ['pd', 'vc', 'news']) {
     const page = await fixturePage('dark', profile);
     const allowed = navPaths.filter(value => !['/vault.html', '/hooks.html', '/news.html', '/insights.html'].includes(value)
       || (profile === 'vc' && value === '/insights.html') || (profile === 'news' && value === '/news.html'));

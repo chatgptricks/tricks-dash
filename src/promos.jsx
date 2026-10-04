@@ -5,6 +5,8 @@ import { apiFetch, API_BASE } from './api';
 import { firebaseAuth, startGoogleSignIn, describeSignInError } from './firebase';
 import { clearSsoCookie, startSsoRefresh, trySsoSignIn } from './sso';
 import ProductHeader from './ProductHeader';
+import ResearchCard, { CardMedia } from './ResearchCard';
+import { ArrowUpRight, ScanEye } from 'lucide-react';
 import { coordinatorFor, devAccessFor } from '../public/product-navigation';
 import TopicStack from './TopicStack';
 import PromoReviewDialog from './PromoReviewDialog';
@@ -66,31 +68,41 @@ function Login() {
   return <main className="promo-auth"><section><span className="promo-kicker">Sentient Dash</span><h1>Promos</h1><p>Review promotion signals, check the evidence, and improve detection together.</p><button className="promo-primary" onClick={login} disabled={busy}>{busy ? 'Signing in…' : 'Sign in with Google'}</button>{error && <p className="promo-error" role="alert">{error}</p>}</section></main>;
 }
 
-function PromoCover({ item }) {
-  const primary = safeExternalUrl(item.cover_url?.startsWith('/') ? `${API_BASE}${item.cover_url}` : item.cover_url) || safeExternalUrl(item.cover_source_url);
-  const fallback = safeExternalUrl(item.cover_source_url);
-  const [source, setSource] = useState(primary);
-  useEffect(() => setSource(primary), [primary]);
-  return source ? <img src={source} alt="" loading="lazy" decoding="async" onError={() => setSource(source !== fallback ? fallback : '')} /> : <span aria-hidden="true">◎</span>;
-}
-
 function PromoCard({ item, onSelect }) {
   const evidence = item.evidence?.[0]?.text || item.jev_review?.contextExcerpt || 'No evidence excerpt';
-  const client = item.client || 'Unknown client';
-  return <article className="promo-card" data-promo-key={promoKey(item)} role="button" tabIndex={0} aria-label={`Review ${item.client || 'unknown brand'} on @${item.account}`} onClick={() => onSelect(item)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onSelect(item); } }}>
-    <div className="promo-cover"><PromoCover item={item} /></div>
-    <div className="promo-card-body"><div className="promo-card-top"><Badge value={item.classification} /><span className="promo-review">{item.classification_source === 'jev_semantic_scan' ? 'JEV candidate' : item.jev_review ? 'JEV checked' : item.review_status}</span></div>
-      <h2 className="promo-opportunity-title"><strong>{client}</strong> <span>on</span> <em>@{item.account}</em></h2><p className="promo-date">{dateLabel(item.published_at || item.first_detected_at)}</p>{item.stack_size > 1 && <p className="promo-stack-context">Topic stack · {item.stack_size} related posts</p>}<p className="promo-product"><span>Product</span> {item.product || 'Not specified'}</p>
-      <dl><div><dt>Signal</dt><dd>{CLASSIFICATION_LABELS[item.classification] || 'Needs review'}</dd></div><div><dt>Detected</dt><dd>{dateLabel(item.first_detected_at)}</dd></div></dl>
-      <p className="promo-evidence">“{evidence}”</p><div className="promo-card-foot">{item.cta?.keyword ? `Keyword: ${item.cta.keyword}` : item.promo_code ? `Code: ${item.promo_code}` : item.links?.length ? 'Commercial link found' : 'Open details'}<span>↗</span></div>
-    </div></article>;
+  const client = item.client || 'Unknown brand';
+  const primary = safeExternalUrl(item.cover_url?.startsWith('/') ? `${API_BASE}${item.cover_url}` : item.cover_url) || safeExternalUrl(item.cover_source_url);
+  const permalink = safeExternalUrl(item.permalink);
+  const review = item.classification_source === 'jev_semantic_scan' ? 'JEV candidate' : item.jev_review ? 'JEV checked' : item.review_status;
+  function openReview(event) {
+    const card = event.currentTarget.closest('.promo-card');
+    const stack = card?.closest('.post-stack-modal');
+    // Research-style cards participate in the stack's explicit handoff contract.
+    stack?.dispatchEvent(new CustomEvent('obs-stack-select', { detail: { card: card.closest('.post-stack-grid > div') } }));
+    onSelect(item);
+  }
+  return <ResearchCard className="promo-card" data-promo-key={promoKey(item)} role="button" tabIndex={0}
+    aria-label={`Review ${item.client || 'unknown brand'} on @${item.account}`}
+    onClick={event => { if (!event.target.closest('button, a')) openReview(event); }}
+    onKeyDown={event => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); openReview(event); } }}
+    source={`@${item.account}`} meta={dateLabel(item.published_at || item.first_detected_at)}
+    marker={<span className="promo-review">{review}</span>}
+    media={<CardMedia src={primary} fallbackSrc={safeExternalUrl(item.cover_source_url)} alt={`Post by @${item.account}`} label="Post preview unavailable" />}
+    actions={<><button type="button" onClick={openReview} aria-label={`Review promotion on @${item.account}`}><ScanEye size={16} /><span>Review</span></button>{permalink && <a href={permalink} target="_blank" rel="noopener noreferrer" aria-label={`Open original post by @${item.account}`}><ArrowUpRight size={16} /><span>Original</span></a>}</>}
+    footer={<span className="promo-card-foot">{item.cta?.keyword ? `Keyword: ${item.cta.keyword}` : item.promo_code ? `Code: ${item.promo_code}` : item.links?.length ? 'Commercial link found' : `Detected ${dateLabel(item.first_detected_at)}`}</span>}
+  >
+    <div className="promo-card-top"><Badge value={item.classification} /></div>
+    <h2 className="promo-opportunity-title">{client}</h2>
+    <p className="promo-product">{item.product || 'Product not identified'}</p>
+    <p className="promo-evidence">“{evidence}”</p>
+  </ResearchCard>;
 }
 
 function Badge({ value }) { return <span className={`promo-badge ${value}`}>{CLASSIFICATION_LABELS[value] || 'Needs review'}</span>; }
 
 function PromoResults({ items, onSelect }) {
   const groups = groupPromos(items);
-  return <section className="promo-grid promo-grid-stacks" aria-label="Promotion review results">
+  return <section className="promo-grid promo-grid-stacks product-card-grid" aria-label="Promotion review results">
     {groups.map(group => {
       const posts = group.items.map(item => ({ ...item, postDate: item.published_at || item.first_detected_at, publishedAt: item.published_at || item.first_detected_at, timestamp: Date.parse(item.published_at || item.first_detected_at || '') || 0 }));
       return <div className={posts.length > 1 ? 'promo-result-stack' : 'promo-result-single'} key={group.key}>

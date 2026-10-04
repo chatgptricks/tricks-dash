@@ -214,7 +214,7 @@ try{
   for(const tool of ['hooks','vault']){
     await openTool(touch,tool);
     assert.equal(await touch.evaluate(()=>matchMedia('(hover: hover)').matches),false);
-    await touch.locator(tool==='hooks'?'.hook-use':'.vault-card-body').first().tap();
+    await touch.locator(tool==='hooks'?'.hook-use':'.vault-card .product-card-body').first().tap();
     await touch.waitForTimeout(400);
     await assertNoTransform(touch,tool==='hooks'?'.hook-card':'.vault-media-link img',`${tool} touch`);
     await assertWidth(touch,`${tool} touch`);

@@ -5,6 +5,8 @@ import { apiFetch, API_BASE } from './api';
 import { firebaseAuth, startGoogleSignIn, describeSignInError } from './firebase';
 import { clearSsoCookie, startSsoRefresh, trySsoSignIn } from './sso';
 import ProductHeader from './ProductHeader';
+import ResearchCard, { CardMedia } from './ResearchCard';
+import { ExternalLink, FilePenLine, Sparkles, Star } from 'lucide-react';
 import { coordinatorFor, devAccessFor } from '../public/product-navigation';
 import { SettingsMenu } from './App';
 import { PrefsProvider } from './prefsContext';
@@ -75,24 +77,35 @@ function ReviewBadge({ review }) {
 }
 
 function StoryCard({ item, rank, review, onReview, busy, locked, saved, onSave, onBrief, failure }) {
-  const [imageFailed, setImageFailed] = useState(false);
   const dimensions = review?.dimensions || {};
   const mainSignals = [['Viral potential', review?.viralPotential ?? dimensions.viral_potential?.score], ['Story freshness', dimensions.timeliness?.score], ['Evidence', review?.evidenceQuality ?? dimensions.evidence_quality?.score]];
-  return <article className={`news-story ${item.image && !imageFailed ? 'with-image' : ''} ${review?.label === 'golden_nugget' ? 'is-golden' : review?.label === 'potential' ? 'is-potential' : ''}`}>
-    <div className="news-story-rank" aria-label={`Story ${rank + 1}`}>{String(rank + 1).padStart(2, '0')}</div>
-    <div className="news-story-content">
-      <div className="news-story-meta"><span className="news-source-pill"><span className={`news-origin-mark ${item.sourceType === 'x' ? 'is-x' : ''}`}>{item.sourceType === 'x' ? '𝕏' : 'N'}</span><span>{item.sourceType === 'x' ? item.source : item.publisher}</span></span><span>{item.published ? <><time dateTime={item.published}>{relativeAge(item.published) || dateLabel(item.published)}</time><span className="news-date-detail"> · {dateLabel(item.published)}</span></> : 'Date unavailable'}</span></div>
-      <h2>{item.title}</h2>
-      <p className="news-story-excerpt">{stripHtml(item.description).slice(0, 360) || 'The feed has no excerpt. Read the original source before developing this story.'}</p>
-      <div className="news-story-tags"><span>{item.feedLabel}</span>{item.coverageCount > 1 && <span className="news-coverage">Seen across {item.coverageCount} source sites · {item.coverageFeeds.length} feeds</span>}{item.socialSignal && <span className="news-social-hint">Filtered X discussion</span>}</div>
-      {review && <div className="news-signal-grid">{mainSignals.filter(([,value]) => value != null).map(([label,value]) => <div className="news-signal" key={label}><span>{label}</span><strong>{Math.round(value * 100)}%</strong><meter min="0" max="1" value={value} /></div>)}</div>}
-      <div className="news-story-actions"><ReviewBadge review={review} /><button className="news-primary-action" disabled={busy || locked} onClick={() => onReview(item)}>{busy ? 'Reviewing…' : review ? 'Recheck JEV' : 'Review with JEV'}</button><button aria-pressed={saved} onClick={onSave}>{saved ? '★ Saved' : '☆ Save'}</button><button onClick={onBrief}>Draft post</button><a href={item.link} target="_blank" rel="noreferrer" aria-label={`Open original story: ${item.title}`}>Source ↗</a></div>
-      {failure && <p role="status" className="news-error">Review failed: {failure}</p>}
-      {review?.strengths?.length > 0 && <details className="news-review-details"><summary>Why JEV ranked this story</summary><p><strong>Strongest signals:</strong> {review.strengths.slice(0, 4).map(human).join(' · ')}. {review.weaknesses?.length ? <><strong>Needs work:</strong> {review.weaknesses.map(human).join(' · ')}.</> : null}</p>{review.editorialAngle && <p><strong>Post angle:</strong> {ANGLES[review.editorialAngle] || human(review.editorialAngle)} {review.postFormat && `Best format: ${human(review.postFormat)}.`}</p>}{review.targetAccount && <p><strong>Optional account fit:</strong> @{review.targetAccount}</p>}<p>Evidence: {review.evidenceSource === 'article' ? 'article text extracted from the publisher' : 'RSS excerpt only'}. Viral potential is an editorial estimate, not a promise of reach or a verified engagement count.</p></details>}
-      {item.relatedStories?.length > 0 && <details className="news-review-details"><summary>Other coverage ({item.relatedStories.length})</summary><ul>{item.relatedStories.map((source,index) => <li key={`${source.link}-${index}`}><a href={source.link} target="_blank" rel="noreferrer">{source.title} · {source.source} ↗</a></li>)}</ul></details>}
-    </div>
-    {item.image && !imageFailed && <img className="news-story-image" src={item.image} alt="" loading="lazy" onError={() => setImageFailed(true)} />}
-  </article>;
+  const publisher = (item.sourceType === 'x' ? item.source : item.publisher) || item.source || 'News';
+  const golden = review?.label === 'golden_nugget' || review?.label === 'gold';
+  const potential = review?.label === 'potential' || review?.label === 'promising';
+  return <ResearchCard
+    className={`news-story${golden ? ' is-golden' : ''}${potential ? ' is-potential' : ''}`}
+    source={publisher}
+    meta={item.published ? <time dateTime={item.published} title={dateLabel(item.published)}>{relativeAge(item.published) || dateLabel(item.published)}</time> : 'Date unavailable'}
+    avatar={<span className={`news-origin-mark${item.sourceType === 'x' ? ' is-x' : ''}`} aria-hidden="true">{item.sourceType === 'x' ? '𝕏' : publisher.slice(0, 2).toUpperCase()}</span>}
+    marker={<span className="news-story-rank" aria-label={`Story ${rank + 1}`}>{String(rank + 1).padStart(2, '0')}</span>}
+    media={<CardMedia src={item.image} alt="" label="No story preview" />}
+    actions={<>
+      <button type="button" aria-pressed={saved} onClick={onSave}><Star size={11} fill={saved ? 'currentColor' : 'none'} />{saved ? 'Saved' : 'Save'}</button>
+      <button type="button" onClick={onBrief} title="Draft post"><FilePenLine size={11} />Draft</button>
+      <a href={item.link} target="_blank" rel="noreferrer" aria-label={`Open original story: ${item.title}`}>Source <ExternalLink size={11} /></a>
+      <button type="button" className="editorial-primary" disabled={busy || locked} onClick={() => onReview(item)} aria-label={busy ? 'Reviewing with JEV' : review ? 'Recheck with JEV' : 'Review with JEV'} title={review ? 'Recheck with JEV' : 'Review with JEV'}><Sparkles size={11} />{busy ? 'Reviewing…' : 'JEV'}</button>
+    </>}
+    footer={<><span>{item.feedLabel}</span>{item.socialSignal && <span className="news-social-hint" title={item.socialSignal}>Filtered X discussion</span>}</>}
+  >
+    <ReviewBadge review={review} />
+    <h2 title={item.title}><a href={item.link} target="_blank" rel="noreferrer">{item.title}</a></h2>
+    <p className="news-story-excerpt">{stripHtml(item.description).slice(0, 360) || 'The feed has no excerpt. Read the original source before developing this story.'}</p>
+    {item.coverageCount > 1 && <div className="news-story-tags"><span className="news-coverage">Seen across {item.coverageCount} source sites · {item.coverageFeeds?.length || 0} feeds</span></div>}
+    {review && <div className="news-signal-grid">{mainSignals.filter(([,value]) => value != null).map(([label,value]) => <div className="news-signal" key={label}><span>{label}</span><strong>{Math.round(value * 100)}%</strong><meter min="0" max="1" value={value} /></div>)}</div>}
+    {failure && <p role="status" className="news-error">Review failed: {failure}</p>}
+    {review?.strengths?.length > 0 && <details className="news-review-details"><summary>Why JEV ranked this story</summary><p><strong>Strongest signals:</strong> {review.strengths.slice(0, 4).map(human).join(' · ')}. {review.weaknesses?.length ? <><strong>Needs work:</strong> {review.weaknesses.map(human).join(' · ')}.</> : null}</p>{review.editorialAngle && <p><strong>Post angle:</strong> {ANGLES[review.editorialAngle] || human(review.editorialAngle)} {review.postFormat && `Best format: ${human(review.postFormat)}.`}</p>}{review.targetAccount && <p><strong>Optional account fit:</strong> @{review.targetAccount}</p>}<p>Evidence: {review.evidenceSource === 'article' ? 'article text extracted from the publisher' : 'RSS excerpt only'}. Viral potential is an editorial estimate, not a promise of reach or a verified engagement count.</p></details>}
+    {item.relatedStories?.length > 0 && <details className="news-review-details"><summary>Other coverage ({item.relatedStories.length})</summary><ul>{item.relatedStories.map((source,index) => <li key={`${source.link}-${index}`}><a href={source.link} target="_blank" rel="noreferrer">{source.title} · {source.source} ↗</a></li>)}</ul></details>}
+  </ResearchCard>;
 }
 
 function NewsApp() {
@@ -221,7 +234,7 @@ function NewsApp() {
     <section className="news-toolbar product-page-controls" aria-label="Story filters"><div className="news-filter-row"><div className="news-filter-tabs" role="tablist" aria-label="Story filters">{filters.map(([key,label,count]) => <button key={key} role="tab" aria-selected={filter === key} className={filter === key ? 'active' : ''} onClick={() => setFilter(key)}>{label}{count !== null && <b>{count}</b>}</button>)}</div><span className="news-result-count"><strong>{ranked.length}</strong> stories<span className="news-result-reviewed"> · {reviewedCount} scored by JEV</span></span></div><div className="news-search-row"><label className="news-search"><span aria-hidden="true">⌕</span><input aria-label="Search stories" value={query} onChange={event => setQuery(event.target.value)} placeholder="Search stories, sources or topics…" />{query && <button className="news-clear-search" onClick={() => setQuery('')} aria-label="Clear search">×</button>}</label><label className="news-feed-select"><span>Feed</span><select aria-label="Filter stories by topic" value={feedFilter} onChange={event => setFeedFilter(event.target.value)}><option value="all">All feeds</option>{feedGroups.map(group => <option value={group} key={group}>{group}</option>)}</select></label><label className="news-sort-select"><span>Sort</span><select aria-label="Sort stories" value={sortBy} onChange={event => setSortBy(event.target.value)}><option value="recommended">Recommended</option><option value="newest">Newest</option><option value="coverage">Most coverage</option></select></label><span className="news-up-to-date">{pendingCount > 0 ? `${pendingCount} queued for automatic JEV review` : 'All caught up'}</span></div></section>
     {scanning && <div className="news-progress" role="progressbar" aria-label="JEV review progress" aria-valuemin="0" aria-valuemax={progress.total} aria-valuenow={progress.done}><span style={{ width: `${progress.total ? progress.done / progress.total * 100 : 0}%` }} /></div>}
     {brief && <section id="news-brief" className="news-brief"><div><span className="news-kicker">EDITORIAL WORKSPACE</span><h2>Build an original post</h2><p>Use the source and the story angle to create something clear, useful, and worth sharing.</p></div><textarea aria-label="Post brief" value={brief.text} onChange={event => setBrief({ ...brief, text: event.target.value })} /><div className="news-story-actions"><button onClick={() => { saveStory(brief.item, true, brief.text); }}>Save brief</button><button onClick={async () => { try { await navigator.clipboard.writeText(brief.text); setError('Brief copied.'); } catch { setError('Copy failed. Select the brief text and copy it manually.'); } }}>Copy brief</button><button onClick={() => setBrief(null)}>Close</button></div></section>}
-    <section className="news-results" aria-label="News stories">{visibleRanked.map((item,index) => <StoryCard key={item.id} rank={index} item={item} review={reviews[item.id]} busy={reviewing === item.id} locked={scanning || Boolean(reviewing)} failure={failures[item.id]} saved={Boolean(saved[item.id])} onReview={review} onSave={() => saveStory(item, !saved[item.id])} onBrief={() => makeBrief(item)} />)}{!ranked.length && <div className="news-empty"><strong>No stories in this view.</strong><span>Clear the search, change the feed, or review unassessed stories. A story without a review has not been rejected.</span>{!items.length && <button onClick={load} disabled={loading}>{loading ? 'Loading feeds…' : 'Load RSS stories'}</button>}</div>}</section>
+    <section className="news-results product-card-grid" aria-label="News stories">{visibleRanked.map((item,index) => <StoryCard key={item.id} rank={index} item={item} review={reviews[item.id]} busy={reviewing === item.id} locked={scanning || Boolean(reviewing)} failure={failures[item.id]} saved={Boolean(saved[item.id])} onReview={review} onSave={() => saveStory(item, !saved[item.id])} onBrief={() => makeBrief(item)} />)}{!ranked.length && <div className="news-empty"><strong>No stories in this view.</strong><span>Clear the search, change the feed, or review unassessed stories. A story without a review has not been rejected.</span>{!items.length && <button onClick={load} disabled={loading}>{loading ? 'Loading feeds…' : 'Load RSS stories'}</button>}</div>}</section>
     {visibleRanked.length < ranked.length && <div className="news-load-more"><span>Showing {visibleRanked.length} of {ranked.length} matching stories</span><button onClick={() => setVisibleLimit(current => Math.min(current + 30, ranked.length))}>Load 30 more stories</button></div>}
     {loading && <div className="news-loading-note">Refreshing RSS.app feeds…</div>}
   </main>;

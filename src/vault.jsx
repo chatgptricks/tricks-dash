@@ -7,6 +7,7 @@ import { clearSsoCookie, startSsoRefresh, trySsoSignIn } from './sso';
 import { PrefsProvider } from './prefsContext';
 import { SettingsMenu } from './App';
 import ProductHeader from './ProductHeader';
+import ResearchCard, { CardMedia } from './ResearchCard';
 import { encodeRouteState } from './urlCodec';
 import './styles.css';
 import './vault.css';
@@ -70,11 +71,39 @@ function Vault() {
     <section className="vault-toolbar product-page-controls"><div className="vault-tabs"><button aria-pressed={view === 'collection'} onClick={() => setView('collection')}>Collection <b>{activeItems.length}</b></button><button aria-pressed={view === 'done'} onClick={() => setView('done')}>Done! <b>{doneItems.length}</b></button><button aria-pressed={discarded} onClick={() => setView('discarded')}>Discarded <b>{items.filter(item => item.discarded).length}</b></button></div><input aria-label="Search links" placeholder="Search links or creators…" value={query} onChange={e => setQuery(e.target.value)} /><select aria-label="Filter by source" value={filter} onChange={e => setFilter(e.target.value)}><option>All</option>{[...new Set(items.filter(item => safeUrl(item.url)).map(item => platform(item.url)))].sort().map(value => <option key={value}>{value}</option>)}</select></section>
     {error && <div className="vault-alert" role="alert">{error} <button onClick={() => setRevision(n => n + 1)}>Reload</button></div>}
     <div className="vault-caption"><span>{rows.length} links{view === 'collection' && ' · Highest priority first'}</span><span>{discarded ? 'Restore a link anytime' : view === 'done' ? 'Completed ideas · Undo anytime' : 'Use ↑ ↓ to change priority'}</span></div>
-    <section className="vault-grid" aria-label="Saved links">{rows.map(item => { const rank = activeItems.findIndex(row => row.id === item.id); const site = platform(item.url); return <article className={`vault-card ${item.done ? 'is-done' : ''}`} key={item.id}>
-      <div className={`vault-card-cover vault-platform-${site.toLowerCase()} ${safeUrl(item.tweet_image) ? 'has-media' : ''}`}><span className="vault-platform-mark">{site === 'X' ? '𝕏' : site === 'Drive' ? '△' : site === 'Instagram' ? '◎' : '↗'}</span>{safeUrl(item.tweet_image) && <a className="vault-media-link" href={safeUrl(item.url)} target="_blank" rel="noopener noreferrer" aria-label={`Open media for ${item.title}`}><img src={safeUrl(item.tweet_image)} alt={`Media from ${item.tweet_author || item.title}`} loading="lazy" referrerPolicy="no-referrer" onError={e => { e.currentTarget.style.display = 'none'; }} /></a>}<small className="vault-platform-badge">{site}</small>{!discarded && <b className="vault-priority-badge">{item.done ? '✓ Done!' : `#${rank + 1}`}</b>}{['video', 'animated_gif'].includes(item.tweet_media_type) && <span className="vault-play-badge">▶ <small>{item.tweet_media_type === 'video' ? 'Video' : 'GIF'}</small></span>}</div>
-      <div className="vault-card-body"><div className="vault-author-row">{safeUrl(item.tweet_avatar) ? <img className="vault-avatar" src={safeUrl(item.tweet_avatar)} alt="" loading="lazy" referrerPolicy="no-referrer" onError={e => { e.currentTarget.style.display = 'none'; }} /> : <span className="vault-avatar-placeholder">{site === 'X' ? '𝕏' : '↗'}</span>}<div><span className="vault-eyebrow">{site === 'X' ? item.title.replace('Post by ', '') : site}</span><h2><a href={safeUrl(item.url)} target="_blank" rel="noopener noreferrer">{item.tweet_author || item.title}</a></h2></div></div>{item.tweet_text ? <div className="vault-tweet"><p>{expanded[item.id] || item.tweet_text.length <= 600 ? item.tweet_text : `${item.tweet_text.slice(0, 600)}…`}</p>{item.tweet_text.length > 600 && <button className="vault-read-more" aria-expanded={Boolean(expanded[item.id])} onClick={() => setExpanded(current => ({ ...current, [item.id]: !current[item.id] }))}>{expanded[item.id] ? 'Show less' : 'Read more'}</button>}{item.tweet_author && <span className="vault-tweet-author">— {item.tweet_author}</span>}</div> : isTweet(item.url) && <div className="vault-tweet-unavailable"><p>{item.text_status === 'unavailable' ? 'X could not provide this tweet’s text.' : 'Tweet text has not been loaded yet.'}</p><button disabled={busy} onClick={() => mutate(`/${item.id}/text`, 'POST', {})}>{busy ? 'Loading…' : item.text_status === 'unavailable' ? 'Retry text' : 'Load tweet text'}</button></div>}<p className="vault-url">{item.url}</p><div className="vault-meta">{item.source ? `From ${item.source} · ` : ''}{new Date(item.shared_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</div><div className="vault-links"><a href={safeUrl(item.url)} target="_blank" rel="noopener noreferrer">Open link ↗</a>{safeUrl(item.slack_url) && <a href={safeUrl(item.slack_url)} target="_blank" rel="noopener noreferrer">Slack ↗</a>}</div></div>
-      <footer>{view === 'collection' && <div className="vault-order-actions"><button aria-label={`Move ${item.title} up`} disabled={busy || rank === 0} onClick={() => move(item, -1)}>↑</button><button aria-label={`Move ${item.title} down`} disabled={busy || rank === activeItems.length - 1} onClick={() => move(item, 1)}>↓</button></div>}{!discarded && <div className="vault-workflow-actions"><button className="vault-done" disabled={busy} onClick={() => mutate(`/${item.id}`, 'PATCH', { done: !item.done })}>{item.done ? 'Undo Done' : '✓ Done!'}</button>{item.pool_request_id ? <a className="vault-in-pool" href={`/queue.html?r=${encodeRouteState({ task: item.pool_request_id })}`} target="sentient-queue">✓ In Queue ↗</a> : <button className="vault-to-pool" disabled={busy} onClick={() => mutate(`/${item.id}/pool`, 'POST', {})}>Send to Pool ↗</button>}</div>}<button className="vault-discard" disabled={busy} onClick={() => mutate(`/${item.id}`, 'PATCH', { discarded: !discarded })}>{discarded ? 'Restore' : 'Discard'}</button></footer>
-    </article>; })}</section>
+    <section className="vault-grid product-card-grid" aria-label="Saved links">{rows.map(item => {
+      const rank = activeItems.findIndex(row => row.id === item.id);
+      const site = platform(item.url);
+      const sharedDate = new Date(item.shared_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      const sourceName = item.tweet_author || site;
+      return <ResearchCard
+        className={`vault-card ${item.done ? 'is-done' : ''}`}
+        key={item.id}
+        source={<a href={safeUrl(item.url)} target="_blank" rel="noopener noreferrer">{sourceName}</a>}
+        meta={`${item.tweet_author ? `${site} · ` : ''}${sharedDate}`}
+        avatar={safeUrl(item.tweet_avatar) ? <img src={safeUrl(item.tweet_avatar)} alt="" loading="lazy" referrerPolicy="no-referrer" onError={event => { event.currentTarget.style.visibility = 'hidden'; }} /> : <span className="vault-avatar-placeholder" aria-hidden="true">{site === 'X' ? '𝕏' : site === 'Drive' ? '△' : site === 'Instagram' ? '◎' : '↗'}</span>}
+        marker={!discarded && <b className="vault-priority-badge">{item.done ? '✓ Done' : `#${rank + 1}`}</b>}
+        media={<>
+          <a className="vault-media-link" href={safeUrl(item.url)} target="_blank" rel="noopener noreferrer" aria-label={`Open media for ${item.title}`}>
+            <CardMedia src={safeUrl(item.tweet_image)} alt={`Media from ${sourceName}`} label={`${site} link`} />
+          </a>
+          {['video', 'animated_gif'].includes(item.tweet_media_type) && <span className="media-badge vault-play-badge">▶ {item.tweet_media_type === 'video' ? 'Video' : 'GIF'}</span>}
+        </>}
+        actions={<>
+          {view === 'collection' && <div className="vault-order-actions"><button aria-label={`Move ${item.title} up`} disabled={busy || rank === 0} onClick={() => move(item, -1)}>↑</button><button aria-label={`Move ${item.title} down`} disabled={busy || rank === activeItems.length - 1} onClick={() => move(item, 1)}>↓</button></div>}
+          <div className="vault-links"><a href={safeUrl(item.url)} target="_blank" rel="noopener noreferrer">Open link ↗</a>{safeUrl(item.slack_url) && <a href={safeUrl(item.slack_url)} target="_blank" rel="noopener noreferrer">Slack ↗</a>}</div>
+        </>}
+        footer={<>
+          {!discarded && <div className="vault-workflow-actions"><button className="vault-done" disabled={busy} onClick={() => mutate(`/${item.id}`, 'PATCH', { done: !item.done })}>{item.done ? 'Undo Done' : '✓ Done!'}</button>{item.pool_request_id ? <a className="vault-in-pool" href={`/queue.html?r=${encodeRouteState({ task: item.pool_request_id })}`} target="sentient-queue">✓ In Queue ↗</a> : <button className="vault-to-pool" disabled={busy} onClick={() => mutate(`/${item.id}/pool`, 'POST', {})}>Send to Pool ↗</button>}</div>}
+          <button className="vault-discard" disabled={busy} onClick={() => mutate(`/${item.id}`, 'PATCH', { discarded: !discarded })}>{discarded ? 'Restore' : 'Discard'}</button>
+        </>}
+      >
+        <h2><a href={safeUrl(item.url)} target="_blank" rel="noopener noreferrer">{item.title}</a></h2>
+        {item.tweet_text ? <div className="vault-tweet"><p>{expanded[item.id] || item.tweet_text.length <= 220 ? item.tweet_text : `${item.tweet_text.slice(0, 220)}…`}</p>{item.tweet_text.length > 220 && <button className="vault-read-more" aria-expanded={Boolean(expanded[item.id])} onClick={() => setExpanded(current => ({ ...current, [item.id]: !current[item.id] }))}>{expanded[item.id] ? 'Show less' : 'Read more'}</button>}</div> : isTweet(item.url) && <div className="vault-tweet-unavailable"><p>{item.text_status === 'unavailable' ? 'X could not provide this tweet’s text.' : 'Tweet text has not been loaded yet.'}</p><button disabled={busy} onClick={() => mutate(`/${item.id}/text`, 'POST', {})}>{busy ? 'Loading…' : item.text_status === 'unavailable' ? 'Retry text' : 'Load tweet text'}</button></div>}
+        <p className="vault-url" title={item.url}>{item.url}</p>
+        {item.source && <p className="vault-meta">From {item.source}</p>}
+      </ResearchCard>;
+    })}</section>
     {!rows.length && <p className="vault-empty">{!loaded ? error ? 'Your links could not be loaded. Use Reload to retry.' : 'Loading your links…' : query || filter !== 'All' ? 'No matching links. Try another search or source.' : discarded ? 'No discarded links.' : view === 'done' ? 'No completed links yet. Mark a card Done! to move it here.' : 'Your collection is ready. Add your first link.'}</p>}
   </main>;
 }

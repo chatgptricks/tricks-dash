@@ -25,7 +25,7 @@
     "smoke:vault": "node smoke/run-vault.mjs && node smoke/run-vault.mjs admin && node smoke/run-vault.mjs preview",
     "smoke:hooks": "node smoke/run-hooks.mjs && node smoke/run-hooks.mjs admin && node smoke/run-hooks.mjs preview",
     "smoke:visual": "node smoke/visual-release.mjs",
-    "check:release": "npm run lint && npm test && npm run build && npm run smoke:visual && npm run smoke:research-visual && npm run smoke:promos && npm run smoke:tool-browser && npm run smoke:motion && npm run smoke:layout",
+    "check:release": "npm run lint && npm test && npm run build && npm run smoke:visual && npm run smoke:research-visual && npm run smoke:promos && npm run smoke:tool-browser && npm run smoke:motion && npm run smoke:layout && npm run smoke:cards",
     "test:auth-cache": "node scripts/test-dashboard-cache.mjs && node smoke/auth-cache.mjs",
     "test:promos": "node scripts/test-promos-intelligence.mjs",
     "smoke:promos": "node smoke/promos-review.mjs",
@@ -33,7 +33,8 @@
     "smoke:tool-browser": "node smoke/tracker-insights-browser.mjs",
     "smoke:motion": "node smoke/run-motion.mjs && node smoke/motion.mjs",
     "smoke:research-visual": "node smoke/research-visual.mjs",
-    "smoke:layout": "node smoke/product-layout.mjs"
+    "smoke:layout": "node smoke/product-layout.mjs",
+    "smoke:cards": "node smoke/product-layout.mjs --cards && node smoke/news-cards.mjs"
   },
   "overrides": {
     "@firebase/firestore": {
