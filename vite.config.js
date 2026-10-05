@@ -34,6 +34,7 @@ export default defineConfig(({ command }) => ({
         dashboard: resolve(__dirname, 'index.html'),
         queue: resolve(__dirname, 'queue.html'),
         settings: resolve(__dirname, 'settings.html'),
+        agents: resolve(__dirname, 'agents.html'),
         promos: resolve(__dirname, 'promos.html'),
         news: resolve(__dirname, 'news.html'),
         hooks: resolve(__dirname, 'hooks.html'),

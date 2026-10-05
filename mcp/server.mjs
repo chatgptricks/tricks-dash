@@ -18,7 +18,8 @@ const r = await fetch(`${base}/openapi.json`, {
 if (!r.ok) throw Error(`OpenAPI discovery failed: ${r.status}`);
 const tools = catalogue(await r.json()),
   allowWrites = process.env.SENTIENT_MCP_ALLOW_WRITES === "true";
-function makeServer(requestToken) {
+function makeServer(requestToken, accessMode) {
+  const effectiveWrites = allowWrites && accessMode !== "read";
   const server = new Server(
     { name: "sentient-dash", version: "1.0.0" },
     { capabilities: { tools: {}, resources: {} }, instructions },
@@ -44,7 +45,7 @@ function makeServer(requestToken) {
         annotations: { readOnlyHint: true },
       },
       ...[...tools.values()]
-        .filter((t) => !t.write || allowWrites)
+        .filter((t) => !t.write || effectiveWrites)
         .map(({ name, description, inputSchema, annotations }) => ({
           name,
           description,
@@ -102,7 +103,7 @@ function makeServer(requestToken) {
       return await execute(tool, params.arguments || {}, {
         base,
         token,
-        allowWrites,
+        allowWrites: effectiveWrites,
       });
     } catch (e) {
       return {
@@ -142,9 +143,12 @@ if (process.argv.includes("--http")) {
     }
     const token = req.headers.authorization?.match(/^Bearer (.+)$/)?.[1];
     if (!token) {
-      res.writeHead(401).end("Bearer Firebase ID token required");
+      res
+        .writeHead(401)
+        .end("Bearer agent connection key or Firebase ID token required");
       return;
     }
+    let accessMode;
     // Authenticate before allowing even tool discovery; no shared user session.
     try {
       const auth = await fetch(`${base}/api/dashboard/me`, {
@@ -156,11 +160,12 @@ if (process.argv.includes("--http")) {
         res.writeHead(auth.status === 403 ? 403 : 401).end("Unauthorized");
         return;
       }
+      accessMode = (await auth.json()).agent_access_mode;
     } catch {
       res.writeHead(503).end("Authentication unavailable");
       return;
     }
-    const server = makeServer(token),
+    const server = makeServer(token, accessMode),
       transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: undefined,
         enableJsonResponse: true,

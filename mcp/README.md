@@ -20,15 +20,19 @@ Requires Node 22 or newer. Run `npm ci` in this directory. Add this entry to you
 }
 ```
 
-The token file must contain an existing, authorized user's **Firebase ID token**, not a custom token, service-account key, or Google access token. Keep it outside the repository with mode 0600. ID tokens expire; your host or credential helper must refresh the file. The file is reread on every call. `SENTIENT_MCP_TOKEN` is also supported, but a host-managed token file avoids embedding tokens in configuration. No automatic login/refresh flow is implemented.
+The token file can contain a **connection code** generated at `/agents.html` (`sad_agent_…`) or an authorized user's Firebase ID token. Connection codes are reusable until their chosen expiry or revocation; no Firebase refresh is needed for codes. Codes require the matching Cortex backend release. Do not use a service-account key, custom token, or Google access token. Keep it outside the repository with mode 0600. ID tokens expire; your host or credential helper must refresh the file. The file is reread on every call. `SENTIENT_MCP_TOKEN` is also supported, but a host-managed token file avoids embedding tokens in configuration. No automatic login/refresh flow is implemented.
 
 `SENTIENT_API_BASE` defaults to the live Cortex origin. A local MCP still operates on production data. Set `SENTIENT_MCP_ALLOW_WRITES=true` to expose mutation/computation tools. Every such call also needs `confirm: true`; this represents the host's authorization and is not an interactive human approval mechanism.
 
 ## Connect hosted agents
 
-Run `node server.mjs --http`. Defaults to `127.0.0.1:3100/mcp`; this is an HTTP listener, not a published service. Deploy behind an HTTPS reverse proxy. Set `SENTIENT_MCP_HOST=0.0.0.0`, `PORT`, and `SENTIENT_MCP_ALLOWED_HOSTS` to the exact proxy Host names. Browser Origin requests are rejected. Never put a shared user token in the remote server environment: each client supplies `Authorization: Bearer <Firebase ID token>` on every request. The server authenticates that user before discovery and forwards their token to Cortex. Stateless HTTP uses JSON responses; no persisted sessions.
+Use `https://cortex-api-db2e.onrender.com/mcp` with the connection code as the bearer credential. Cortex hosts the MCP alongside its normal API, so no additional service is needed. Full-access codes enable actions there; read-only codes hide and reject action tools.
 
-Remote clients must support custom bearer headers. OAuth-only clients need a future OAuth authorization integration; this server does not advertise an OAuth flow or issue agent API keys. Muse/Dots configuration has not been validated against their specific hosts.
+### Optional separate Node server
+
+Run `node server.mjs --http`. Defaults to `127.0.0.1:3100/mcp`; this is an HTTP listener, not a published service. Deploy behind an HTTPS reverse proxy. Set `SENTIENT_MCP_HOST=0.0.0.0`, `PORT`, and `SENTIENT_MCP_ALLOWED_HOSTS` to the exact proxy Host names. Browser Origin requests are rejected. Never put a shared user token in the remote server environment: each client supplies `Authorization: Bearer <connection-code>` (Firebase ID tokens remain supported) on every request. The server authenticates that user before discovery and forwards their token to Cortex. Stateless HTTP uses JSON responses; no persisted sessions.
+
+Remote clients must support custom bearer headers. OAuth-only clients need a future OAuth authorization integration; this server does not advertise an OAuth flow; the signed-in product page issues user-owned agent connection keys. Muse/Dots configuration has not been validated against their specific hosts.
 
 ## Agent workflow
 
@@ -45,3 +49,11 @@ Credential-minting endpoints, Slack callbacks, media image routes, continuous li
 ## Validation
 
 `npm test` checks schema generation, authorization gates, path handling, form encoding, HTTP errors and a real MCP client/server connection against a mock Cortex API. Public production OpenAPI discovery was verified; authenticated production execution requires your authorized token. These tests do not mutate production.
+
+## User-owned connection codes
+
+Open **Agent connections** from your account menu, name the agent, select full account access or read only, and choose a 30-day, 90-day or one-year expiry. Copy the code once into the agent host's secure MCP credential field. Each user creates their own codes. Full access inherits the owner's current permissions; it does not elevate other users to an administrator. Deleted users immediately lose access, and revocation stops subsequent authenticated requests (already-running actions are not undone).
+
+Raw codes are never stored server-side: Cortex keeps SHA-256 hashes plus connection metadata. Codes cannot create more codes or access authentication endpoints. Key-management endpoints are excluded from MCP tools. The MCP deployment must set `SENTIENT_MCP_ALLOW_WRITES=true` for full-access connections to execute mutation tools; read-only connection restrictions are independently enforced by Cortex.
+
+Muse and Dots need support for stdio credentials or custom bearer headers. OAuth-only integrations still require an OAuth adapter. The hosted Cortex MCP is at `https://cortex-api-db2e.onrender.com/mcp` once the matching backend release is deployed. Full-access codes expose actions there without the standalone Node server write opt-in.

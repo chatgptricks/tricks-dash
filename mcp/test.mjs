@@ -140,8 +140,8 @@ test("HTTP MCP authenticates each caller and rejects missing credentials", async
   const api = createServer((req, res) => {
     res.setHeader("Content-Type", "application/json");
     if (req.url === "/openapi.json") res.end(JSON.stringify(spec));
-    else if (req.headers.authorization === "Bearer http-token")
-      res.end('{"email":"http-agent@example.com"}');
+    else if (req.headers.authorization === "Bearer sad_agent_" + "t".repeat(43))
+      res.end('{"email":"http-agent@example.com","agent_access_mode":"read"}');
     else res.writeHead(401).end("{}");
   });
   await new Promise((r) => api.listen(0, "127.0.0.1", r));
@@ -157,7 +157,7 @@ test("HTTP MCP authenticates each caller and rejects missing credentials", async
         ...process.env,
         PORT: String(port),
         SENTIENT_API_BASE: `http://127.0.0.1:${api.address().port}`,
-        SENTIENT_MCP_ALLOW_WRITES: "false",
+        SENTIENT_MCP_ALLOW_WRITES: "true",
       },
       stdio: ["ignore", "ignore", "pipe"],
     },
@@ -192,9 +192,13 @@ test("HTTP MCP authenticates each caller and rejects missing credentials", async
       401,
     );
     const transport = new StreamableHTTPClientTransport(url, {
-      requestInit: { headers: { Authorization: "Bearer http-token" } },
+      requestInit: {
+        headers: { Authorization: "Bearer sad_agent_" + "t".repeat(43) },
+      },
     });
     await client.connect(transport);
+    const discovery = await client.listTools();
+    assert.ok(!discovery.tools.some(t => t.name === "post_queue_id_"));
     const result = await client.callTool({ name: "product_me", arguments: {} });
     assert.equal(
       JSON.parse(result.content[0].text).data.email,

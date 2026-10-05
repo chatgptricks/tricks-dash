@@ -39,6 +39,7 @@ export function catalogue(spec) {
     ajv = new Ajv({ strict: false, validateFormats: false });
   for (const [path, item] of Object.entries(spec.paths || {})) {
     if (
+      path.startsWith("/api/dashboard/me/agent-connections") ||
       !path.startsWith("/api/") ||
       /\/api\/(auth|slack)(\/|$)|\/covers\/|\/avatar\/|\/user-avatar\/|\/alert-image\/|\/live$/.test(
         path,
@@ -143,7 +144,7 @@ export async function execute(
   if (tool.write && !allowWrites)
     throw Error("Writes disabled. Set SENTIENT_MCP_ALLOW_WRITES=true.");
   if (!token)
-    throw Error("Provide a Firebase ID token for an authorized product user.");
+    throw Error("Provide a connection code or Firebase ID token for an authorized product user.");
   let path = tool.path;
   for (const [k, v] of Object.entries(args.path || {})) {
     if (
