@@ -5,7 +5,7 @@ import reactHooks from 'eslint-plugin-react-hooks';
 // Deliberately small: catch the mistakes that build cleanly and only break at
 // render (undefined names, TDZ, hook misuse). Style is not enforced here.
 export default [
-  { ignores: ['dist/**', 'work/**', 'node_modules/**', '.vite/**', 'public/**'] },
+  { ignores: ['dist/**', 'work/**', '**/node_modules/**', '.vite/**', 'public/**'] },
   js.configs.recommended,
   {
     files: ['**/*.{js,jsx,mjs}'],
@@ -24,7 +24,7 @@ export default [
     },
   },
   {
-    files: ['scripts/**', 'smoke/**', 'vite.config.js', 'eslint.config.js'],
+    files: ['mcp/**', 'scripts/**', 'smoke/**', 'vite.config.js', 'eslint.config.js'],
     languageOptions: { globals: { ...globals.node, ...globals.browser } },
   },
 ];

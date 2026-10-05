@@ -71,3 +71,10 @@ Production publishing is a separate two-branch workflow: source on `main`,
 static output on `gh-pages`. The ignored local `FOR_CODEX.md` contains the
 operational handover and deployment steps. Frontend checks do not validate
 the live backend, Firebase login redirects, or ingestion jobs.
+
+## Agent access (MCP)
+
+The [Sentient Dash MCP server](mcp/README.md) exposes typed Cortex tools over
+stdio or authenticated Streamable HTTP, including product discovery,
+Research, Queue, analytics, and restricted subtools. Follow its connection
+guide for Muse, Dots, or another MCP host.
