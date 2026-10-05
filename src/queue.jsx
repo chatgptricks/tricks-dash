@@ -270,10 +270,10 @@ Object.assign(COPY.es, {
 });
 
 Object.assign(COPY.en, {
-  createPost: 'Create Post', createPostTitle: 'Create a Queue post', createPostHelp: 'Start a production request without a dashboard post.', targetAccount: 'Publishing account', accountToSelect: 'Account selected when assigned', chooseAccountLater: 'Choose later (optional)', postTitle: 'Post title', postTitlePlaceholder: 'e.g. AI tools carousel for next week', postType: 'Post type', postTypeImage: 'Image', postTypeCarousel: 'Carousel', postTypeReel: 'Reel', postTypePromo: 'Promo', postTypeStory: 'Story', postTypeOther: 'Other', titleRequired: 'Add a title for this post.', accountRequired: 'Choose a Sentient account.', postCreated: 'Post created in the production pool.', sourceLink: 'Source link', sourceLinkHelp: 'Paste a public Reddit, X, Canva, LinkedIn, Facebook, Instagram, or other source link. Queue will try to bring in its title, description, and thumbnail.', getSourceDetails: 'Get details', gettingSourceDetails: 'Getting details…', sourcePreview: 'Source preview', sourceDetected: 'Details added without replacing fields you already edited.',
+  createPost: 'Create Post', createPostTitle: 'Create a Queue post', createPostHelp: 'Create a new Pool task from any source, including a post used before.', targetAccount: 'Publishing account', accountToSelect: 'Account selected when assigned', chooseAccountLater: 'Choose later (optional)', postTitle: 'Post title', postTitlePlaceholder: 'e.g. AI tools carousel for next week', postType: 'Post type', postTypeImage: 'Image', postTypeCarousel: 'Carousel', postTypeReel: 'Reel', postTypePromo: 'Promo', postTypeStory: 'Story', postTypeOther: 'Other', titleRequired: 'Add a title for this post.', accountRequired: 'Choose a Sentient account.', postCreated: 'Post created in the production pool.', sourceLink: 'Source link', sourceLinkHelp: 'Paste a public Reddit, X, Canva, LinkedIn, Facebook, Instagram, or other source link. Queue will try to bring in its title, description, and thumbnail.', getSourceDetails: 'Get details', gettingSourceDetails: 'Getting details…', sourcePreview: 'Source preview', sourceDetected: 'Details added without replacing fields you already edited.', sourceUsedBefore: 'Previously used in Queue', sourceFoundResearch: 'Found in Research', sourceReuseHelp: 'Create a new Pool task from this source. Previous assignments and history stay unchanged.', sourceResearchHelp: 'A new Pool task will use this Research source.',
 });
 Object.assign(COPY.es, {
-  createPost: 'Crear post', createPostTitle: 'Crear un post en Queue', createPostHelp: 'Inicia un request de producción sin un post del dashboard.', targetAccount: 'Cuenta de publicación', accountToSelect: 'Cuenta se elige al asignar', chooseAccountLater: 'Elegir después (opcional)', postTitle: 'Título del post', postTitlePlaceholder: 'ej. Carrusel de herramientas de IA para la próxima semana', postType: 'Tipo de post', postTypeImage: 'Imagen', postTypeCarousel: 'Carrusel', postTypeReel: 'Reel', postTypePromo: 'Promo', postTypeStory: 'Story', postTypeOther: 'Otro', titleRequired: 'Agrega un título para este post.', accountRequired: 'Elige una cuenta de Sentient.', postCreated: 'Post creado en el pool de producción.', sourceLink: 'Link de origen', sourceLinkHelp: 'Pega un link público de Reddit, X, Canva, LinkedIn, Facebook, Instagram u otra fuente. Queue intentará traer su título, descripción y miniatura.', getSourceDetails: 'Traer detalles', gettingSourceDetails: 'Obteniendo detalles…', sourcePreview: 'Vista previa del origen', sourceDetected: 'Se agregaron los detalles sin reemplazar campos que ya editaste.',
+  createPost: 'Crear post', createPostTitle: 'Crear un post en Queue', createPostHelp: 'Crea un nuevo trabajo en el Pool desde cualquier fuente, incluso un post usado antes.', targetAccount: 'Cuenta de publicación', accountToSelect: 'Cuenta se elige al asignar', chooseAccountLater: 'Elegir después (opcional)', postTitle: 'Título del post', postTitlePlaceholder: 'ej. Carrusel de herramientas de IA para la próxima semana', postType: 'Tipo de post', postTypeImage: 'Imagen', postTypeCarousel: 'Carrusel', postTypeReel: 'Reel', postTypePromo: 'Promo', postTypeStory: 'Story', postTypeOther: 'Otro', titleRequired: 'Agrega un título para este post.', accountRequired: 'Elige una cuenta de Sentient.', postCreated: 'Post creado en el pool de producción.', sourceLink: 'Link de origen', sourceLinkHelp: 'Pega un link público de Reddit, X, Canva, LinkedIn, Facebook, Instagram u otra fuente. Queue intentará traer su título, descripción y miniatura.', getSourceDetails: 'Traer detalles', gettingSourceDetails: 'Obteniendo detalles…', sourcePreview: 'Vista previa del origen', sourceDetected: 'Se agregaron los detalles sin reemplazar campos que ya editaste.', sourceUsedBefore: 'Usado antes en Queue', sourceFoundResearch: 'Encontrado en Research', sourceReuseHelp: 'Crea un nuevo trabajo en el Pool desde esta fuente. Las asignaciones anteriores y su historial se conservan.', sourceResearchHelp: 'Un nuevo trabajo en el Pool usará esta fuente de Research.',
 });
 Object.assign(COPY.en, {
   traineeReview: 'Trainee review', sendForReview: 'Send for review', canvaLink: 'Canva design link',
@@ -690,19 +690,25 @@ function CreatePostModal({ tags = [], initial = null, onClose, onCreated }) {
   const [sourceUrl, setSourceUrl] = useState(() => initial?.sourceUrl || '');
   const [sourcePreview, setSourcePreview] = useState(null);
   const [sourceLoading, setSourceLoading] = useState(false);
-  const [titleEdited, setTitleEdited] = useState(false);
-  const [briefEdited, setBriefEdited] = useState(false);
   const [tagSet, setTagSet] = useState(() => new Set());
   const [attachmentFiles, setAttachmentFiles] = useState([]);
-  const [createdRequestId, setCreatedRequestId] = useState(null);
+  const [createdRequest, setCreatedRequest] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const busyRef = useRef(false);
+  const createdRef = useRef(null);
+  const attemptRef = useRef(null);
+  const sourceRef = useRef(sourceUrl);
+  const previewRef = useRef(null);
+  const editedRef = useRef({ title: false, brief: Boolean(initial?.reason), postType: false, references: false });
+  const autoReferenceRef = useRef('');
 
   useEffect(() => {
-    const onKey = (event) => { if (event.key === 'Escape' && !saving) onClose(); };
+    const onKey = (event) => { if (event.key === 'Escape' && !busyRef.current) onClose(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose, saving]);
+  }, [onClose]);
+  useEffect(() => () => { previewRef.current?.abort(); previewRef.current = null; }, []);
 
   const toggleTag = (tag) => setTagSet((current) => {
     const next = new Set(current);
@@ -711,45 +717,76 @@ function CreatePostModal({ tags = [], initial = null, onClose, onCreated }) {
   });
 
   const fetchSource = async () => {
-    const candidate = sourceUrl.trim();
-    if (!candidate || sourceLoading) return;
+    const candidate = sourceRef.current.trim();
+    if (!candidate || previewRef.current || busyRef.current || createdRef.current) return;
+    const controller = new AbortController();
+    previewRef.current = controller;
+    const timeout = setTimeout(() => controller.abort(), 20000);
     setSourceLoading(true);
     setError('');
     try {
-      const result = await json('/api/dashboard/queue/v2/source-preview', { method: 'POST', body: new URLSearchParams({ source_url: candidate }) });
+      const result = await json('/api/dashboard/queue/v2/source-preview', { method: 'POST', body: new URLSearchParams({ source_url: candidate }), signal: controller.signal });
+      if (previewRef.current !== controller || sourceRef.current.trim() !== candidate || busyRef.current) return;
       const preview = result.preview || {};
       const extractedTitle = preview.title && String(preview.title).trim().toLowerCase() !== String(preview.platform || '').trim().toLowerCase() ? preview.title : '';
       setSourcePreview(preview);
+      sourceRef.current = preview.sourceUrl || candidate;
       setSourceUrl(preview.sourceUrl || candidate);
       setForm((current) => {
         const references = current.references.split(/\n|,/).map((item) => item.trim()).filter(Boolean);
         const reference = preview.sourceUrl || candidate;
-        if (reference && !references.includes(reference)) references.unshift(reference);
+        if (reference && !references.includes(reference)) { references.unshift(reference); autoReferenceRef.current = reference; }
+        const detectedType = preview.postType === 'Video' ? 'Reel' : preview.postType;
         return {
           ...current,
-          title: !titleEdited || !current.title.trim() ? (extractedTitle || current.title) : current.title,
-          brief: !briefEdited || !current.brief.trim() ? (preview.description || current.brief) : current.brief,
+          title: !editedRef.current.title || !current.title.trim() ? (extractedTitle || current.title) : current.title,
+          brief: !editedRef.current.brief || !current.brief.trim() ? (preview.description || current.brief) : current.brief,
+          postType: !editedRef.current.postType && ['Image', 'Carousel', 'Reel', 'Promo', 'Story', 'Other'].includes(detectedType) ? detectedType : current.postType,
           references: references.join('\n'),
         };
       });
     } catch (reason) {
+      if (previewRef.current !== controller) return;
       setSourcePreview(null);
-      setError(reason.message || 'Could not get source details.');
+      setError(controller.signal.aborted ? 'Source details took too long. You can still add a title and create the post.' : reason.message || 'Could not get source details.');
     } finally {
-      setSourceLoading(false);
+      clearTimeout(timeout);
+      if (previewRef.current === controller) { previewRef.current = null; setSourceLoading(false); }
     }
+  };
+
+  const changeSource = (value) => {
+    previewRef.current?.abort();
+    previewRef.current = null;
+    sourceRef.current = value;
+    setSourceUrl(value);
+    if (sourcePreview) {
+      const autoReference = autoReferenceRef.current;
+      setForm(current => ({
+        ...current,
+        title: editedRef.current.title ? current.title : '',
+        brief: editedRef.current.brief ? current.brief : '',
+        postType: editedRef.current.postType ? current.postType : 'Image',
+        references: editedRef.current.references ? current.references : current.references.split('\n').filter(reference => reference !== autoReference).join('\n'),
+      }));
+      autoReferenceRef.current = '';
+    }
+    setSourcePreview(null);
+    setSourceLoading(false);
+    setError('');
   };
 
   const submit = async (event) => {
     event.preventDefault();
-    if (!form.title.trim() && !sourcePreview?.dashboardPost) { setError(t('titleRequired')); return; }
+    if (busyRef.current || previewRef.current) return;
+    if (!form.title.trim()) { setError(t('titleRequired')); return; }
     if (!Number.isInteger(Number(form.productionPoints)) || Number(form.productionPoints) < 1) { setError('Production points must be at least 1.'); return; }
+    busyRef.current = true;
     setSaving(true);
     setError('');
     try {
-      let requestId = createdRequestId;
-      let createdRequest = null;
-      if (!requestId) {
+      let request = createdRef.current;
+      if (!request) {
         const body = new FormData();
         body.append('production_points', String(form.productionPoints));
         body.append('priority', form.priority);
@@ -757,27 +794,36 @@ function CreatePostModal({ tags = [], initial = null, onClose, onCreated }) {
         body.append('notes', form.notes);
         body.append('references', JSON.stringify(form.references.split(/\n|,/).map((item) => item.trim()).filter(Boolean)));
         body.append('tags', [...tagSet].join(','));
-        const existing = sourcePreview?.dashboardPost;
-        let endpoint = `${API_BASE}/api/dashboard/queue/v2/create`;
-        if (existing?.account && existing?.shortcode) {
-          endpoint = `${API_BASE}/api/dashboard/queue/v2/pool`;
-          body.append('account', existing.account);
-          body.append('shortcode', existing.shortcode);
-        } else {
-          body.append('title', form.title.trim());
-          body.append('post_type', form.postType);
-          body.append('source_url', sourcePreview?.sourceUrl || sourceUrl.trim());
-          body.append('source_title', sourcePreview?.title || '');
-          body.append('source_description', sourcePreview?.description || '');
-          body.append('source_image_url', sourcePreview?.imageUrl || '');
+        body.append('title', form.title.trim());
+        body.append('post_type', form.postType);
+        body.append('source_url', sourcePreview?.sourceUrl || sourceRef.current.trim());
+        if (sourcePreview) {
+          body.append('source_title', sourcePreview.title || '');
+          body.append('source_description', sourcePreview.description || '');
+          body.append('source_image_url', sourcePreview.imageUrl || '');
         }
-        const response = await apiFetch(endpoint, { method: 'POST', body });
-        const result = await response.json().catch(() => ({}));
+        const signature = JSON.stringify([...body.entries()]);
+        if (attemptRef.current?.signature !== signature) attemptRef.current = { signature, key: crypto.randomUUID() };
+        body.append('idempotency_key', attemptRef.current.key);
+        // Create Post is explicit reuse. Research's Send to Pool keeps its
+        // existing duplicate guard; this path always creates a fresh task.
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 45000);
+        let response, result;
+        try {
+          response = await apiFetch(`${API_BASE}/api/dashboard/queue/v2/create`, { method: 'POST', body, signal: controller.signal });
+          result = await response.json().catch(() => ({}));
+        } catch (issue) {
+          if (controller.signal.aborted) throw new Error('Queue took too long to confirm. Retry to recover this task without creating a duplicate.', { cause: issue });
+          throw issue;
+        } finally { clearTimeout(timeout); }
         if (!response.ok) throw new Error(result.detail || 'Could not create this Queue post.');
-        createdRequest = result.request;
-        requestId = createdRequest?.id;
-        setCreatedRequestId(requestId);
+        if (!result.request?.id) throw new Error('The Pool task could not be confirmed. Retry to recover it.');
+        request = result.request;
+        createdRef.current = request;
+        setCreatedRequest(request);
       }
+      const requestId = request.id;
       const failed = [];
       for (const file of attachmentFiles) {
         try {
@@ -791,10 +837,11 @@ function CreatePostModal({ tags = [], initial = null, onClose, onCreated }) {
         setAttachmentFiles(failed);
         throw new Error(`The post is already in the Pool, but ${failed.length} file${failed.length === 1 ? '' : 's'} failed to upload. Send again to retry only those files.`);
       }
-      await onCreated(createdRequest || { id: requestId });
+      await onCreated(request);
     } catch (reason) {
       setError(reason.message || 'Could not create this Queue post.');
     } finally {
+      busyRef.current = false;
       setSaving(false);
     }
   };
@@ -805,23 +852,25 @@ function CreatePostModal({ tags = [], initial = null, onClose, onCreated }) {
     ['Promo', 'postTypePromo'], ['Story', 'postTypeStory'], ['Other', 'postTypeOther'],
   ];
 
-  return <div className="queue-create-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) onClose(); }}>
-    <form className="queue-create-modal" onSubmit={submit} aria-labelledby="queue-create-title">
+  return <div className="queue-create-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !busyRef.current) onClose(); }}>
+    <form className="queue-create-modal" onSubmit={submit} role="dialog" aria-modal="true" aria-labelledby="queue-create-title">
       <header className="queue-create-head"><div><p className="scheduler-eyebrow">Queue</p><h2 id="queue-create-title">{t('createPostTitle')}</h2><small>{t('createPostHelp')}</small></div><button type="button" onClick={onClose} aria-label={t('close')} disabled={saving}><X size={16} /></button></header>
-      <section className="queue-source-link"><header><div><span>{t('sourceLink')} <i>optional</i></span><small>{t('sourceLinkHelp')}</small></div></header><div><input type="url" value={sourceUrl} placeholder="https://www.reddit.com/..." onChange={(event) => { setSourceUrl(event.target.value); setSourcePreview(null); }} onBlur={() => { if (sourceUrl.trim() && !sourcePreview) fetchSource(); }} /><button type="button" className="scheduler-secondary" disabled={!sourceUrl.trim() || sourceLoading} onClick={fetchSource}>{sourceLoading ? <LoaderCircle className="queue-spin" size={14} /> : <Link2 size={14} />}{sourceLoading ? t('gettingSourceDetails') : t('getSourceDetails')}</button></div>{sourcePreview ? <article className="queue-source-preview"><div>{sourcePreview.imageUrl ? <img src={sourcePreview.imageUrl} alt="" referrerPolicy="no-referrer" onError={(event) => { event.currentTarget.parentElement.hidden = true; }} /> : null}</div><span><b>{sourcePreview.dashboardPost ? 'Already in Dashboard' : sourcePreview.platform || t('sourcePreview')}</b><strong>{sourcePreview.title || sourcePreview.sourceUrl}</strong><small>{sourcePreview.dashboardPost ? 'This will be added to the Pool as the existing Dashboard post.' : sourcePreview.description || ''}</small></span></article> : null}</section>
+      <fieldset className="queue-create-content" disabled={saving || Boolean(createdRequest)}>
+      <section className="queue-source-link"><header><div><span>{t('sourceLink')} <i>optional</i></span><small>{t('sourceLinkHelp')}</small></div></header><div><input aria-label={t('sourceLink')} type="url" value={sourceUrl} placeholder="https://www.reddit.com/..." onChange={(event) => changeSource(event.target.value)} onBlur={() => { if (sourceUrl.trim() && !sourcePreview) fetchSource(); }} /><button type="button" className="scheduler-secondary" disabled={!sourceUrl.trim() || sourceLoading} onClick={fetchSource}>{sourceLoading ? <LoaderCircle className="queue-spin" size={14} /> : <Link2 size={14} />}{sourceLoading ? t('gettingSourceDetails') : t('getSourceDetails')}</button></div>{sourcePreview ? <article className="queue-source-preview">{sourcePreview.imageUrl ? <div key={sourcePreview.imageUrl}><img src={sourcePreview.imageUrl.startsWith('/api/') ? `${API_BASE}${sourcePreview.imageUrl}` : sourcePreview.imageUrl} alt="" referrerPolicy="no-referrer" onError={(event) => { event.currentTarget.parentElement.hidden = true; }} /></div> : null}<span><b>{sourcePreview.queueHistory?.count ? t('sourceUsedBefore') : sourcePreview.dashboardPost ? t('sourceFoundResearch') : sourcePreview.platform || t('sourcePreview')}</b><strong>{sourcePreview.title || sourcePreview.sourceUrl}</strong><small>{sourcePreview.queueHistory?.count ? t('sourceReuseHelp') : sourcePreview.dashboardPost ? t('sourceResearchHelp') : sourcePreview.description || ''}</small></span></article> : null}</section>
       <div className="queue-create-grid">
-        <label className="is-wide"><span>{t('postTitle')} <i>required</i></span><input value={form.title} maxLength="160" autoFocus onChange={(event) => { setTitleEdited(true); setForm((current) => ({ ...current, title: event.target.value })); }} placeholder={t('postTitlePlaceholder')} /></label>
-        <label><span>{t('postType')}</span><select value={form.postType} onChange={(event) => setForm((current) => ({ ...current, postType: event.target.value }))}>{typeOptions.map(([value, key]) => <option key={value} value={value}>{t(key)}</option>)}</select></label>
+        <label className="is-wide"><span>{t('postTitle')} <i>required</i></span><input value={form.title} maxLength="160" autoFocus onChange={(event) => { editedRef.current.title = true; setForm((current) => ({ ...current, title: event.target.value })); }} placeholder={t('postTitlePlaceholder')} /></label>
+        <label><span>{t('postType')}</span><select value={form.postType} onChange={(event) => { editedRef.current.postType = true; setForm((current) => ({ ...current, postType: event.target.value })); }}>{typeOptions.map(([value, key]) => <option key={value} value={value}>{t(key)}</option>)}</select></label>
         <label><span>{t('productionPoints')} <i>required</i></span><input type="number" min="1" step="1" value={form.productionPoints} onChange={(event) => setForm((current) => ({ ...current, productionPoints: event.target.value }))} /></label>
         <label className="queue-urgent-toggle"><input type="checkbox" checked={isUrgent(form.priority)} onChange={(event) => setForm((current) => ({ ...current, priority: event.target.checked ? 'urgent' : 'normal' }))} /><span>{t('markUrgent')}</span></label>
       </div>
-      <label className="queue-create-note"><span>{t('brief')} <i>optional</i></span><textarea value={form.brief} onChange={(event) => { setBriefEdited(true); setForm((current) => ({ ...current, brief: event.target.value })); }} rows={3} /></label>
+      <label className="queue-create-note"><span>{t('brief')} <i>optional</i></span><textarea value={form.brief} onChange={(event) => { editedRef.current.brief = true; setForm((current) => ({ ...current, brief: event.target.value })); }} rows={3} /></label>
       <label className="queue-create-note"><span>{t('notes')} <i>optional</i></span><textarea value={form.notes} onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))} rows={2} /></label>
-      <label className="queue-create-note"><span>{t('referenceLinks')} <i>optional</i></span><textarea value={form.references} onChange={(event) => setForm((current) => ({ ...current, references: event.target.value }))} placeholder={t('oneLinkPerLine')} rows={2} /></label>
+      <label className="queue-create-note"><span>{t('referenceLinks')} <i>optional</i></span><textarea value={form.references} onChange={(event) => { editedRef.current.references = true; setForm((current) => ({ ...current, references: event.target.value })); }} placeholder={t('oneLinkPerLine')} rows={2} /></label>
       <label className="queue-create-files"><span>{t('attachments')} <i>optional · up to 20 MB each</i></span><input type="file" multiple onChange={(event) => setAttachmentFiles([...event.target.files])} />{attachmentFiles.length ? <small>{attachmentFiles.map((file) => file.name).join(' · ')}</small> : null}</label>
       {tagOptions.length ? <fieldset className="queue-create-fieldset"><legend>{t('tags')} <i>optional</i></legend><div className="queue-tag-picker">{tagOptions.map((tag) => <button type="button" key={tag} className={tagSet.has(tag) ? 'is-on' : ''} onClick={() => toggleTag(tag)}>{tag}</button>)}</div></fieldset> : null}
+      </fieldset>
       {error ? <p className="queue-create-error" role="alert">{error}</p> : null}
-      <footer className="queue-create-actions"><button type="button" className="scheduler-secondary" onClick={onClose} disabled={saving}>{t('cancel')}</button><button type="submit" className="scheduler-primary" disabled={saving}>{saving ? <LoaderCircle className="queue-spin" size={14} /> : <Plus size={14} />}{t('createPost')}</button></footer>
+      <footer className="queue-create-actions"><button type="button" className="scheduler-secondary" onClick={onClose} disabled={saving}>{t('cancel')}</button><button type="submit" className="scheduler-primary" disabled={saving || sourceLoading}>{saving ? <LoaderCircle className="queue-spin" size={14} /> : <Plus size={14} />}{t('createPost')}</button></footer>
     </form>
   </div>;
 }

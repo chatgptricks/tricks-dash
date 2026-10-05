@@ -30,6 +30,7 @@ with Playwright Chromium and then audits production dependencies.
 | `npm run smoke:research` | Full Research rendering, filters, list editing, caption generation, media actions, and preferences |
 | `npm run smoke:queue` | Queue rendering, rejected/partial mutations, and nested stack keyboard interactions |
 | `node smoke/queue-suggestions.mjs` | External/Research suggestions, managed accounts, safe links, duplicate-submit protection, retained failed drafts, and confirmed Queue placements |
+| `npm run smoke:queue-reuse` | Create fresh Pool work from known sources, preserve prior assignments, retry safely, ignore stale source previews, and retain normal Research Send to Pool behavior |
 | `npm run smoke:settings` | Settings rendering and account-management interactions |
 | `npm run smoke:mobile` | Mobile routing, touch workflows, and role-aware controls |
 | `npm run smoke:roles` | Shared navigation, role previews, and access controls |

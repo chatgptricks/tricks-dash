@@ -25,7 +25,7 @@
     "smoke:vault": "node smoke/run-vault.mjs && node smoke/run-vault.mjs admin && node smoke/run-vault.mjs preview",
     "smoke:hooks": "node smoke/run-hooks.mjs && node smoke/run-hooks.mjs admin && node smoke/run-hooks.mjs preview",
     "smoke:visual": "node smoke/visual-release.mjs",
-    "check:release": "npm run lint && npm test && npm run build && npm run smoke:visual && npm run smoke:research-visual && npm run smoke:promos && npm run smoke:tool-browser && npm run smoke:motion && npm run smoke:layout && npm run smoke:cards && npm run smoke:media && npm run smoke:caption && npm run smoke:suggestions",
+    "check:release": "npm run lint && npm test && npm run build && npm run smoke:visual && npm run smoke:research-visual && npm run smoke:promos && npm run smoke:tool-browser && npm run smoke:motion && npm run smoke:layout && npm run smoke:cards && npm run smoke:media && npm run smoke:caption && npm run smoke:suggestions && npm run smoke:queue-reuse",
     "test:auth-cache": "node scripts/test-dashboard-cache.mjs && node smoke/auth-cache.mjs",
     "test:promos": "node scripts/test-promos-intelligence.mjs",
     "smoke:promos": "node smoke/promos-review.mjs",
@@ -38,7 +38,8 @@
     "smoke:media": "node smoke/media-download.mjs",
     "smoke:caption": "node smoke/caption-generator.mjs",
     "smoke:agents": "node smoke/agent-connections.mjs",
-    "smoke:suggestions": "node smoke/queue-suggestions.mjs"
+    "smoke:suggestions": "node smoke/queue-suggestions.mjs",
+    "smoke:queue-reuse": "node smoke/queue-reuse.mjs"
   },
   "overrides": {
     "@firebase/firestore": {
