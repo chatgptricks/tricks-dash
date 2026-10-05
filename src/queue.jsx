@@ -1,6 +1,8 @@
 import QueuePostInspector, { captureQueueCardOrigin } from './QueuePostInspector';
 import { returnCardFromSide } from './card-flight';
 import ProductHeader from './ProductHeader';
+import QueueSuggestionModal from './QueueSuggestionModal';
+import { suggestionAccounts, submitQueueSuggestion } from './queueSuggestions';
 import React, { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { mountApp } from './mountApp';
 import { createPortal } from 'react-dom';
@@ -824,31 +826,6 @@ function CreatePostModal({ tags = [], initial = null, onClose, onCreated }) {
   </div>;
 }
 
-function SuggestPostModal({ onClose, onCreated, initialUrl = '' }) {
-  const [sourceUrl, setSourceUrl] = useState(initialUrl);
-  const [reason, setReason] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  const submit = async (event) => {
-    event.preventDefault();
-    setSaving(true); setError('');
-    try {
-      await onCreated({ sourceUrl, reason });
-    } catch (err) {
-      setError(err.message || 'Could not send your suggestion.');
-    } finally { setSaving(false); }
-  };
-  return <div className="queue-create-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) onClose(); }}>
-    <form className="queue-create-modal queue-suggest-modal" onSubmit={submit} aria-labelledby="queue-suggest-title">
-      <header className="queue-create-head"><div><p className="scheduler-eyebrow">Queue</p><h2 id="queue-suggest-title">Suggest a post</h2><small>Send an Instagram post to a VC or admin for review.</small></div><button type="button" onClick={onClose} aria-label="Close" disabled={saving}><X size={16} /></button></header>
-      <label className="queue-create-note"><span>Instagram post link <i>required</i></span><input type="url" value={sourceUrl} placeholder="https://www.instagram.com/p/..." onChange={(event) => setSourceUrl(event.target.value)} required /></label>
-      <label className="queue-create-note"><span>Why would this work? <i>required</i></span><textarea value={reason} rows={5} maxLength="1000" onChange={(event) => setReason(event.target.value)} required /></label>
-      {error ? <p className="queue-create-error" role="alert">{error}</p> : null}
-      <footer className="queue-create-actions"><button type="button" className="scheduler-secondary" onClick={onClose} disabled={saving}>Cancel</button><button type="submit" className="scheduler-primary" disabled={saving || !sourceUrl.trim() || !reason.trim()}>{saving ? <LoaderCircle className="queue-spin" size={14} /> : <Send size={14} />}Send suggestion</button></footer>
-    </form>
-  </div>;
-}
-
 function AssignMultipleAccountsModal({ task, accounts = [], designers = [], busy = false, onClose, onSubmit }) {
   const { t } = useQueuePreferences();
   const [selected, setSelected] = useState(() => new Set());
@@ -1667,7 +1644,11 @@ function QueueApp({ user }) {
   const pickActionRef = useRef(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [createSeed, setCreateSeed] = useState(null);
-  const [suggestOpen, setSuggestOpen] = useState(Boolean(decodeRouteState(new URLSearchParams(window.location.search).get('r'))?.suggest));
+  const [suggestSeed, setSuggestSeed] = useState(() => {
+    const route = decodeRouteState(new URLSearchParams(window.location.search).get('r')) || {};
+    return { sourceUrl: route.suggest || '', sourceAccount: route.sourceAccount || '', sourceShortcode: route.sourceShortcode || '' };
+  });
+  const [suggestOpen, setSuggestOpen] = useState(Boolean(suggestSeed.sourceUrl));
   const [multiAssignRequest, setMultiAssignRequest] = useState(null);
   const [multiAssignBusy, setMultiAssignBusy] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
@@ -2015,6 +1996,8 @@ function QueueApp({ user }) {
   const coordinator = data?.viewer && (effectiveDevAccess || devCoordinatorPreview || data.viewer.isAdmin || data.viewer.operatingRoles?.includes('vc'));
   const simulatedTimeZone = isDev ? timeZonePreview : (data?.viewer?.timeZone || 'America/Costa_Rica');
   const canSelfAssign = Boolean(data?.viewer?.canSelfAssign);
+  const canSuggest = Boolean(data?.viewer?.operatingRoles?.includes('pd'));
+  const managedSuggestionAccounts = useMemo(() => suggestionAccounts(data), [data]);
   const pool = useMemo(() => {
     const byId = new Map();
     (data?.requests || []).filter((task) => task.status === 'pool').forEach((task) => byId.set(task.id, task));
@@ -2556,15 +2539,36 @@ function QueueApp({ user }) {
       throw err;
     }
   };
-  const createSuggestion = async ({ sourceUrl, reason }) => {
-    const result = await json('/api/dashboard/queue/v2/tickets/post-suggestion', {
-      method: 'POST', body: new URLSearchParams({ source_url: sourceUrl, reason }),
-    });
-    setTickets((current) => [result.ticket, ...current]);
-    setData((current) => current ? { ...current, pendingTicketCount: (current.pendingTicketCount || 0) + 1 } : current);
+  const closeSuggestion = () => {
     setSuggestOpen(false);
-    setTicketsOpen(true);
-    notify('Suggestion sent for review.');
+    setSuggestSeed({});
+    const url = new URL(window.location.href);
+    const route = decodeRouteState(url.searchParams.get('r')) || {};
+    delete route.suggest; delete route.sourceAccount; delete route.sourceShortcode;
+    if (Object.keys(route).length) url.searchParams.set('r', encodeRouteState(route));
+    else url.searchParams.delete('r');
+    window.history.replaceState(null, '', url);
+  };
+  const createSuggestion = async (payload) => {
+    saveQuietly();
+    const result = await submitQueueSuggestion(payload);
+    mutationGenerationRef.current += 1;
+    const request = result.request;
+    setData(current => current ? {
+      ...current,
+      requests: request.scheduledDate === date && (coordinator || request.designerEmail === current.viewer.email) ? [request, ...(current.requests || []).filter(task => task.id !== request.id)] : current.requests,
+      assignedRequests: request.designerEmail === current.viewer.email ? [request, ...(current.assignedRequests || []).filter(task => task.id !== request.id)] : (current.assignedRequests || []).filter(task => task.id !== request.id),
+    } : current);
+    if (result.ticket) setTickets(current => [result.ticket, ...current.filter(ticket => ticket.id !== result.ticket.id)]);
+    // An accepted assignment stays successful even if a later refresh fails.
+    load({ silent: true }).catch(() => {});
+    return result;
+  };
+  const openSuggestedRequest = request => {
+    closeSuggestion();
+    setArchive(false);
+    if (request.scheduledDate) setDate(request.scheduledDate);
+    setOpen(request);
   };
   const openPendingTickets = useMemo(() => {
     if (!open?.id) return [];
@@ -2594,7 +2598,7 @@ function QueueApp({ user }) {
           <span className={`queue-live-status is-${liveStatus}`} title={liveStatus === 'live' ? t('liveConnected') : liveStatus === 'offline' ? t('liveOffline') : t('liveConnecting')}>{liveStatus === 'offline' ? <WifiOff size={12} /> : <Radio size={12} />}<b>{liveStatus === 'live' ? t('liveConnected') : liveStatus === 'offline' ? t('liveOffline') : t('liveConnecting')}</b></span>
           {lateStart ? <button type="button" className="queue-start-warning" onClick={() => setOpen(lateStart)} title="Open the scheduled job"><AlertTriangle size={14} /><span>Current job has not started</span></button> : null}
           {(coordinator || canSelfAssign) ? <button type="button" className="queue-create-button" onClick={() => { setCreateSeed(null); setCreateOpen(true); }}><Plus size={14} />{t('createPost')}</button> : null}
-          {!coordinator && !canSelfAssign && data?.viewer?.operatingRoles?.includes('pd') ? <button type="button" className="queue-create-button" onClick={() => setSuggestOpen(true)}><Lightbulb size={14} />Suggest post</button> : null}
+          {canSuggest ? <button type="button" className="queue-create-button" onClick={() => { setSuggestSeed({}); setSuggestOpen(true); }}><Lightbulb size={14} />{language === 'es' ? 'Sugerir post' : 'Suggest post'}</button> : null}
           {coordinator ? <button type="button" className="scheduler-add-time" onClick={() => setAddTimeNonce((value) => value + 1)}><CalendarPlus size={13} />{t('addTime')}</button> : null}
           {coordinator ? <button type="button" className={`queue-overview-button${overviewOpen ? ' is-active' : ''}`} onClick={toggleOverview}><BarChart3 size={14} />{t('adminOverview')}</button> : null}
           {data?.viewer ? <button type="button" className={`queue-ticket-button${ticketsOpen ? ' is-active' : ''}`} onClick={toggleTickets}><ClipboardList size={14} />{t('tickets')}{data.pendingTicketCount ? <b>{data.pendingTicketCount}</b> : null}</button> : null}
@@ -2616,7 +2620,7 @@ function QueueApp({ user }) {
     </> : null}
     {ticketsOpen && data?.viewer ? <TicketPanel tickets={tickets} loading={ticketsLoading} error={ticketsError} onClose={() => setTicketsOpen(false)} onReview={reviewTicket} onContinueSuggestion={(ticket) => { setCreateSeed({ sourceUrl: ticket.title, reason: ticket.reason }); setTicketsOpen(false); setCreateOpen(true); }} isDev={effectiveDevAccess} canReview={Boolean(coordinator)} /> : null}
     {pickOpen ? <PickModal requests={pickPool} hotFallback={pickHotFallback} busy={pickBusy} error={pickError} onClose={() => { if (!pickActionRef.current) setPickOpen(false); }} onAssign={pickRequest} /> : null}
-    {suggestOpen && !coordinator && !canSelfAssign && data?.viewer?.operatingRoles?.includes('pd') ? <SuggestPostModal initialUrl={decodeRouteState(new URLSearchParams(window.location.search).get('r'))?.suggest || ''} onClose={() => setSuggestOpen(false)} onCreated={createSuggestion} /> : null}
+    {suggestOpen && canSuggest ? <QueueSuggestionModal accounts={managedSuggestionAccounts} viewerName={displayName(data.viewer.email)} viewerEmail={data.viewer.email} initial={suggestSeed} language={language} timeZone={simulatedTimeZone} onClose={closeSuggestion} onSubmit={createSuggestion} onOpenRequest={openSuggestedRequest} /> : null}
     {createOpen ? <CreatePostModal tags={data?.tags || []} initial={createSeed} onClose={() => { setCreateOpen(false); setCreateSeed(null); }} onCreated={(request) => { saveQuietly(); setData((current) => current ? { ...current, requests: [request, ...(current.requests || []).filter((task) => task.id !== request.id)], pickRequests: [request, ...(current.pickRequests || []).filter((task) => task.id !== request.id)] } : current); setCreateOpen(false); setCreateSeed(null); notify(t('postCreated')); }} /> : null}
     {multiAssignRequest ? <AssignMultipleAccountsModal key={multiAssignRequest.id} task={multiAssignRequest} accounts={data?.accounts || []} designers={data?.schedulerUsers || data?.designers || []} busy={multiAssignBusy} onClose={() => { if (!multiAssignBusy) setMultiAssignRequest(null); }} onSubmit={(selectedAccounts) => assignToMultipleAccounts(multiAssignRequest.id, selectedAccounts)} /> : null}
     {resetOpen ? <ResetQueueModal onClose={() => setResetOpen(false)} onReset={resetQueue} /> : null}

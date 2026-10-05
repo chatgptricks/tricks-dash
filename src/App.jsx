@@ -2002,7 +2002,7 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
     onQuickAdd: quickAddToPool,
     onQuickAddSuccess: closeSidebar,
     canPool: poolAccess,
-    canSuggest: !poolAccess && effectiveOperatingRoles.includes('pd'),
+    canSuggest: effectiveOperatingRoles.includes('pd'),
   }), [setPostFlags, reloadPost, quickAddToPool, closeSidebar, poolAccess, effectiveOperatingRoles]);
 
   const selectPost = useCallback((postKey) => {
@@ -2348,7 +2348,7 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
                     onAssign={setAssignmentPost}
                     onQuickAdd={quickAddToPool}
                     onQuickAddSuccess={closeSidebar}
-                    canSuggest={!poolAccess && effectiveOperatingRoles.includes('pd')}
+                    canSuggest={effectiveOperatingRoles.includes('pd')}
                     canPool={poolAccess}
                     {...dragProps}
                   />

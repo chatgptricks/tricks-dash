@@ -11,13 +11,15 @@ const queue = {
   viewer: { email: 'user03@example.com', isAdmin: true, isDev: true, operatingRoles: ['vc', 'pd'], minutesPerPP: 10 },
   date: day, requests: [{ ...task, id: 2, status: 'pool', designerEmail: null, scheduledDate: null, scheduledStartMinutes: null }],
   planningRequests: [task], assignedRequests: [task], pickRequests: [], hotPickRequests: [], liveDrafts: [], liveRevision: 0,
-  pendingTicketCount: 1, timeBlocks: [], accounts: [{ handle: 'chatgptricks', label: 'ChatGPTricks' }],
-  schedulerUsers: [{ email: 'user03@example.com', displayName: 'User 03', roles: ['vc', 'pd'], avatarUrl: '' }],
+  pendingTicketCount: 1, timeBlocks: [], accounts: [{ handle: 'chatgptricks', label: 'ChatGPTricks' }, { handle: 'unmanaged', label: 'Unmanaged' }, { handle: 'inactive', label: 'Inactive', is_active: false }],
+  schedulerUsers: [{ email: 'user03@example.com', displayName: 'User 03', roles: ['vc', 'pd'], avatarUrl: '', accounts: ['chatgptricks', 'inactive'] }],
 };
 const tracker = { tracking_since: day, accounts: [{ handle: 'chatgptricks', label: 'ChatGPTricks', followers: 100000, delta_1d: { delta: 120 }, delta_7d: { delta: 1200 }, avg_likes_30d: 2200 }] };
 const post = { account: 'chatgptricks', shortcode: 'ONE', caption: 'Useful AI workflow', ocrText: 'A better prompt', type: 'Carousel', coverUrl: '', permalink: 'https://instagram.com/p/ONE/', likes: 4200, comments: 32, postDate: `${day}T12:00:00`, group: 'sentient', isHot: true, hotMultiplier: 3.4 };
 const ok = (body, headers = {}) => ({ ok: true, status: 200, headers: { get: (key) => headers[String(key).toLowerCase()] || null }, json: async () => body, text: async () => JSON.stringify(body), blob: async () => new Blob(['x']) });
 const mediaRequests = [];
+const suggestions = [];
+let queueRefreshFailure = false;
 const downloads = [];
 const downloadBlobs = new Map();
 let mediaMode = 'carousel';
@@ -59,7 +61,19 @@ const fetchStub = async (url, options = {}) => {
   if (value.includes('/api/dashboard/posts')) return ok({ posts: [post], summary: {} });
   if (value.includes('/api/dashboard/accounts')) return ok({ accounts: [{ handle: 'chatgptricks', label: 'ChatGPTricks', group: 'sentient' }] });
   if (value.includes('/api/dashboard/queue/v2/admin-report')) return ok({ totals: {}, designers: [], assignedPosts: [task] });
-  if (value.includes('/api/dashboard/queue/v2')) return ok(queue);
+  if (value.includes('/api/dashboard/queue/v2/tickets/post-suggestion')) {
+    const body = Object.fromEntries(new URLSearchParams(options.body));
+    suggestions.push(body);
+    const request = { ...task, id: 9, recommendedAccounts: [body.account], post: { ...task.post, title: body.title || 'Suggested video', permalink: body.source_url }, brief: body.reason };
+    queue.planningRequests.push(request);
+    queue.assignedRequests.push(request);
+    queueRefreshFailure = true;
+    return ok({ ok: true, request, ticket: { id: 90, status: 'approved', requestId: 9 }, alreadyScheduled: false });
+  }
+  if (value.includes('/api/dashboard/queue/v2')) {
+    if (queueRefreshFailure) return { ...ok({ detail: 'Refresh temporarily unavailable.' }), ok: false, status: 400 };
+    return ok(queue);
+  }
   if (value.includes('/api/tracker/summary')) return ok(tracker);
   if (value.includes('/api/insights/posts')) return ok({ accounts: [{ handle: 'chatgptricks', group: 'sentient', label: 'ChatGPTricks' }], posts: [{ a: 'chatgptricks', d: `${day}T12:00:00`, l: 4200, c: 32, t: 'Carousel', hot: 1, ocr: 'better prompt workflow artificial intelligence' }] });
   if (value.includes('/api/admin/accounts')) return ok({ accounts: [{ handle: 'chatgptricks', label: 'ChatGPTricks', group: 'sentient', is_active: true, total_posts: 1, hot_threshold: 600 }] });
@@ -76,6 +90,13 @@ window.scrollTo = () => {};
 localStorage.setItem('sentient.tracker.favs', JSON.stringify(['chatgptricks']));
 
 const click = async (node) => act(async () => { node.dispatchEvent(new window.MouseEvent('click', { bubbles: true })); await new Promise((resolve) => setTimeout(resolve, 80)); });
+const fill = async (node, value) => act(async () => {
+  const proto = node.tagName === 'TEXTAREA' ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
+  Object.getOwnPropertyDescriptor(proto, 'value').set.call(node, value);
+  node.dispatchEvent(new window.Event('input', { bubbles: true }));
+  node.dispatchEvent(new window.Event('change', { bubbles: true }));
+});
+
 
 (async () => {
   const checks = {};
@@ -91,6 +112,9 @@ const click = async (node) => act(async () => { node.dispatchEvent(new window.Mo
     const nav = [...document.querySelectorAll('.m-bottom-nav button')];
     checks['Independent Dashboard renders'] = document.querySelectorAll('.m-post-card').length === 1;
     await click(document.querySelector('.m-post-card'));
+    const suggestLink = [...document.querySelectorAll('.m-post-detail a')].find((node) => /Suggest a post/.test(node.textContent));
+    const researchRoute = suggestLink ? JSON.parse(atob(new URL(suggestLink.href).searchParams.get('r').replace(/-/g, '+').replace(/_/g, '/'))) : {};
+    checks['Mobile Research suggestion preserves source identity'] = researchRoute.tab === 'queue' && researchRoute.suggest === post.permalink && researchRoute.sourceAccount === post.account && researchRoute.sourceShortcode === post.shortcode;
     const downloadButton = document.querySelector('.m-post-detail .m-action-grid button');
     checks['Mobile media download action renders'] = /Download media/.test(downloadButton?.textContent || '');
     await click(downloadButton);
@@ -122,6 +146,20 @@ const click = async (node) => act(async () => { node.dispatchEvent(new window.Mo
     checks['Queue day map renders'] = Boolean(document.querySelector('.m-day-map')) && Boolean(document.querySelector('.m-day-bar'));
     checks['Mobile Queue is a desktop-directed support view'] = /Open Queue on desktop/.test(document.body.textContent)
       && !document.querySelector('.m-queue-quick');
+    const suggestButton = [...document.querySelectorAll('.m-content button')].find((node) => /Suggest a post/.test(node.textContent));
+    checks['Mobile Queue offers automatic post suggestions'] = Boolean(suggestButton);
+    await click(suggestButton);
+    const suggestionForm = document.querySelector('.queue-suggestion-modal form') || document.querySelector('form[aria-labelledby="queue-suggestion-title"]') || document.querySelector('[role="dialog"] form');
+    checks['Suggestion offers only active managed accounts'] = Boolean(suggestionForm) && [...suggestionForm.querySelectorAll('select option')].some((option) => option.value === 'chatgptricks') && ![...suggestionForm.querySelectorAll('select option')].some((option) => ['unmanaged', 'inactive'].includes(option.value));
+    await fill(suggestionForm.querySelector('input[type="url"]'), 'https://www.youtube.com/watch?v=workflow');
+    await fill(suggestionForm.querySelector('textarea'), 'Adapt this useful walkthrough for our audience.');
+    await act(async () => { suggestionForm.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true })); await new Promise((resolve) => setTimeout(resolve, 150)); });
+    checks['Mobile suggestion submits arbitrary source and selected account'] = suggestions.length === 1 && suggestions[0].source_url === 'https://www.youtube.com/watch?v=workflow' && suggestions[0].account === 'chatgptricks' && Boolean(suggestions[0].idempotency_key);
+    checks['Successful scheduling stays successful when refresh fails'] = /Added to your Queue|Scheduled in your Queue|Scheduled for you|Your post is scheduled/.test(document.body.textContent) && !/Could not (?:send|schedule|add)/.test(document.body.textContent);
+    queueRefreshFailure = false;
+    const suggestionClose = [...document.querySelectorAll('dialog button')].find((node) => /Done|Close/.test(node.textContent) || node.getAttribute('aria-label') === 'Close');
+    await click(suggestionClose);
+    checks['Scheduled suggestion appears in mobile agenda'] = [...document.querySelectorAll('.m-task')].length >= 2 && queue.pendingTicketCount === 1;
     await click(nav[2]);
     checks['Independent Tracker renders'] = document.querySelectorAll('.m-tracker-row').length === 1 && /100,000/.test(document.body.textContent) && /\+120/.test(document.body.textContent);
     checks['Tracker favorite is first'] = Boolean(document.querySelector('.m-tracker-row:first-child .m-favorite.is-on'));

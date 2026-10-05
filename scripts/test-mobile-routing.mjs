@@ -67,6 +67,17 @@ assert.equal(run('/mobile/?desktop=1&r=invalid', { agent: 'iphone', blockedStora
 assert.equal(run('/queue.html', { agent: 'android', blockedStorage: true }).pathname, '/mobile/');
 checks += 7;
 
+const suggestion = { suggest: 'https://www.instagram.com/p/RESEARCH1/', sourceAccount: 'researchsource', sourceShortcode: 'RESEARCH1' };
+for (const agent of ['iphone', 'android']) {
+  const mobileSuggestion = run(`/queue.html?r=${encode(suggestion)}`, { agent });
+  assert.equal(mobileSuggestion.pathname, '/mobile/');
+  assert.deepEqual(route(mobileSuggestion), { ...suggestion, tab: 'queue' }, 'Research identity must survive the mobile redirect');
+  const desktopSuggestion = run(`/mobile/?desktop=1&r=${encode({ ...suggestion, tab: 'queue' })}`, { agent });
+  assert.equal(desktopSuggestion.pathname, '/queue.html');
+  assert.deepEqual(route(desktopSuggestion), suggestion, 'Suggestion must survive the desktop handoff');
+  checks += 4;
+}
+
 for (const entry of ['index.html', 'queue.html', 'settings.html', 'public/tracker.html', 'public/insights.html', 'mobile/index.html']) {
   const html = fs.readFileSync(new URL(`../${entry}`, import.meta.url), 'utf8');
   assert.match(html, /<script src="\/mobile-redirect\.js\?v=20260908-device"><\/script>/, `${entry} must run the current device gate before app startup`);

@@ -17,14 +17,15 @@ import { loadCompleteDashboardCatalogue } from '../dashboardCatalogue';
 import { authPersistenceReady, describeSignInError, firebaseAuth, startGoogleSignIn } from '../firebase';
 import { onServerPreferences, savePreference, syncUserPreferences } from '../userPreferences';
 import { followQueueLive } from '../queueLive';
+import QueueSuggestionModal from '../QueueSuggestionModal';
+import { submitQueueSuggestion, suggestionAccounts as getSuggestionAccounts } from '../queueSuggestions';
 import { clearSsoCookie, startSsoRefresh, trySsoSignIn } from '../sso';
 import { decodeRouteState, encodeRouteState } from '../urlCodec';
 import './mobile.css';
 
 const LEGACY_PASSWORD = 'authenticated';
-// Queue slots are planned in Costa Rica time. The mobile surface is
-// intentionally read-only, but its day query and Now marker must still agree
-// with desktop rather than drift with the phone's local time zone.
+// Queue slots are planned in Costa Rica time. The day query and Now marker
+// must agree with desktop rather than drift with the phone's local time zone.
 const QUEUE_TIME_ZONE = 'America/Costa_Rica';
 const queueClockParts = (value = new Date()) => Object.fromEntries(
   new Intl.DateTimeFormat('en-US', {
@@ -49,7 +50,7 @@ const I18N = {
     search: 'Search posts', filters: 'Filters', all: 'All', sentient: 'Sentient', competitors: 'Competitors', hot: 'HOT',
     newest: 'Newest', oldest: 'Oldest', mostLiked: 'Most liked', mostCommented: 'Most commented', hottest: 'Hottest', account: 'Account', format: 'Format', clear: 'Clear', results: 'results',
     media: 'Media', anyMedia: 'Any media', staticOnly: 'Static only', videoOnly: 'Video only', period: 'Period', anyTime: 'Any time', last24: 'Last 24 hours', last3: 'Last 3 days', last7: 'Last 7 days', customRange: 'Custom range', from: 'From', to: 'To', minLikes: 'Minimum likes', minComments: 'Minimum comments', promoOnly: 'Promos only', showHidden: 'Show hidden posts', order: 'Order',
-    likes: 'Likes', comments: 'Comments', viewPost: 'View on Instagram', downloadMedia: 'Download media',
+    likes: 'Likes', comments: 'Comments', viewPost: 'View on Instagram', viewSource: 'Open source', downloadMedia: 'Download media',
     sendPool: 'Send to Pool', productionPoints: 'Production points', priority: 'Priority', brief: 'Brief', tags: 'Tags',
     addPool: 'Add to production pool', addedPool: 'Post added to Queue.', low: 'Low', medium: 'Medium', high: 'High', urgent: 'Urgent',
     agenda: 'Agenda', requests: 'Requests', team: 'Team', pick: 'Pick', createPost: 'Create Post',
@@ -74,8 +75,9 @@ const I18N = {
     active: 'Active', inactive: 'Inactive', threshold: 'HOT threshold', group: 'Group', scrapeContent: 'Extract content', reels: 'Reels', postsAndReels: 'Posts & Reels', refreshAvatar: 'Refresh avatar', deactivate: 'Deactivate', activate: 'Activate', accountSaved: 'Account updated.', disk: 'Disk', slack: 'Slack', ocr: 'OCR',
     customAlert: 'Custom notification', alertTitle: 'Title (optional)', alertMessage: 'Message', attachImage: 'Attach image', changeImage: 'Change image', sendAlert: 'Send notification', alertSent: 'Notification sent to Slack.', sendTest: 'Send test',
     dayMap: 'Day map', blockedTime: 'Blocked time',
-    queueMobileSupport: 'Queue on mobile is a live day view. Open desktop to assign, start, close, review, or change the schedule.',
-    researchMobileSupport: 'Research on mobile is a visual reference view. Use desktop to group sources or send work to Queue.',
+    queueMobileSupport: 'Suggest a post here to add it to your next available Queue slot. Open desktop to manage the rest of your schedule.',
+    suggestPost: 'Suggest a post',
+    researchMobileSupport: 'Open a post to suggest it for your Queue. Use desktop to organize and group sources.',
     openQueueDesktop: 'Open Queue on desktop',
     install: 'Install app', installHelp: 'Add Sentient Dash to your Home Screen for the full app experience.',
     iosInstall: 'In Safari, tap Share and then “Add to Home Screen”.', desktop: 'Open desktop version', signOut: 'Sign out',
@@ -92,7 +94,7 @@ const I18N = {
     search: 'Buscar posts', filters: 'Filtros', all: 'Todos', sentient: 'Sentient', competitors: 'Competidores', hot: 'HOT',
     newest: 'Más recientes', oldest: 'Más antiguos', mostLiked: 'Más likes', mostCommented: 'Más comentados', hottest: 'Mayor HOT', account: 'Cuenta', format: 'Formato', clear: 'Limpiar', results: 'resultados',
     media: 'Media', anyMedia: 'Cualquier media', staticOnly: 'Solo estáticos', videoOnly: 'Solo videos', period: 'Periodo', anyTime: 'Cualquier fecha', last24: 'Últimas 24 horas', last3: 'Últimos 3 días', last7: 'Últimos 7 días', customRange: 'Rango personalizado', from: 'Desde', to: 'Hasta', minLikes: 'Likes mínimos', minComments: 'Comentarios mínimos', promoOnly: 'Solo promos', showHidden: 'Mostrar posts ocultos', order: 'Orden',
-    likes: 'Likes', comments: 'Comentarios', viewPost: 'Ver en Instagram', downloadMedia: 'Descargar media',
+    likes: 'Likes', comments: 'Comentarios', viewPost: 'Ver en Instagram', viewSource: 'Abrir fuente', downloadMedia: 'Descargar media',
     sendPool: 'Enviar al Pool', productionPoints: 'Puntos de producción', priority: 'Prioridad', brief: 'Brief', tags: 'Tags',
     addPool: 'Agregar al pool de producción', addedPool: 'Post agregado a Queue.', low: 'Baja', medium: 'Media', high: 'Alta', urgent: 'Urgente',
     agenda: 'Agenda', requests: 'Requests', team: 'Equipo', pick: 'Pick', createPost: 'Crear Post',
@@ -117,8 +119,9 @@ const I18N = {
     active: 'Activa', inactive: 'Inactiva', threshold: 'Umbral HOT', group: 'Grupo', scrapeContent: 'Extraer contenido', reels: 'Reels', postsAndReels: 'Posts y Reels', refreshAvatar: 'Actualizar avatar', deactivate: 'Desactivar', activate: 'Activar', accountSaved: 'Cuenta actualizada.', disk: 'Disco', slack: 'Slack', ocr: 'OCR',
     customAlert: 'Notificación personalizada', alertTitle: 'Título (opcional)', alertMessage: 'Mensaje', attachImage: 'Adjuntar imagen', changeImage: 'Cambiar imagen', sendAlert: 'Enviar notificación', alertSent: 'Notificación enviada a Slack.', sendTest: 'Enviar prueba',
     dayMap: 'Mapa del día', blockedTime: 'Tiempo bloqueado',
-    queueMobileSupport: 'Queue en móvil es una vista en vivo del día. Abre desktop para asignar, empezar, cerrar, revisar o modificar la agenda.',
-    researchMobileSupport: 'Research en móvil es una vista visual de referencia. Usa desktop para agrupar fuentes o enviar trabajo a Queue.',
+    queueMobileSupport: 'Sugiere un post aquí para agregarlo al siguiente espacio disponible de tu Queue. Abre desktop para gestionar el resto de tu agenda.',
+    suggestPost: 'Sugerir un post',
+    researchMobileSupport: 'Abre un post para sugerirlo a tu Queue. Usa desktop para organizar y agrupar fuentes.',
     openQueueDesktop: 'Abrir Queue en desktop',
     install: 'Instalar app', installHelp: 'Agrega Sentient Dash a tu pantalla de inicio para usarla como app.',
     iosInstall: 'En Safari, toca Compartir y luego “Agregar a pantalla de inicio”.', desktop: 'Abrir versión desktop', signOut: 'Cerrar sesión',
@@ -269,7 +272,8 @@ function MobileShell({ user, viewer }) {
   const coordinator = Boolean(viewer.is_admin || viewer.is_dev || viewer.operating_roles?.includes('vc'));
   const visibleNav = NAV.filter(([key]) => coordinator || key !== 'insights');
   const initialParams = new URLSearchParams(location.search);
-  const initial = decodeRouteState(initialParams.get('r'))?.tab || initialParams.get('tab');
+  const initialRoute = decodeRouteState(initialParams.get('r')) || {};
+  const initial = initialRoute.tab || (initialRoute.suggest || initialRoute.task ? 'queue' : initialParams.get('tab'));
   const safeInitial = visibleNav.some(([key]) => key === initial) || initial === 'settings' ? initial : 'dashboard';
   const [tab, setTab] = useState(safeInitial);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -361,7 +365,7 @@ function HomeView({ viewer, navigate }) {
   </div>;
 }
 
-function DashboardView() {
+function DashboardView({ viewer }) {
   const [count, setCount] = useState(60);
   const { t } = usePrefs();
   const deepLinkOpened = useRef(false);
@@ -426,11 +430,11 @@ function DashboardView() {
     <div className="m-post-grid">{topics.slice(0, count).map((group) => <TopicStack key={group.id} posts={group.posts} total={group.total} renderCard={(post, expand) => (<button className="m-post-card" key={`${post.account}:${post.shortcode}`} data-context-type="post" data-context-title={post.title || post.caption || post.account} data-context-account={post.account || ''} data-context-shortcode={post.shortcode || ''} data-context-permalink={post.permalink || ''} onClick={expand || (() => setSelected(post))}><div className="m-post-cover"><Cover src={post.coverUrl} alt="" />{post.isHot ? <span className="m-hot"><Flame size={11} />{Number(post.hotMultiplier || 0).toFixed(1)}x</span> : null}{post.queueState ? <span className="m-queued">{editorialStates[post.queueState] || post.queueState}</span> : null}</div><div><b>@{post.account}</b><span><Heart size={11} />{fmt(post.likes)}</span></div></button>)} />)}</div>
     {count < topics.length ? <button className="m-secondary" onClick={() => setCount((value) => value + 60)}>Load more</button> : null}
     {filtersOpen ? <Sheet title={t('filters')} onClose={() => setFiltersOpen(false)}><div className="m-form"><label>{t('account')}<select value={account} onChange={(event) => setAccount(event.target.value)}><option value="">{t('all')}</option>{accounts.map((item) => <option key={item.handle} value={item.handle}>@{item.handle}</option>)}</select></label><div className="m-form-pair"><label>{t('format')}<select value={type} onChange={(event) => setType(event.target.value)}><option value="">{t('all')}</option><option value="image">Image</option><option value="video">Video</option><option value="carousel">Carousel</option></select></label><label>{t('media')}<select value={media} onChange={(event) => setMedia(event.target.value)}><option value="all">{t('anyMedia')}</option><option value="static">{t('staticOnly')}</option><option value="video">{t('videoOnly')}</option></select></label></div><label>{t('period')}<select value={period} onChange={(event) => setPeriod(event.target.value)}><option value="all">{t('anyTime')}</option><option value="1">{t('last24')}</option><option value="3">{t('last3')}</option><option value="7">{t('last7')}</option><option value="30">{t('last30')}</option><option value="90">{t('last90')}</option><option value="custom">{t('customRange')}</option></select></label>{period === 'custom' ? <div className="m-form-pair"><label>{t('from')}<input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} /></label><label>{t('to')}<input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} /></label></div> : null}<div className="m-form-pair"><label>{t('minLikes')}<input type="number" inputMode="numeric" min="0" value={minLikes} onChange={(event) => setMinLikes(event.target.value)} /></label><label>{t('minComments')}<input type="number" inputMode="numeric" min="0" value={minComments} onChange={(event) => setMinComments(event.target.value)} /></label></div><label>{t('order')}<select value={sort} onChange={(event) => setSort(event.target.value)}><option value="newest">{t('newest')}</option><option value="oldest">{t('oldest')}</option><option value="likes">{t('mostLiked')}</option><option value="comments">{t('mostCommented')}</option><option value="hot">{t('hottest')}</option></select></label><label className="m-toggle"><input type="checkbox" checked={promoOnly} onChange={(event) => setPromoOnly(event.target.checked)} /><span>{t('promoOnly')}</span></label><label className="m-toggle"><input type="checkbox" checked={showHidden} onChange={(event) => setShowHidden(event.target.checked)} /><span>{t('showHidden')}</span></label><button className="m-primary" onClick={() => setFiltersOpen(false)}>{fmt(filtered.length)} {t('results')}</button></div></Sheet> : null}
-    {selected ? <PostSheet post={selected} onClose={() => setSelected(null)} /> : null}
+    {selected ? <PostSheet post={selected} canSuggest={viewer.operating_roles?.includes('pd')} onClose={() => setSelected(null)} /> : null}
   </div>;
 }
 
-function PostSheet({ post, onClose }) {
+function PostSheet({ post, canSuggest, onClose }) {
   const { t, language } = usePrefs(); const [busy, setBusy] = useState(false); const [notice, setNotice] = useState('');
   const [videoPoster, setVideoPoster] = useState('');
   const downloadController = useRef(null);
@@ -466,12 +470,17 @@ function PostSheet({ post, onClose }) {
       }
     }
   };
-  return <Sheet title={`@${post.account}`} onClose={onClose} wide><article className="m-post-detail"><Cover src={post.coverUrl} fallbackSrc={videoPoster} /><div className="m-detail-kicker"><span>{post.type}</span><span>{dateLabel(post.postDate, language)}</span></div><div className="m-detail-metrics"><span><Heart size={16} />{fmt(post.likes)} {t('likes')}</span><span><MessageCircle size={16} />{fmt(post.comments)} {t('comments')}</span></div>{post.title ? <h3>{post.title}</h3> : null}<p>{post.caption}</p>{post.queueState ? <Notice>{t('queue')}: {editorialStates[post.queueState] || post.queueState}</Notice> : null}<Notice>{t('researchMobileSupport')}</Notice><Notice type="error">{notice}</Notice><div className="m-action-grid"><a className="m-secondary" href={post.permalink} target="_blank" rel="noreferrer"><ExternalLink size={16} />{t('viewPost')}</a><button className="m-secondary" onClick={download} disabled={busy}><Download size={16} />{t('downloadMedia')}</button><a className="m-primary" href="/?desktop=1"><ExternalLink size={16} />{t('desktop')}</a></div></article></Sheet>;
+  return <Sheet title={`@${post.account}`} onClose={onClose} wide><article className="m-post-detail"><Cover src={post.coverUrl} fallbackSrc={videoPoster} /><div className="m-detail-kicker"><span>{post.type}</span><span>{dateLabel(post.postDate, language)}</span></div><div className="m-detail-metrics"><span><Heart size={16} />{fmt(post.likes)} {t('likes')}</span><span><MessageCircle size={16} />{fmt(post.comments)} {t('comments')}</span></div>{post.title ? <h3>{post.title}</h3> : null}<p>{post.caption}</p>{post.queueState ? <Notice>{t('queue')}: {editorialStates[post.queueState] || post.queueState}</Notice> : null}<Notice>{t('researchMobileSupport')}</Notice><Notice type="error">{notice}</Notice><div className="m-action-grid"><a className="m-secondary" href={post.permalink} target="_blank" rel="noreferrer"><ExternalLink size={16} />{t('viewPost')}</a><button className="m-secondary" onClick={download} disabled={busy}><Download size={16} />{t('downloadMedia')}</button><a className="m-primary" href="/?desktop=1"><ExternalLink size={16} />{t('desktop')}</a>{canSuggest ? <a className="m-primary" href={`/mobile/?r=${encodeRouteState({ tab: 'queue', suggest: post.permalink, sourceAccount: post.account, sourceShortcode: post.shortcode })}`}><Send size={16} />{t('suggestPost')}</a> : null}</div></article></Sheet>;
 }
 
 function QueueView({ viewer }) {
-  const { t } = usePrefs();
+  const { t, language } = usePrefs();
   const [date, setDate] = useState(DAY()); const [data, setData] = useState(null); const [error, setError] = useState(''); const [mode, setMode] = useState('agenda'); const [open, setOpen] = useState(null); const [live, setLive] = useState('connecting');
+  const initialSuggestion = useMemo(() => {
+    const route = decodeRouteState(new URLSearchParams(location.search).get('r')) || {};
+    return route.suggest ? { sourceUrl: route.suggest, sourceAccount: route.sourceAccount, sourceShortcode: route.sourceShortcode } : null;
+  }, []);
+  const [suggestion, setSuggestion] = useState(initialSuggestion);
   const revision = useRef(0); const loadRef = useRef(null); const deepLinkOpened = useRef(false);
   const coordinator = Boolean(data?.viewer?.isAdmin || data?.viewer?.isDev || data?.viewer?.operatingRoles?.includes('vc') || viewer.is_admin || viewer.is_dev || viewer.operating_roles?.includes('vc'));
   const load = useCallback(async ({ silent = false } = {}) => { if (!silent) setError(''); try { const next = await apiJson(`/api/dashboard/queue/v2?date=${date}`); setData(next); revision.current = Math.max(revision.current, Number(next.liveRevision || 0)); if (open?.id) { const all = [...(next.requests || []), ...(next.planningRequests || []), ...(next.assignedRequests || []), ...(next.liveDrafts || [])]; setOpen(all.find((task) => task.id === open.id) || null); } } catch (err) { setError(err.message); } }, [date, open?.id]);
@@ -491,11 +500,47 @@ function QueueView({ viewer }) {
   const pool = useMemo(() => { const map = new Map((data?.requests || []).filter((task) => task.status === 'pool').map((task) => [task.id, task])); (data?.liveDrafts || []).forEach((task) => task.status === 'pool' ? map.set(task.id, task) : map.delete(task.id)); return [...map.values()].sort((a, b) => (priorityOrder[a.priority] ?? 2) - (priorityOrder[b.priority] ?? 2)); }, [data]);
   const team = useMemo(() => [...(data?.planningRequests || []), ...(data?.liveDrafts || [])].filter((task, index, rows) => task.designerEmail && ['scheduled', 'in_progress', 'completed'].includes(task.status) && rows.findLastIndex((item) => item.id === task.id) === index).sort((a, b) => `${a.scheduledDate}${String(a.scheduledStartMinutes || 0).padStart(4, '0')}`.localeCompare(`${b.scheduledDate}${String(b.scheduledStartMinutes || 0).padStart(4, '0')}`)), [data]);
   const queuePool = coordinator ? pool : [];
+  const canSuggest = Boolean((data?.viewer?.operatingRoles || viewer.operating_roles || []).includes('pd'));
+  const suggestionUser = (data?.schedulerUsers || data?.designers || []).find((person) => person.email === data?.viewer?.email);
+  const suggestionAccounts = getSuggestionAccounts(data);
+  const closeSuggestion = () => {
+    setSuggestion(null);
+    const url = new URL(location.href);
+    const route = decodeRouteState(url.searchParams.get('r')) || { tab: 'queue' };
+    delete route.suggest;
+    delete route.sourceAccount;
+    delete route.sourceShortcode;
+    url.searchParams.set('r', encodeRouteState(route));
+    history.replaceState(null, '', url);
+  };
+  const suggestPost = async (payload) => {
+    const result = await submitQueueSuggestion(payload);
+    const request = result.request;
+    if (request) setData((current) => {
+      if (!current) return current;
+      const own = request.designerEmail === current.viewer?.email;
+      const include = coordinator || own;
+      const merge = (rows, visible = true) => [...(rows || []).filter((item) => item.id !== request.id), ...(visible ? [request] : [])];
+      return { ...current, planningRequests: merge(current.planningRequests, include), assignedRequests: merge(current.assignedRequests, own && !['pool', 'closed', 'cancelled'].includes(request.status)), requests: merge(current.requests, include && request.scheduledDate === date) };
+    });
+    void loadRef.current?.({ silent: true });
+    return result;
+  };
+  const openSuggestedRequest = (request) => {
+    closeSuggestion();
+    if (request.scheduledDate) setDate(request.scheduledDate);
+    setMode('agenda');
+    setOpen(request);
+    const url = new URL(location.href);
+    url.searchParams.set('r', encodeRouteState({ tab: 'queue', task: request.id }));
+    history.replaceState(null, '', url);
+  };
   const modes = coordinator ? ['agenda', 'pool', 'team'] : ['agenda'];
   if (!data && !error) return <Spinner label={t('loading')} />;
   return <div className="m-stack">
     <div className="m-queue-toolbar"><div className={`m-live is-${live}`}>{live === 'live' ? <Wifi size={13} /> : <WifiOff size={13} />}{live === 'live' ? t('activityLive') : t('reconnecting')}</div><div><button onClick={() => setDate(shiftDay(date, -1))} aria-label={t('previousDay')}><ChevronLeft size={18} /></button><button onClick={() => setDate(DAY())}>{date === DAY() ? t('today') : dateLabel(date)}</button><button onClick={() => setDate(shiftDay(date, 1))} aria-label={t('nextDay')}><ChevronRight size={18} /></button></div></div>
     <div className="m-tab-scroll">{modes.map((value) => <button key={value} className={mode === value ? 'is-on' : ''} onClick={() => setMode(value)}>{t(value)}</button>)}</div>
+    {canSuggest ? <button className="m-primary m-full" onClick={() => setSuggestion({})}><Send size={16} />{t('suggestPost')}</button> : null}
     <Notice>{t('queueMobileSupport')}</Notice>
     <a className="m-secondary m-full" href="/queue.html?desktop=1"><ExternalLink size={16} />{t('openQueueDesktop')}</a>
     {error ? <Notice type="error">{error}</Notice> : null}
@@ -503,6 +548,7 @@ function QueueView({ viewer }) {
     {mode === 'pool' ? <section className="m-queue-list">{queuePool.length ? queuePool.map((task) => <QueueTaskCard key={task.id} task={task} onClick={() => setOpen(task)} />) : <Empty title={t('noPool')} />}</section> : null}
     {mode === 'team' ? <section className="m-team-groups">{data.schedulerUsers?.map((person) => { const work = team.filter((task) => task.designerEmail === person.email && task.scheduledDate === date); return <article key={person.email}><header><Avatar person={person} /><span><b>{person.displayName || displayName(person.email)}</b><small>{work.length} {t('assigned')}</small></span></header>{work.length ? work.map((task) => <QueueTaskCard key={task.id} task={task} compact onClick={() => setOpen(task)} />) : <p>{t('noAssignments')}</p>}</article>; })}</section> : null}
     {open ? <QueueDetail task={open} onClose={() => setOpen(null)} /> : null}
+    {suggestion && canSuggest && data ? <QueueSuggestionModal accounts={suggestionAccounts} viewerEmail={data.viewer?.email} language={language} timeZone={data.viewer?.timeZone || viewer.time_zone || QUEUE_TIME_ZONE} viewerName={suggestionUser?.displayName || displayName(data.viewer?.email)} initial={suggestion} onClose={closeSuggestion} onSubmit={suggestPost} onOpenRequest={openSuggestedRequest} /> : null}
   </div>;
 }
 
@@ -533,7 +579,7 @@ function QueueTaskCard({ task, onClick, compact = false, showDesigner = false })
 
 function QueueDetail({ task, onClose }) {
   const { t } = usePrefs(); const post = task.post || {};
-  return <Sheet title={`Queue #${task.id}`} onClose={onClose} wide><article className="m-task-detail"><Cover src={post.coverUrl || task.coverUrl} /><div className="m-detail-kicker"><span className={`m-priority priority-${task.priority}`}>{t(task.priority) || task.priority}</span><span>{t(task.status) || task.status}</span></div><h3>{post.title || post.ocrText || post.caption || `Queue #${task.id}`}</h3><p>{task.brief || post.caption}</p><div className="m-info-grid"><div><span>{t('designer')}</span><b>{task.designerEmail ? displayName(task.designerEmail) : '—'}</b></div><div><span>{t('date')}</span><b>{task.scheduledDate || '—'}</b></div><div><span>{t('time')}</span><b>{timeLabel(task.scheduledStartMinutes)}</b></div><div><span>PP</span><b>{task.productionPoints}</b></div></div>{task.recommendedAccounts?.length ? <div className="m-bubbles">{task.recommendedAccounts.map((account) => <span key={account}>@{account}</span>)}</div> : null}<Notice>{t('queueMobileSupport')}</Notice><div className="m-action-grid"><a className="m-primary" href="/queue.html?desktop=1"><ExternalLink size={16} />{t('openQueueDesktop')}</a>{post.permalink ? <a className="m-secondary" href={post.permalink} target="_blank" rel="noreferrer"><ExternalLink size={16} />Instagram</a> : null}</div></article></Sheet>;
+  return <Sheet title={`Queue #${task.id}`} onClose={onClose} wide><article className="m-task-detail"><Cover src={post.coverUrl || task.coverUrl} /><div className="m-detail-kicker"><span className={`m-priority priority-${task.priority}`}>{t(task.priority) || task.priority}</span><span>{t(task.status) || task.status}</span></div><h3>{post.title || post.ocrText || post.caption || `Queue #${task.id}`}</h3><p>{task.brief || post.caption}</p><div className="m-info-grid"><div><span>{t('designer')}</span><b>{task.designerEmail ? displayName(task.designerEmail) : '—'}</b></div><div><span>{t('date')}</span><b>{task.scheduledDate || '—'}</b></div><div><span>{t('time')}</span><b>{timeLabel(task.scheduledStartMinutes)}</b></div><div><span>PP</span><b>{task.productionPoints}</b></div></div>{task.recommendedAccounts?.length ? <div className="m-bubbles">{task.recommendedAccounts.map((account) => <span key={account}>@{account}</span>)}</div> : null}<Notice>{t('queueMobileSupport')}</Notice><div className="m-action-grid"><a className="m-primary" href="/queue.html?desktop=1"><ExternalLink size={16} />{t('openQueueDesktop')}</a>{post.permalink ? <a className="m-secondary" href={post.permalink} target="_blank" rel="noreferrer"><ExternalLink size={16} />{t('viewSource')}</a> : null}</div></article></Sheet>;
 }
 
 function AssignmentSheet({ task, data, onClose, onChanged }) {

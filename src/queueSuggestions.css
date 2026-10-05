@@ -1,0 +1,39 @@
+.queue-suggestion-modal { width: min(580px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); margin: auto; padding: 24px; overflow: auto; color: var(--text, var(--m-text, #eee)); background: var(--surface-1, var(--m-panel, #161616)); border: 1px solid var(--line, var(--m-line, #333)); border-radius: 20px; box-shadow: 0 24px 80px #0005; font: 14px/1.45 Inter, system-ui, sans-serif; }
+.queue-suggestion-modal::backdrop { background: #0009; backdrop-filter: blur(6px); }
+.queue-suggestion-header { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 22px; }
+.queue-suggestion-header > div { flex: 1; min-width: 0; }
+.queue-suggestion-header small { color: var(--accent-text, var(--accent, var(--m-accent, #70dfb1))); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; }
+.queue-suggestion-header h2 { margin: 5px 0 8px; font-size: 23px; line-height: 1.2; color: var(--text-strong, var(--text, var(--m-text))); }
+.queue-suggestion-header p, .queue-suggestion-placement p { margin: 0; color: var(--muted-strong, var(--m-muted, #999)); font-size: 13px; }
+.queue-suggestion-modal button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 42px; padding: 10px 14px; border: 1px solid var(--line, var(--m-line, #444)); border-radius: 12px; background: var(--surface-2, var(--m-panel-2, #242424)); color: inherit; font: inherit; font-weight: 600; cursor: pointer; }
+.queue-suggestion-modal .queue-suggestion-close { flex-shrink: 0; width: 36px; min-height: 36px; padding: 8px; border-radius: 50%; }
+.queue-suggestion-modal button:disabled { opacity: .5; cursor: default; }
+.queue-suggestion-modal :is(button, input, select, textarea):focus-visible { outline: 2px solid var(--accent, var(--m-accent, #70dfb1)); outline-offset: 3px; }
+.queue-suggestion-fields { display: grid; gap: 17px; border: 0; padding: 0; margin: 0; min-width: 0; }
+.queue-suggestion-fields label { display: grid; gap: 7px; min-width: 0; }
+.queue-suggestion-fields label > span { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 650; }
+.queue-suggestion-fields :is(input, textarea, select) { width: 100%; min-width: 0; min-height: 44px; padding: 11px 12px; border: 1px solid var(--line, var(--m-line, #444)); border-radius: 10px; background: var(--surface-2, var(--m-panel-2, #242424)); color: var(--text, var(--m-text, #eee)); font: inherit; }
+.queue-suggestion-fields textarea { resize: vertical; }
+.queue-suggestion-fields small, .queue-suggestion-hint { font-size: 11px; color: var(--muted-strong, var(--m-muted, #999)); }
+.queue-suggestion-row { display: grid; grid-template-columns: minmax(0, 1fr) 150px; gap: 14px; }
+.queue-suggestion-placement { display: flex; gap: 10px; margin-top: 20px; padding: 14px; border-radius: 12px; background: rgba(var(--accent-rgb, var(--m-accent-rgb, 112, 223, 177)), .07); }
+.queue-suggestion-placement > svg { flex-shrink: 0; color: var(--accent-text, var(--accent, var(--m-accent, #70dfb1))); margin-top: 2px; }
+.queue-suggestion-placement strong { display: block; margin-bottom: 4px; font-size: 12px; }
+.queue-suggestion-placement p { font-size: 12px; }
+.queue-suggestion-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
+.queue-suggestion-modal .queue-suggestion-primary { background: var(--accent, var(--m-accent, #70dfb1)); color: var(--accent-ink, var(--m-accent-ink, #101612)); border-color: transparent; }
+.queue-suggestion-error, .queue-suggestion-empty { margin: 12px 0 0; padding: 12px; border: 1px solid var(--line, var(--m-line, #444)); border-radius: 10px; font-size: 13px; }
+.queue-suggestion-error { color: #e77986; background: #b52d4910; }
+:root[data-theme='light'] .queue-suggestion-error { color: #a92342; }
+.queue-suggestion-success { outline: none; }
+.queue-suggestion-success > svg { color: var(--accent-text, var(--accent, var(--m-accent, #70dfb1))); }
+.queue-suggestion-success h3 { font-size: 17px; margin: 12px 0 20px; overflow-wrap: anywhere; }
+.queue-suggestion-success dl { margin: 0; display: grid; gap: 14px; }
+.queue-suggestion-success dl > div { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 12px; }
+.queue-suggestion-success dt { color: var(--muted-strong, var(--m-muted, #999)); font-size: 12px; }
+.queue-suggestion-success dd { margin: 0; font-weight: 650; overflow-wrap: anywhere; }
+.queue-suggestion-spinner { animation: queue-suggestion-spin 1s linear infinite; }
+@keyframes queue-suggestion-spin { to { transform: rotate(360deg); } }
+@media (max-width: 600px) { .queue-suggestion-modal { padding: 20px; width: calc(100vw - 24px); max-height: calc(100dvh - 24px); } .queue-suggestion-fields :is(input, textarea, select) { font-size: 16px; } .queue-suggestion-row { grid-template-columns: minmax(0, 1fr); } .queue-suggestion-actions { flex-wrap: wrap; } .queue-suggestion-actions button { flex: 1 1 auto; } }
+@media (prefers-reduced-motion: reduce) { .queue-suggestion-spinner { animation: none; } }
+:root[data-effects='off'] .queue-suggestion-spinner { animation: none; }

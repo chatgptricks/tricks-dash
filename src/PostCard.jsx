@@ -25,6 +25,8 @@ export const ACCOUNT_PROFILE_IMAGES = {
 export const PROMO_HASHTAG = '#aitoolsentient';
 export const PROMO_HASHTAG_RE = /#aitoolsentient\b/i;
 
+const suggestionLink = post => `/queue.html?r=${encodeRouteState({ suggest: post.permalink, sourceAccount: post.account, sourceShortcode: post.shortcode })}`;
+
 const currencyFormatter = new Intl.NumberFormat('en-US');
 const compactFormatter = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 });
 
@@ -216,6 +218,7 @@ export function PostMenu({ post, isPromo, onFlags, onReload, onAssign, onQuickAd
             <ListTodo size={13} />
             Send to Pool
           </button> : null}
+          {canSuggest && post.permalink ? <a role="menuitem" href={suggestionLink(post)}><PenLine size={13} />{t('Suggest post')}</a> : null}
           {canPool ? <QuickAddButton post={post} onQuickAdd={onQuickAdd} onAdded={() => { setOpen(false); onQuickAddSuccess?.(); }} className="" role="menuitem" label="Quick add to Pool" /> : null}
           {stackActions ? <button type="button" role="menuitem" onClick={(event) => run(event, 'similar', () => stackActions.findSimilar(post))} disabled={Boolean(busy)}><Search size={13} className={busy === 'similar' ? 'spin' : ''} />{busy === 'similar' ? t('Searching…') : t('Find similar')}</button> : null}
           {stackActions && Number(post.stackSize) > 1 ? <button type="button" role="menuitem" onClick={(event) => run(event, 'separate', () => stackActions.separate([post.postKey || `${post.account}:${post.shortcode}`]))} disabled={Boolean(busy)}>↗ {t('Separate from stack')}</button> : null}
@@ -406,7 +409,7 @@ export const PostCard = memo(function PostCard({ post, goldenNugget, priority, s
 
       <div className="post-editorial-actions" onClick={stopAction}>
         <button type="button" onClick={(event) => { sendCardToSide(event.currentTarget.closest('.post-card'), post.postKey); onSelect(post.postKey); }}>View details</button>
-        {post.queueRequestId && post.queueState !== 'cancelled' ? <a className="editorial-primary" href={`/queue.html?r=${encodeRouteState({ task: post.queueRequestId })}`}>Open in Queue</a> : canPool ? <button type="button" className="editorial-primary" onClick={() => onAssign(post)}>Send to Pool</button> : canSuggest ? <a className="editorial-primary" href={`/queue.html?r=${encodeRouteState({ suggest: post.permalink })}`}>Suggest post</a> : null}
+        {post.queueRequestId && post.queueState !== 'cancelled' ? <a className="editorial-primary" href={`/queue.html?r=${encodeRouteState({ task: post.queueRequestId })}`}>Open in Queue</a> : canPool ? <button type="button" className="editorial-primary" onClick={() => onAssign(post)}>Send to Pool</button> : canSuggest ? <a className="editorial-primary" href={suggestionLink(post)}>Suggest post</a> : null}
         <a href={post.permalink} target="_blank" rel="noreferrer">Original <ExternalLink size={11} /></a>
       </div>
 
