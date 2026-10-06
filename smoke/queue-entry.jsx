@@ -3,11 +3,12 @@ import { decodeRouteState } from '../src/urlCodec';
 
 window.localStorage.setItem('sentient.queueGuide.v1', 'completed');
 
-const localDay = () => {
-  const value = new Date();
-  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
-};
-const day = localDay();
+// Also embedded in visual-release.mjs: both fixtures must use Queue's
+// Costa Rica calendar rather than the Node/browser host's local date.
+const queueDateParts = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
+  timeZone: 'America/Costa_Rica', year: 'numeric', month: '2-digit', day: '2-digit',
+}).formatToParts(new Date()).filter(({ type }) => type !== 'literal').map(({ type, value }) => [type, value]));
+const day = `${queueDateParts.year}-${queueDateParts.month}-${queueDateParts.day}`;
 const post = (account, shortcode) => ({ account, shortcode, caption: `${account} source post`, type: 'Image', coverUrl: '' });
 const base = { productionPoints: 3, minutesPerPP: 10, durationMinutes: 30, priority: 'medium', tags: [], brief: '', notes: '', references: [], attachments: [], recommendedAccounts: [], coordinatorEmail: 'user05@example.com' };
 const pool = { ...base, id: 1, post: post('chatgptricks', 'POOL1'), status: 'pool', designerEmail: null, scheduledDate: null, scheduledStartMinutes: null };
