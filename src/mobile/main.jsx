@@ -18,7 +18,7 @@ import { authPersistenceReady, describeSignInError, firebaseAuth, startGoogleSig
 import { onServerPreferences, savePreference, syncUserPreferences } from '../userPreferences';
 import { followQueueLive } from '../queueLive';
 import QueueSuggestionModal from '../QueueSuggestionModal';
-import { submitQueueSuggestion, suggestionAccounts as getSuggestionAccounts } from '../queueSuggestions';
+import { submitQueueSuggestion, suggestionAccounts as getSuggestionAccounts, suggestionSourceUrl } from '../queueSuggestions';
 import { clearSsoCookie, startSsoRefresh, trySsoSignIn } from '../sso';
 import { decodeRouteState, encodeRouteState } from '../urlCodec';
 import './mobile.css';
@@ -75,8 +75,9 @@ const I18N = {
     active: 'Active', inactive: 'Inactive', threshold: 'HOT threshold', group: 'Group', scrapeContent: 'Extract content', reels: 'Reels', postsAndReels: 'Posts & Reels', refreshAvatar: 'Refresh avatar', deactivate: 'Deactivate', activate: 'Activate', accountSaved: 'Account updated.', disk: 'Disk', slack: 'Slack', ocr: 'OCR',
     customAlert: 'Custom notification', alertTitle: 'Title (optional)', alertMessage: 'Message', attachImage: 'Attach image', changeImage: 'Change image', sendAlert: 'Send notification', alertSent: 'Notification sent to Slack.', sendTest: 'Send test',
     dayMap: 'Day map', blockedTime: 'Blocked time',
-    queueMobileSupport: 'Suggest a post here to add it to your next available Queue slot. Open desktop to manage the rest of your schedule.',
-    suggestPost: 'Suggest a post',
+    queueMobileSupport: 'Suggestions need VC approval. Once approved, the post is assigned to you and your selected account in your next available Queue slot. Open desktop to manage your schedule.',
+    suggestPost: 'Suggest a post', mySuggestions: 'My suggestions', postSuggestion: 'Post suggestion', noSuggestions: 'No suggestions yet.',
+    suggestionApprovalHelp: 'A VC reviews your suggestion before it is assigned to you and scheduled for your selected account.',
     researchMobileSupport: 'Open a post to suggest it for your Queue. Use desktop to organize and group sources.',
     openQueueDesktop: 'Open Queue on desktop',
     install: 'Install app', installHelp: 'Add Sentient Dash to your Home Screen for the full app experience.',
@@ -119,8 +120,9 @@ const I18N = {
     active: 'Activa', inactive: 'Inactiva', threshold: 'Umbral HOT', group: 'Grupo', scrapeContent: 'Extraer contenido', reels: 'Reels', postsAndReels: 'Posts y Reels', refreshAvatar: 'Actualizar avatar', deactivate: 'Desactivar', activate: 'Activar', accountSaved: 'Cuenta actualizada.', disk: 'Disco', slack: 'Slack', ocr: 'OCR',
     customAlert: 'Notificación personalizada', alertTitle: 'Título (opcional)', alertMessage: 'Mensaje', attachImage: 'Adjuntar imagen', changeImage: 'Cambiar imagen', sendAlert: 'Enviar notificación', alertSent: 'Notificación enviada a Slack.', sendTest: 'Enviar prueba',
     dayMap: 'Mapa del día', blockedTime: 'Tiempo bloqueado',
-    queueMobileSupport: 'Sugiere un post aquí para agregarlo al siguiente espacio disponible de tu Queue. Abre desktop para gestionar el resto de tu agenda.',
-    suggestPost: 'Sugerir un post',
+    queueMobileSupport: 'Las sugerencias necesitan aprobación de un VC. Al aprobarse, el post se te asigna para la cuenta elegida en el siguiente espacio disponible de tu Queue. Abre desktop para gestionar tu agenda.',
+    suggestPost: 'Sugerir un post', mySuggestions: 'Mis sugerencias', postSuggestion: 'Sugerencia de post', noSuggestions: 'Aún no tienes sugerencias.',
+    suggestionApprovalHelp: 'Un VC revisa tu sugerencia antes de asignártela y programarla para la cuenta elegida.',
     researchMobileSupport: 'Abre un post para sugerirlo a tu Queue. Usa desktop para organizar y agrupar fuentes.',
     openQueueDesktop: 'Abrir Queue en desktop',
     install: 'Instalar app', installHelp: 'Agrega Sentient Dash a tu pantalla de inicio para usarla como app.',
@@ -481,6 +483,8 @@ function QueueView({ viewer }) {
     return route.suggest ? { sourceUrl: route.suggest, sourceAccount: route.sourceAccount, sourceShortcode: route.sourceShortcode } : null;
   }, []);
   const [suggestion, setSuggestion] = useState(initialSuggestion);
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
+  const [suggestionTickets, setSuggestionTickets] = useState([]);
   const revision = useRef(0); const loadRef = useRef(null); const deepLinkOpened = useRef(false);
   const coordinator = Boolean(data?.viewer?.isAdmin || data?.viewer?.isDev || data?.viewer?.operatingRoles?.includes('vc') || viewer.is_admin || viewer.is_dev || viewer.operating_roles?.includes('vc'));
   const load = useCallback(async ({ silent = false } = {}) => { if (!silent) setError(''); try { const next = await apiJson(`/api/dashboard/queue/v2?date=${date}`); setData(next); revision.current = Math.max(revision.current, Number(next.liveRevision || 0)); if (open?.id) { const all = [...(next.requests || []), ...(next.planningRequests || []), ...(next.assignedRequests || []), ...(next.liveDrafts || [])]; setOpen(all.find((task) => task.id === open.id) || null); } } catch (err) { setError(err.message); } }, [date, open?.id]);
@@ -516,12 +520,21 @@ function QueueView({ viewer }) {
   const suggestPost = async (payload) => {
     const result = await submitQueueSuggestion(payload);
     const request = result.request;
-    if (request) setData((current) => {
+    const ticket = result.ticket;
+    if (ticket) setSuggestionTickets((current) => [...current.filter((item) => item.id !== ticket.id), ticket]);
+    setData((current) => {
       if (!current) return current;
+      const knownTicket = (current.tickets || []).some((item) => item.id === ticket?.id);
+      const next = {
+        ...current,
+        tickets: ticket ? [...(current.tickets || []).filter((item) => item.id !== ticket.id), ticket] : current.tickets,
+        pendingTicketCount: Number.isFinite(result.pendingTicketCount) ? result.pendingTicketCount : Number(current.pendingTicketCount || 0) + (ticket?.status === 'pending' && !knownTicket && !result.alreadySubmitted ? 1 : 0),
+      };
+      if (!request || ticket?.status !== 'approved') return next;
       const own = request.designerEmail === current.viewer?.email;
       const include = coordinator || own;
       const merge = (rows, visible = true) => [...(rows || []).filter((item) => item.id !== request.id), ...(visible ? [request] : [])];
-      return { ...current, planningRequests: merge(current.planningRequests, include), assignedRequests: merge(current.assignedRequests, own && !['pool', 'closed', 'cancelled'].includes(request.status)), requests: merge(current.requests, include && request.scheduledDate === date) };
+      return { ...next, planningRequests: merge(current.planningRequests, include), assignedRequests: merge(current.assignedRequests, own && !['pool', 'closed', 'cancelled'].includes(request.status)), requests: merge(current.requests, include && request.scheduledDate === date) };
     });
     void loadRef.current?.({ silent: true });
     return result;
@@ -535,12 +548,17 @@ function QueueView({ viewer }) {
     url.searchParams.set('r', encodeRouteState({ tab: 'queue', task: request.id }));
     history.replaceState(null, '', url);
   };
+  const openSuggestions = () => {
+    closeSuggestion();
+    setSuggestionsOpen(true);
+  };
   const modes = coordinator ? ['agenda', 'pool', 'team'] : ['agenda'];
   if (!data && !error) return <Spinner label={t('loading')} />;
   return <div className="m-stack">
     <div className="m-queue-toolbar"><div className={`m-live is-${live}`}>{live === 'live' ? <Wifi size={13} /> : <WifiOff size={13} />}{live === 'live' ? t('activityLive') : t('reconnecting')}</div><div><button onClick={() => setDate(shiftDay(date, -1))} aria-label={t('previousDay')}><ChevronLeft size={18} /></button><button onClick={() => setDate(DAY())}>{date === DAY() ? t('today') : dateLabel(date)}</button><button onClick={() => setDate(shiftDay(date, 1))} aria-label={t('nextDay')}><ChevronRight size={18} /></button></div></div>
     <div className="m-tab-scroll">{modes.map((value) => <button key={value} className={mode === value ? 'is-on' : ''} onClick={() => setMode(value)}>{t(value)}</button>)}</div>
     {canSuggest ? <button className="m-primary m-full" onClick={() => setSuggestion({})}><Send size={16} />{t('suggestPost')}</button> : null}
+    {canSuggest ? <button className="m-secondary m-full" onClick={openSuggestions}><Inbox size={16} />{t('mySuggestions')}</button> : null}
     <Notice>{t('queueMobileSupport')}</Notice>
     <a className="m-secondary m-full" href="/queue.html?desktop=1"><ExternalLink size={16} />{t('openQueueDesktop')}</a>
     {error ? <Notice type="error">{error}</Notice> : null}
@@ -548,8 +566,48 @@ function QueueView({ viewer }) {
     {mode === 'pool' ? <section className="m-queue-list">{queuePool.length ? queuePool.map((task) => <QueueTaskCard key={task.id} task={task} onClick={() => setOpen(task)} />) : <Empty title={t('noPool')} />}</section> : null}
     {mode === 'team' ? <section className="m-team-groups">{data.schedulerUsers?.map((person) => { const work = team.filter((task) => task.designerEmail === person.email && task.scheduledDate === date); return <article key={person.email}><header><Avatar person={person} /><span><b>{person.displayName || displayName(person.email)}</b><small>{work.length} {t('assigned')}</small></span></header>{work.length ? work.map((task) => <QueueTaskCard key={task.id} task={task} compact onClick={() => setOpen(task)} />) : <p>{t('noAssignments')}</p>}</article>; })}</section> : null}
     {open ? <QueueDetail task={open} onClose={() => setOpen(null)} /> : null}
-    {suggestion && canSuggest && data ? <QueueSuggestionModal accounts={suggestionAccounts} viewerEmail={data.viewer?.email} language={language} timeZone={data.viewer?.timeZone || viewer.time_zone || QUEUE_TIME_ZONE} viewerName={suggestionUser?.displayName || displayName(data.viewer?.email)} initial={suggestion} onClose={closeSuggestion} onSubmit={suggestPost} onOpenRequest={openSuggestedRequest} /> : null}
+    {suggestion && canSuggest && data ? <QueueSuggestionModal accounts={suggestionAccounts} viewerEmail={data.viewer?.email} language={language} timeZone={data.viewer?.timeZone || viewer.time_zone || QUEUE_TIME_ZONE} viewerName={suggestionUser?.displayName || displayName(data.viewer?.email)} initial={suggestion} onClose={closeSuggestion} onSubmit={suggestPost} onOpenRequest={openSuggestedRequest} onOpenRequests={openSuggestions} /> : null}
+    {suggestionsOpen && data ? <MySuggestionsSheet viewerEmail={data.viewer?.email} initialTickets={[...(data.tickets || []).filter((ticket) => !suggestionTickets.some((item) => item.id === ticket.id)), ...suggestionTickets]} onClose={() => setSuggestionsOpen(false)} /> : null}
   </div>;
+}
+
+function MySuggestionsSheet({ viewerEmail, initialTickets, onClose }) {
+  const { t, language } = usePrefs();
+  const [tickets, setTickets] = useState(initialTickets);
+  const [loading, setLoading] = useState(true);
+  const [notice, setNotice] = useState('');
+  useEffect(() => {
+    let active = true;
+    apiJson('/api/dashboard/queue/v2/tickets').then((body) => {
+      if (active) setTickets(body.tickets || []);
+    }).catch((error) => {
+      if (active) setNotice(error.message);
+    }).finally(() => {
+      if (active) setLoading(false);
+    });
+    return () => { active = false; };
+  }, [viewerEmail]);
+  const ownSuggestions = tickets.filter((ticket) => ticket.type === 'post_suggestion' && ticket.requesterEmail === viewerEmail).sort((a, b) => Number(b.id) - Number(a.id));
+  return <Sheet title={t('mySuggestions')} onClose={onClose} wide>
+    <Notice>{t('suggestionApprovalHelp')}</Notice>
+    <Notice type="error">{notice}</Notice>
+    <div className="m-ticket-list">{ownSuggestions.map((ticket) => {
+      const suggestion = ticket.suggestion || {};
+      let sourceUrl = '';
+      try { sourceUrl = suggestionSourceUrl(suggestion.sourceUrl || ticket.title); } catch { /* Legacy tickets may have a title instead of a URL. */ }
+      const account = suggestion.account || ticket.requestedAccounts?.[0];
+      return <article key={ticket.id} style={{ minWidth: 0, overflowWrap: 'anywhere' }}>
+        <header><span>{t('postSuggestion')}</span><i className={`status-${ticket.status}`}>{t(ticket.status)}</i></header>
+        <b>{suggestion.title || sourceUrl || ticket.title || t('postSuggestion')}</b>
+        {account ? <p>{t('account')}: @{String(account).replace(/^@/, '')}</p> : null}
+        {ticket.reason ? <p>{ticket.reason}</p> : null}
+        {sourceUrl ? <a className="m-secondary" href={sourceUrl} target="_blank" rel="noreferrer"><ExternalLink size={14} />{t('viewSource')}</a> : null}
+        {ticket.reviewNote ? <p>{ticket.reviewNote}</p> : null}
+        <small>{ticket.reviewedAt ? `${displayName(ticket.reviewerEmail)} · ${dateLabel(ticket.reviewedAt, language)}` : ticket.createdAt ? dateLabel(ticket.createdAt, language) : ''}</small>
+      </article>;
+    })}</div>
+    {loading && !ownSuggestions.length ? <Spinner label={t('loading')} /> : !ownSuggestions.length ? <Empty title={t('noSuggestions')} /> : null}
+  </Sheet>;
 }
 
 function MiniSchedule({ data, date, coordinator, onOpen }) {

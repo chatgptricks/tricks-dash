@@ -19,7 +19,13 @@ const post = { account: 'chatgptricks', shortcode: 'ONE', caption: 'Useful AI wo
 const ok = (body, headers = {}) => ({ ok: true, status: 200, headers: { get: (key) => headers[String(key).toLowerCase()] || null }, json: async () => body, text: async () => JSON.stringify(body), blob: async () => new Blob(['x']) });
 const mediaRequests = [];
 const suggestions = [];
+const tickets = [
+  { id: 89, type: 'post_suggestion', status: 'pending', requesterEmail: 'someoneelse@sentientagency.io', title: 'Another user suggestion', reason: 'Private to the other user', suggestion: { sourceUrl: 'https://example.com/other', account: 'unmanaged' } },
+  { id: 88, type: 'post_suggestion', status: 'rejected', requesterEmail: queue.viewer.email, title: 'Rejected suggestion', reason: 'Rejected original idea', reviewNote: 'Please use a more recent source.', reviewerEmail: 'vc@sentientagency.io', reviewedAt: `${day}T12:00:00Z`, suggestion: { sourceUrl: 'https://example.com/rejected', account: 'chatgptricks' } },
+  { id: 87, type: 'post_suggestion', status: 'approved', requesterEmail: queue.viewer.email, title: 'Approved suggestion', requestId: 87, suggestion: { sourceUrl: 'https://example.com/approved', account: 'chatgptricks' } },
+];
 let queueRefreshFailure = false;
+let ticketRefreshFailure = true;
 const downloads = [];
 const downloadBlobs = new Map();
 let mediaMode = 'carousel';
@@ -64,15 +70,19 @@ const fetchStub = async (url, options = {}) => {
   if (value.includes('/api/dashboard/queue/v2/tickets/post-suggestion')) {
     const body = Object.fromEntries(new URLSearchParams(options.body));
     suggestions.push(body);
-    const request = { ...task, id: 9, recommendedAccounts: [body.account], post: { ...task.post, title: body.title || 'Suggested video', permalink: body.source_url }, brief: body.reason };
-    queue.planningRequests.push(request);
-    queue.assignedRequests.push(request);
+    const ticket = { id: 90, type: 'post_suggestion', status: 'pending', requesterEmail: queue.viewer.email, requestId: null, title: body.source_url, reason: body.reason, requestedAccounts: [body.account], suggestion: { sourceUrl: body.source_url, title: body.title || 'Suggested video', account: body.account, postType: body.post_type } };
+    tickets.push(ticket);
+    queue.pendingTicketCount += 1;
     queueRefreshFailure = true;
-    return ok({ ok: true, request, ticket: { id: 90, status: 'approved', requestId: 9 }, alreadyScheduled: false });
+    return ok({ ok: true, request: null, ticket, alreadySubmitted: false, pendingTicketCount: queue.pendingTicketCount });
+  }
+  if (value.includes('/api/dashboard/queue/v2/tickets')) {
+    if (ticketRefreshFailure) return { ...ok({ detail: 'Ticket refresh temporarily unavailable.' }), ok: false, status: 400 };
+    return ok({ tickets });
   }
   if (value.includes('/api/dashboard/queue/v2')) {
     if (queueRefreshFailure) return { ...ok({ detail: 'Refresh temporarily unavailable.' }), ok: false, status: 400 };
-    return ok(queue);
+    return ok({ ...queue });
   }
   if (value.includes('/api/tracker/summary')) return ok(tracker);
   if (value.includes('/api/insights/posts')) return ok({ accounts: [{ handle: 'chatgptricks', group: 'sentient', label: 'ChatGPTricks' }], posts: [{ a: 'chatgptricks', d: `${day}T12:00:00`, l: 4200, c: 32, t: 'Carousel', hot: 1, ocr: 'better prompt workflow artificial intelligence' }] });
@@ -147,7 +157,7 @@ const fill = async (node, value) => act(async () => {
     checks['Mobile Queue is a desktop-directed support view'] = /Open Queue on desktop/.test(document.body.textContent)
       && !document.querySelector('.m-queue-quick');
     const suggestButton = [...document.querySelectorAll('.m-content button')].find((node) => /Suggest a post/.test(node.textContent));
-    checks['Mobile Queue offers automatic post suggestions'] = Boolean(suggestButton);
+    checks['Mobile Queue offers post suggestions requiring VC approval'] = Boolean(suggestButton) && /Suggestions need VC approval/.test(document.body.textContent);
     await click(suggestButton);
     const suggestionForm = document.querySelector('.queue-suggestion-modal form') || document.querySelector('form[aria-labelledby="queue-suggestion-title"]') || document.querySelector('[role="dialog"] form');
     checks['Suggestion offers only active managed accounts'] = Boolean(suggestionForm) && [...suggestionForm.querySelectorAll('select option')].some((option) => option.value === 'chatgptricks') && ![...suggestionForm.querySelectorAll('select option')].some((option) => ['unmanaged', 'inactive'].includes(option.value));
@@ -155,11 +165,20 @@ const fill = async (node, value) => act(async () => {
     await fill(suggestionForm.querySelector('textarea'), 'Adapt this useful walkthrough for our audience.');
     await act(async () => { suggestionForm.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true })); await new Promise((resolve) => setTimeout(resolve, 150)); });
     checks['Mobile suggestion submits arbitrary source and selected account'] = suggestions.length === 1 && suggestions[0].source_url === 'https://www.youtube.com/watch?v=workflow' && suggestions[0].account === 'chatgptricks' && Boolean(suggestions[0].idempotency_key);
-    checks['Successful scheduling stays successful when refresh fails'] = /Added to your Queue|Scheduled in your Queue|Scheduled for you|Your post is scheduled/.test(document.body.textContent) && !/Could not (?:send|schedule|add)/.test(document.body.textContent);
+    checks['Pending submission stays successful when refresh fails'] = /Sent for approval/.test(document.body.textContent) && !/Could not (?:send|schedule|add)/.test(document.body.textContent);
+    checks['Pending suggestion does not enter mobile agenda or reserve a slot'] = document.querySelectorAll('.m-task').length === 1 && document.querySelectorAll('.m-day-bar').length === 1 && queue.planningRequests.length === 1 && queue.assignedRequests.length === 1;
     queueRefreshFailure = false;
-    const suggestionClose = [...document.querySelectorAll('dialog button')].find((node) => /Done|Close/.test(node.textContent) || node.getAttribute('aria-label') === 'Close');
-    await click(suggestionClose);
-    checks['Scheduled suggestion appears in mobile agenda'] = [...document.querySelectorAll('.m-task')].length >= 2 && queue.pendingTicketCount === 1;
+    const viewRequest = [...document.querySelectorAll('dialog button')].find((node) => /View request/.test(node.textContent));
+    await click(viewRequest);
+    checks['Mobile pending request remains readable when ticket refresh fails'] = /My suggestions/.test(document.querySelector('.m-sheet')?.textContent || '') && /Suggested video/.test(document.querySelector('.m-ticket-list')?.textContent || '') && /Pending/.test(document.querySelector('.m-ticket-list')?.textContent || '') && /@chatgptricks/.test(document.querySelector('.m-ticket-list')?.textContent || '');
+    await click(document.querySelector('.m-sheet > header button'));
+    ticketRefreshFailure = false;
+    await click([...document.querySelectorAll('.m-content button')].find((node) => /My suggestions/.test(node.textContent)));
+    checks['Mobile suggestions sheet shows only own requests even for VC'] = document.querySelectorAll('.m-ticket-list article').length === 3 && !/Another user suggestion|Private to the other user/.test(document.querySelector('.m-sheet')?.textContent || '');
+    checks['Mobile suggestions tracking preserves review outcomes and notes'] = /Pending/.test(document.querySelector('.m-ticket-list')?.textContent || '') && /Approved/.test(document.querySelector('.m-ticket-list')?.textContent || '') && /Rejected/.test(document.querySelector('.m-ticket-list')?.textContent || '') && /Please use a more recent source/.test(document.querySelector('.m-ticket-list')?.textContent || '');
+    checks['Mobile suggestions sheet cannot approve, reject, or block time'] = ![...document.querySelectorAll('.m-sheet button')].some((node) => /^(Approve|Reject|Block time)$/.test(node.textContent.trim()));
+    await click(document.querySelector('.m-sheet > header button'));
+    checks['Closing pending tracking leaves mobile agenda unchanged'] = document.querySelectorAll('.m-task').length === 1 && queue.pendingTicketCount === 2;
     await click(nav[2]);
     checks['Independent Tracker renders'] = document.querySelectorAll('.m-tracker-row').length === 1 && /100,000/.test(document.body.textContent) && /\+120/.test(document.body.textContent);
     checks['Tracker favorite is first'] = Boolean(document.querySelector('.m-tracker-row:first-child .m-favorite.is-on'));

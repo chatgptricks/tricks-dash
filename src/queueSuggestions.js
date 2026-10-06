@@ -33,8 +33,8 @@ export async function submitQueueSuggestion({ sourceUrl, account, reason, title,
     const response = await apiFetch(`${API_BASE}/api/dashboard/queue/v2/tickets/post-suggestion`, { method: 'POST', body, signal: controller.signal });
     let result;
     try { result = await response.json(); } catch { throw new Error('Queue returned an unreadable response. Retry to recover your suggestion.'); }
-    if (!response.ok) throw new Error(typeof result.detail === 'string' ? result.detail : 'Could not schedule your suggestion. Please retry.');
-    if (!result.request?.id) throw new Error('The assignment could not be confirmed. Retry to recover your suggestion.');
+    if (!response.ok) throw new Error(typeof result.detail === 'string' ? result.detail : 'Could not send your suggestion. Please retry.');
+    if (!result.ticket?.id || result.ticket.type !== 'post_suggestion' || !['pending', 'approved', 'rejected'].includes(result.ticket.status)) throw new Error('The suggestion could not be confirmed. Retry to recover it.');
     return result;
   } catch (error) {
     if (controller.signal.aborted) throw new Error('Queue took too long to confirm. Retry to recover your suggestion without creating a duplicate.', { cause: error });

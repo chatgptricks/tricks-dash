@@ -2,11 +2,11 @@ import QueuePostInspector, { captureQueueCardOrigin } from './QueuePostInspector
 import { returnCardFromSide } from './card-flight';
 import ProductHeader from './ProductHeader';
 import QueueSuggestionModal from './QueueSuggestionModal';
-import { suggestionAccounts, submitQueueSuggestion } from './queueSuggestions';
+import { suggestedSlotLabel, suggestionAccounts, suggestionSourceUrl, submitQueueSuggestion } from './queueSuggestions';
 import React, { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { mountApp } from './mountApp';
 import { createPortal } from 'react-dom';
-import { AlertTriangle, Archive, ArrowLeft, Ban, BarChart3, BellRing, CalendarDays, CalendarPlus, Check, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Clock3, Copy, Coffee, Download, History, Image as ImageIcon, Layers, Lightbulb, Link2, LoaderCircle, LocateFixed, LogOut, Maximize2, Moon, Paperclip, Pencil, Play, Plus, Radio, Search, Send, Settings, Sun, TimerReset, WifiOff, X } from 'lucide-react';
+import { AlertTriangle, Archive, ArrowLeft, Ban, BarChart3, BellRing, CalendarDays, CalendarPlus, Check, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Clock3, Copy, Coffee, Download, ExternalLink, History, Image as ImageIcon, Layers, Lightbulb, Link2, LoaderCircle, LocateFixed, LogOut, Maximize2, Moon, Paperclip, Pencil, Play, Plus, Radio, Search, Send, Settings, Sun, TimerReset, WifiOff, X } from 'lucide-react';
 import { browserPopupRedirectResolver, getRedirectResult, onAuthStateChanged, signOut } from 'firebase/auth';
 import { describeSignInError, firebaseAuth as auth, startGoogleSignIn } from './firebase';
 import { clearSsoCookie, startSsoRefresh, trySsoSignIn } from './sso';
@@ -1027,10 +1027,13 @@ function QueueOverview({ report, loading, error, onRetry, onOpen, onBatchClose }
   return <section className="queue-overview-page"><header className="queue-overview-header"><div><p className="scheduler-eyebrow">{t('adminOverview')}</p><h2>{t('productionReports')}</h2><small>{t('workloadHelp')}</small></div><div className="queue-overview-header-meta"><span>{assignedPosts.length} {t('assignedPostsCount')}</span><span>{designers.length} {t('designer')}</span></div></header><div className="queue-overview-metrics">{metric('pool', t('inPool'))}{metric('scheduled', t('scheduled'))}{metric('in_progress', t('inProgress'))}{metric('completed', t('readyToClose'))}{metric('closed', t('closed'))}</div><section className="queue-overview-designers"><header><div><p className="scheduler-eyebrow">{t('designerWorkload')}</p><h3>{designers.length} {t('allUsers')}</h3></div></header><div className="queue-overview-designer-grid">{designers.map((designer) => <article key={designer.email}><div><b>{displayName(designer.email, designer.displayName)}</b><small>{designer.activeRequests} {t('activeRequests')}</small></div><strong>{designer.productionPoints} PP</strong><span>{designer.closedRequests} {t('closed')}</span></article>)}{!designers.length ? <p className="scheduler-empty">{t('noAssignedPosts')}</p> : null}</div></section><AdminAssignmentTable tasks={assignedPosts} onOpen={onOpen} onBatchClose={onBatchClose} headingKey="allAssignedPosts" countKey="assignedPostsCount" /></section>;
 }
 
-function TicketPanel({ tickets, loading, error, onClose, onReview, onContinueSuggestion, canReview, isDev }) {
+function TicketPanel({ tickets, loading, error, onClose, onReview, onContinueSuggestion, onOpenRequest, canReview, isDev, accounts = [], schedulerUsers = [], initialTab = 'pending', focusTicketId, timeZone = QUEUE_TIME_ZONE }) {
   const displayName = useQueueDisplayName();
   const { t, language } = useQueuePreferences();
-  const [tab, setTab] = useState('pending');
+  const [tab, setTab] = useState(initialTab);
+  const [reviewAccounts, setReviewAccounts] = useState({});
+  const reviewRef = useRef(false);
+  useEffect(() => { setTab(initialTab); }, [initialTab, focusTicketId]);
   const [busy, setBusy] = useState('');
   const items = tickets.filter((ticket) => ticket.status === tab);
   const counts = {
@@ -1044,7 +1047,16 @@ function TicketPanel({ tickets, loading, error, onClose, onReview, onContinueSug
     { status: 'rejected', label: 'ticketsRejected', empty: 'noRejectedTickets' },
   ];
   const emptyMessage = tabs.find((item) => item.status === tab)?.empty || 'noPendingTickets';
-  const review = async (ticket, action) => { setBusy(`${ticket.id}:${action}`); try { await onReview(ticket.id, action); } finally { setBusy(''); } };
+  const review = async (ticket, action) => {
+    if (reviewRef.current) return;
+    reviewRef.current = true;
+    setBusy(`${ticket.id}:${action}`);
+    try {
+      await onReview(ticket.id, action, reviewAccounts[ticket.id] || '');
+      if (ticket.type === 'post_suggestion') setTab(action === 'approve' ? 'approved' : 'rejected');
+    } catch { /* The inbox displays the review error; keep the proposal pending. */ }
+    finally { reviewRef.current = false; setBusy(''); }
+  };
   const ticketTitle = (ticket) => ticket.type === 'new_account' ? 'New account request · Dev only' : ticket.type === 'post_suggestion' ? 'Post suggestion' : ticket.type === 'account_access' ? t('accountAccessRequest') : ticket.type === 'move' ? t('moveRequest') : ticket.type === 'time_block' ? (ticket.title || t(ticket.category || 'other')) : ticket.type === 'pp_revision' ? t('ppRevision') : ticket.type === 'trainee_review' ? t('traineeReview') : t('cancellationRequest');
   const ticketMeta = (ticket) => {
     if (ticket.type === 'account_access' || ticket.type === 'new_account') return (ticket.requestedAccounts || []).map((account) => `@${account}`).join(' · ') || t('noAccounts');
@@ -1052,7 +1064,7 @@ function TicketPanel({ tickets, loading, error, onClose, onReview, onContinueSug
       const account = ticket.request?.post?.account ? `@${ticket.request.post.account}` : t('post');
       return `${account} · ${ticket.scheduledDate || '—'} · ${time(ticket.scheduledStartMinutes ?? 0)}`;
     }
-    if (ticket.type === 'post_suggestion') return ticket.title;
+    if (ticket.type === 'post_suggestion') return ticket.suggestion?.title || ticket.title;
     if (ticket.type === 'time_block') return `${displayDate(ticket.scheduledDate, language)} · ${time(ticket.scheduledStartMinutes)} · ${ticket.durationMinutes} min`;
     const account = ticket.request?.post?.account ? `@${ticket.request.post.account}` : t('post');
     if (ticket.type === 'pp_revision') return `${account} · ${ticket.request?.productionPoints || '—'} PP → ${ticket.requestedProductionPoints} PP`;
@@ -1066,7 +1078,31 @@ function TicketPanel({ tickets, loading, error, onClose, onReview, onContinueSug
       {loading ? <div className="queue-ticket-state"><LoaderCircle className="queue-spin" />{t('loadingSchedule')}</div> : null}
       {error ? <p className="queue-ticket-error">{error}</p> : null}
       {!loading && !items.length ? <div className="queue-ticket-empty"><ClipboardList size={20} /><span>{t(emptyMessage)}</span></div> : null}
-      {items.map((ticket) => <article key={ticket.id} className={`ticket-${ticket.type} status-${ticket.status}`}><header><span>{ticket.type === 'post_suggestion' ? <Lightbulb size={14} /> : ticket.type === 'account_access' ? <Settings size={14} /> : ticket.type === 'time_block' ? <CalendarPlus size={14} /> : ticket.type === 'pp_revision' ? <TimerReset size={14} /> : ticket.type === 'move' ? <TimerReset size={14} /> : ticket.type === 'trainee_review' ? <Pencil size={14} /> : <Ban size={14} />}</span><div><b>{ticketTitle(ticket)}</b><small>{displayName(ticket.requesterEmail)} · {displayTimestamp(ticket.createdAt, language)}</small></div><i>{ticket.status === 'pending' ? t('ticketsPending') : t(ticket.status)}</i></header><p>{ticketMeta(ticket)}</p>{ticket.reason ? ticket.type === 'trainee_review' ? <a className="queue-ticket-link" href={ticket.reason} target="_blank" rel="noreferrer">{t('openCanva')}</a> : <blockquote>{ticket.reason}</blockquote> : null}{ticket.status === 'pending' && canReview && (ticket.type !== 'new_account' || isDev) ? <footer>{ticket.type === 'new_account' ? <a href="settings.html?tab=accounts" target="sentient-settings">Add in Settings</a> : null}<button type="button" className="is-approve" disabled={Boolean(busy)} onClick={() => review(ticket, 'approve')}>{busy === `${ticket.id}:approve` ? <LoaderCircle className="queue-spin" size={13} /> : <Check size={13} />}{ticket.type === 'new_account' ? 'Mark as added' : t('approve')}</button><button type="button" className="is-reject" disabled={Boolean(busy)} onClick={() => review(ticket, 'reject')}>{busy === `${ticket.id}:reject` ? <LoaderCircle className="queue-spin" size={13} /> : <X size={13} />}{t('reject')}</button></footer> : ticket.type === 'post_suggestion' && ticket.status === 'approved' && canReview ? <footer><button type="button" className="is-approve" onClick={() => onContinueSuggestion?.(ticket)}><Plus size={13} />Create post</button></footer> : ticket.status === 'pending' ? <small className="ticket-reviewer">{t('pendingApproval')}</small> : <small className="ticket-reviewer">{ticket.reviewerEmail ? displayName(ticket.reviewerEmail) : '—'} · {ticket.reviewedAt ? displayTimestamp(ticket.reviewedAt, language) : ''}</small>}</article>)}
+      {items.map((ticket) => {
+        const suggestion = ticket.type === 'post_suggestion';
+        const selectedAccount = ticket.suggestion?.account || ticket.requestedAccounts?.[0] || '';
+        const needsAccount = suggestion && ticket.status === 'pending' && !selectedAccount;
+        const managed = needsAccount ? suggestionAccounts({ viewer: { email: ticket.requesterEmail }, schedulerUsers, accounts }) : [];
+        const sourceLink = suggestion ? suggestionSourceUrl(ticket.suggestion?.sourceUrl || ticket.title) : '';
+        return <article key={ticket.id} className={`ticket-${ticket.type} status-${ticket.status}`}>
+          <header><span>{suggestion ? <Lightbulb size={14} /> : ticket.type === 'account_access' ? <Settings size={14} /> : ticket.type === 'time_block' ? <CalendarPlus size={14} /> : ticket.type === 'pp_revision' || ticket.type === 'move' ? <TimerReset size={14} /> : ticket.type === 'trainee_review' ? <Pencil size={14} /> : <Ban size={14} />}</span><div><b>{ticketTitle(ticket)}</b><small>{displayName(ticket.requesterEmail)} · {displayTimestamp(ticket.createdAt, language)}</small></div><i>{ticket.status === 'pending' ? t('ticketsPending') : t(ticket.status)}</i></header>
+          <p>{ticketMeta(ticket)}</p>
+          {suggestion ? <div className="queue-ticket-suggestion">
+            {sourceLink ? <a className="queue-ticket-link" href={sourceLink} target="_blank" rel="noreferrer">{language === 'es' ? 'Abrir origen' : 'Open source'}<ExternalLink size={12} /></a> : null}
+            <p>{selectedAccount ? `@${selectedAccount}` : language === 'es' ? 'Cuenta pendiente de selección' : 'Account not selected'}{ticket.suggestion?.postType ? ` · ${ticket.suggestion.postType}` : ''}</p>
+            {ticket.status === 'pending' ? <small>{language === 'es' ? `Al aprobar, se asignará a ${displayName(ticket.requesterEmail)} en su próximo espacio disponible en Queue.` : `Approval assigns this post to ${displayName(ticket.requesterEmail)} at their next available Queue slot.`}</small> : null}
+            {needsAccount && canReview ? <label>{language === 'es' ? 'Cuenta para esta sugerencia' : 'Account for this suggestion'}<select value={reviewAccounts[ticket.id] || ''} disabled={Boolean(busy)} onChange={event => setReviewAccounts(current => ({ ...current, [ticket.id]: event.target.value }))}><option value="">{language === 'es' ? 'Elige una cuenta' : 'Choose an account'}</option>{managed.map(account => <option value={account.handle} key={account.handle}>@{account.handle}</option>)}</select><small>{language === 'es' ? 'Esta solicitud anterior no guardó una cuenta. Elige una cuenta que gestione la persona que la sugirió.' : 'This older request has no account. Choose one managed by the person who suggested it.'}</small></label> : null}
+            {ticket.status === 'approved' && ticket.requestId && ticket.scheduledDate ? <small>{language === 'es' ? 'Programado' : 'Scheduled'} · {suggestedSlotLabel(ticket, timeZone, language)}</small> : null}
+          </div> : null}
+          {ticket.reason ? ticket.type === 'trainee_review' ? <a className="queue-ticket-link" href={ticket.reason} target="_blank" rel="noreferrer">{t('openCanva')}</a> : <blockquote>{ticket.reason}</blockquote> : null}
+          {ticket.reviewNote ? <p>{ticket.reviewNote}</p> : null}
+          {ticket.status === 'pending' && canReview && (ticket.type !== 'new_account' || isDev) ? <footer>
+            {ticket.type === 'new_account' ? <a href="settings.html?tab=accounts" target="sentient-settings">Add in Settings</a> : null}
+            <button type="button" className="is-approve" disabled={Boolean(busy) || (needsAccount && !reviewAccounts[ticket.id])} onClick={() => review(ticket, 'approve')}>{busy === `${ticket.id}:approve` ? <LoaderCircle className="queue-spin" size={13} /> : <Check size={13} />}{ticket.type === 'new_account' ? 'Mark as added' : t('approve')}</button>
+            <button type="button" className="is-reject" disabled={Boolean(busy)} onClick={() => review(ticket, 'reject')}>{busy === `${ticket.id}:reject` ? <LoaderCircle className="queue-spin" size={13} /> : <X size={13} />}{t('reject')}</button>
+          </footer> : suggestion && ticket.status === 'approved' && ticket.requestId ? <footer><button type="button" className="is-approve" onClick={() => onOpenRequest?.(ticket)}><ExternalLink size={13} />{language === 'es' ? 'Abrir en Queue' : 'Open in Queue'}</button></footer> : suggestion && ticket.status === 'approved' && canReview ? <footer><button type="button" className="is-approve" onClick={() => onContinueSuggestion?.(ticket)}><Plus size={13} />Create post</button></footer> : ticket.status === 'pending' ? <small className="ticket-reviewer">{t('pendingApproval')}</small> : <small className="ticket-reviewer">{ticket.reviewerEmail ? displayName(ticket.reviewerEmail) : '—'} · {ticket.reviewedAt ? displayTimestamp(ticket.reviewedAt, language) : ''}</small>}
+        </article>;
+      })}
     </div>
   </aside></>;
 }
@@ -1685,6 +1721,7 @@ function QueueApp({ user }) {
   const [designerScope, setDesignerScope] = useState(() => readDesignerScope(user?.email));
   const [ticketsOpen, setTicketsOpen] = useState(new URLSearchParams(window.location.search).get('inbox') === '1');
   const [tickets, setTickets] = useState([]);
+  const [ticketFocus, setTicketFocus] = useState({ status: 'pending', id: null });
   const [ticketsLoading, setTicketsLoading] = useState(false);
   const [ticketsError, setTicketsError] = useState('');
   const [pickOpen, setPickOpen] = useState(false);
@@ -1931,11 +1968,12 @@ function QueueApp({ user }) {
   const loadTickets = useCallback(async ({ silent = false } = {}) => {
     if (!silent) setTicketsLoading(true);
     setTicketsError('');
+    const generation = mutationGenerationRef.current;
     try {
       const result = await json('/api/dashboard/queue/v2/tickets');
-      setTickets(result.tickets || []);
+      if (generation === mutationGenerationRef.current) setTickets(result.tickets || []);
     } catch (err) {
-      setTicketsError(err.message || 'Could not load requests.');
+      if (generation === mutationGenerationRef.current) setTicketsError(err.message || 'Could not load requests.');
     } finally {
       if (!silent) setTicketsLoading(false);
     }
@@ -2574,19 +2612,47 @@ function QueueApp({ user }) {
       return false;
     }
   };
-  const reviewTicket = async (ticketId, reviewAction) => {
+  const applyTicketResult = result => {
+    mutationGenerationRef.current += 1;
+    if (result.ticket) setTickets(current => [result.ticket, ...current.filter(ticket => ticket.id !== result.ticket.id)]);
+    setData(current => {
+      if (!current) return current;
+      const next = { ...current };
+      if (Number.isFinite(result.pendingTicketCount)) next.pendingTicketCount = result.pendingTicketCount;
+      const request = result.request;
+      if (!request?.id) return next;
+      const without = items => (items || []).filter(task => task.id !== request.id);
+      const merged = items => [request, ...without(items)];
+      const own = request.designerEmail === current.viewer.email;
+      next.requests = request.scheduledDate === date && (coordinator || own) ? merged(current.requests) : without(current.requests);
+      next.planningRequests = coordinator || own ? merged(current.planningRequests) : without(current.planningRequests);
+      next.assignedRequests = own ? merged(current.assignedRequests) : without(current.assignedRequests);
+      return next;
+    });
+  };
+  const reviewTicket = async (ticketId, reviewAction, account = '') => {
+    setTicketsError('');
+    let result;
     try {
-      await json(`/api/dashboard/queue/v2/tickets/${ticketId}/review`, { method: 'POST', body: new URLSearchParams({ action: reviewAction }) });
-      await Promise.all([load({ silent: true }), loadTickets({ silent: true })]);
-      if (open?.id) {
-        const result = await json(`/api/dashboard/queue/v2/requests/${open.id}`);
-        setOpen(result.request);
-      }
-      notify(t('ticketReviewed'));
+      const body = new URLSearchParams({ action: reviewAction });
+      if (account) body.set('account', account);
+      result = await json(`/api/dashboard/queue/v2/tickets/${ticketId}/review`, { method: 'POST', body });
     } catch (err) {
       setTicketsError(err.message || 'Could not review request.');
       throw err;
     }
+    applyTicketResult(result);
+    // A confirmed review stays successful even if a later refresh fails.
+    load({ silent: true }).catch(() => {});
+    loadTickets({ silent: true });
+    if (open?.id) {
+      const openId = open.id;
+      json(`/api/dashboard/queue/v2/requests/${openId}`).then(fresh => {
+        setOpen(current => current?.id === openId ? fresh.request : current);
+      }).catch(() => {});
+    }
+    notify(t('ticketReviewed'));
+    return result;
   };
   const closeSuggestion = () => {
     setSuggestOpen(false);
@@ -2601,15 +2667,8 @@ function QueueApp({ user }) {
   const createSuggestion = async (payload) => {
     saveQuietly();
     const result = await submitQueueSuggestion(payload);
-    mutationGenerationRef.current += 1;
-    const request = result.request;
-    setData(current => current ? {
-      ...current,
-      requests: request.scheduledDate === date && (coordinator || request.designerEmail === current.viewer.email) ? [request, ...(current.requests || []).filter(task => task.id !== request.id)] : current.requests,
-      assignedRequests: request.designerEmail === current.viewer.email ? [request, ...(current.assignedRequests || []).filter(task => task.id !== request.id)] : (current.assignedRequests || []).filter(task => task.id !== request.id),
-    } : current);
-    if (result.ticket) setTickets(current => [result.ticket, ...current.filter(ticket => ticket.id !== result.ticket.id)]);
-    // An accepted assignment stays successful even if a later refresh fails.
+    applyTicketResult(result);
+    // Pending suggestions never add an assignment to the local schedule.
     load({ silent: true }).catch(() => {});
     return result;
   };
@@ -2618,6 +2677,24 @@ function QueueApp({ user }) {
     setArchive(false);
     if (request.scheduledDate) setDate(request.scheduledDate);
     setOpen(request);
+  };
+  const openSuggestionTicket = ticket => {
+    closeSuggestion();
+    setTicketFocus({ status: ticket.status, id: ticket.id });
+    setTicketsOpen(true);
+    loadTickets({ silent: true });
+  };
+  const openTicketRequest = async ticket => {
+    setTicketsError('');
+    try {
+      const result = await json(`/api/dashboard/queue/v2/requests/${ticket.requestId}`);
+      setTicketsOpen(false);
+      setArchive(false);
+      if (result.request.scheduledDate) setDate(result.request.scheduledDate);
+      setOpen(result.request);
+    } catch (err) {
+      setTicketsError(err.message || 'Could not open the assignment.');
+    }
   };
   const openPendingTickets = useMemo(() => {
     if (!open?.id) return [];
@@ -2667,9 +2744,9 @@ function QueueApp({ user }) {
       {archive ? <section className="queue-archive-list"><header><p className="scheduler-eyebrow">{t('archive')}</p><h2>{archived.length} {t('cancelled')}</h2></header>{archived.length ? archived.map((task) => <button type="button" key={task.id} className={`${priorityClass(task.priority)}${hotClass(task)}`} onClick={() => setOpen(task)}><span>{cover(task) ? <img src={cover(task)} alt="" /> : '@'}</span><div><b>@{task.post.account}</b><small>{task.cancellationReason || t('cancelled')}</small>{isHotTask(task) ? <i className="queue-hot-badge">🔥 {hotText(task)}</i> : null}</div><em>{displayTimestamp(task.updatedAt, language)}</em></button>) : <p className="scheduler-empty">{t('noArchived')}</p>}</section> : <><Scheduler onAccountsChange={changeDraftAccounts} onConfirmDraft={submit} onCancelDraft={clearDrafts} draftBusy={draftBusy} data={data} draft={draft} setDraft={applyDraft} onDraftChange={persistDrafts} selectedDate={date} designerScope={designerScope} timeZone={simulatedTimeZone} canCoordinate={coordinator} onOpen={setOpen} onError={(message) => notify(message, 'error')} onCreateTimeBlock={createTimeBlock} onEditTimeBlock={editTimeBlock} onDeleteTimeBlock={deleteTimeBlock} onReturnToPool={returnTaskToPool} onCancelTask={cancelTask} onDuplicateTask={(task) => duplicateRequest(task.id)} onSavePreferences={saveSchedulerPreferences} addTimeNonce={addTimeNonce} />{coordinator ? <AdminAssignmentTable tasks={upcoming} onOpen={setOpen} onBatchClose={data?.viewer?.isAdmin ? batchClose : null} headingKey="upcomingProduction" countKey="activeRequests" /> : <DesignerAssignments tasks={assigned} closedTasks={recentClosed} timeZone={simulatedTimeZone} onOpen={setOpen} />}</>}
       </> : null}
     </> : null}
-    {ticketsOpen && data?.viewer ? <TicketPanel tickets={tickets} loading={ticketsLoading} error={ticketsError} onClose={() => setTicketsOpen(false)} onReview={reviewTicket} onContinueSuggestion={(ticket) => { setCreateSeed({ sourceUrl: ticket.title, reason: ticket.reason }); setTicketsOpen(false); setCreateOpen(true); }} isDev={effectiveDevAccess} canReview={Boolean(coordinator)} /> : null}
+    {ticketsOpen && data?.viewer ? <TicketPanel tickets={tickets} loading={ticketsLoading} error={ticketsError} onClose={() => setTicketsOpen(false)} onReview={reviewTicket} onOpenRequest={openTicketRequest} accounts={data.accounts || []} schedulerUsers={data.schedulerUsers || data.designers || []} initialTab={ticketFocus.status} focusTicketId={ticketFocus.id} timeZone={simulatedTimeZone} onContinueSuggestion={(ticket) => { setCreateSeed({ sourceUrl: ticket.title, reason: ticket.reason }); setTicketsOpen(false); setCreateOpen(true); }} isDev={effectiveDevAccess} canReview={Boolean(coordinator)} /> : null}
     {pickOpen ? <PickModal requests={pickPool} hotFallback={pickHotFallback} busy={pickBusy} error={pickError} onClose={() => { if (!pickActionRef.current) setPickOpen(false); }} onAssign={pickRequest} /> : null}
-    {suggestOpen && canSuggest ? <QueueSuggestionModal accounts={managedSuggestionAccounts} viewerName={displayName(data.viewer.email)} viewerEmail={data.viewer.email} initial={suggestSeed} language={language} timeZone={simulatedTimeZone} onClose={closeSuggestion} onSubmit={createSuggestion} onOpenRequest={openSuggestedRequest} /> : null}
+    {suggestOpen && canSuggest ? <QueueSuggestionModal accounts={managedSuggestionAccounts} viewerName={displayName(data.viewer.email)} viewerEmail={data.viewer.email} initial={suggestSeed} language={language} timeZone={simulatedTimeZone} onClose={closeSuggestion} onSubmit={createSuggestion} onOpenRequests={openSuggestionTicket} onOpenRequest={openSuggestedRequest} /> : null}
     {createOpen ? <CreatePostModal tags={data?.tags || []} initial={createSeed} onClose={() => { setCreateOpen(false); setCreateSeed(null); }} onCreated={(request) => { saveQuietly(); setData((current) => current ? { ...current, requests: [request, ...(current.requests || []).filter((task) => task.id !== request.id)], pickRequests: [request, ...(current.pickRequests || []).filter((task) => task.id !== request.id)] } : current); setCreateOpen(false); setCreateSeed(null); notify(t('postCreated')); }} /> : null}
     {multiAssignRequest ? <AssignMultipleAccountsModal key={multiAssignRequest.id} task={multiAssignRequest} accounts={data?.accounts || []} designers={data?.schedulerUsers || data?.designers || []} busy={multiAssignBusy} onClose={() => { if (!multiAssignBusy) setMultiAssignRequest(null); }} onSubmit={(selectedAccounts) => assignToMultipleAccounts(multiAssignRequest.id, selectedAccounts)} /> : null}
     {resetOpen ? <ResetQueueModal onClose={() => setResetOpen(false)} onReset={resetQueue} /> : null}
