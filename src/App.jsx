@@ -859,6 +859,7 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
   const dashboardSummaryRef = useRef({});
   const dashboardAccountsRef = useRef([]);
   const dashboardCatalogueRevisionRef = useRef('');
+  const dashboardMetricsAtRef = useRef('');
   const dashboardFlightRef = useRef(null);
   const dashboardAliveRef = useRef(true);
   const dashboardUserRef = useRef(firebaseAuth.currentUser);
@@ -1064,7 +1065,8 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
           signal,
           etag: dashboardEtagRef.current,
           cachedCatalogue: dashboardPostsRef.current.length && dashboardSourcesRef.current.length
-            ? { posts: dashboardPostsRef.current, sources: dashboardSourcesRef.current }
+            ? { posts: dashboardPostsRef.current, sources: dashboardSourcesRef.current,
+                revision: dashboardCatalogueRevisionRef.current, metricsAvailable: true, metricsAt: dashboardMetricsAtRef.current }
             : null,
         }),
         apiFetch(`${API_BASE}/api/dashboard/accounts`, { signal }).then(async (accountsResponse) => {
@@ -1085,6 +1087,7 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
       // The server has confirmed that the catalog has not changed. Keep the
       // current cards, selection and scroll intact while still accepting the
       // lightweight accounts roster response.
+      if (catalogue.metricsAt) dashboardMetricsAtRef.current = catalogue.metricsAt;
       if (catalogue.notModified) {
         dashboardAccountsRef.current = resolvedAccounts.accounts;
         setAccounts(resolvedAccounts.accounts);
@@ -1123,6 +1126,7 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
           catalogueComplete: true,
           catalogueRevision: catalogue.revision,
           catalogueSources: dashboardSourcesRef.current,
+          metricsAt: dashboardMetricsAtRef.current,
         }, userEmail).catch(() => {});
       if (!isCurrentRequest()) return;
       setDashboard({ posts: catalogue.posts, summary: catalogue.summary || {} });
@@ -1195,6 +1199,7 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
           dashboardSummaryRef.current = snapshot.summary || {};
           dashboardAccountsRef.current = snapshot.accounts;
           dashboardCatalogueRevisionRef.current = snapshot.catalogueRevision || '';
+          dashboardMetricsAtRef.current = snapshot.metricsAt || '';
           setDashboard({ posts: snapshot.posts, summary: snapshot.summary || {} });
           setAccounts(snapshot.accounts);
           setLoading(false);

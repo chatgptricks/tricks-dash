@@ -82,6 +82,46 @@ try {
   };
   assert.deepEqual(await loadCompleteDashboardCatalogue({ etag: '"unchanged"', cachedCatalogue }), { notModified: true });
   assert.equal(conditionalCalls, 1, 'An unchanged manifest must not download pages');
+  const stamp = '2026-10-06T15:11:40+00:00';
+  const metricCached = { ...cachedCatalogue, revision: 'unchanged', metricsAvailable: true, metricsAt: '' };
+  const metricCalls = [];
+  globalThis.fetch = async (input) => {
+    const url = new URL(input);
+    metricCalls.push(url.pathname);
+    if (url.pathname.endsWith('/manifest')) return new Response(null, { status: 304 });
+    assert.ok(url.pathname.endsWith('/metrics'), 'Metric changes must not download the historical catalogue');
+    const second = Boolean(url.searchParams.get('after_code'));
+    return Response.json({
+      updates: [{ shortcode: second ? 'old-dashboard' : 'old-canonical', likes: second ? 50 : 40, comments: 3, likesUpdatedAt: stamp }],
+      cursor: { at: stamp, code: second ? 'old-dashboard' : 'old-canonical' }, hasMore: !second,
+    });
+  };
+  const metricOnly = await loadCompleteDashboardCatalogue({ etag: '"unchanged"', cachedCatalogue: metricCached });
+  assert.deepEqual(metricOnly.posts.map(p => p.likes), [40, 50]);
+  assert.equal(metricOnly.metricsAt, stamp);
+  assert.equal(metricOnly.posts[0].likesUpdatedAt, stamp);
+  assert.equal(metricOnly.summary['Total likes'], 90);
+  assert.equal(metricCalls.filter(path => path.endsWith('/page')).length, 0);
+  assert.deepEqual(await loadCompleteDashboardCatalogue({ etag: '"unchanged"', cachedCatalogue: metricOnly }), { notModified: true, metricsAt: stamp });
+
+  const appendCalls = [];
+  globalThis.fetch = async (input) => {
+    const url = new URL(input);
+    appendCalls.push(url.pathname);
+    if (url.pathname.endsWith('/manifest')) return Response.json({ revision: 'appended', sources: sources(6), metricsAvailable: true });
+    if (url.pathname.endsWith('/page')) return Response.json({ revision: 'appended', posts: [post('new-post')], nextCursor: 6, done: true });
+    assert.ok(url.pathname.endsWith('/metrics'));
+    return Response.json({ updates: [{ shortcode: 'old-canonical', likes: 77, comments: null, likesUpdatedAt: stamp }], cursor: { at: stamp, code: 'old-canonical' }, hasMore: false });
+  };
+  const appendedWithMetrics = await loadCompleteDashboardCatalogue({ cachedCatalogue: metricCached });
+  assert.equal(appendedWithMetrics.delta, true);
+  assert.equal(appendedWithMetrics.posts.find(p => p.shortcode === 'old-canonical').likes, 77);
+  assert.equal(appendCalls.filter(path => path.endsWith('/page')).length, 1);
+
+  globalThis.fetch = async (input) => new URL(input).pathname.endsWith('/manifest')
+    ? new Response(null, { status: 304 }) : new Response(null, { status: 404 });
+  assert.deepEqual(await loadCompleteDashboardCatalogue({ etag: '"unchanged"', cachedCatalogue: metricCached }), { notModified: true });
+  console.log('PASS metric deltas: unchanged manifests, bounded pagination, stable repeats, new posts with older metric changes and independent deployment propagation');
   console.log('PASS catalogue: bounded growth, changed revisions, source changes, watermark rollback, cold loads and conditional reads');
 } finally {
   globalThis.fetch = originalFetch;

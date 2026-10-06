@@ -160,6 +160,7 @@ async function fetchRevision(manifest, signal, onProgress, startingBounds = new 
     rawTotal: rawPosts.length,
     revision: manifest.revision,
     sources: manifest.sources,
+    metricsAvailable: Boolean(manifest.metricsAvailable),
   };
 }
 
@@ -174,13 +175,47 @@ function mergeCompleteCatalogue(cachedPosts, newerPosts) {
   return dedupePosts(retained);
 }
 
+async function refreshCatalogueMetrics(catalogue, signal, unchanged = false) {
+  if (!catalogue.metricsAvailable || !Array.isArray(catalogue.posts)) return unchanged ? { notModified: true } : catalogue;
+  let cursor = { at: catalogue.metricsAt || '', code: '' };
+  const updates = new Map();
+  let hasMore = true;
+  while (hasMore) {
+    const params = new URLSearchParams({ after_at: cursor.at, after_code: cursor.code });
+    const response = await apiFetch(`${API_BASE}/api/dashboard/posts/metrics?${params}`, { signal });
+    // Safe while frontend and API deployments propagate independently.
+    if (response.status === 404) return unchanged ? { notModified: true } : catalogue;
+    const data = await jsonOrError(response);
+    if (!Array.isArray(data.updates) || !data.cursor || typeof data.cursor.at !== 'string' || typeof data.cursor.code !== 'string') {
+      throw new DashboardCatalogueError('The metric update stream was invalid.');
+    }
+    for (const item of data.updates) updates.set(item.shortcode, item);
+    if (data.hasMore && data.cursor.at === cursor.at && data.cursor.code === cursor.code) {
+      throw new DashboardCatalogueError('The metric update stream did not advance.');
+    }
+    cursor = data.cursor;
+    hasMore = Boolean(data.hasMore);
+  }
+  let changed = false;
+  const posts = catalogue.posts.map((post) => {
+    const patch = updates.get(post.shortcode);
+    if (!patch) return post;
+    const comments = patch.comments ?? post.comments;
+    if (post.likes === patch.likes && post.comments === comments && post.likesUpdatedAt === patch.likesUpdatedAt) return post;
+    changed = true;
+    return { ...post, likes: patch.likes, comments, likesUpdatedAt: patch.likesUpdatedAt };
+  });
+  if (unchanged && !changed) return { notModified: true, metricsAt: cursor.at };
+  return { ...catalogue, posts, metricsAt: cursor.at, summary: catalogueSummary(posts) };
+}
+
 export async function loadCompleteDashboardCatalogue({ signal, etag = '', onProgress, cachedCatalogue = null } = {}) {
   // A persisted full library remains complete after an ID-bounded delta is
   // merged in. Normal reloads should not pull all historical posts again just
   // because the scheduler inserted one newer row.
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const manifestResult = await fetchManifest(signal, attempt === 0 ? etag : '');
-    if (manifestResult.notModified) return manifestResult;
+    if (manifestResult.notModified) return refreshCatalogueMetrics({ ...cachedCatalogue, etag }, signal, true);
     try {
       const cachedSources = normaliseSources(cachedCatalogue?.sources);
       const currentSources = normaliseSources(manifestResult.manifest.sources);
@@ -202,15 +237,16 @@ export async function loadCompleteDashboardCatalogue({ signal, etag = '', onProg
         onProgress,
         canDelta ? cachedSources : new Map(),
       );
-      if (!canDelta) return { ...catalogue, etag: manifestResult.etag };
+      if (!canDelta) return refreshCatalogueMetrics({ ...catalogue, etag: manifestResult.etag, metricsAt: cachedCatalogue?.metricsAt }, signal);
       const posts = mergeCompleteCatalogue(cachedCatalogue.posts, catalogue.posts);
-      return {
+      return refreshCatalogueMetrics({
         ...catalogue,
         posts,
         summary: catalogueSummary(posts),
         etag: manifestResult.etag,
         delta: true,
-      };
+        metricsAt: cachedCatalogue?.metricsAt,
+      }, signal);
     } catch (error) {
       if (!(error instanceof DashboardCatalogueError) || error.status !== 409 || attempt === 1) throw error;
     }
