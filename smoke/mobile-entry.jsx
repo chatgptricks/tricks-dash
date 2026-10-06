@@ -1,7 +1,11 @@
 import { act } from 'react';
 
-const localNow = new Date();
-const day = `${localNow.getFullYear()}-${String(localNow.getMonth() + 1).padStart(2, '0')}-${String(localNow.getDate()).padStart(2, '0')}`;
+// Fixtures use Queue's calendar day, regardless of the CI host's time zone.
+// UTC midnight is still the previous production day in Costa Rica.
+const queueDateParts = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
+  timeZone: 'America/Costa_Rica', year: 'numeric', month: '2-digit', day: '2-digit',
+}).formatToParts(new Date()).filter(({ type }) => type !== 'literal').map(({ type, value }) => [type, value]));
+const day = `${queueDateParts.year}-${queueDateParts.month}-${queueDateParts.day}`;
 const task = {
   id: 1, status: 'scheduled', designerEmail: 'user03@example.com', scheduledDate: day,
   scheduledStartMinutes: 600, productionPoints: 3, durationMinutes: 30, priority: 'high', tags: [],
