@@ -432,7 +432,7 @@ function dashboardDataRevision(posts = [], summary = {}) {
   };
   add(JSON.stringify(summary));
   posts.forEach((post) => add([
-    post.account, post.shortcode, post.postDate, post.likes, post.comments,
+    post.account, post.shortcode, post.postDate, post.likes, post.comments, post.likesUpdatedAt,
     post.isHot, post.hotRateMultiplier, post.queueState, post.queueRequestId,
     post.isPromo, post.hidden, post.permalink, post.imagePath, post.stackId, post.stackSize,
   ].join('|')));
@@ -1982,6 +1982,7 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
     patchPost(post.account, post.shortcode, {
       likes: data.deleted ? post.likes : data.likes,
       comments: data.deleted ? post.comments : (data.comments ?? post.comments),
+      likesUpdatedAt: data.likesUpdatedAt || post.likesUpdatedAt,
       isDeleted: Boolean(data.deleted),
       coverRefreshToken: Date.now(),
     });

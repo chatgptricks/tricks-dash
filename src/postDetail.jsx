@@ -30,7 +30,7 @@ export function formatDate(iso) {
   return Number.isNaN(date.getTime()) ? '—' : dateFormatter.format(date);
 }
 
-function formatElapsed(timestampMs) {
+export function formatElapsed(timestampMs) {
   if (!Number.isFinite(timestampMs)) return null;
   const diffMs = Date.now() - timestampMs;
   if (diffMs < 0) return null;
@@ -237,11 +237,12 @@ export function SongLine({ url, children }) {
   );
 }
 
-export function Metric({ label, value }) {
+export function Metric({ label, value, hint }) {
   return (
     <div className="metric">
       <span>{label}</span>
       <strong>{value}</strong>
+      {hint ? <small title={hint}>{hint}</small> : null}
     </div>
   );
 }
@@ -674,7 +675,7 @@ export function PostDetailPanel({ post, captionExtra = null }) {
       </section>
 
       <section className="panel stats-panel">
-        <Metric label="Likes" value={formatLikes(post.likes)} />
+        <Metric label="Likes" value={formatLikes(post.likes)} hint={post.likesUpdatedAt ? `${t('Updated')} ${formatElapsed(new Date(post.likesUpdatedAt).getTime()) || '—'} ${t('ago')}` : t('Update time unavailable')} />
         <Metric label={t('Comments')} value={compactFormatter.format(post.comments || 0)} />
         <Metric label={t('Date')} value={formatDate(post.postDate || post.publishedAt)} />
         <Metric label={t('Media')} value={post.postType || post.type} />

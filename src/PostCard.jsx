@@ -5,7 +5,7 @@ import { Check, ExternalLink, PenLine, Eye, EyeOff, ListTodo, LoaderCircle, Mega
 import { usePrefs } from './prefsContext';
 import { API_BASE, IG_HANDLE } from './api';
 import { encodeRouteState } from './urlCodec';
-import { CoverImage, HotBadge, hotEffects, posterTheme } from './postDetail';
+import { CoverImage, HotBadge, hotEffects, posterTheme, formatElapsed } from './postDetail';
 import { useStackActions, useStackScope } from './StackActions';
 import { runStackOperation, stackPostKey } from './stackOperations';
 import { editorialStates } from './topicGroups';
@@ -414,7 +414,7 @@ export const PostCard = memo(function PostCard({ post, goldenNugget, priority, s
       </div>
 
       <div className="post-copy">
-        <div className="post-likes">{formatLikes(post.likes)} likes</div>
+        <div className="post-likes" title={post.likesUpdatedAt ? `${t('Updated')} ${formatElapsed(new Date(post.likesUpdatedAt).getTime()) || '—'} ${t('ago')}` : t('Update time unavailable')}>{formatLikes(post.likes)} likes</div>
         {!hideCaption ? <p>
           <strong title={accountLabel}>{accountLabel}</strong> {post.headline || post.excerpt}
         </p> : null}
