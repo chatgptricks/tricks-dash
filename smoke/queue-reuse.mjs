@@ -145,6 +145,7 @@ try {
       unexpected.push(`${request.method()} ${pathname}`);
       return route.fulfill({ status: 404, json: { detail: 'Unmocked API endpoint.' } });
     }
+    if (url.origin === 'https://x.com') return route.fulfill({ contentType: 'text/html', body: '<title>X note reference</title>' });
     if (url.origin === base) return route.continue();
     if (request.resourceType() === 'image') return route.fulfill({ contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="300" height="400"><rect width="300" height="400" fill="#244238"/></svg>' });
     return route.fulfill({ status: 404, body: '' });
@@ -181,6 +182,8 @@ try {
   await modal.getByText('Previously used in Queue', { exact: true }).waitFor();
   assert.match(await modal.locator('.queue-source-preview').innerText(), /previous assignments|history.*unchanged/i);
   await title.fill('Reuse this idea for a new audience');
+  const linkedNotes = 'Ver https://x.com/example/status/123?s=20.\n[Fuente](https://example.com/article) y www.example.org/path, x.com/example/status/456.\njavascript:alert(1) <script>alert(1)</script>';
+  await modal.getByLabel(/^Notes/i).fill(linkedNotes);
   holdCreate = true;
   await modal.evaluate(element => {
     element.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
@@ -209,6 +212,23 @@ try {
   assert.equal(ledger.size, 1);
   assert.deepEqual(oldTask, original, 'The prior closed assignment remains unchanged.');
   assert.ok(queue.requests.some(task => task.id !== oldTask.id && task.status === 'pool'));
+  assert.equal(createBodies[0].notes.replaceAll('\r\n', '\n'), linkedNotes, 'Notes are saved without rewriting links.');
+  await page.locator('.queue-pool-card').filter({ hasText: 'Reuse this idea for a new audience' }).getByRole('button').click();
+  const linked = page.locator('.queue-linked-notes');
+  await linked.waitFor();
+  assert.deepEqual(await linked.locator('a').evaluateAll(links => links.map(link => link.getAttribute('href'))), [
+    'https://x.com/example/status/123?s=20', 'https://example.com/article', 'https://www.example.org/path', 'https://x.com/example/status/456',
+  ]);
+  assert.equal(await linked.locator('a').evaluateAll(links => links.every(link => link.target === '_blank' && link.rel.includes('noopener'))), true);
+  assert.equal(await linked.locator('script').count(), 0);
+  assert.match(await linked.innerText(), /javascript:alert\(1\) <script>/);
+  assert.equal(await linked.locator('a').first().evaluate(link => getComputedStyle(link).display), 'inline');
+  await page.screenshot({ path: path.join(output, 'linked-notes-desktop.png') });
+  const [noteLinkTab] = await Promise.all([page.waitForEvent('popup'), linked.locator('a').first().click()]);
+  await noteLinkTab.waitForLoadState();
+  assert.equal(noteLinkTab.url(), 'https://x.com/example/status/123?s=20');
+  await noteLinkTab.close();
+  await page.keyboard.press('Escape');
   console.log('PASS Existing source recognition, independent Pool creation, locked double-submit protection, and retry recovery.');
 
   await openCreate();

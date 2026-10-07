@@ -1371,3 +1371,6 @@ button, input, select, textarea { font: inherit; } button { cursor: pointer; } a
 .scheduler-page-options label:hover { background:var(--q-panel-2); }
 .scheduler-page-options input { accent-color:var(--q-accent); }
 .scheduler-page-options p { font-size:12px; color:var(--q-muted); }
+
+.queue-linked-notes { white-space: pre-wrap; overflow-wrap: anywhere; }
+.queue-detail-copy .queue-linked-notes a { display: inline; margin-top: 0; font-size: inherit; line-height: inherit; text-decoration: underline; }
