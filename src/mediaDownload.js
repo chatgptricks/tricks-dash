@@ -83,8 +83,7 @@ function saveMedia(blob, name) {
   }
 }
 
-// A single `only` index is the API's native-file route. Request each selected
-// item separately: both the no-index and comma-separated routes create ZIPs.
+// A single `only` index returns native media; multiple indexes return one ZIP.
 export async function downloadPostMedia({ post, items, indexes, signal, onProgress }) {
   let downloadedCount = 0;
   let selected = [];
@@ -94,6 +93,27 @@ export async function downloadPostMedia({ post, items, indexes, signal, onProgre
     selected = available.filter(item => !wanted || wanted.has(item.index));
     if (!selected.length) throw new Error('No media found for this post.');
     if (selected.some(item => !Number.isInteger(item.index) || item.index < 1)) throw new Error('Could not read the media list. Please retry.');
+    if (selected.length > 1) {
+      assertActive(signal);
+      const response = await apiFetch(mediaUrl(post, { only: selected.map(item => item.index).join(',') }), { signal });
+      if (!response.ok) throw new Error(await readError(response));
+      const blob = await response.blob();
+      const bytes = new Uint8Array(await blob.slice(0, 4).arrayBuffer());
+      if (bytes[0] !== 0x50 || bytes[1] !== 0x4b || bytes[2] !== 3 || bytes[3] !== 4) {
+        throw new Error('The server did not return a ZIP file. Please retry.');
+      }
+      const count = Number(response.headers.get('X-Slide-Count'));
+      if (count > 0 && count !== selected.length) {
+        throw new Error('Some selected media could not be downloaded. Please retry.');
+      }
+      assertActive(signal);
+      const name = responseName(response) || `${post.account || IG_HANDLE}-${post.shortcode}.zip`;
+      // Reuse filename sanitization, then apply the archive extension.
+      saveMedia(blob, fileName(post, selected[0], name, 'image/jpeg').replace(/\.[^.]*$/, '.zip'));
+      downloadedCount = selected.length;
+      onProgress?.(downloadedCount, selected.length);
+      return downloadedCount;
+    }
     for (const item of selected) {
       assertActive(signal);
       const response = await apiFetch(mediaUrl(post, { only: String(item.index) }), { signal });

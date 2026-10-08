@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { chromium } from 'playwright';
 import { createServer } from 'vite';
 
@@ -72,6 +73,17 @@ try {
       if (url.searchParams.get('list') === '1') return route.fulfill({ json: { source: 'instagram', items: items.map(({ bytes: _bytes, type: _type, disposition: _disposition, ...item }) => item) } });
       const only = url.searchParams.get('only');
       requests.push({ shortcode, only });
+      if (/^\d+(,\d+)+$/.test(only || '')) {
+        const selected = items.filter(item => only.split(',').includes(String(item.index)));
+        if (shortcode === 'failure' && failSecond) selected.pop();
+        const archive = execFileSync('python3', ['-c', `import io,json,sys,zipfile,base64
+items=json.load(sys.stdin)
+buffer=io.BytesIO()
+with zipfile.ZipFile(buffer,'w',zipfile.ZIP_DEFLATED) as archive:
+ for item in items: archive.writestr(item['name'],base64.b64decode(item['bytes']))
+sys.stdout.buffer.write(buffer.getvalue())`], { input: JSON.stringify(selected.map(item => ({ name: String(item.index).padStart(2, '0') + (item.type === 'video/mp4' ? '.mp4' : item.type === 'image/png' ? '.png' : '.jpg'), bytes: item.bytes.toString('base64') }))) });
+        return route.fulfill({ contentType: 'application/zip', headers: { 'X-Slide-Count': String(selected.length), 'Access-Control-Expose-Headers': 'X-Slide-Count' }, body: archive });
+      }
       if (!/^\d+$/.test(only || '')) {
         errors.push(`Archive endpoint requested: ${url.href}`);
         return route.fulfill({ contentType: 'application/zip', body: 'PK: unexpected archive' });
@@ -127,22 +139,30 @@ try {
   assert.deepEqual(requests, [{ shortcode: 'reel', only: '1' }]);
   console.log('PASS Photo and Reel retain original bytes, native extensions, and attachment names without ZIP');
 
+  const verifyZip = async (download, expected) => {
+    assert.equal(download.suggestedFilename(), 'fixture.account-carousel.zip');
+    assert.equal(await download.failure(), null);
+    const entries = JSON.parse(execFileSync('python3', ['-c', `import zipfile,json,sys,base64
+with zipfile.ZipFile(sys.argv[1]) as archive:
+ assert archive.testzip() is None
+ print(json.dumps({name:base64.b64encode(archive.read(name)).decode() for name in archive.namelist()}))`, await download.path()], { encoding: 'utf8' }));
+    assert.deepEqual(Object.values(entries).map(value => Buffer.from(value, 'base64')), expected.map(item => item.bytes));
+    assert.deepEqual(Object.keys(entries), expected.map(item => String(item.index).padStart(2, '0') + (item.type === 'video/mp4' ? '.mp4' : item.type === 'image/png' ? '.png' : '.jpg')));
+  };
   await openPicker('carousel');
   await page.locator('.media-cell-select').nth(1).click();
-  const selected = await clickAndCollect(page.getByRole('button', { name: 'Download selected (2)', exact: true }), 2);
-  await verifyFile(selected[0], media.carousel[0]);
-  await verifyFile(selected[1], media.carousel[2]);
-  assert.deepEqual(requests.map(request => request.only), ['1', '3']);
+  const [selected] = await clickAndCollect(page.getByRole('button', { name: 'Download selected (2)', exact: true }), 1);
+  await verifyZip(selected, [media.carousel[0], media.carousel[2]]);
+  assert.deepEqual(requests.map(request => request.only), ['1,3']);
   requests.length = 0;
   const [video] = await clickAndCollect(page.locator('.media-cell').nth(1).locator('button.media-cell-action').first(), 1);
   await verifyFile(video, media.carousel[1]);
   assert.deepEqual(requests.map(request => request.only), ['2']);
   requests.length = 0;
-  const all = await clickAndCollect(page.getByRole('button', { name: 'Download all', exact: true }), 3);
-  for (let index = 0; index < all.length; index++) await verifyFile(all[index], media.carousel[index]);
-  assert.equal(all[2].suggestedFilename(), 'fixture.account-carousel-03.png');
-  assert.deepEqual(requests.map(request => request.only), ['1', '2', '3']);
-  console.log('PASS Mixed carousel selected/all/per-item downloads remain separate originals; MIME supplies missing filenames');
+  const [all] = await clickAndCollect(page.getByRole('button', { name: 'Download all', exact: true }), 1);
+  await verifyZip(all, media.carousel);
+  assert.deepEqual(requests.map(request => request.only), ['1,2,3']);
+  console.log('PASS Multiple selections and Download all produce one valid ZIP with exact original media; individual files stay native');
 
   await openPicker('archive');
   const beforeArchive = downloads.length;
@@ -153,11 +173,12 @@ try {
   console.log('PASS Unexpected ZIP response is rejected instead of saving an invalid image');
 
   await openPicker('failure');
-  const [first] = await clickAndCollect(page.getByRole('button', { name: 'Download all', exact: true }), 1);
-  await verifyFile(first, media.failure[0]);
+  const beforeFailure = downloads.length;
+  await page.getByRole('button', { name: 'Download all', exact: true }).click();
   await page.locator('.slide-download-note.is-error').waitFor();
-  assert.match(await page.locator('.slide-download-note.is-error').innerText(), /temporarily unavailable/i);
-  assert.deepEqual(requests.map(request => request.only), ['1', '2']);
+  assert.equal(downloads.length, beforeFailure, 'An incomplete ZIP is not silently saved');
+  assert.match(await page.locator('.slide-download-note.is-error').innerText(), /could not be downloaded/i);
+  assert.deepEqual(requests.map(request => request.only), ['1,2']);
   failSecond = false;
   requests.length = 0;
   const [retried] = await clickAndCollect(page.locator('.media-cell').nth(1).locator('button.media-cell-action').first(), 1);
