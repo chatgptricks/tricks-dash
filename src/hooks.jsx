@@ -565,7 +565,7 @@ function HookLab() {
         <section>
           <span>Sentient Dash · DEV tool</span>
           <h1>Hooks</h1>
-          <p>This tool is available only in authorized accounts.</p>
+          <p>This tool is available only to authorized accounts.</p>
           {authError && (
             <p className="hooks-auth-error" role="alert">
               {authError}
