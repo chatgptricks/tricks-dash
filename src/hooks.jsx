@@ -72,7 +72,17 @@ async function request(path, options = {}) {
   const base = path.startsWith("/api/dashboard/hooks")
     ? HOOKS_API_BASE
     : API_BASE;
-  const response = await apiFetch(`${base}${path}`, options);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 45000);
+  let response;
+  try {
+    response = await apiFetch(`${base}${path}`, { ...options, signal: controller.signal });
+  } catch (reason) {
+    if (controller.signal.aborted) throw new Error("Hooks took too long to respond. Please try again.");
+    throw reason;
+  } finally {
+    clearTimeout(timer);
+  }
   let body = {};
   try {
     body = await response.json();
@@ -253,6 +263,7 @@ function HookLab() {
   });
   const [warning, setWarning] = useState("");
   const [error, setError] = useState("");
+  const [indexBuilding, setIndexBuilding] = useState(false);
   const [loading, setLoading] = useState(false);
   const [categorizing, setCategorizing] = useState(false);
   const [selected, setSelected] = useState([]);
@@ -278,7 +289,7 @@ function HookLab() {
       savingSourceIds.current.clear(); setSavingSources([]);
       setSelected([]); setSourceSnapshots({}); setBrief(""); setEditor("");
       setRewriteInstruction(""); setVariants([]); setDrafts([]); setActiveDraft(null);
-      setSavedDraftText(""); setLoading(false); setGenerating(false); setSavingDraft(false); setCategorizing(false); setCopied(false);
+      setSavedDraftText(""); setIndexBuilding(false); setLoading(false); setGenerating(false); setSavingDraft(false); setCategorizing(false); setCopied(false);
     });
     return () => { session.current += 1; unsubscribe(); };
   }, []);
@@ -325,7 +336,8 @@ function HookLab() {
         setResults(data.results || []);
         setSearchedQuery(nextQuery.trim());
         setStatus(data.status || {});
-        setWarning(data.warning || "");
+        setIndexBuilding(Boolean(data.sync?.busy));
+        setWarning(data.sync?.busy ? "Preparing the OCR library. Results will refresh automatically." : data.warning || "");
       } catch (reason) {
         if (owner === session.current && sequence === searchSequence.current) setError(reason.message || "Unable to search hooks.");
       } finally {
@@ -340,6 +352,12 @@ function HookLab() {
     search("");
     loadDrafts();
   }, [user, (viewer?.is_dev || viewer?.can_access_hooks), viewer?.queue_role_preview_active]);
+
+  useEffect(() => {
+    if (!indexBuilding || !user || loading) return undefined;
+    const timer = setTimeout(() => search(searchedQuery), 4000);
+    return () => clearTimeout(timer);
+  }, [indexBuilding, user, loading, search, searchedQuery]);
 
   const selectedItems = useMemo(
     () =>
@@ -645,10 +663,6 @@ function HookLab() {
         <div>
           <strong>{fmt(status.total)}</strong>
           <span>Source hooks</span>
-        </div>
-        <div>
-          <strong>{fmt(status.captions)}</strong>
-          <span>Caption openings</span>
         </div>
         <div>
           <strong>{fmt(status.ocr)}</strong>
