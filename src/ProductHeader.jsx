@@ -5,7 +5,7 @@ import '../public/product-shell.css';
 
 export default function ProductHeader({ current, coordinator = false, isDev = false, canAccessNews = false, canAccessHooks: hooksAccess = false, account, children, count = 0 }) {
   const { lang } = usePrefs();
-  const canAccessHooks = hooksAccess || isDev || account?.props?.email?.trim().toLowerCase() === "user05@example.com";
+  const canAccessHooks = hooksAccess || isDev;
   const navigation = useRef(null);
   useEffect(() => {
     const nav = navigation.current;
