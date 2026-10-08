@@ -225,7 +225,7 @@ function DraftList({ drafts, activeId, onOpen, onDelete }) {
         </div>
       ) : (
         <p>
-          Save a hook from the editor and it will stay private to your DEV
+          Save a hook from the editor and it will stay private to your
           account.
         </p>
       )}
@@ -336,10 +336,10 @@ function HookLab() {
   );
 
   useEffect(() => {
-    if (!user || !viewer?.is_dev || viewer?.queue_role_preview_active) return;
+    if (!user || !(viewer?.is_dev || viewer?.can_access_hooks) || viewer?.queue_role_preview_active) return;
     search("");
     loadDrafts();
-  }, [user, viewer?.is_dev, viewer?.queue_role_preview_active]);
+  }, [user, (viewer?.is_dev || viewer?.can_access_hooks), viewer?.queue_role_preview_active]);
 
   const selectedItems = useMemo(
     () =>
@@ -539,7 +539,7 @@ function HookLab() {
         <section>
           <span>Sentient Dash · DEV tool</span>
           <h1>Hooks</h1>
-          <p>Hooks could not verify your DEV access: {viewer.accessError}</p>
+          <p>Hooks could not verify your access: {viewer.accessError}</p>
           {authError && (
             <p className="hooks-auth-error" role="alert">
               {authError}
@@ -559,13 +559,13 @@ function HookLab() {
         </section>
       </main>
     );
-  if (viewer && (!viewer.is_dev || viewer.queue_role_preview_active))
+  if (viewer && (!(viewer.is_dev || viewer.can_access_hooks) || viewer.queue_role_preview_active))
     return (
       <main className="hooks-gate">
         <section>
           <span>Sentient Dash · DEV tool</span>
           <h1>Hooks</h1>
-          <p>This tool is available only in DEV full access.</p>
+          <p>This tool is available only in authorized accounts.</p>
           {authError && (
             <p className="hooks-auth-error" role="alert">
               {authError}
@@ -578,7 +578,7 @@ function HookLab() {
       </main>
     );
   if (!viewer)
-    return <main className="hooks-loading">Verifying DEV access…</main>;
+    return <main className="hooks-loading">Verifying access…</main>;
 
   const signOutNow = () => {
     clearSsoCookie();
@@ -588,9 +588,9 @@ function HookLab() {
     <main className="hooks-shell product-page">
       <ProductHeader
         current="hooks"
-        coordinator
-        isDev
-        account={<SettingsMenu email={user.email} avatarUrl={user.photoURL || viewer.avatar_url} isAdmin={Boolean(viewer.is_admin)} isDev onSignOut={signOutNow} />}
+        coordinator={Boolean(viewer.is_admin || viewer.is_dev || ["admin", "vc"].includes(viewer.operating_role))}
+        isDev={Boolean(viewer.is_dev)}
+        account={<SettingsMenu email={user.email} avatarUrl={user.photoURL || viewer.avatar_url} isAdmin={Boolean(viewer.is_admin)} isDev={Boolean(viewer.is_dev)} onSignOut={signOutNow} />}
       >
         <h1>Hooks</h1>
       </ProductHeader>
