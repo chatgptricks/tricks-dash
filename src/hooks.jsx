@@ -588,6 +588,7 @@ function HookLab() {
     <main className="hooks-shell product-page">
       <ProductHeader
         current="hooks"
+        canAccessHooks={Boolean(viewer.can_access_hooks)}
         coordinator={Boolean(viewer.is_admin || viewer.is_dev || ["admin", "vc"].includes(viewer.operating_role))}
         isDev={Boolean(viewer.is_dev)}
         account={<SettingsMenu email={user.email} avatarUrl={user.photoURL || viewer.avatar_url} isAdmin={Boolean(viewer.is_admin)} isDev={Boolean(viewer.is_dev)} onSignOut={signOutNow} />}

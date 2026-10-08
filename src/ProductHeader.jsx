@@ -3,9 +3,9 @@ import { productSections, sectionHref, openSection, revealCurrentSection } from 
 import { usePrefs } from './prefsContext';
 import '../public/product-shell.css';
 
-export default function ProductHeader({ current, coordinator = false, isDev = false, canAccessNews = false, account, children, count = 0 }) {
+export default function ProductHeader({ current, coordinator = false, isDev = false, canAccessNews = false, canAccessHooks: hooksAccess = false, account, children, count = 0 }) {
   const { lang } = usePrefs();
-  const canAccessHooks = isDev || account?.props?.email?.trim().toLowerCase() === "user05@example.com";
+  const canAccessHooks = hooksAccess || isDev || account?.props?.email?.trim().toLowerCase() === "user05@example.com";
   const navigation = useRef(null);
   useEffect(() => {
     const nav = navigation.current;
