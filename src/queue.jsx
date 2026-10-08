@@ -2434,7 +2434,7 @@ function QueueApp({ user }) {
     const body = actionName === 'start'
       ? new URLSearchParams({ move_to_now: String(moveToNow) })
       : value ? new URLSearchParams(actionName === 'close' ? { final_permalinks: JSON.stringify(value) } : {}) : undefined;
-    closeDetail();
+    if (actionName === 'close') closeDetail();
     let deferred = false;
     const saved = await runItemAction(`post:${target.id}`, async (signal) => {
       const result = await json(`/api/dashboard/queue/v2/requests/${target.id}/${actionName}`, { method: 'POST', body, signal });

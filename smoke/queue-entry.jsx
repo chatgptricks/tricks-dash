@@ -389,17 +389,18 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     await click(start);
     checks['Start action asks where to place the work'] = Boolean(document.querySelector('#queue-start-choice-title'));
     await click(document.querySelector('.queue-create-modal .scheduler-primary'));
-    checks['Rejected start closes the detail and preserves scheduled state'] = !document.querySelector('.queue-request-rail') && Boolean(document.querySelector('.scheduler-block.state-scheduled'));
+    checks['Rejected start keeps the detail open and preserves scheduled state'] = Boolean(document.querySelector('.queue-request-rail')) && Boolean(document.querySelector('.scheduler-block.state-scheduled'));
     checks['Rejected start shows the server reason'] = document.querySelector('.queue-toast')?.textContent.includes('Only the assigned designer');
     await click(document.querySelector('.scheduler-block.state-scheduled'));
     await click([...document.querySelectorAll('.queue-detail-actions button')].find(node => /Start work|Empezar trabajo/.test(node.textContent)));
     await click(document.querySelector('.queue-create-modal .scheduler-primary'));
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 100)); });
-    checks['Deferred start closes the detail and stays scheduled'] = started
-      && !document.querySelector('.queue-request-rail')
+    checks['Deferred start keeps the detail open and stays scheduled'] = started
+      && Boolean(document.querySelector('.queue-request-rail'))
       && Boolean(document.querySelector('.scheduler-block.state-scheduled'));
     checks['Deferred warning is shown'] = /already in progress|Ya hay otro post/.test(document.querySelector('.queue-toast')?.textContent || '');
 
+    await click(document.querySelector('.queue-request-rail .rail-close-button'));
     const poolCardShell = document.querySelector('.queue-pool-card');
     const poolCard = poolCardShell?.querySelector(':scope > button');
     checks['Pool card primary surface is draggable'] = Boolean(poolCard?.draggable) && !poolCardShell?.draggable;
@@ -464,12 +465,12 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     await click(document.querySelector('.scheduler-block.state-scheduled'));
     await click([...document.querySelectorAll('.queue-detail-actions button')].find(node => /Start work|Empezar trabajo/.test(node.textContent)));
     await click(document.querySelector('.queue-create-modal .scheduler-primary'));
-    checks['Starting closes sidebar while request is pending'] = !document.querySelector('.queue-request-rail') && Boolean(document.querySelector('.scheduler-block.is-pending-action .queue-item-loading'));
+    checks['Starting keeps sidebar open while request is pending'] = Boolean(document.querySelector('.queue-request-rail')) && Boolean(document.querySelector('.scheduler-block.is-pending-action .queue-item-loading'));
     await act(async () => { releaseStart(); await new Promise(resolve => setTimeout(resolve, 50)); });
     checks['Start updates state without reload'] = document.querySelectorAll('.scheduler-block.state-in_progress').length === 2 && !document.querySelector('.scheduler-block.is-pending-action');
-    await click(document.querySelector('.scheduler-block.state-in_progress'));
     await click([...document.querySelectorAll('.queue-detail-actions button')].find(node => /Mark complete|Marcar como completado/.test(node.textContent)));
-    checks['Completing closes sidebar and updates state'] = !document.querySelector('.queue-request-rail') && Boolean(document.querySelector('.scheduler-block.state-completed'));
+    checks['Completing keeps sidebar open and updates state'] = Boolean(document.querySelector('.queue-request-rail')) && Boolean(document.querySelector('.scheduler-block.state-completed'));
+    await click(document.querySelector('.queue-request-rail .rail-close-button'));
     payload.viewer.isAdmin = true;
     for (const key of ['requests', 'planningRequests', 'assignedRequests']) payload[key] = payload[key].map(task => [2, 3].includes(task.id) ? { ...task, status: 'completed' } : task);
     await click(document.querySelector('[aria-label="Next day"]'));
