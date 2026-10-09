@@ -95,7 +95,11 @@ const fetchStub = async (url, options = {}) => {
   }
   if (value.includes('/api/tracker/summary')) return ok(tracker);
   if (value.includes('/api/insights/posts')) return ok({ accounts: [{ handle: 'chatgptricks', group: 'sentient', label: 'ChatGPTricks' }], posts: [{ a: 'chatgptricks', d: `${day}T12:00:00`, l: 4200, c: 32, t: 'Carousel', hot: 1, ocr: 'better prompt workflow artificial intelligence' }] });
-  if (value.includes('/api/admin/accounts')) return ok({ accounts: [{ handle: 'chatgptricks', label: 'ChatGPTricks', group: 'sentient', is_active: true, total_posts: 1, hot_threshold: 600 }] });
+  if (value.includes('/api/admin/accounts')) return ok({ accounts: [
+    { handle: 'chatgptricks', label: 'ChatGPTricks', group: 'sentient', is_active: true, total_posts: 1, hot_threshold: 600, scrape_mode: 'posts' },
+    { handle: 'reels.fixture', label: 'Reels fixture', group: 'sentient', is_active: true, total_posts: 1, hot_threshold: 600, scrape_mode: 'reels' },
+    { handle: 'both.fixture', label: 'Both fixture', group: 'sentient', is_active: false, total_posts: 1, hot_threshold: 600, scrape_mode: 'both' },
+  ] });
   if (value.includes('/api/admin/users')) return ok({ users: [{ email: 'user03@example.com', display_name: 'User 03', operating_role: 'vc', operating_roles: ['vc', 'pd'], is_admin: true, slack_user_id: 'U0000000012' }] });
   if (value.includes('/api/admin/usage')) return ok({ active_users_7d: 1, active_users_30d: 1, total_events_in_range: 10, users: [] });
   if (value.includes('/api/admin/disk-status')) return ok({ pct_used: 25, free_mb: 750 });
@@ -204,6 +208,9 @@ const fill = async (node, value) => act(async () => {
     await click(settingsTabs.find((node) => /Notifications|Notificaciones/.test(node.textContent)));
     checks['Custom notification renders'] = Boolean(document.querySelector('.m-settings-card textarea'));
     await click(settingsTabs.find((node) => /Accounts|Cuentas/.test(node.textContent)));
+    checks['Every mobile account shows its extraction mode before opening its editor'] = [...document.querySelectorAll('.m-account-extraction strong')]
+      .map((node) => node.textContent.trim()).join('|') === 'Posts|Reels|Both'
+      && !document.querySelector('.m-account-edit-head');
     const accountRow = document.querySelector('.m-settings-list > button');
     await click(accountRow);
     checks['Account parameters are editable'] = Boolean(document.querySelector('.m-account-edit-head')) && document.querySelectorAll('.m-sheet .m-form input').length >= 2;

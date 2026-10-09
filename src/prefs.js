@@ -147,6 +147,8 @@ const ES = {
   'Manage the people, accounts, operations, notifications, and production controls shared by every Sentient tool.': 'Administra las personas, cuentas, operaciones, notificaciones y controles de producción compartidos por todas las herramientas de Sentient.',
   'Overview': 'Resumen',
   'Accounts': 'Cuentas',
+  'Extraction': 'Extracción',
+  'Both': 'Ambos',
   'Users': 'Usuarios',
   'Usage': 'Uso',
   'Notifications': 'Notificaciones',

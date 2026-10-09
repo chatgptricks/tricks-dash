@@ -4208,6 +4208,7 @@ export function SettingsPanel({
     handle: (a) => a.handle || '',
     group: (a) => a.group || '',
     subcategory: (a) => a.subcategory || '',
+    scrape_mode: (a) => a.scrape_mode || 'posts',
     followers: (a) => a.followers,
     total_posts: (a) => a.total_posts,
     avg_likes: (a) => a.avg_likes,
@@ -4500,6 +4501,7 @@ export function SettingsPanel({
                             { key: 'handle', label: 'Account' },
                             { key: 'group', label: 'Category' },
                             { key: 'subcategory', label: 'Subcategory' },
+                            { key: 'scrape_mode', label: t('Extraction') },
                             { key: 'followers', label: 'Followers' },
                             { key: 'total_posts', label: 'Posts' },
                             { key: 'avg_likes', label: 'Avg 1h likes (30d)' },
@@ -4559,6 +4561,11 @@ export function SettingsPanel({
                                 </td>
                                 <td>{ACCOUNT_GROUP_OPTIONS.find((option) => option.value === account.group)?.label || account.group}</td>
                                 <td>{ACCOUNT_SUBCATEGORY_OPTIONS.find((option) => option.value === account.subcategory)?.label || account.subcategory || 'Other'}</td>
+                                <td className="accounts-cell-extraction" data-label={t('Extraction')}>
+                                  <span className="account-extraction-badge">
+                                    {t(SCRAPE_MODE_OPTIONS.find((option) => option.value === account.scrape_mode)?.label || 'Posts')}
+                                  </span>
+                                </td>
                                 <td>{fmtCompact(account.followers)}</td>
                                 <td>{fmtCompact(account.total_posts)}</td>
                                 <td>{fmtCompact(account.avg_likes)}</td>
@@ -4586,7 +4593,7 @@ export function SettingsPanel({
                               </tr>
                               {isOpen ? (
                                 <tr className="accounts-detail-row">
-                                  <td colSpan={9}>
+                                  <td colSpan={10}>
                                     <div className="account-manage-detail" onClick={(event) => event.stopPropagation()}>
                                       <div className="account-manage-fields">
                                         <label className="account-manage-field">
@@ -4809,7 +4816,7 @@ export function SettingsPanel({
                         })}
                         {!sortedRoster.length ? (
                           <tr>
-                            <td colSpan={9} className="accounts-table-empty">No accounts match.</td>
+                            <td colSpan={10} className="accounts-table-empty">No accounts match.</td>
                           </tr>
                         ) : null}
                       </tbody>

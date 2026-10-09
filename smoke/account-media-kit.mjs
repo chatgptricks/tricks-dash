@@ -25,8 +25,9 @@ const email = 'user03@example.com';
 const viewer = { email, is_admin: true, is_dev: true };
 const preferences = { theme: 'dark', accent: 'coral', language: 'en', effects: 'off' };
 const accounts = [
-  { handle: 'chatgptricks', label: 'ChatGPTricks', group: 'sentient', subcategory: 'ai_automation', followers: 1438276, total_posts: 2490, avg_likes: 12834, hot_threshold: 13000, is_active: true },
-  { handle: 'fixture.account', label: 'Fixture account', group: 'sentient', subcategory: 'ai_automation', followers: 328417, total_posts: 892, avg_likes: 3219, hot_threshold: 3300, is_active: true },
+  { handle: 'chatgptricks', label: 'ChatGPTricks', group: 'sentient', subcategory: 'ai_automation', followers: 1438276, total_posts: 2490, avg_likes: 12834, hot_threshold: 13000, scrape_mode: 'posts', is_active: true },
+  { handle: 'fixture.account', label: 'Fixture account', group: 'sentient', subcategory: 'ai_automation', followers: 328417, total_posts: 892, avg_likes: 3219, hot_threshold: 3300, scrape_mode: 'reels', is_active: true },
+  { handle: 'fixture.both', label: 'Both fixture', group: 'sentient', subcategory: 'ai_automation', followers: 45678, total_posts: 120, avg_likes: 789, hot_threshold: 800, scrape_mode: 'both', is_active: true },
 ];
 const pdf = Buffer.from('%PDF-1.7\nAccount media kit native download fixture\n%%EOF\n');
 const filename = 'chatgptricks-media-kit-2026-10-09.pdf';
@@ -96,6 +97,10 @@ try {
     await page.waitForFunction((value) => document.documentElement.dataset.theme === value, theme);
   };
   await button.waitFor();
+  assert.deepEqual(await page.locator('.account-extraction-badge').allTextContents(), ['Posts', 'Reels', 'Both']);
+  await page.getByRole('columnheader', { name: 'Extraction', exact: true }).click();
+  assert.deepEqual(await page.locator('.account-extraction-badge').allTextContents(), ['Both', 'Posts', 'Reels'], 'Extraction column sorts by the actual mode');
+  await page.getByRole('columnheader', { name: 'Account', exact: true }).click();
   assert.equal(requests.length, 0, 'Opening Accounts must not generate reports');
   await page.screenshot({ path: path.join(output, 'accounts-desktop.png'), fullPage: true });
   await button.click();
@@ -137,7 +142,7 @@ try {
   assert.ok(requests.every((request) => request.path === '/api/admin/accounts/chatgptricks/media-kit.pdf'));
   assert.deepEqual({ theme: requests[3].theme, accent: requests[3].accent }, { theme: 'dark', accent: '#123abc' }, 'Theme changes must not retain the first request appearance');
   await page.locator('.accounts-row[data-context-handle="chatgptricks"]').click();
-  assert.equal(await page.locator('.accounts-detail-row td').getAttribute('colspan'), '9');
+  assert.equal(await page.locator('.accounts-detail-row td').getAttribute('colspan'), '10');
   await page.locator('.accounts-row[data-context-handle="chatgptricks"]').click();
   for (const theme of ['dark', 'light']) {
     await page.evaluate((value) => { document.documentElement.dataset.theme = value; document.body.dataset.theme = value; }, theme);
@@ -146,8 +151,32 @@ try {
       await page.screenshot({ path: path.join(output, `accounts-${theme}-${width}.png`), fullPage: true });
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
       assert.equal(overflow, false, `Settings must not overflow the document at ${width}px`);
+      assert.equal(await page.locator('.account-extraction-badge:visible').count(), accounts.length, 'Every responsive row displays its extraction mode');
     }
   }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.addInitScript(() => {
+    if (location.pathname.startsWith('/mobile')) Object.defineProperty(navigator, 'userAgent', { configurable: true, value: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148' });
+  });
+  await page.goto(`${base}/mobile/?tab=settings`);
+  await page.locator('.m-tab-scroll').getByRole('button', { name: 'Accounts', exact: true }).click();
+  await page.locator('.m-account-extraction').first().waitFor();
+  assert.deepEqual(await page.locator('.m-account-extraction strong').allTextContents(), ['Posts', 'Reels', 'Both']);
+  assert.equal(await page.locator('.m-account-edit-head').count(), 0, 'Modes display without opening the mobile editor');
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false, 'Mobile Settings must not overflow');
+  await page.screenshot({ path: path.join(output, 'accounts-extraction-mobile.png'), fullPage: true });
+  preferences.language = 'es';
+  await page.addInitScript(() => { localStorage.setItem('sentient.lang', 'es'); localStorage.setItem('sentient.language', 'es'); });
+  await page.reload();
+  await page.locator('.m-tab-scroll').getByRole('button', { name: 'Cuentas', exact: true }).click();
+  await page.locator('.m-account-extraction').first().waitFor();
+  assert.deepEqual(await page.locator('.m-account-extraction').allTextContents(), ['Extracción: Posts', 'Extracción: Reels', 'Extracción: Ambos']);
+  await page.screenshot({ path: path.join(output, 'accounts-extraction-mobile-es.png'), fullPage: true });
+  await page.goto(`${base}/settings.html?settingsTab=accounts&desktop=1`);
+  await page.getByRole('tab', { name: 'Cuentas', exact: true }).click();
+  await page.locator('.accounts-table th').filter({ hasText: /^Extracción$/ }).waitFor({ state: 'attached' });
+  assert.deepEqual(await page.locator('.account-extraction-badge').allTextContents(), ['Posts', 'Reels', 'Ambos']);
+  await page.screenshot({ path: path.join(output, 'accounts-extraction-responsive-es.png'), fullPage: true });
   assert.deepEqual(errors, []);
   console.log(`PASS Native Settings media kit download, fresh authenticated current theme/accent, pending isolation, error/retry, PDF bytes/name, table spans and 1440/390px layout. Screenshots: ${output}`);
 } finally {

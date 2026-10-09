@@ -257,6 +257,7 @@ img { display:block; max-width:100%; }
 .m-account-list img, .m-account-list .m-cover-empty, .m-settings-list img, .m-settings-list .m-cover-empty { width:44px; height:44px; border-radius:50%; object-fit:cover; }
 .m-account-list>button>div, .m-settings-list>button>div, .m-settings-list>article>div { display:grid; min-width:0; gap:2px; }
 .m-account-list b, .m-settings-list b { overflow:hidden; font-size:11px; text-overflow:ellipsis; white-space:nowrap; }
+.m-settings-list .m-account-extraction strong { color:var(--m-text); font-weight:750; }
 .m-account-list span, .m-settings-list span { overflow:hidden; color:var(--m-muted); font-size:9px; text-overflow:ellipsis; white-space:nowrap; }
 .m-account-list>button>strong { display:grid; justify-items:end; gap:2px; font-size:12px; }.m-account-list strong small { color:var(--m-accent); font-size:8px; }
 .m-settings-list small { color:var(--m-muted); font-size:9px; }.m-settings-list>article>i,.m-settings-list>button>i { padding:4px 7px; border-radius:99px; background:var(--m-panel-2); color:var(--m-muted); font-size:8px; font-style:normal; font-weight:800; }.m-settings-list>article>i.is-active,.m-settings-list>button>i.is-active { color:var(--m-accent); }

@@ -3,7 +3,8 @@ import { act } from 'react';
 const ok = (body) => ({ ok: true, status: 200, json: async () => body, text: async () => JSON.stringify(body) });
 const users = [{ email: 'user03@example.com', display_name: 'User 03', role: 'admin', operating_role: 'vc', operating_roles: '["vc","pd","dev"]', is_admin: 1, slack_user_id: 'U0000000012', avatar_url: '/api/dashboard/user-avatar/U0000000012' }];
 const accounts = [{ handle: 'chatgptricks', label: 'ChatGPTricks', group: 'sentient', group_name: 'sentient', subcategory: 'ai_automation', research_enabled: true, promos_enabled: false, hot_threshold: 600, scrape_mode: 'posts', is_active: true, followers: 1, total_posts: 1, avg_likes: 1 }];
-accounts.push({ ...accounts[0], handle: 'fixture.account', label: 'Fixture account' });
+accounts.push({ ...accounts[0], handle: 'fixture.account', label: 'Fixture account', scrape_mode: 'reels' });
+accounts.push({ ...accounts[0], handle: 'fixture.both', label: 'Both fixture', scrape_mode: 'both' });
 const mediaKitPdf = new Uint8Array([37, 80, 68, 70, 45, ...new TextEncoder().encode('1.7\nSettings media kit fixture\n%%EOF\n')]);
 const mediaKitRequests = [], mediaKitDownloads = [], mediaKitBlobs = [];
 let mediaKitMode = 'success';
@@ -92,7 +93,14 @@ const clickTab = async (label) => {
     await clickTab('Accounts');
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 50)); });
     const mediaKitButton = () => document.querySelector('[aria-label="Download media kit for chatgptricks"]');
-    checks['Media kit has its own Accounts column and generates on click'] = document.querySelectorAll('.accounts-table th').length === 9
+    checks['Account extraction modes are visible without opening account settings'] = [...document.querySelectorAll('.accounts-row')]
+      .every((row) => row.querySelector('.account-extraction-badge')?.textContent.trim() === ({ chatgptricks: 'Posts', 'fixture.account': 'Reels', 'fixture.both': 'Both' })[row.dataset.contextHandle])
+      && document.querySelectorAll('.account-extraction-badge').length === 3
+      && [...document.querySelectorAll('.accounts-table th')].some((node) => node.textContent.trim() === 'Extraction')
+      && !document.querySelector('.accounts-detail-row');
+    checks['Extraction labels remain available in responsive account rows'] = [...document.querySelectorAll('.accounts-cell-extraction')]
+      .every((cell) => cell.dataset.label === 'Extraction' && !cell.querySelector('button, input, select'));
+    checks['Media kit has its own Accounts column and generates on click'] = document.querySelectorAll('.accounts-table th').length === 10
       && [...document.querySelectorAll('.accounts-table th')].some((node) => /Media kit/i.test(node.textContent))
       && Boolean(mediaKitButton()) && mediaKitRequests.length === 0;
     mediaKitMode = 'pending';
@@ -139,7 +147,7 @@ const clickTab = async (label) => {
     const accountSearch = document.querySelector('.accounts-search');
     const accountSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
     await act(async () => { accountSetter.call(accountSearch, 'no-account-matches-fixture'); accountSearch.dispatchEvent(new window.Event('input', { bubbles: true })); });
-    checks['Empty account results span the Media kit column'] = document.querySelector('.accounts-table-empty')?.colSpan === 9;
+    checks['Empty account results span all account columns'] = document.querySelector('.accounts-table-empty')?.colSpan === 10;
     await act(async () => { accountSetter.call(accountSearch, ''); accountSearch.dispatchEvent(new window.Event('input', { bubbles: true })); });
     checks['Account import progress comes from the server queue'] = Boolean(document.querySelector('.settings-account-backfill-progress'))
       && /@newaccount/.test(document.body.textContent)
@@ -154,7 +162,7 @@ const clickTab = async (label) => {
       await new Promise((resolve) => setTimeout(resolve, 20));
     });
     const scrapeSelect = document.querySelector('[aria-label="Content to extract for chatgptricks"]');
-    checks['Expanded account details span the Media kit column'] = document.querySelector('.accounts-detail-row td')?.colSpan === 9;
+    checks['Expanded account details span all account columns'] = document.querySelector('.accounts-detail-row td')?.colSpan === 10;
     checks['Existing account exposes Reels extraction'] = scrapeSelect?.value === 'posts'
       && [...(scrapeSelect?.options || [])].map((option) => option.value).join('|') === 'posts|reels|both';
     checks['Account exposes category, subcategory, and tool scopes'] = [...document.querySelectorAll('.account-manage-field select')]
