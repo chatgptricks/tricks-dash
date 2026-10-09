@@ -1,91 +1,262 @@
 <!doctype html>
-<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Guía para conectar un media kit a la API de Sentient Dash: claves privadas, perfil, métricas, posts e historial de seguidores"><meta name="color-scheme" content="dark"><title>Conectar tu media kit a Sentient Dash</title><link rel="icon" href="/favicon.svg"><style>
-:root{color-scheme:dark;--bg:#090b0d;--panel:#101418;--text:#f1f3f5;--muted:#abb4bf;--edge:#293039;--accent:#9cebc7;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:100px}body{margin:0;background:var(--bg);color:var(--text);font-size:16px;line-height:1.7}a{color:var(--accent);text-underline-offset:4px}a:hover{color:#ccf8e3}a:focus-visible{outline:2px solid var(--accent);outline-offset:5px}.skip{position:absolute;top:-100px}.skip:focus{top:10px;left:10px;background:var(--panel);padding:10px;z-index:10}.top{position:sticky;top:0;z-index:2;background:#090b0df2;backdrop-filter:blur(16px);border-bottom:1px solid var(--edge)}.top-inner{width:min(1240px,100%);margin:auto;padding:18px 30px;display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}.brand{font-size:15px;color:var(--text);text-decoration:none;font-weight:650}.actions{display:flex;gap:8px;flex-wrap:wrap}.button{display:inline-block;padding:8px 12px;border:1px solid var(--edge);border-radius:8px;color:var(--text);text-decoration:none;font-size:13px;line-height:1.4}.button.primary{border-color:#57836e;background:#173727;color:#c2f6de}.layout{display:grid;grid-template-columns:210px minmax(0,1fr);gap:52px;width:min(1240px,100%);margin:auto;padding:56px 30px 80px}.contents{position:sticky;top:115px;height:max-content;font-size:13px;line-height:1.5}.contents p{margin:0 0 12px;color:var(--muted);font-weight:600}.contents a{display:block;color:var(--muted);text-decoration:none;padding:8px 0}.contents a:hover{color:var(--accent)}main{min-width:0;max-width:850px}h1{font-size:clamp(32px,4vw,46px);line-height:1.12;letter-spacing:-.035em;margin:0 0 24px;max-width:730px}h2{font-size:26px;line-height:1.3;letter-spacing:-.025em;margin:52px 0 20px;padding-top:4px}h3{font-size:19px;margin:28px 0 14px}p{margin:0 0 18px;color:#ced5dd}strong{color:var(--text)}ol{padding-left:22px;margin:0 0 22px}li{margin:0 0 12px;padding-left:5px;color:#ced5dd}code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86em;color:#c4efd9;overflow-wrap:anywhere}p code,li code,td code{background:#18211e;border-radius:4px;padding:2px 4px}pre{margin:0 0 22px;padding:20px;background:#101619;border:1px solid var(--edge);border-radius:0 0 10px 10px;overflow-x:auto;font-size:14px;line-height:1.6}pre code{white-space:pre;overflow-wrap:normal;font-size:1em}.code-label{margin-top:22px;padding:7px 20px;background:#151e22;border:1px solid var(--edge);border-bottom:0;border-radius:10px 10px 0 0;color:var(--muted);font-size:11px;letter-spacing:.05em}.table-wrap{margin:22px 0;overflow-x:auto;border:1px solid var(--edge);border-radius:10px}table{width:100%;border-collapse:collapse;font-size:14px;line-height:1.5;min-width:500px}th,td{text-align:left;padding:14px 16px;vertical-align:top;border-bottom:1px solid var(--edge)}th{background:#141a20;color:var(--text);font-weight:600}td{color:#c4ccd6}tr:last-child td{border-bottom:0}td:first-child{width:45%}footer{margin-top:48px;color:var(--muted);font-size:13px}.lede{font-size:17px}.tag{font-size:12px;color:var(--accent);font-weight:600;letter-spacing:.08em;text-transform:uppercase;margin:0 0 16px} @media(max-width:900px){.layout{grid-template-columns:minmax(0,1fr);padding:36px 24px 60px;gap:0}.contents{display:none}main{max-width:none}.top-inner{padding:14px 24px}h2{margin-top:42px}} @media(max-width:500px){body{font-size:15px}.layout{padding:30px 18px 50px}.top-inner{padding:12px 18px;gap:10px}.actions{gap:6px}.button{font-size:11px;padding:7px 9px}h2{font-size:23px}pre{padding:14px;font-size:12px}.code-label{padding-left:14px}} @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
-</style></head>
-<body><a class="skip" href="#inicio">Ir a la guía</a><header class="top"><div class="top-inner"><a class="brand" href="/">Sentient Dash</a><div class="actions"><a class="button" href="/api-guide.md" download>Descargar guía</a><a class="button" href="/media-kit-example.zip" download>Descargar ejemplo</a><a class="button primary" href="/api.html">API connections</a></div></div></header><div class="layout"><nav class="contents" aria-label="Contenido de la guía"><p>En esta guía</p><a href="#paso-1">1 Crear la clave en el dashboard</a><a href="#paso-2">2 Guardar la clave en el servidor</a><a href="#paso-3">3 Probar una consulta</a><a href="#paso-4">4 Elegir el endpoint</a><a href="#paso-5">5 Leer posts e historial con paginación</a><a href="#paso-6">6 Ejecutar el ejemplo listo para adaptar</a><a href="#paso-7">7 Caché y fechas de actualización</a><a href="#paso-8">8 Resolver errores</a></nav><main><p class="tag">Integración para websites</p><h1 id="inicio">Conectar tu media kit a Sentient Dash</h1>
-<p>User 10 puede mostrar en su website el perfil, seguidores, rendimiento de publicaciones, catálogo de posts e historial de seguidores que ya están guardados en el dashboard. El website consulta una API de solo lectura usando una clave con acceso únicamente a las cuentas elegidas. La clave se guarda en el servidor del website; los visitantes reciben solo los datos públicos que el website decida mostrar.</p>
-<p><strong>Base de la API:</strong> <code>https://cortex-api-db2e.onrender.com/api/v1</code></p>
-<p><strong>Versión de respuesta:</strong> <code>schema_version: &quot;1.0&quot;</code></p>
-<h2 id="paso-1">1 Crear la clave en el dashboard</h2>
-<ol><li>Entra a <a href="https://sentientdash.app">sentientdash.app</a> con tu cuenta de Admin o Dev.</li><li>Abre el menú del engranaje y elige <strong>API connections</strong>, o entra directamente a <a href="https://sentientdash.app/api.html">API connections</a>.</li><li>En <strong>Connect a website</strong>, escribe el nombre del sitio en <strong>Website name</strong>, por ejemplo <code>Media kit de User 10</code>.</li><li>Selecciona su vigencia en <strong>Expires in</strong>: 30, 90 o 365 días.</li><li>En <strong>Allowed accounts</strong>, marca las cuentas que ese website podrá consultar. Usa <strong>Search accounts</strong> para encontrarlas. Si solo necesitas una, autoriza esa cuenta.</li><li>Pulsa <strong>Generate API key</strong>. En <strong>Your API key</strong>, usa <strong>Copy API key</strong> y guárdala como variable privada del servidor. Después pulsa <strong>I saved the key</strong>. La clave comienza con <code>sad_api_</code> y se muestra una sola vez.</li></ol>
-<p>Cada website debe tener su propia clave para poder revocarla sin afectar a los demás. En <strong>Your API keys</strong>, usa <strong>Revoke</strong> y después <strong>Confirm revoke</strong> para bloquear su acceso. Si pierdes una clave, crea otra y revoca la anterior. Las consultas vuelven a verificar la vigencia y permisos de la clave; el website puede conservar datos públicos que ya recibió en su propia caché.</p>
-<p>Las claves de website acceden solo a la API pública de lectura. No son un login del dashboard ni permiten administrar cuentas, usuarios, Queue, contactos o herramientas internas. Se generan con una sesión de Admin o Dev. Si se elimina al propietario de la clave o pierde ese rol, sus claves dejan de poder consultar datos.</p>
-<h2 id="paso-2">2 Guardar la clave en el servidor</h2>
-<p>En la configuración privada del hosting crea:</p>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Documentación general de la API de Sentient Dash: autenticación, perfiles, métricas, posts, historial, ejemplos y conexión con websites, apps y reportes"><meta name="color-scheme" content="dark"><title>Guía de la API de Sentient Dash</title><link rel="icon" href="/favicon.svg"><link rel="stylesheet" href="/api-guide.css"></head>
+<body><a class="skip" href="#inicio">Ir a la guía</a><header class="top"><div class="top-inner"><a class="brand" href="/">Sentient Dash</a><div class="actions"><a class="button" href="/api-guide.md" download>Descargar guía</a><a class="button" href="/media-kit-example.zip" download>Descargar ejemplo</a><a class="button primary" href="/api.html">API connections</a></div></div></header><div class="layout"><nav class="contents" aria-label="Contenido de la guía"><p>En esta guía</p><a href="#paso-1">1 Elegir los datos y la forma de integración</a><a href="#paso-2">2 Crear y administrar una conexión</a><a href="#paso-3">3 Autenticación y configuración del servidor</a><a href="#paso-4">4 Primera consulta y referencia de endpoints</a><a href="#paso-5">5 Resumen de rendimiento y media kit</a><a href="#paso-6">6 Catálogo de posts e historial de seguidores</a><a href="#paso-7">7 Ejemplos de servidor y proyecto descargable</a><a href="#paso-8">8 Actualización, caché y calidad de los datos</a><a href="#paso-9">9 Errores, límites y reintentos</a><a href="#paso-10">10 Versionado y comprobación de la integración</a></nav><main><p class="tag">Documentación de la API</p><h1 id="inicio">Guía de la API de Sentient Dash</h1>
+<p>Conecta los datos del dashboard con websites, media kits, aplicaciones, reportes y procesos automáticos. Esta guía sirve para cualquier integración autorizada y explica qué datos puedes consultar, cómo autenticarte y cómo interpretar cada respuesta, sin depender del lenguaje ni del hosting que utilices.</p>
+<p>La API ofrece <strong>lectura de datos públicos guardados de las cuentas seleccionadas</strong>: perfil, seguidores, rendimiento de publicaciones, catálogo de posts e historial de seguidores. Cada conexión tiene su propia clave, vigencia y alcance. La aplicación consulta desde su servidor; si tiene una interfaz pública, ese servidor entrega a los visitantes los datos que corresponda mostrar.</p>
+<div class="table-wrap"><table><thead><tr><th scope="col">Referencia</th><th scope="col">Valor</th></tr></thead><tbody><tr><td>Base de producción</td><td><code>https://cortex-api-db2e.onrender.com/api/v1</code></td></tr><tr><td>Autenticación</td><td>Header <code>Authorization: Bearer TU_CLAVE</code></td></tr><tr><td>Método</td><td><code>GET</code> en los cinco endpoints de esta guía</td></tr><tr><td>Formato</td><td>JSON, <code>schema_version: &quot;1.0&quot;</code></td></tr><tr><td>Límite</td><td>60 consultas por minuto por clave</td></tr><tr><td>Configuración de conexiones</td><td><a href="https://sentientdash.app/api.html">API connections</a></td></tr></tbody></table></div>
+<h2 id="paso-1">1 Elegir los datos y la forma de integración</h2>
+<div class="table-wrap"><table><thead><tr><th scope="col">Lo que quieres construir</th><th scope="col">Datos y patrón de consulta</th></tr></thead><tbody><tr><td>Media kit o página de un creador</td><td><code>/media-kit</code> para perfil, seguidores, rendimiento y posts destacados</td></tr><tr><td>Website de una marca o directorio de cuentas</td><td><code>/accounts</code> para conocer el alcance y perfil de cada cuenta con <code>/accounts/{handle}</code></td></tr><tr><td>Galería o catálogo de publicaciones</td><td><code>/posts</code>, paginado y filtrado por fechas</td></tr><tr><td>Gráfico de evolución de audiencia</td><td><code>/followers/history</code>, con muestras diarias guardadas</td></tr><tr><td>Reporte periódico o herramienta de análisis</td><td>Consultas desde un script o servicio; guarda la fecha de captura y el rango utilizado</td></tr><tr><td>Website estático</td><td>Una función de servidor como proxy, o una tarea que genere contenido estático a partir de la API</td></tr><tr><td>Aplicación con varias cuentas</td><td>Una clave que autorice esas cuentas, caché separada por cuenta y consultas dentro del límite compartido de la clave</td></tr></tbody></table></div>
+<p>Actualmente los perfiles expuestos son de Instagram. La API lee la base del dashboard: una consulta no inicia scraping, no solicita nuevas capturas ni acelera la actualización de métricas. Los datos cambian cuando el dashboard guarda nuevas observaciones. Tampoco permite editar datos, administrar usuarios o Queue, ni acceder a contactos, análisis internos o credenciales de otros servicios. No incluye webhooks: para mantener tu integración al día, consulta periódicamente o al vencer su caché.</p>
+<h2 id="paso-2">2 Crear y administrar una conexión</h2>
+<ol><li>Entra a <a href="https://sentientdash.app">sentientdash.app</a> con tu cuenta de Admin o Dev.</li><li>Abre el menú del engranaje y elige <strong>API connections</strong>, o abre <a href="https://sentientdash.app/api.html">la pantalla de conexiones</a>.</li><li>En <strong>Connect an integration</strong>, escribe un nombre reconocible en <strong>Connection name</strong>, por ejemplo <code>Website de la marca</code>, <code>Reporte mensual</code> o <code>App de analítica</code>.</li><li>Selecciona la vigencia en <strong>Expires in</strong>: 30, 90 o 365 días.</li><li>En <strong>Allowed accounts</strong>, marca las cuentas que la integración podrá consultar. Usa <strong>Search accounts</strong> para encontrarlas. La clave conserva esta selección; no recibe automáticamente cuentas nuevas que agregues al dashboard.</li><li>Pulsa <strong>Generate API key</strong>. En <strong>Your API key</strong>, usa <strong>Copy API key</strong> y guárdala como secreto privado del servidor. Después pulsa <strong>I saved the key</strong>. La clave comienza con <code>sad_api_</code> y se muestra una sola vez.</li></ol>
+<p>Crea una clave por integración o entorno para poder identificarla y revocarla por separado. Puedes autorizar hasta 100 cuentas activas por clave y mantener hasta 20 claves activas por propietario. El límite de 60 consultas por minuto se comparte entre todos los endpoints y cuentas consultados con una misma clave.</p>
+<p>En <strong>Your API keys</strong> puedes ver el alcance, vencimiento y último uso. Para bloquear una conexión, pulsa <strong>Revoke</strong> y después <strong>Confirm revoke</strong>. Si pierdes una clave o necesitas cambiar las cuentas autorizadas, crea una nueva y revoca la anterior. Para rotar una clave sin interrumpir tu aplicación, configura primero la nueva en el servidor, comprueba una consulta y revoca la anterior.</p>
+<p>Solo Admin o Dev puede crear claves. Si el propietario pierde ese permiso o se elimina su acceso al dashboard, sus claves dejan de consultar datos. La revocación y la caducidad bloquean las lecturas futuras; los datos que tu integración ya recibió pueden permanecer en su caché o almacenamiento. Para retirar datos publicados inmediatamente, retíralos también de tu aplicación.</p>
+<h2 id="paso-3">3 Autenticación y configuración del servidor</h2>
+<p>Estas rutas requieren una clave de integración <code>sad_api_</code>: una sesión Firebase del dashboard o una clave MCP no sirven para autenticarse en <code>/api/v1</code>. Envía la clave únicamente al origen de la API y en el header:</p>
+<div class="code-label">http</div><pre><code>Authorization: Bearer sad_api_REEMPLAZA_CON_TU_CLAVE</code></pre>
+<p>Guárdala en las variables privadas o en el gestor de secretos del hosting. En los ejemplos de esta guía usamos:</p>
 <div class="code-label">dotenv</div><pre><code>SENTIENT_DASH_API_KEY=sad_api_REEMPLAZA_CON_TU_CLAVE
 SENTIENT_DASH_ACCOUNT=tu_cuenta</code></pre>
-<p><code>SENTIENT_DASH_ACCOUNT</code> es el usuario de Instagram sin <code>@</code>. La clave nunca debe aparecer en HTML, JavaScript del navegador, repositorios, URLs ni variables públicas como <code>VITE_*</code> o <code>NEXT_PUBLIC_*</code>.</p>
-<p>El flujo es:</p>
-<div class="code-label">text</div><pre><code>Visitante → servidor de tu website → API de Sentient Dash
-         ← datos públicos         ← datos públicos
-                                    clave privada en Authorization</code></pre>
-<p>Si el website ya usa Next.js, PHP, WordPress u otro backend, agrega una ruta de servidor. Si es solo HTML o un hosting estático, agrega una función de servidor o un backend pequeño y haz que la página consulte esa función. El código que llama al dashboard se ejecuta allí, con acceso a las variables privadas. El navegador consulta una ruta del propio website como <code>/api/media-kit</code>.</p>
-<h2 id="paso-3">3 Probar una consulta</h2>
-<p>Con las variables anteriores cargadas en una terminal del servidor:</p>
+<p><code>SENTIENT_DASH_ACCOUNT</code> es una variable de conveniencia para los ejemplos de una cuenta, no un requisito del protocolo. Su valor es el usuario de Instagram sin <code>@</code>. Para varias cuentas, descubre los handles con <code>/accounts</code> y consulta cada uno desde tu servidor.</p>
+<p>La clave nunca debe aparecer en HTML, JavaScript del navegador, una app móvil distribuida, repositorios, URLs, analítica ni variables públicas como <code>VITE_*</code> o <code>NEXT_PUBLIC_*</code>. No publiques la clave ni el header en logs. Los visitantes o usuarios finales no necesitan una clave del dashboard.</p>
+<div class="code-label">text</div><pre><code>Website o app → tu servidor o función → API de Sentient Dash
+             ← datos para mostrar   ← JSON de cuentas autorizadas
+                                      clave privada en Authorization
+
+Reporte o automatización → API de Sentient Dash
+                           clave privada en el entorno del proceso</code></pre>
+<div class="table-wrap"><table><thead><tr><th scope="col">Tu plataforma</th><th scope="col">Dónde ejecutar la consulta</th></tr></thead><tbody><tr><td>React, Vue u otra interfaz en el navegador</td><td>En tu backend o función de servidor; la interfaz consulta una ruta propia</td></tr><tr><td>Next.js u otro framework con servidor</td><td>En una ruta o proceso que se ejecute únicamente en el servidor</td></tr><tr><td>PHP o WordPress</td><td>En código del servidor; guarda el secreto fuera de los archivos públicos</td></tr><tr><td>HTML estático</td><td>En una función de servidor o durante la generación del sitio</td></tr><tr><td>App móvil</td><td>En el backend de la app; no incluyas la clave en el paquete instalado</td></tr><tr><td>Python, Node u otra automatización</td><td>En el proceso que ejecuta el reporte, con el secreto en su entorno</td></tr></tbody></table></div>
+<p>Una clave con varias cuentas da acceso a todas ellas a tu servidor. Si expones una ruta para usuarios finales, decide cuáles pueden ver cada cuenta y valida los handles permitidos. Evita un proxy que acepte una URL arbitraria del navegador. La clave del dashboard no sustituye la autenticación de tu propia aplicación.</p>
+<h2 id="paso-4">4 Primera consulta y referencia de endpoints</h2>
+<p>Con la variable <code>SENTIENT_DASH_API_KEY</code> cargada en una terminal del servidor, descubre las cuentas autorizadas:</p>
+<div class="code-label">bash</div><pre><code>curl --fail-with-body \
+  -H &quot;Authorization: Bearer $SENTIENT_DASH_API_KEY&quot; \
+  &quot;https://cortex-api-db2e.onrender.com/api/v1/accounts&quot;</code></pre>
+<p>Todos los endpoints siguientes usan <code>GET</code>. Los paths se añaden a la base <code>/api/v1</code>. Usa el handle recibido en <code>/accounts</code>, sin <code>@</code>.</p>
+<div class="table-wrap"><table><thead><tr><th scope="col">Endpoint</th><th scope="col">Contenido de <code>data</code></th><th scope="col">Parámetros de consulta</th></tr></thead><tbody><tr><td><code>/accounts</code></td><td>Lista de cuentas activas autorizadas</td><td>Ninguno</td></tr><tr><td><code>/accounts/{handle}</code></td><td>Perfil público de una cuenta</td><td>Ninguno</td></tr><tr><td><code>/accounts/{handle}/media-kit</code></td><td>Perfil, resumen de rendimiento, posts destacados y crecimiento disponible</td><td>Ninguno</td></tr><tr><td><code>/accounts/{handle}/posts</code></td><td>Lista paginada de publicaciones públicas guardadas</td><td><code>limit</code>, <code>offset</code>, <code>from</code>, <code>to</code></td></tr><tr><td><code>/accounts/{handle}/followers/history</code></td><td>Lista paginada de muestras diarias de seguidores</td><td><code>limit</code>, <code>offset</code>, <code>from</code>, <code>to</code></td></tr></tbody></table></div>
+<p>Las respuestas de colección tienen <code>data</code> como arreglo; perfil y media kit tienen <code>data</code> como objeto. No todos los endpoints llevan los mismos metadatos: <code>/accounts</code> incluye <code>schema_version</code> y <code>data</code>; perfil y media kit incluyen además <code>generated_at</code> y <code>data_updated_at</code>; posts e historial incluyen <code>generated_at</code>, <code>pagination</code> y las fechas de cada fila. El historial añade <code>timezone</code>.</p>
+<p>Los ejemplos JSON siguientes son ficticios y muestran la estructura, no datos reales de una cuenta. Un campo opcional puede no estar presente y una medición desconocida puede ser <code>null</code>. Conserva esa diferencia en tu aplicación.</p>
+<h3>Cuentas autorizadas</h3>
+<div class="code-label">json</div><pre><code>{
+  &quot;schema_version&quot;: &quot;1.0&quot;,
+  &quot;data&quot;: [
+    {
+      &quot;handle&quot;: &quot;cuenta_ejemplo&quot;,
+      &quot;public_name&quot;: &quot;Cuenta de ejemplo&quot;,
+      &quot;profile_url&quot;: &quot;https://www.instagram.com/cuenta_ejemplo/&quot;
+    }
+  ]
+}</code></pre>
+<p>La lista contiene las cuentas seleccionadas para esa clave que siguen activas. Una cuenta fuera de su alcance o inactiva no se puede consultar: devuelve <code>404</code>. Una selección autorizada no garantiza que ya haya métricas disponibles.</p>
+<h3>Perfil público</h3>
+<div class="code-label">bash</div><pre><code>curl --fail-with-body \
+  -H &quot;Authorization: Bearer $SENTIENT_DASH_API_KEY&quot; \
+  &quot;https://cortex-api-db2e.onrender.com/api/v1/accounts/$SENTIENT_DASH_ACCOUNT&quot;</code></pre>
+<div class="code-label">json</div><pre><code>{
+  &quot;schema_version&quot;: &quot;1.0&quot;,
+  &quot;generated_at&quot;: &quot;2026-10-09T18:00:00+00:00&quot;,
+  &quot;data_updated_at&quot;: {
+    &quot;profile&quot;: &quot;2026-10-09T12:00:00+00:00&quot;,
+    &quot;engagement&quot;: &quot;2026-10-09T15:00:00+00:00&quot;
+  },
+  &quot;data&quot;: {
+    &quot;handle&quot;: &quot;cuenta_ejemplo&quot;,
+    &quot;public_name&quot;: &quot;Cuenta de ejemplo&quot;,
+    &quot;public_bio&quot;: &quot;Descripción pública de ejemplo&quot;,
+    &quot;platform&quot;: &quot;Instagram&quot;,
+    &quot;profile_url&quot;: &quot;https://www.instagram.com/cuenta_ejemplo/&quot;,
+    &quot;followers&quot;: 10000,
+    &quot;profile_posts&quot;: 120,
+    &quot;verified&quot;: false
+  }
+}</code></pre>
+<div class="table-wrap"><table><thead><tr><th scope="col">Campo del perfil</th><th scope="col">Significado</th></tr></thead><tbody><tr><td><code>handle</code>, <code>public_name</code></td><td>Usuario y nombre público de la cuenta</td></tr><tr><td><code>public_bio</code></td><td>Biografía pública, opcional</td></tr><tr><td><code>platform</code>, <code>profile_url</code></td><td>Plataforma y enlace al perfil</td></tr><tr><td><code>followers</code></td><td>Seguidores de la última captura disponible con esa medición; puede ser <code>null</code></td></tr><tr><td><code>profile_posts</code></td><td>Número de publicaciones informado por el perfil; puede ser <code>null</code></td></tr><tr><td><code>verified</code></td><td>Estado de verificación almacenado</td></tr></tbody></table></div>
+<h2 id="paso-5">5 Resumen de rendimiento y media kit</h2>
 <div class="code-label">bash</div><pre><code>curl --fail-with-body \
   -H &quot;Authorization: Bearer $SENTIENT_DASH_API_KEY&quot; \
   &quot;https://cortex-api-db2e.onrender.com/api/v1/accounts/$SENTIENT_DASH_ACCOUNT/media-kit&quot;</code></pre>
-<p>La autenticación usa <code>Authorization: Bearer CLAVE</code>. No envíes la clave como parámetro de URL. Este comando consulta datos existentes: no inicia scraping ni actualiza métricas.</p>
-<h2 id="paso-4">4 Elegir el endpoint</h2>
-<p>Todos los endpoints usan <code>GET</code>. Reemplaza <code>{handle}</code> por el usuario autorizado sin <code>@</code>.</p>
-<div class="table-wrap"><table><thead><tr><th scope="col">Endpoint después de <code>/api/v1</code></th><th scope="col">Datos</th></tr></thead><tbody><tr><td><code>/accounts</code></td><td>Cuentas autorizadas para esa clave: <code>handle</code>, <code>public_name</code>, <code>profile_url</code></td></tr><tr><td><code>/accounts/{handle}</code></td><td>Perfil público de la cuenta</td></tr><tr><td><code>/accounts/{handle}/media-kit</code></td><td>Perfil, resumen de rendimiento y posts destacados</td></tr><tr><td><code>/accounts/{handle}/posts</code></td><td>Catálogo paginado de publicaciones guardadas</td></tr><tr><td><code>/accounts/{handle}/followers/history</code></td><td>Muestras paginadas del historial de seguidores</td></tr></tbody></table></div>
-<p>La respuesta de media kit contiene <code>schema_version</code>, <code>generated_at</code>, <code>data_updated_at</code> y <code>data</code>. <code>generated_at</code> indica cuándo se construyó la respuesta. <strong>La fecha de actualización real viene en <code>data_updated_at.profile</code> y <code>data_updated_at.engagement</code></strong>; puede ser <code>null</code> si no está disponible.</p>
-<h3 id="campos">Campos para el media kit</h3>
-<div class="table-wrap"><table><thead><tr><th scope="col">Campo de la respuesta</th><th scope="col">Uso en el website</th></tr></thead><tbody><tr><td><code>data.account.handle</code>, <code>public_name</code>, <code>public_bio</code>, <code>profile_url</code></td><td>Identidad y descripción pública</td></tr><tr><td><code>data.account.followers</code></td><td>Seguidores capturados en el perfil</td></tr><tr><td><code>data.account.profile_posts</code></td><td>Número de publicaciones informado por el perfil</td></tr><tr><td><code>data.account.verified</code>, <code>platform</code></td><td>Verificación y plataforma</td></tr><tr><td><code>data.summary.all_time.post_count</code></td><td>Posts guardados que entran en el análisis</td></tr><tr><td><code>data.summary.all_time.metrics.likes.average</code></td><td>Likes promedio por post medido</td></tr><tr><td><code>data.summary.all_time.metrics.comments.average</code></td><td>Comentarios promedio por post medido</td></tr><tr><td><code>data.summary.all_time.metrics.video_views.average</code></td><td>Vistas promedio de los posts con esa medición</td></tr><tr><td><code>data.summary.all_time.metrics.video_plays.average</code></td><td>Reproducciones promedio de los posts con esa medición</td></tr><tr><td><code>data.summary.all_time.engagements.total</code>, <code>.average</code></td><td>Interacciones medidas, total y promedio</td></tr><tr><td><code>data.summary.all_time.engagement_rate_pct</code></td><td>Tasa de interacciones por seguidores, ya expresada en porcentaje</td></tr><tr><td><code>data.summary.last_30_days</code></td><td>Mismos campos, cuando hay datos para ese período</td></tr><tr><td><code>data.best_posts.all_time</code>, <code>data.best_posts.last_30_days</code></td><td>Publicaciones destacadas del catálogo analizado</td></tr></tbody></table></div>
-<p>En cada métrica de <code>summary</code>, <code>total</code> es la suma y <code>average</code> es el promedio de los posts con esa medición. <code>profile_posts</code> y <code>post_count</code> representan cosas distintas: publicaciones del perfil y publicaciones guardadas analizadas. El nombre <code>all_time</code> se refiere al catálogo disponible; no promete el historial completo de Instagram.</p>
-<p>Cada post destacado tiene <code>shortcode</code>, <code>permalink</code>, <code>public_caption</code>, <code>format</code>, <code>published_at</code>, <code>metrics: { likes, comments, video_views, video_plays }</code>, <code>engagements</code> y <code>engagement_rate_pct</code>. Para pintarlo, usa <code>public_caption</code> como texto y <code>permalink</code> como enlace. En el endpoint <code>/posts</code>, esos valores son campos planos llamados <code>caption</code>, <code>likes</code>, <code>comments</code>, <code>video_views</code> y <code>video_plays</code>; incluye además <code>metrics_updated_at</code>.</p>
-<p>Usa <code>—</code> o “No disponible” cuando una métrica sea <code>null</code>. Un cero real sí se muestra como <code>0</code>. Si <code>last_30_days</code> no existe, oculta esa sección o explica que no hay datos suficientes. No multipliques <code>engagement_rate_pct</code> por 100: ya es un porcentaje. Las vistas y reproducciones no equivalen a alcance único.</p>
-<h2 id="paso-5">5 Leer posts e historial con paginación</h2>
-<p><code>/posts</code> y <code>/followers/history</code> aceptan:</p>
+<p>La respuesta lleva los metadatos de frescura de perfil y engagement. Dentro de <code>data</code> aparecen:</p>
+<div class="table-wrap"><table><thead><tr><th scope="col">Campo</th><th scope="col">Contenido</th></tr></thead><tbody><tr><td><code>generated_at</code>, <code>timezone</code></td><td>Fecha de construcción y zona de referencia del resumen</td></tr><tr><td><code>account</code></td><td>Los campos del perfil público descritos arriba</td></tr><tr><td><code>summary.all_time</code></td><td>Resumen del catálogo público guardado que entra en el análisis</td></tr><tr><td><code>summary.last_30_days</code></td><td>Resumen de posts publicados durante la ventana móvil de 30 días, cuando existe cobertura suficiente</td></tr><tr><td><code>best_posts.all_time</code></td><td>Hasta tres posts destacados del catálogo público</td></tr><tr><td><code>best_posts.last_30_days</code></td><td>Hasta tres posts destacados de esa ventana, cuando está disponible</td></tr><tr><td><code>follower_growth.30d.pct</code></td><td>Crecimiento porcentual de seguidores cuando hay muestras que sustentan exactamente 30 días; opcional</td></tr></tbody></table></div>
+<p>Cada objeto de <code>summary</code> utiliza esta estructura; el ejemplo representa dos posts ficticios:</p>
+<div class="code-label">json</div><pre><code>{
+  &quot;post_count&quot;: 2,
+  &quot;metrics&quot;: {
+    &quot;likes&quot;: { &quot;total&quot;: 1000, &quot;average&quot;: 500 },
+    &quot;comments&quot;: { &quot;total&quot;: 100, &quot;average&quot;: 50 },
+    &quot;video_views&quot;: { &quot;total&quot;: null, &quot;average&quot;: null },
+    &quot;video_plays&quot;: { &quot;total&quot;: null, &quot;average&quot;: null }
+  },
+  &quot;engagements&quot;: { &quot;total&quot;: 1100, &quot;average&quot;: 550 },
+  &quot;engagement_rate_pct&quot;: 5.5
+}</code></pre>
+<div class="table-wrap"><table><thead><tr><th scope="col">Campo del resumen</th><th scope="col">Cómo interpretarlo</th></tr></thead><tbody><tr><td><code>post_count</code></td><td>Cantidad de posts públicos guardados incluidos en ese resumen</td></tr><tr><td><code>metrics.likes</code>, <code>metrics.comments</code></td><td>Likes y comentarios, con <code>total</code> y <code>average</code></td></tr><tr><td><code>metrics.video_views</code>, <code>metrics.video_plays</code></td><td>Vistas y reproducciones disponibles, con <code>total</code> y <code>average</code></td></tr><tr><td><code>engagements.total</code>, <code>engagements.average</code></td><td>Interacciones calculadas a partir de likes y comentarios conocidos</td></tr><tr><td><code>engagement_rate_pct</code></td><td>Interacciones promedio por post divididas por seguidores, expresadas como porcentaje</td></tr></tbody></table></div>
+<p><code>all_time</code> se refiere al catálogo disponible del dashboard, no necesariamente a todas las publicaciones históricas de Instagram. <code>profile_posts</code> y <code>post_count</code> miden cosas diferentes: publicaciones informadas en el perfil frente a posts guardados incluidos en el análisis.</p>
+<p>Los contadores son mediciones acumuladas de cada publicación. <code>last_30_days</code> selecciona posts según su fecha de publicación durante las últimas 30 × 24 horas; no representa interacciones ganadas únicamente durante ese período. Los promedios usan las mediciones disponibles. Un total de 30 días puede ser <code>null</code> cuando falta cobertura de esa métrica, aunque haya un promedio observado.</p>
+<p><code>follower_growth.30d.pct</code> compara capturas utilizables separadas exactamente 30 días; puede ser negativo y no necesariamente finalizar en el día actual.</p>
+<p>No sumes los promedios de likes y comentarios para reconstruir <code>engagements.average</code>: pueden tener distintas poblaciones medidas. No multipliques <code>engagement_rate_pct</code> ni <code>follower_growth.30d.pct</code> por 100: ya son porcentajes. Las vistas y reproducciones no equivalen a personas únicas ni a alcance único.</p>
+<p>Cada post destacado incluye <code>shortcode</code>, <code>permalink</code>, <code>public_caption</code>, <code>format</code>, <code>published_at</code>, <code>metrics: { likes, comments, video_views, video_plays }</code>, <code>engagements</code> y <code>engagement_rate_pct</code>. Usa <code>public_caption</code> como texto y <code>permalink</code> como enlace. La API JSON no entrega archivos de imágenes, videos ni rutas de almacenamiento internas.</p>
+<p>Si falta <code>last_30_days</code> o <code>follower_growth</code>, oculta ese bloque o explica que no hay datos suficientes. Para una cuenta privada, el catálogo público y los posts destacados están vacíos. Los posts ocultos, eliminados, sin fecha utilizable o con fecha futura quedan fuera de la exportación pública.</p>
+<h2 id="paso-6">6 Catálogo de posts e historial de seguidores</h2>
+<p>Ambos endpoints aceptan los siguientes parámetros:</p>
 <div class="table-wrap"><table><thead><tr><th scope="col">Parámetro</th><th scope="col">Valor</th></tr></thead><tbody><tr><td><code>limit</code></td><td>Entero de 1 a 100; por defecto 20</td></tr><tr><td><code>offset</code></td><td>Entero desde 0; por defecto 0</td></tr><tr><td><code>from</code></td><td>Fecha inicial inclusiva, <code>YYYY-MM-DD</code>, opcional</td></tr><tr><td><code>to</code></td><td>Fecha final inclusiva, <code>YYYY-MM-DD</code>, opcional</td></tr></tbody></table></div>
-<p>Las fechas se interpretan en <code>America/Costa_Rica</code>. La respuesta incluye <code>pagination: { limit, offset, total, has_more, next_offset }</code> y <code>data</code>. Los posts se ordenan del más reciente al más antiguo. Las muestras de seguidores tienen <code>date</code>, <code>captured_at</code> y <code>followers</code>, con una muestra válida final por día, ordenadas del día más antiguo al más reciente. El historial contiene solo las muestras guardadas por el dashboard.</p>
-<p>Ejemplo de rango:</p>
+<p>Las fechas se interpretan como días de calendario en <code>America/Costa_Rica</code>. Puedes usar un solo extremo o ambos; <code>from</code> debe ser anterior o igual a <code>to</code>. No envíes fechas u horas en otro formato. Los filtros de posts se aplican a la fecha de publicación; los del historial, al día de la captura.</p>
+<h3>Posts</h3>
 <div class="code-label">bash</div><pre><code>curl --fail-with-body \
   -H &quot;Authorization: Bearer $SENTIENT_DASH_API_KEY&quot; \
   &quot;https://cortex-api-db2e.onrender.com/api/v1/accounts/$SENTIENT_DASH_ACCOUNT/posts?limit=20&amp;offset=0&amp;from=2026-10-01&amp;to=2026-10-09&quot;</code></pre>
-<p>Este helper de <strong>servidor</strong> continúa usando <code>next_offset</code>; en un website normalmente basta cargar una página, sin descargar todo el catálogo en cada visita:</p>
+<div class="code-label">json</div><pre><code>{
+  &quot;schema_version&quot;: &quot;1.0&quot;,
+  &quot;generated_at&quot;: &quot;2026-10-09T18:00:00+00:00&quot;,
+  &quot;data&quot;: [
+    {
+      &quot;shortcode&quot;: &quot;ExamplePost01&quot;,
+      &quot;caption&quot;: &quot;Texto público de ejemplo&quot;,
+      &quot;published_at&quot;: &quot;2026-10-08T16:00:00+00:00&quot;,
+      &quot;permalink&quot;: &quot;https://www.instagram.com/p/ExamplePost01/&quot;,
+      &quot;format&quot;: &quot;Image&quot;,
+      &quot;likes&quot;: 500,
+      &quot;comments&quot;: 50,
+      &quot;video_views&quot;: null,
+      &quot;video_plays&quot;: null,
+      &quot;metrics_updated_at&quot;: &quot;2026-10-09T15:00:00+00:00&quot;
+    }
+  ],
+  &quot;pagination&quot;: {
+    &quot;limit&quot;: 20,
+    &quot;offset&quot;: 0,
+    &quot;total&quot;: 1,
+    &quot;has_more&quot;: false,
+    &quot;next_offset&quot;: null
+  }
+}</code></pre>
+<p>Los posts se ordenan del más reciente al más antiguo y se deduplican por publicación. <code>shortcode</code> identifica el post; <code>published_at</code> es su fecha de publicación y <code>metrics_updated_at</code> indica la fecha disponible de actualización de métricas. <code>caption</code> puede ser <code>null</code>. <code>format</code> describe el formato almacenado: <code>Image</code>, <code>Carousel</code>, <code>Video</code> o <code>Reel</code>; maneja también valores desconocidos en tu interfaz. Aquí las métricas son campos planos; en los posts destacados de <code>/media-kit</code> están dentro de <code>metrics</code> y el texto se llama <code>public_caption</code>.</p>
+<h3>Historial de seguidores</h3>
+<div class="code-label">bash</div><pre><code>curl --fail-with-body \
+  -H &quot;Authorization: Bearer $SENTIENT_DASH_API_KEY&quot; \
+  &quot;https://cortex-api-db2e.onrender.com/api/v1/accounts/$SENTIENT_DASH_ACCOUNT/followers/history?limit=100&amp;from=2026-10-01&amp;to=2026-10-09&quot;</code></pre>
+<div class="code-label">json</div><pre><code>{
+  &quot;schema_version&quot;: &quot;1.0&quot;,
+  &quot;generated_at&quot;: &quot;2026-10-09T18:00:00+00:00&quot;,
+  &quot;timezone&quot;: &quot;America/Costa_Rica&quot;,
+  &quot;data&quot;: [
+    { &quot;date&quot;: &quot;2026-10-08&quot;, &quot;captured_at&quot;: &quot;2026-10-09T02:00:00+00:00&quot;, &quot;followers&quot;: 9900 },
+    { &quot;date&quot;: &quot;2026-10-09&quot;, &quot;captured_at&quot;: &quot;2026-10-09T12:00:00+00:00&quot;, &quot;followers&quot;: 10000 }
+  ],
+  &quot;pagination&quot;: {
+    &quot;limit&quot;: 100,
+    &quot;offset&quot;: 0,
+    &quot;total&quot;: 2,
+    &quot;has_more&quot;: false,
+    &quot;next_offset&quot;: null
+  }
+}</code></pre>
+<p>El historial devuelve la última captura guardada de cada día de Costa Rica, ordenada del día más antiguo al más reciente. <code>date</code> es ese día local y <code>captured_at</code> es la fecha y hora de la captura. <code>followers</code> puede ser <code>null</code> si la última captura del día no contiene esa medición. Un día sin captura no aparece: no se rellena automáticamente ni se transforma en cero. Usa solo mediciones conocidas si calculas crecimiento y conserva las fechas reales.</p>
+<h3>Recorrer páginas</h3>
+<p><code>pagination.total</code> es el número de filas que cumplen el filtro. <code>next_offset</code> indica dónde continúa la siguiente página y vale <code>null</code> cuando termina. Un <code>200</code> con <code>data: []</code> puede significar que no hay registros para el rango o que el offset está más allá del final; no equivale a un error de autenticación.</p>
+<p>Este helper de servidor recoge un rango, con un límite propio de diez páginas para evitar una descarga accidentalmente extensa:</p>
 <div class="code-label">js</div><pre><code>async function readPages(resource, from, to) {
-  const base = &#x27;https://cortex-api-db2e.onrender.com/api/v1&#x27;;
+  const base = 'https://cortex-api-db2e.onrender.com/api/v1';
   const handle = process.env.SENTIENT_DASH_ACCOUNT;
   const key = process.env.SENTIENT_DASH_API_KEY;
-  if (![&#x27;posts&#x27;, &#x27;followers/history&#x27;].includes(resource)) {
-    throw new Error(&#x27;Recurso no permitido&#x27;);
+  if (!handle || !key) throw new Error('Falta configuración privada');
+  if (!['posts', 'followers/history'].includes(resource)) {
+    throw new Error('Recurso no permitido');
   }
   const rows = [];
   let offset = 0;
   for (let page = 0; page &lt; 10; page += 1) {
-    const query = new URLSearchParams({ limit: &#x27;100&#x27;, offset: String(offset) });
-    if (from) query.set(&#x27;from&#x27;, from);
-    if (to) query.set(&#x27;to&#x27;, to);
-    const url = `${base}/accounts/${encodeURIComponent(handle)}/${resource}?${query}`;
-    const response = await fetch(url, {
-      headers: { Authorization: `Bearer ${key}` },
-      signal: AbortSignal.timeout(10000),
-      redirect: &#x27;error&#x27;,
-    });
+    const query = new URLSearchParams({ limit: '100', offset: String(offset) });
+    if (from) query.set('from', from);
+    if (to) query.set('to', to);
+    const response = await fetch(
+      `${base}/accounts/${encodeURIComponent(handle)}/${resource}?${query}`,
+      {
+        headers: { Authorization: `Bearer ${key}` },
+        signal: AbortSignal.timeout(10000),
+        redirect: 'error',
+      },
+    );
     if (!response.ok) throw new Error(`API HTTP ${response.status}`);
     const payload = await response.json();
     rows.push(...payload.data);
     if (!payload.pagination.has_more) return rows;
     const next = payload.pagination.next_offset;
-    if (!Number.isInteger(next) || next &lt;= offset) throw new Error(&#x27;Paginación inválida&#x27;);
+    if (!Number.isInteger(next) || next &lt;= offset) throw new Error('Paginación inválida');
     offset = next;
   }
-  throw new Error(&#x27;El rango supera 1000 muestras; consulta un período más corto&#x27;);
+  throw new Error('El rango supera diez páginas; usa un período más corto');
 }</code></pre>
-<h2 id="paso-6">6 Ejecutar el ejemplo listo para adaptar</h2>
-<p>El <a href="https://sentientdash.app/media-kit-example.zip">ejemplo descargable</a> incluye un website y servidor Node.js 22 o posterior, sin dependencias adicionales. Extrae el ZIP y abre una terminal dentro de la carpeta que contiene <code>server.mjs</code> y <code>.env.example</code>.</p>
+<p>Consulta un rango estable para un reporte y evita recorrer todo el catálogo en cada visita. La paginación usa offset y no congela una instantánea: si llegan posts nuevos entre páginas, el orden puede desplazarse. Si guardas resultados de posts, deduplica por <code>shortcode</code>; en historial, por <code>date</code>.</p>
+<h2 id="paso-7">7 Ejemplos de servidor y proyecto descargable</h2>
+<h3>JavaScript en servidor</h3>
+<p>Este ejemplo consulta primero el alcance y luego el resumen de la primera cuenta. Requiere Node.js 22 o posterior y la clave en el entorno privado del proceso.</p>
+<div class="code-label">js</div><pre><code>const base = 'https://cortex-api-db2e.onrender.com/api/v1';
+const key = process.env.SENTIENT_DASH_API_KEY;
+if (!key) throw new Error('Falta SENTIENT_DASH_API_KEY');
+
+async function readAPI(path) {
+  const response = await fetch(`${base}${path}`, {
+    headers: { Authorization: `Bearer ${key}` },
+    signal: AbortSignal.timeout(10000),
+    redirect: 'error',
+  });
+  if (!response.ok) throw new Error(`API HTTP ${response.status}`);
+  return response.json();
+}
+
+const accounts = await readAPI('/accounts');
+const handle = accounts.data[0]?.handle;
+if (!handle) throw new Error('La clave no tiene cuentas activas disponibles');
+const result = await readAPI(`/accounts/${encodeURIComponent(handle)}/media-kit`);
+// Usa result.data en tu reporte o respuesta pública; nunca envíes la clave.
+const followers = result.data.account.followers;
+console.log(followers === null ? 'No disponible' : followers);</code></pre>
+<h3>Python para un reporte o automatización</h3>
+<p>Este ejemplo usa la biblioteca estándar, la misma clave privada y un timeout. La cuenta puede venir de tu configuración o de <code>/accounts</code>.</p>
+<div class="code-label">python</div><pre><code>import json
+import os
+from urllib.parse import quote
+from urllib.request import HTTPRedirectHandler, Request, build_opener
+
+class NoRedirect(HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+base = 'https://cortex-api-db2e.onrender.com/api/v1'
+key = os.environ['SENTIENT_DASH_API_KEY']
+handle = quote(os.environ['SENTIENT_DASH_ACCOUNT'], safe='')
+request = Request(
+    f'{base}/accounts/{handle}',
+    headers={'Authorization': f'Bearer {key}'},
+)
+with build_opener(NoRedirect).open(request, timeout=10) as response:
+    payload = json.load(response)
+
+followers = payload['data']['followers']
+print('No disponible' if followers is None else followers)</code></pre>
+<h3>Website de ejemplo completo</h3>
+<p>El <a href="https://sentientdash.app/media-kit-example.zip">proyecto descargable</a> es una implementación de referencia de un media kit, uno de los usos posibles de la API. Incluye website y servidor Node.js 22 o posterior, sin dependencias adicionales. Puedes adaptar su diseño, usar su proxy en otra interfaz o tomarlo como base para una integración propia.</p>
+<p>Extrae el ZIP y abre una terminal en la carpeta que contiene <code>server.mjs</code> y <code>.env.example</code>:</p>
 <div class="code-label">bash</div><pre><code>cp .env.example .env</code></pre>
-<p>Edita <code>.env</code> con tu clave y cuenta. Luego ejecuta:</p>
+<p>Edita <code>.env</code> con tu clave y una cuenta autorizada. Luego ejecuta:</p>
 <div class="code-label">bash</div><pre><code>node --env-file=.env server.mjs</code></pre>
-<p>Abre <a href="http://localhost:3000">http://localhost:3000</a>. El comando utiliza la <a href="https://nodejs.org/download/release/latest-v22.x/docs/api/cli.html#--env-filefile">opción oficial <code>--env-file</code> de Node</a>, y las consultas usan <a href="https://nodejs.org/download/release/latest-v22.x/docs/api/globals.html#fetch"><code>fetch</code> integrado</a>.</p>
-<p>El ejemplo ofrece <code>/api/media-kit</code>, <code>/api/posts</code> y <code>/api/followers</code> en el servidor del website. La cuenta se fija con la variable privada. Mantiene caché de cinco minutos, timeout de diez segundos, caché breve de fallos y presupuesto de 50 consultas por minuto en cada proceso. El proxy solo permite parámetros conocidos y aplica un tope propio de <code>offset=100000</code>. Las pruebas <code>node --test server.test.mjs</code> usan un backend falso; no requieren una clave real.</p>
-<p>Para publicarlo, configura las dos variables privadas en el hosting y usa <code>node server.mjs</code> como comando de inicio. El hosting aporta <code>PORT</code>. Sirve el dominio por HTTPS. En despliegues con varias instancias, usa caché compartida y límites en el hosting: la caché del ejemplo vive en la memoria de un proceso. Puedes adaptar <code>client.js</code> y <code>styles.css</code> al diseño actual del media kit.</p>
-<h2 id="paso-7">7 Caché y fechas de actualización</h2>
-<p>Guarda una respuesta válida durante unos cinco minutos en el servidor del website. Así, muchas visitas pueden usar los mismos datos sin consumir consultas para cada visitante. También puedes regenerar el sitio mediante una tarea del servidor si no necesita responder dinámicamente.</p>
-<p>Muestra la fecha capturada en <code>data_updated_at</code>, no una etiqueta “actualizado ahora” tomada de <code>generated_at</code>. Leer la API no solicita nuevos scrapes: la información cambia cuando el dashboard guarda nuevas capturas. Revocar la clave detiene las próximas lecturas al dashboard; para retirar inmediatamente datos ya publicados, limpia también la caché o retíralos de tu website.</p>
-<h2 id="paso-8">8 Resolver errores</h2>
-<p>La API permite <strong>60 consultas por minuto por clave</strong>. Al superar ese límite devuelve <code>429</code> con <code>Retry-After</code>; espera los segundos indicados antes de volver a consultar.</p>
-<div class="table-wrap"><table><thead><tr><th scope="col">Estado</th><th scope="col">Qué hacer</th></tr></thead><tbody><tr><td><code>401</code></td><td>Revisa que la clave exista, no haya vencido ni sido revocada y que se envíe como Bearer desde el servidor</td></tr><tr><td><code>403</code></td><td>Revisa que el propietario conserve el rol Admin o Dev y que uses GET en la API <code>/api/v1</code></td></tr><tr><td><code>404</code></td><td>Revisa el handle sin <code>@</code>, el endpoint y que la cuenta siga activa y autorizada para esa clave; si necesitas otro alcance, crea una clave con las cuentas correctas</td></tr><tr><td><code>422</code></td><td>Revisa parámetros, límites y fechas reales; <code>from</code> debe ser anterior o igual a <code>to</code></td></tr><tr><td><code>429</code></td><td>Respeta <code>Retry-After</code>, usa caché y evita reintentos simultáneos</td></tr><tr><td><code>5xx</code> o timeout</td><td>Muestra un mensaje temporal y reintenta con espera; el proxy del ejemplo usa 502 para fallos y 504 para timeout</td></tr></tbody></table></div>
-<p>Antes de compartir el website, revisa que el navegador solo consulte tu propio servidor, que muestre <code>null</code> sin inventar cero y que diferencie fechas de captura de fechas de respuesta. Si se expone la clave, revócala y configura una nueva en el servidor.</p><footer><a href="/api-guide.md" download>Descargar versión Markdown</a> · <a href="/media-kit-example.zip" download>Descargar website de ejemplo</a></footer></main></div></body></html>
+<p>Abre <a href="http://localhost:3000">http://localhost:3000</a>. El comando utiliza la <a href="https://nodejs.org/download/release/latest-v22.x/docs/api/cli.html#--env-filefile">opción oficial <code>--env-file</code> de Node</a> y las consultas usan <a href="https://nodejs.org/download/release/latest-v22.x/docs/api/globals.html#fetch"><code>fetch</code> integrado</a>.</p>
+<p>El ejemplo ofrece <code>/api/media-kit</code>, <code>/api/posts</code> y <code>/api/followers</code> en el servidor de tu website. La cuenta se fija en su configuración privada. Mantiene caché de cinco minutos, timeout de diez segundos, caché breve de fallos y presupuesto de 50 consultas al dashboard por minuto en cada proceso. Valida los parámetros y aplica un tope propio de <code>offset=100000</code>. Estas son decisiones del ejemplo, no cambios al contrato de la API.</p>
+<p>Para publicarlo, configura las variables privadas en el hosting y usa <code>node server.mjs</code> como comando de inicio. El hosting aporta <code>PORT</code>. Sirve el dominio por HTTPS. En despliegues con varias instancias, usa caché compartida y límites en el hosting: la caché del ejemplo vive en la memoria de un proceso. Las pruebas <code>node --test server.test.mjs</code> usan un backend falso y no necesitan una clave real.</p>
+<h2 id="paso-8">8 Actualización, caché y calidad de los datos</h2>
+<div class="table-wrap"><table><thead><tr><th scope="col">Campo de tiempo</th><th scope="col">Qué representa</th></tr></thead><tbody><tr><td><code>generated_at</code></td><td>Momento en que se construyó la respuesta; no es una nueva captura</td></tr><tr><td><code>data_updated_at.profile</code></td><td>Fecha disponible de la captura utilizada para el perfil y seguidores</td></tr><tr><td><code>data_updated_at.engagement</code></td><td>Fecha disponible más reciente de actualización del conjunto de métricas; no garantiza la misma frescura en todos los posts</td></tr><tr><td><code>metrics_updated_at</code> de un post</td><td>Fecha disponible de actualización de sus métricas</td></tr><tr><td><code>captured_at</code> del historial</td><td>Momento de la captura de esa fila</td></tr></tbody></table></div>
+<p>Las fechas de hora usan formato ISO 8601. El rango <code>from</code>/<code>to</code> y los días del historial usan Costa Rica como referencia. Una fecha de actualización puede ser <code>null</code> si no hay evidencia guardada. En perfil, distintos campos pueden provenir de las últimas observaciones disponibles para cada medición.</p>
+<p>Guarda una respuesta válida durante unos cinco minutos en tu servidor, por cuenta y recurso, para que varias visitas puedan reutilizarla. Las respuestas del dashboard se envían como <code>private, no-store</code>; evita una caché pública del request autenticado y conserva únicamente los datos necesarios dentro de tu integración. Si compartes caché entre varias conexiones, separa sus alcances para que una clave no reciba datos de otra.</p>
+<p>Para reportes o generación estática, ejecuta consultas en la frecuencia que necesite el producto y que tenga sentido con la actualización del dashboard. Leer cada segundo no produce datos más nuevos. En varias instancias, comparte caché o coordina el presupuesto, porque todas consumen el límite de la misma clave.</p>
+<p>Muestra <code>—</code> o “No disponible” para <code>null</code>, y <code>0</code> solo cuando el valor sea realmente cero. No dibujes como cero un día ausente del historial ni inventes un resumen reciente cuando falta. Si conservas una respuesta anterior durante una incidencia, muestra su fecha de captura y que estás usando datos guardados. Trata nombres y captions como texto; no ejecutes HTML recibido en esos campos.</p>
+<h2 id="paso-9">9 Errores, límites y reintentos</h2>
+<p>Comprueba el estado HTTP antes de procesar <code>data</code>. Los errores JSON de la API usan un campo <code>detail</code>; su forma puede ser un texto o una lista de validaciones. Una incidencia del gateway o un error <code>5xx</code> también puede devolver texto o HTML, así que no asumas que todos los errores son JSON. Usa el estado HTTP para decidir qué hacer y evita depender de frases exactas del error.</p>
+<div class="table-wrap"><table><thead><tr><th scope="col">Estado</th><th scope="col">Causa habitual y acción</th></tr></thead><tbody><tr><td><code>200</code></td><td>Consulta correcta; una lista vacía o una métrica <code>null</code> también son respuestas válidas</td></tr><tr><td><code>401</code></td><td>Clave ausente, inválida, vencida o revocada; revisa el secreto y el header Bearer</td></tr><tr><td><code>403</code></td><td>El propietario perdió permiso Admin/Dev, o la clave se usó fuera de las rutas y método permitidos; verifica acceso y endpoint</td></tr><tr><td><code>404</code></td><td>Cuenta fuera del alcance, inactiva o handle incorrecto; revisa <code>/accounts</code></td></tr><tr><td><code>422</code></td><td>Parámetros, límites o fechas inválidos; corrige la consulta antes de reintentar</td></tr><tr><td><code>429</code></td><td>Límite de 60 consultas por minuto por clave; espera los segundos indicados en <code>Retry-After</code></td></tr><tr><td><code>5xx</code> o timeout</td><td>Incidencia temporal; reintenta con espera creciente y un número acotado de intentos</td></tr></tbody></table></div>
+<p>No reintentes automáticamente errores <code>401</code>, <code>403</code>, <code>404</code> o <code>422</code> sin corregir su causa. Para <code>429</code>, respeta <code>Retry-After</code>; para fallos temporales, evita que todas las instancias reintenten a la vez. Consolida peticiones simultáneas al mismo recurso y reduce consultas cuando ya tengas datos en caché.</p>
+<p>El proxy del proyecto descargable conserva los estados útiles de la API y el header <code>Retry-After</code>. Utiliza <code>502</code> para fallos de conexión o respuestas inválidas y <code>504</code> para timeout, sin devolver al navegador los cuerpos de error del backend.</p>
+<h2 id="paso-10">10 Versionado y comprobación de la integración</h2>
+<p>La ruta pública actual es <code>/api/v1</code> y las respuestas declaran <code>schema_version: &quot;1.0&quot;</code>. Lee los campos necesarios para tu aplicación, tolera campos adicionales y comprueba los objetos opcionales antes de utilizarlos. No uses rutas internas del dashboard ni de MCP con una clave de integración.</p>
+<p>Antes de publicar, verifica estos puntos:</p>
+<ul><li>La clave vive únicamente en el servidor o entorno privado del proceso.</li><li><code>/accounts</code> contiene exactamente las cuentas que necesita la integración.</li><li>Los cinco endpoints se interpretan con sus estructuras y fechas correspondientes.</li><li>Las listas vacías, los campos opcionales y <code>null</code> se muestran correctamente.</li><li>La paginación usa <code>next_offset</code>, los reportes conservan el rango y los posts se deduplican por <code>shortcode</code>.</li><li>Hay caché, timeout y manejo de <code>429</code> con <code>Retry-After</code>.</li><li>La aplicación protege el acceso de sus propios usuarios cuando corresponde.</li><li>La fecha mostrada representa la captura de los datos y no solo la hora de respuesta.</li><li>Existe una forma de reemplazar o revocar la clave y limpiar datos publicados en la aplicación.</li></ul>
+<p>Puedes volver a <a href="https://sentientdash.app/api.html">API connections</a> para crear y administrar claves, <a href="https://sentientdash.app/api-guide.md">descargar esta guía</a> o <a href="https://sentientdash.app/media-kit-example.zip">descargar el proyecto de referencia</a>.</p><footer><a href="/api-guide.md" download>Descargar versión Markdown</a> · <a href="/media-kit-example.zip" download>Descargar proyecto de referencia</a></footer></main></div></body></html>
