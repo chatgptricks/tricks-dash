@@ -34,7 +34,7 @@ const download = await downloadAccountMediaKit('chatgptricks');
 assert.equal(download.filename, 'chatgptricks-media-kit-2026-10-09.pdf');
 assert.equal(downloads.length, 1);
 assert.equal(downloads[0].filename, download.filename);
-assert.equal(requests[0].url, 'https://api.test/api/admin/accounts/chatgptricks/media-kit.pdf?theme=light&accent=%2300A991');
+assert.equal(requests[0].url, 'https://api.test/api/admin/accounts/chatgptricks/media-kit.pdf?theme=light&accent=%2300A991&lang=en');
 assert.equal(requests[0].options.cache, 'no-store', 'Each click must generate a fresh server report');
 assert.equal(String(requests[0].options.method || 'GET').toUpperCase(), 'GET');
 assert.deepEqual(Buffer.from(await blobs[0].arrayBuffer()), pdfBytes, 'The original PDF bytes must reach the browser download');
@@ -44,7 +44,7 @@ assert.ok(revoked.includes(downloads[0].href), 'The download object URL must eve
 
 response = () => new Response(pdfBytes, { headers: { 'Content-Type': 'application/pdf', 'Content-Disposition': "attachment; filename*=UTF-8''sales%20kit.pdf" } });
 await downloadAccountMediaKit('fixture.account');
-assert.equal(requests.at(-1).url, 'https://api.test/api/admin/accounts/fixture.account/media-kit.pdf?theme=light&accent=%2300A991');
+assert.equal(requests.at(-1).url, 'https://api.test/api/admin/accounts/fixture.account/media-kit.pdf?theme=light&accent=%2300A991&lang=en');
 assert.equal(downloads.at(-1).filename, 'sales kit.pdf', 'UTF-8 attachment names must be decoded');
 
 response = () => new Response(pdfBytes, { headers: { 'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="../../unsafe.pdf"' } });
@@ -58,7 +58,7 @@ assert.equal(downloads.at(-1).filename, 'fixture.account-media-kit.pdf', 'An inv
 
 response = () => new Response(pdfBytes, { headers: { 'Content-Type': 'application/pdf' } });
 await downloadAccountMediaKit('account/name');
-assert.equal(requests.at(-1).url, 'https://api.test/api/admin/accounts/account%2Fname/media-kit.pdf?theme=light&accent=%2300A991', 'Handles must be encoded as one path segment');
+assert.equal(requests.at(-1).url, 'https://api.test/api/admin/accounts/account%2Fname/media-kit.pdf?theme=light&accent=%2300A991&lang=en', 'Handles must be encoded as one path segment');
 const beforeRepeat = requests.length;
 await downloadAccountMediaKit('chatgptricks');
 await downloadAccountMediaKit('chatgptricks');
@@ -84,8 +84,13 @@ for (const invalidAccent of ['#123', '#123abc&theme=dark', 'javascript:alert(1)'
   const fallbackUrl = new URL(requests.at(-1).url);
   assert.equal(fallbackUrl.searchParams.get('theme'), 'light');
   assert.equal(fallbackUrl.searchParams.get('accent'), '#00A991');
-  assert.equal([...fallbackUrl.searchParams].length, 2, 'Invalid appearance input must not add request parameters');
+  assert.equal([...fallbackUrl.searchParams].length, 3, 'Invalid appearance input must not add request parameters');
 }
+
+await downloadAccountMediaKit('chatgptricks', { lang: 'es' });
+assert.equal(new URL(requests.at(-1).url).searchParams.get('lang'), 'es', 'Spanish reports must request Spanish PDF labels');
+await downloadAccountMediaKit('chatgptricks', { lang: 'invalid&theme=dark' });
+assert.equal(new URL(requests.at(-1).url).searchParams.get('lang'), 'en', 'Unsupported language must fall back without injecting parameters');
 
 const beforeFailure = downloads.length;
 for (const [label, makeResponse, expected] of [

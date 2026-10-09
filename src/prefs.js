@@ -1,3 +1,5 @@
+import { PRODUCT_ES } from './productCopy';
+import { PROMO_BRIEF_ES } from './promoBriefCopy';
 // Language and theme, shared by the React dashboard.
 //
 // They belong to the person, not the URL, so a shared ?tab=hot link doesn't
@@ -20,7 +22,7 @@ const ACCENT_KEY = 'sentient.accent';
 
 export function readLang() {
   try {
-    const saved = localStorage.getItem(LANG_KEY);
+    const saved = [localStorage.getItem(LANG_KEY), localStorage.getItem('sentient.language')].find((value) => LANGS.includes(value));
     if (LANGS.includes(saved)) return saved;
   } catch { /* private mode */ }
   // Falls back to the browser, so a Spanish-speaking teammate gets Spanish on
@@ -433,8 +435,8 @@ const ES = {
 };
 
 export function makeT(lang) {
-  return function t(text) {
-    if (lang !== 'es') return text;
-    return ES[text] ?? text;
+  return function t(text, values = {}) {
+    const translated = lang === 'es' ? ES[text] ?? PRODUCT_ES[text] ?? PROMO_BRIEF_ES[text] ?? text : text;
+    return typeof translated === 'string' ? translated.replace(/\{(\w+)\}/g, (match, key) => values[key] ?? match) : translated;
   };
 }

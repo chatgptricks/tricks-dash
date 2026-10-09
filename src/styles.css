@@ -7473,7 +7473,8 @@ body {
   color: var(--accent-text);
 }
 
-.settings-menu-admin {
+.settings-menu-admin,
+.settings-menu-connections {
   flex-direction: column;
   align-items: stretch;
   gap: 8px;
@@ -7482,7 +7483,8 @@ body {
   border-top: 1px solid rgba(var(--edge), 0.1);
 }
 
-.settings-menu-admin > span {
+.settings-menu-admin > span,
+.settings-menu-connections > span {
   font-size: 9px;
   font-weight: 850;
   letter-spacing: 0.06em;
@@ -7490,22 +7492,30 @@ body {
 }
 
 .settings-menu-link {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 6px;
-  align-self: flex-start;
-  min-height: 28px;
-  padding: 0 8px;
-  border: 1px solid rgba(var(--accent-rgb), 0.32);
-  border-radius: 7px;
-  background: rgba(var(--accent-rgb), 0.08);
-  color: var(--accent-text);
-  font-size: 11px;
+  gap: 10px;
+  min-height: 56px;
+  padding: 9px 10px;
+  border: 1px solid rgba(var(--edge), 0.1);
+  border-radius: 9px;
+  background: rgba(var(--edge), 0.025);
+  color: var(--text-strong);
+  font-size: 12px;
   font-weight: 750;
   font-family: inherit;
   text-decoration: none;
   cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease;
 }
+
+.settings-menu-link:hover { background: rgba(var(--accent-rgb), 0.08); border-color: rgba(var(--accent-rgb), 0.32); }
+.settings-menu-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.settings-menu-link-icon { display: grid; place-items: center; width: 32px; height: 32px; flex: 0 0 32px; border-radius: 8px; background: rgba(var(--accent-rgb), 0.1); color: var(--accent-text); }
+.settings-menu-link-copy { display: grid; min-width: 0; gap: 4px; }
+.settings-menu-link-copy strong { font-size: 12px; font-weight: 750; line-height: 1.25; }
+.settings-menu-link-copy small { color: rgba(var(--ink), 0.55); font-size: 10px; font-weight: 500; line-height: 1.35; }
+.settings-menu-link-arrow { margin-left: auto; flex-shrink: 0; color: rgba(var(--ink), 0.4); }
 
 .settings-access-card h1 {
   margin: 7px 0 10px;

@@ -378,7 +378,7 @@ const el = document.getElementById('root') || document.body.appendChild(document
   // not standalone topbar toggles) --------------------------------------------
   inter['theme starts dark'] = document.documentElement.getAttribute('data-theme') === 'dark';
   await click(q('.settings-menu-trigger'));
-  inter['lang toggle present'] = qa('.lang-option').map(b => b.textContent.trim()).join('/') === 'ENG/ES';
+  inter['lang toggle present'] = qa('.lang-option').map(b => b.textContent.trim()).join('/') === 'EN/ES';
   const themeButtons = qa('.settings-menu-segment button');
   const darkButton = themeButtons.find((b) => /Dark/.test(b.textContent));
   const lightButton = themeButtons.find((b) => /Light/.test(b.textContent));
@@ -397,7 +397,7 @@ const el = document.getElementById('root') || document.body.appendChild(document
   inter['lang persisted'] = localStorage.getItem('sentient.lang') === 'es';
   inter['UI translated'] = /Buscar posts|Textos, canciones/.test(document.body.innerHTML);
   inter['filters translated'] = qa('.filter-trigger').some(b => /Cuenta|Fecha|Orden/.test(b.textContent));
-  await click(qa('.lang-option').find(b => b.textContent.trim() === 'ENG'));
+  await click(qa('.lang-option').find(b => b.textContent.trim() === 'EN'));
   inter['back to english'] = /Captions, songs/.test(document.body.innerHTML);
 
   console.log('\n=== INTERACTION CHECKS ===');

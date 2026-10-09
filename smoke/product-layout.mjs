@@ -193,7 +193,12 @@ try {
       await page.goto(`${base}/${tool === 'research' ? 'index' : tool}.html?desktop=1`);
       await page.locator('.product-header').waitFor({ timeout: 20000 });
       if (['tracker', 'insights'].includes(tool)) await page.locator('#authGate.hidden').waitFor({ state: 'attached' });
-      await page.waitForFunction(() => document.querySelector('.product-nav a[href="/insights.html"]')?.getClientRects().length > 0);
+      // Role preview can reveal Insights before the static shell resolves
+      // DEV access. Measure only after every authorized link has settled.
+      await page.waitForFunction(paths => paths.every(path => {
+        const link = document.querySelector(`.product-nav a[href="${path}"]`);
+        return link && !link.hidden && getComputedStyle(link).display !== 'none' && link.getClientRects().length > 0;
+      }), navPaths);
       await page.evaluate(() => document.fonts.ready);
       await page.waitForTimeout(200);
       check(await page.locator('.app-recovery').count() === 0, `${tool}/${theme}: real workspace renders without recovery`);

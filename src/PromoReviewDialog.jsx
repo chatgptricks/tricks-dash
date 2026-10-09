@@ -1,3 +1,5 @@
+import { usePrefs } from './prefsContext';
+import { makeT, readLang } from './prefs';
 import { useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowLeft, ArrowRight, Check, Copy, ExternalLink, LoaderCircle, RotateCcw, Sparkles, X } from 'lucide-react';
@@ -9,12 +11,12 @@ const FAMILY_LABELS = { explicit: 'Disclosure language', relationship: 'Brand re
 const RECOMMENDATIONS = { possible_missed_promotion: 'Possible missed promotion', conflicting_evidence: 'Conflicting evidence', human_review: 'Needs human review', no_promotion_signal: 'No promotion signal found', assessment_available: 'Assessment available' };
 const identity = (item) => `${item?.account || ''}:${item?.shortcode || ''}`;
 const text = (value) => typeof value === 'string' ? value : '';
-const classificationLabel = (value) => CLASSIFICATION_LABELS[value] || value || 'Unclassified';
-const sourceLabel = (value) => SOURCE_LABELS[value] || (value ? String(value).replaceAll('_', ' ') : 'Source not recorded');
+const classificationLabel = (value) => makeT(readLang())(CLASSIFICATION_LABELS[value] || value || 'Unclassified');
+const sourceLabel = (value) => makeT(readLang())(SOURCE_LABELS[value] || (value ? String(value).replaceAll('_', ' ') : 'Source not recorded'));
 const initialDraft = (item) => ({ classification: text(item.classification) || 'needs_review', client: text(item.client), product: text(item.product) });
 function dateLabel(value) {
   const date = value ? new Date(value) : null;
-  return date && Number.isFinite(date.getTime()) ? new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'America/Costa_Rica' }).format(date) : 'Date unavailable';
+  return date && Number.isFinite(date.getTime()) ? new Intl.DateTimeFormat(readLang() === 'es' ? 'es-CR' : 'en-US', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'America/Costa_Rica' }).format(date) : makeT(readLang())('Date unavailable');
 }
 function captionMatches(caption, evidence) {
   const ranges = [];
@@ -128,6 +130,7 @@ export default function PromoReviewDialog(props) {
 }
 
 function ReviewDialog({ item, relatedItems = [], onClose, onSave, onJevReview, onSelect, position, onPrevious, onNext, entry, closing, onExited }) {
+  const { t } = usePrefs();
   const titleId = useId();
   const [draft, setDraft] = useState(() => initialDraft(item));
   const [operation, setOperation] = useState('');
@@ -159,7 +162,7 @@ function ReviewDialog({ item, relatedItems = [], onClose, onSave, onJevReview, o
   const support = typeof jev?.semanticPromo === 'number' && Number.isFinite(jev.semanticPromo) && jev.semanticPromo >= 0 && jev.semanticPromo <= 1 ? Math.round(jev.semanticPromo * 100) : null;
   const dirty = Object.keys(draft).some(key => draft[key] !== initialDraft(item)[key]);
   const links = Array.isArray(item.links) ? item.links.filter(link => safeExternalUrl(typeof link === 'string' ? link : link?.url)) : [];
-  const reviewStatus = REVIEW_LABELS[item.review_status] || 'Not reviewed';
+  const reviewStatus = t(REVIEW_LABELS[item.review_status] || 'Not reviewed');
   const index = Number(position?.index);
   const total = Number(position?.total);
 
@@ -236,7 +239,7 @@ function ReviewDialog({ item, relatedItems = [], onClose, onSave, onJevReview, o
     }
   };
   const copyBrief = async () => {
-    try { await navigator.clipboard.writeText(buildReviewBrief(item, relatedItems)); if (mountedRef.current) setCopyState('Review brief copied.'); }
+    try { await navigator.clipboard.writeText(buildReviewBrief(item, relatedItems, t)); if (mountedRef.current) setCopyState('Review brief copied.'); }
     catch { if (mountedRef.current) setCopyState('Could not copy. Check clipboard access and try again.'); }
   };
 
@@ -247,137 +250,135 @@ function ReviewDialog({ item, relatedItems = [], onClose, onSave, onJevReview, o
       <section ref={dialogRef} className="promo-dialog promo-review-dialog" role="dialog" aria-modal="true" aria-labelledby={titleId} aria-busy={busy} tabIndex={-1}>
         <header className="promo-review-header">
           <div>
-            <span className="promo-kicker">Promotion review</span>
-            <h2 id={titleId}>Review @{item.account || 'unknown account'}</h2>
-            {Number.isFinite(index) && index >= 0 && total > 0 ? <span className="promo-review-position">{index + 1} of {total} loaded signals</span> : <span className="promo-review-position">Outside current filtered view</span>}
+            <span className="promo-kicker">{t("Promotion review")}</span>
+            <h2 id={titleId}>{t("Review @")}{item.account || t("unknown account")}</h2>
+            {Number.isFinite(index) && index >= 0 && total > 0 ? <span className="promo-review-position">{index + 1} {t("of")} {total} {t("loaded signals")}</span> : <span className="promo-review-position">{t("Outside current filtered view")}</span>}
           </div>
-          <nav aria-label="Review navigation">
-            <button type="button" aria-label="Previous signal" disabled={busy || !onPrevious || index <= 0} onClick={() => navigate(onPrevious)}><ArrowLeft size={17} /></button>
-            <button type="button" aria-label="Next signal" disabled={busy || !onNext || (total > 0 && index >= total - 1)} onClick={() => navigate(onNext)}><ArrowRight size={17} /></button>
-            <button type="button" className="promo-close" data-autofocus aria-label="Close promotion review" disabled={busy} onClick={() => navigate(onClose)}><X size={20} /></button>
+          <nav aria-label={t("Review navigation")}>
+            <button type="button" aria-label={t("Previous signal")} disabled={busy || !onPrevious || index <= 0} onClick={() => navigate(onPrevious)}><ArrowLeft size={17} /></button>
+            <button type="button" aria-label={t("Next signal")} disabled={busy || !onNext || (total > 0 && index >= total - 1)} onClick={() => navigate(onNext)}><ArrowRight size={17} /></button>
+            <button type="button" className="promo-close" data-autofocus aria-label={t("Close promotion review")} disabled={busy} onClick={() => navigate(onClose)}><X size={20} /></button>
           </nav>
         </header>
         {pendingNavigation ? <div className="promo-unsaved-confirmation" role="alert">
-          <p><strong>Discard unsaved corrections?</strong> Your classification, client or product edits have not been saved.</p>
-          <div><button type="button" onClick={() => setPendingNavigation(null)}>Keep editing</button><button type="button" onClick={() => navigate(pendingNavigation.action, { discard: true })}>Discard changes & continue</button></div>
+          <p><strong>{t("Discard unsaved corrections?")}</strong> {t("Your classification, client or product edits have not been saved.")}</p>
+          <div><button type="button" onClick={() => setPendingNavigation(null)}>{t("Keep editing")}</button><button type="button" onClick={() => navigate(pendingNavigation.action, { discard: true })}>{t("Discard changes & continue")}</button></div>
         </div> : null}
-        {operation === 'navigate' ? <p className="promo-review-notice" role="status">Opening review…</p> : null}
+        {operation === 'navigate' ? <p className="promo-review-notice" role="status">{t("Opening review…")}</p> : null}
         <div className="promo-review-summary">
           <dl>
-            <div><dt>Current classification</dt><dd><span className={`promo-badge ${item.classification || 'needs_review'}`}>{classificationLabel(item.classification)}</span></dd></div>
-            <div><dt>Human review</dt><dd><span className={`promo-review-status ${item.review_status || 'new'}`}>{reviewStatus}</span></dd></div>
-            <div><dt>Client / brand</dt><dd>{item.client || 'Not identified'}</dd></div>
-            <div><dt>Product</dt><dd>{item.product || 'Not identified'}</dd></div>
+            <div><dt>{t("Current classification")}</dt><dd><span className={`promo-badge ${item.classification || 'needs_review'}`}>{classificationLabel(item.classification)}</span></dd></div>
+            <div><dt>{t("Human review")}</dt><dd><span className={`promo-review-status ${item.review_status || 'new'}`}>{reviewStatus}</span></dd></div>
+            <div><dt>{t("Client / brand")}</dt><dd>{item.client || t("Not identified")}</dd></div>
+            <div><dt>{t("Product")}</dt><dd>{item.product || t("Not identified")}</dd></div>
           </dl>
-          <p className="promo-by">{item.account_group_label || item.account_group || 'Account group unavailable'} · Published {dateLabel(item.published_at)} · Costa Rica time</p>
+          <p className="promo-by">{item.account_group_label || item.account_group || t("Account group unavailable")} {t("· Published")} {dateLabel(item.published_at)} {t("· Costa Rica time")}</p>
           <p className="promo-review-context">
-            {item.overrides?.classification ? 'Classification includes a saved human correction.' : item.classification_source === 'jev_semantic_scan' ? 'Discovered through JEV review of stored posts.' : 'Flagged by stored-post detection rules.'} A promotion signal alone does not confirm payment.
-          </p>
+            {item.overrides?.classification ? t("Classification includes a saved human correction.") : item.classification_source === 'jev_semantic_scan' ? t("Discovered through JEV review of stored posts.") : t("Flagged by stored-post detection rules.")} {t("A promotion signal alone does not confirm payment.")} </p>
         </div>
-        {inspection.reasons.length ? <section className="promo-review-attention" aria-label="Points to check">
-          <h3>Points to check</h3>
-          <ul>{inspection.reasons.map(reason => <li key={reason.code}><strong>{reason.label}</strong><span>{reason.detail}</span></li>)}</ul>
+        {inspection.reasons.length ? <section className="promo-review-attention" aria-label={t("Points to check")}>
+          <h3>{t("Points to check")}</h3>
+          <ul>{inspection.reasons.map(reason => <li key={reason.code}><strong>{t(reason.label)}</strong><span>{t(reason.detail)}</span></li>)}</ul>
         </section> : null}
         <div className="promo-review-layout">
           <div className="promo-review-main">
-            <section className="promo-review-section" aria-label="Full caption">
-              <header><h3>Full caption</h3><SafeLink url={item.permalink} busy={busy}>Open original post</SafeLink></header>
-              <p className="promo-section-help">Highlighted text is an exact match to stored caption evidence.</p>
-              <div className="promo-caption">{caption ? <HighlightedCaption caption={caption} ranges={ranges} /> : 'Caption unavailable in this stored record.'}</div>
+            <section className="promo-review-section" aria-label={t("Full caption")}>
+              <header><h3>{t("Full caption")}</h3><SafeLink url={item.permalink} busy={busy}>{t("Open original post")}</SafeLink></header>
+              <p className="promo-section-help">{t("Highlighted text is an exact match to stored caption evidence.")}</p>
+              <div className="promo-caption">{caption ? <HighlightedCaption caption={caption} ranges={ranges} /> : t("Caption unavailable in this stored record.")}</div>
             </section>
-            <section className="promo-review-section" aria-label="Detection evidence">
-              <header><h3>Detection evidence</h3><span>{evidence.length} stored signals</span></header>
+            <section className="promo-review-section" aria-label={t("Detection evidence")}>
+              <header><h3>{t("Detection evidence")}</h3><span>{evidence.length} {t("stored signals")}</span></header>
               {groups.length ? <div className="promo-evidence-list">{groups.map(([family, entries]) => (
                 <section className="promo-evidence-group" key={family}>
-                  <h4>{FAMILY_LABELS[family] || 'Other stored evidence'}</h4>
+                  <h4>{t(FAMILY_LABELS[family] || "Other stored evidence")}</h4>
                   {entries.map((entry, entryIndex) => {
                     const exact = entry.source === 'caption' && Boolean(text(entry.text)) && caption.includes(entry.text);
                     return <article className="promo-evidence-item" key={`${entry.rule}:${entryIndex}`}>
-                      <header><strong>{entry.rule || 'Stored signal'}</strong><span className="promo-source-label">{sourceLabel(entry.source)}</span></header>
-                      <blockquote>{text(entry.text) || 'No excerpt stored.'}</blockquote>
-                      <small>{exact ? 'Exact excerpt found in the caption above.' : entry.source === 'caption' ? 'Not found verbatim in this caption. Check the original post.' : 'Stored context evidence; not highlighted as caption text.'}</small>
+                      <header><strong>{entry.rule || t("Stored signal")}</strong><span className="promo-source-label">{sourceLabel(entry.source)}</span></header>
+                      <blockquote>{text(entry.text) || t("No excerpt stored.")}</blockquote>
+                      <small>{exact ? t("Exact excerpt found in the caption above.") : entry.source === 'caption' ? t("Not found verbatim in this caption. Check the original post.") : t("Stored context evidence; not highlighted as caption text.")}</small>
                     </article>;
                   })}
                 </section>
-              ))}</div> : <p className="promo-review-empty">No rule evidence excerpts were stored. Review the caption and available JEV context.</p>}
+              ))}</div> : <p className="promo-review-empty">{t("No rule evidence excerpts were stored. Review the caption and available JEV context.")}</p>}
             </section>
-            <section className="promo-review-section promo-jev" aria-label="JEV assessment">
+            <section className="promo-review-section promo-jev" aria-label={t("JEV assessment")}>
               <header>
-                <div><h3>JEV assessment</h3><p className="promo-section-help">Run a semantic review only when you need another reading of the stored context.</p></div>
+                <div><h3>{t("JEV assessment")}</h3><p className="promo-section-help">{t("Run a semantic review only when you need another reading of the stored context.")}</p></div>
                 <button type="button" disabled={busy || !onJevReview} onClick={reviewWithJev}>
                   {operation === 'jev' ? <LoaderCircle size={15} className="spin" /> : <Sparkles size={15} />}
-                  {operation === 'jev' ? 'Reviewing with JEV…' : 'Review with JEV'}
+                  {operation === 'jev' ? t("Reviewing with JEV…") : t("Review with JEV")}
                 </button>
               </header>
               {jev ? <div className={`promo-jev-result ${jev.recommendation || ''}`}>
-                <h4>{RECOMMENDATIONS[jev.recommendation] || 'Stored assessment'}</h4>
+                <h4>{t(RECOMMENDATIONS[jev.recommendation] || "Stored assessment")}</h4>
                 <dl>
-                  <div><dt>Commercial intent support</dt><dd>{support === null ? 'Not available' : `${support}% semantic support`}</dd></div>
-                  <div><dt>Relationship reading</dt><dd>{RELATIONSHIP_LABELS[jev.commercialRelationship] || 'Unclear relationship'}</dd></div>
-                  <div><dt>Rules result at JEV review</dt><dd>{classificationLabel(jev.deterministicClassification)}</dd></div>
-                  <div><dt>Assessment source</dt><dd>{sourceLabel(jev.source)}</dd></div>
+                  <div><dt>{t("Commercial intent support")}</dt><dd>{support === null ? t("Not available") : `${support}% semantic support`}</dd></div>
+                  <div><dt>{t("Relationship reading")}</dt><dd>{t(RELATIONSHIP_LABELS[jev.commercialRelationship] || "Unclear relationship")}</dd></div>
+                  <div><dt>{t("Rules result at JEV review")}</dt><dd>{classificationLabel(jev.deterministicClassification)}</dd></div>
+                  <div><dt>{t("Assessment source")}</dt><dd>{sourceLabel(jev.source)}</dd></div>
                 </dl>
                 {jev.guidance ? <p>{text(jev.guidance)}</p> : null}
-                {jev.contextExcerpt ? <blockquote><span className="promo-source-label">{sourceLabel(jev.contextSource)}</span><p>{text(jev.contextExcerpt)}</p></blockquote> : <p>No context excerpt was saved with this assessment.</p>}
-                <small>Semantic support measures commercial intent in the available text. It is not a payment probability. The historical rules result may differ from the current classification.</small>
-                {jev.reviewedAt ? <p className="promo-date">Reviewed {dateLabel(jev.reviewedAt)} · Costa Rica time</p> : null}
-              </div> : <p className="promo-review-empty">No JEV assessment yet. The action above runs one for this post.</p>}
+                {jev.contextExcerpt ? <blockquote><span className="promo-source-label">{sourceLabel(jev.contextSource)}</span><p>{text(jev.contextExcerpt)}</p></blockquote> : <p>{t("No context excerpt was saved with this assessment.")}</p>}
+                <small>{t("Semantic support measures commercial intent in the available text. It is not a payment probability. The historical rules result may differ from the current classification.")}</small>
+                {jev.reviewedAt ? <p className="promo-date">{t("Reviewed")} {dateLabel(jev.reviewedAt)} {t("· Costa Rica time")}</p> : null}
+              </div> : <p className="promo-review-empty">{t("No JEV assessment yet. The action above runs one for this post.")}</p>}
             </section>
-            <section className="promo-review-section" aria-label="Related loaded signals">
-              <header><h3>Compare related signals</h3><span>Loaded posts only</span></header>
-              <p className="promo-section-help">A shared brand or topic helps comparison; it does not establish a paid campaign.</p>
+            <section className="promo-review-section" aria-label={t("Related loaded signals")}>
+              <header><h3>{t("Compare related signals")}</h3><span>{t("Loaded posts only")}</span></header>
+              <p className="promo-section-help">{t("A shared brand or topic helps comparison; it does not establish a paid campaign.")}</p>
               {related.length ? <div className="promo-related-list">{related.map(({ item: relatedItem, label }) => (
                 <button type="button" key={identity(relatedItem)} disabled={busy || !onSelect} onClick={() => navigate(() => onSelect(relatedItem))}>
-                  <strong>@{relatedItem.account}</strong><small>{label}</small>
-                  <span>{relatedItem.client || 'Client unknown'} · {relatedItem.product || 'Product unknown'}</span>
-                  <span>{classificationLabel(relatedItem.classification)} · {REVIEW_LABELS[relatedItem.review_status] || 'Not reviewed'}</span>
+                  <strong>@{relatedItem.account}</strong><small>{t(label)}</small>
+                  <span>{relatedItem.client || t("Client unknown")} · {relatedItem.product || t("Product unknown")}</span>
+                  <span>{classificationLabel(relatedItem.classification)} · {t(REVIEW_LABELS[relatedItem.review_status] || "Not reviewed")}</span>
                   <small>{dateLabel(relatedItem.published_at)}</small>
                 </button>
-              ))}</div> : <p className="promo-review-empty">No related signals in the loaded results.</p>}
+              ))}</div> : <p className="promo-review-empty">{t("No related signals in the loaded results.")}</p>}
             </section>
           </div>
           <aside className="promo-review-sidebar">
             <form className="promo-review-section" onSubmit={event => { event.preventDefault(); if (dirty) save(); }}>
-              <h3>Review corrections</h3>
-              <p className="promo-section-help">Correct the assessment using the evidence. Review status is tracked separately.</p>
+              <h3>{t("Review corrections")}</h3>
+              <p className="promo-section-help">{t("Correct the assessment using the evidence. Review status is tracked separately.")}</p>
               <div className="promo-review-fields">
-                <label>Classification
-                  <select aria-label="Classification" value={draft.classification} disabled={busy} onChange={event => setDraft(current => ({ ...current, classification: event.target.value }))}>
+                <label>{t("Classification")} <select aria-label={t("Classification")} value={draft.classification} disabled={busy} onChange={event => setDraft(current => ({ ...current, classification: event.target.value }))}>
                     {!CLASSIFICATION_LABELS[draft.classification] ? <option value={draft.classification}>{draft.classification}</option> : null}
-                    {Object.entries(CLASSIFICATION_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                    {Object.entries(CLASSIFICATION_LABELS).map(([value, label]) => <option key={value} value={value}>{t(label)}</option>)}
                   </select>
                 </label>
-                <label>Client / brand<input aria-label="Client / brand" value={draft.client} disabled={busy} onChange={event => setDraft(current => ({ ...current, client: event.target.value }))} placeholder="Not identified" /></label>
-                <label>Product<input aria-label="Product" value={draft.product} disabled={busy} onChange={event => setDraft(current => ({ ...current, product: event.target.value }))} placeholder="Not identified" /></label>
+                <label>{t("Client / brand")}<input aria-label={t("Client / brand")} value={draft.client} disabled={busy} onChange={event => setDraft(current => ({ ...current, client: event.target.value }))} placeholder={t("Not identified")} /></label>
+                <label>{t("Product")}<input aria-label={t("Product")} value={draft.product} disabled={busy} onChange={event => setDraft(current => ({ ...current, product: event.target.value }))} placeholder={t("Not identified")} /></label>
               </div>
-              <p className="promo-review-draft-status">{dirty ? 'Unsaved corrections' : 'Showing saved values'}</p>
-              <button type="submit" disabled={busy || !dirty}>{operation === 'save' ? 'Saving…' : 'Save corrections'}</button>
+              <p className="promo-review-draft-status">{dirty ? t("Unsaved corrections") : t("Showing saved values")}</p>
+              <button type="submit" disabled={busy || !dirty}>{operation === 'save' ? t("Saving…") : t("Save corrections")}</button>
             </form>
             <section className="promo-review-section">
-              <h3>Offer details</h3>
-              <dl><div><dt>Automation keyword</dt><dd>{text(item.cta?.keyword) || 'None stored'}</dd></div><div><dt>Promotion code</dt><dd>{text(item.promo_code) || 'None stored'}</dd></div></dl>
-              {links.length ? <ul className="promo-link-list">{links.map((link, linkIndex) => <li key={linkIndex}><span className="promo-source-label">{sourceLabel(link.source)}</span><SafeLink url={typeof link === 'string' ? link : link.url} busy={busy} /></li>)}</ul> : <p className="promo-review-empty">No valid web links stored.</p>}
+              <h3>{t("Offer details")}</h3>
+              <dl><div><dt>{t("Automation keyword")}</dt><dd>{text(item.cta?.keyword) || t("None stored")}</dd></div><div><dt>{t("Promotion code")}</dt><dd>{text(item.promo_code) || t("None stored")}</dd></div></dl>
+              {links.length ? <ul className="promo-link-list">{links.map((link, linkIndex) => <li key={linkIndex}><span className="promo-source-label">{sourceLabel(link.source)}</span><SafeLink url={typeof link === 'string' ? link : link.url} busy={busy} /></li>)}</ul> : <p className="promo-review-empty">{t("No valid web links stored.")}</p>}
               {Array.isArray(item.client_candidates) && item.client_candidates.some(candidate => text(candidate?.name)) ? <div className="promo-review-candidates">
-                <h4>Extracted brand candidates</h4><p className="promo-section-help">Verify these names before correcting the client.</p>
+                <h4>{t("Extracted brand candidates")}</h4><p className="promo-section-help">{t("Verify these names before correcting the client.")}</p>
                 <ul>{item.client_candidates.filter(candidate => text(candidate?.name)).map((candidate, candidateIndex) => <li key={candidateIndex}><strong>{candidate.name}</strong><span className="promo-source-label">{sourceLabel(candidate.source)}</span></li>)}</ul>
               </div> : null}
             </section>
             <section className="promo-review-section">
-              <h3>Review brief</h3><p className="promo-section-help">Copy the saved assessment, source evidence and related context. Unsaved corrections are not included.</p>
-              <button type="button" disabled={busy} onClick={copyBrief}>{copyState === 'Review brief copied.' ? <Check size={15} /> : <Copy size={15} />}Copy review brief</button>
-              {copyState ? <p role="status">{copyState}</p> : null}
+              <h3>{t("Review brief")}</h3><p className="promo-section-help">{t("Copy the saved assessment, source evidence and related context. Unsaved corrections are not included.")}</p>
+              <button type="button" disabled={busy} onClick={copyBrief}>{copyState === 'Review brief copied.' ? <Check size={15} /> : <Copy size={15} />}{t("Copy review brief")}</button>
+              {copyState ? <p role="status">{t(copyState)}</p> : null}
             </section>
           </aside>
         </div>
         <footer className="promo-review-footer">
           <div className="promo-review-feedback" aria-live="polite">
-            {error ? <p className="promo-error" role="alert">{error}</p> : notice ? <p className="promo-review-notice" role="status">{notice}</p> : <p>Review actions save your corrections. Dismissal alone does not change the classification.</p>}
+            {error ? <p className="promo-error" role="alert">{t(error)}</p> : notice ? <p className="promo-review-notice" role="status">{t(notice)}</p> : <p>{t("Review actions save your corrections. Dismissal alone does not change the classification.")}</p>}
           </div>
           <div className="promo-actions">
-            {item.review_status === 'reviewed' || item.review_status === 'dismissed' ? <button type="button" disabled={busy} onClick={() => save('new')}><RotateCcw size={15} />{operation === 'new' ? 'Restoring…' : 'Restore to new'}</button> : null}
-            <button type="button" disabled={busy} onClick={() => save('dismissed', true)}>{operation === 'dismissed' ? 'Saving…' : 'Dismiss & next'}</button>
+            {item.review_status === 'reviewed' || item.review_status === 'dismissed' ? <button type="button" disabled={busy} onClick={() => save('new')}><RotateCcw size={15} />{operation === 'new' ? t("Restoring…") : t("Restore to new")}</button> : null}
+            <button type="button" disabled={busy} onClick={() => save('dismissed', true)}>{operation === 'dismissed' ? t("Saving…") : t("Dismiss & next")}</button>
             <button type="button" className="promo-primary" disabled={busy} onClick={() => save('reviewed', true)}>
-              {operation === 'reviewed' ? <LoaderCircle size={15} className="spin" /> : <Check size={15} />}{operation === 'reviewed' ? 'Saving…' : 'Mark reviewed & next'}
+              {operation === 'reviewed' ? <LoaderCircle size={15} className="spin" /> : <Check size={15} />}{operation === 'reviewed' ? t("Saving…") : t("Mark reviewed & next")}
             </button>
           </div>
         </footer>

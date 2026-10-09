@@ -15,11 +15,13 @@ function pdfFilename(disposition, handle) {
 
 // Each download requests a fresh server-rendered report. The server reads
 // the stored account history; downloading never starts a paid refresh.
-export async function downloadAccountMediaKit(handle, { signal, theme = 'light', accent = '#00A991' } = {}) {
+export async function downloadAccountMediaKit(handle, { signal, theme = 'light', accent = '#00A991', lang = 'en' } = {}) {
+  const language = lang === 'es' ? 'es' : 'en';
   const selectedAccent = typeof accent === 'string' ? accent.trim() : '';
   const appearance = new URLSearchParams({
     theme: theme === 'dark' ? 'dark' : 'light',
     accent: /^#[0-9a-f]{6}$/i.test(selectedAccent) ? selectedAccent : '#00A991',
+    lang: language,
   });
   const response = await apiFetch(`${API_BASE}/api/admin/accounts/${encodeURIComponent(handle)}/media-kit.pdf?${appearance}`, {
     cache: 'no-store',
@@ -29,14 +31,14 @@ export async function downloadAccountMediaKit(handle, { signal, theme = 'light',
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
     const detail = typeof body.detail === 'string' ? body.detail : '';
-    throw new Error(detail || `Could not generate the media kit (HTTP ${response.status}). Try again.`);
+    throw new Error(detail || (language === 'es' ? `No se pudo generar el media kit (HTTP ${response.status}). Intenta de nuevo.` : `Could not generate the media kit (HTTP ${response.status}). Try again.`));
   }
   if (!response.headers.get('content-type')?.toLowerCase().startsWith('application/pdf')) {
-    throw new Error('The server did not return a PDF. Try again.');
+    throw new Error(language === 'es' ? 'El servidor no devolvió un PDF. Intenta de nuevo.' : 'The server did not return a PDF. Try again.');
   }
   const blob = await response.blob();
   if (!blob.size || await blob.slice(0, 5).text() !== '%PDF-') {
-    throw new Error('The PDF could not be generated. Try again.');
+    throw new Error(language === 'es' ? 'No se pudo generar el PDF. Intenta de nuevo.' : 'The PDF could not be generated. Try again.');
   }
   if (signal?.aborted) throw new DOMException('Request aborted.', 'AbortError');
   const filename = pdfFilename(response.headers.get('content-disposition'), handle);

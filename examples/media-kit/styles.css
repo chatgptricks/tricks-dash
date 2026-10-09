@@ -3,6 +3,11 @@
 body { margin: 0; }
 main { width: min(920px, 100%); margin: auto; padding: 56px 24px; }
 header { margin-bottom: 40px; }
+.language-bar { display: flex; justify-content: flex-end; align-items: center; gap: 12px; margin-bottom: 24px; color: #acb5c0; font-size: 14px; }
+.language-options { display: flex; gap: 4px; padding: 4px; border: 1px solid #252d37; border-radius: 12px; }
+.language-options button { color: #acb5c0; background: transparent; border: 0; border-radius: 8px; padding: 10px 14px; font: inherit; font-weight: 600; cursor: pointer; }
+.language-options button[aria-pressed="true"] { color: #090b0e; background: #9debca; }
+.language-options button:focus-visible { outline: 2px solid #9debca; outline-offset: 3px; }
 h1 { font-size: clamp(32px, 7vw, 52px); letter-spacing: -.04em; margin: 12px 0; overflow-wrap: anywhere; }
 h2 { font-size: 21px; margin: 0 0 12px; }
 p { line-height: 1.6; }

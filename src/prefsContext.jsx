@@ -27,6 +27,13 @@ export function PrefsProvider({ children, lang: controlledLang, theme: controlle
   useEffect(() => { if (!isLangControlled) applyLang(effectiveLang); }, [effectiveLang, isLangControlled]);
   useEffect(() => { if (!isThemeControlled) applyTheme(effectiveTheme); }, [effectiveTheme, isThemeControlled]);
   useEffect(() => { applyAccent(accent); }, [accent]);
+  useEffect(() => {
+    const changed = event => {
+      if (!isLangControlled && ['sentient.lang', 'sentient.language'].includes(event.key)) setLangState(readLang());
+    };
+    window.addEventListener('storage', changed);
+    return () => window.removeEventListener('storage', changed);
+  }, [isLangControlled]);
   // The server owns these per user; its values replace the first-paint copy.
   useEffect(() => {
     syncUserPreferences();

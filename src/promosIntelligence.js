@@ -179,43 +179,72 @@ export function summarizePromos(items) {
   };
 }
 
-export function buildReviewBrief(value, items = []) {
+const BRIEF_SOURCES = Object.freeze({
+  caption: 'Caption', first_comment: 'First comment', metadata: 'Post metadata',
+  paid_partnership: 'Partnership metadata', alt_text: 'Image alt text', transcript: 'Transcript',
+  hook_text: 'Cover text', ocr: 'Cover text', jev_manual_review: 'Requested JEV review',
+  jev_semantic_scan: 'JEV discovery', hashtag: 'Hashtag', mention: 'Mention',
+  relationship: 'Brand relationship', url: 'URL',
+});
+const BRIEF_FAMILIES = Object.freeze({
+  explicit: 'Disclosure language', relationship: 'Brand relationship', affiliate: 'Affiliate or referral offer',
+  cta: 'Call to action', commercial: 'Commercial language', hashtag: 'Hashtag signal',
+  metadata: 'Post metadata', stack: 'Related-post support',
+});
+const BRIEF_RECOMMENDATIONS = Object.freeze({
+  possible_missed_promotion: 'Possible missed promotion', conflicting_evidence: 'Conflicting evidence',
+  human_review: 'Needs human review', no_promotion_signal: 'No promotion signal found',
+  assessment_available: 'Assessment available',
+});
+
+export function buildReviewBrief(value, items = [], t = value => value) {
   const item = record(value);
   const inspection = inspectPromo(item);
   const jev = record(item.jev_review);
   const evidence = evidenceRows(item);
   const related = getRelatedPromos(item, items);
   const sourceUrl = safeExternalUrl(item.permalink);
+  // Localize only known interface labels. Unknown enums and original excerpts,
+  // names, URLs, dates and JEV guidance remain source values.
+  const knownLabel = (raw, labels, fallback = raw) => {
+    const copy = labels[raw];
+    return copy && t(copy) !== copy ? t(copy) : fallback;
+  };
+  const sourceLabel = (value, fallback = 'source unspecified') => {
+    const source = text(value);
+    return source ? knownLabel(source, BRIEF_SOURCES) : t(fallback);
+  };
+  const status = text(item.review_status) || 'new';
   const lines = [
-    'PROMOS REVIEW BRIEF',
-    `Brand: ${inspection.missingClient ? 'Unknown client' : text(item.client)}`,
-    `Product: ${text(item.product) || 'Not specified'}`,
-    `Account: @${text(item.account).replace(/^@/, '') || 'unknown'}`,
-    `Post: ${sourceUrl || 'Link unavailable'}`,
-    `Published: ${text(item.published_at) || 'Date unavailable'}`,
-    `Classification: ${CLASSIFICATION_LABELS[item.classification] || 'Needs review'}`,
-    `Review status: ${text(item.review_status) || 'new'}`,
-    `Review priority: ${inspection.priority} (triage only; not a probability)`,
-    '', 'REVIEW CHECKS',
-    ...(inspection.reasons.length ? inspection.reasons.map(reason => `- ${reason.label}: ${reason.detail}`) : ['- No additional issues surfaced in the loaded evidence.']),
-    '', 'SAVED RULE EVIDENCE',
-    ...(evidence.length ? evidence.map(entry => `- ${text(entry.rule) || text(entry.family) || 'Signal'} [${text(entry.source) || 'source unspecified'}]: ${text(entry.text) || 'Excerpt unavailable'}`) : ['- No saved rule evidence.']),
+    t('PROMOS REVIEW BRIEF'),
+    `${t('Brand')}: ${inspection.missingClient ? t('Unknown client') : text(item.client)}`,
+    `${t('Product')}: ${text(item.product) || t('Not specified')}`,
+    `${t('Account')}: @${text(item.account).replace(/^@/, '') || t('unknown')}`,
+    `${t('Post')}: ${sourceUrl || t('Link unavailable')}`,
+    `${t('Published')}: ${text(item.published_at) || t('Date unavailable')}`,
+    `${t('Classification')}: ${t(CLASSIFICATION_LABELS[item.classification] || 'Needs review')}`,
+    `${t('Review status')}: ${['new', 'reviewed', 'dismissed'].includes(status) ? t(status) : status}`,
+    `${t('Review priority')}: ${t(inspection.priority)} (${t('triage only; not a probability')})`,
+    '', t('REVIEW CHECKS'),
+    ...(inspection.reasons.length ? inspection.reasons.map(reason => `- ${t(reason.label)}: ${t(reason.detail)}`) : [`- ${t('No additional issues surfaced in the loaded evidence.')}`]),
+    '', t('SAVED RULE EVIDENCE'),
+    ...(evidence.length ? evidence.map(entry => `- ${text(entry.rule) || knownLabel(text(entry.family), BRIEF_FAMILIES) || t('Signal')} [${sourceLabel(entry.source)}]: ${text(entry.text) || t('Excerpt unavailable')}`) : [`- ${t('No saved rule evidence.')}`]),
   ];
-  if (list(item.client_candidates).length) lines.push('', 'EXTRACTED BRAND CANDIDATES', ...list(item.client_candidates).map(record).filter(candidate => text(candidate.name)).map(candidate => `- ${text(candidate.name)} (${text(candidate.source) || 'source unspecified'})`));
+  if (list(item.client_candidates).length) lines.push('', t('EXTRACTED BRAND CANDIDATES'), ...list(item.client_candidates).map(record).filter(candidate => text(candidate.name)).map(candidate => `- ${text(candidate.name)} (${sourceLabel(candidate.source)})`));
   if (Object.keys(jev).length) {
-    lines.push('', 'SAVED JEV ASSESSMENT',
-      `Relationship reading: ${RELATIONSHIP_LABELS[jev.commercialRelationship] || 'Unclear relationship'}`,
-      `Recommendation: ${text(jev.recommendation).replaceAll('_', ' ') || 'Assessment available'}`,
-      `Rules at JEV review: ${CLASSIFICATION_LABELS[jev.deterministicClassification] || 'Unavailable'}`,
-      `Guidance: ${text(jev.guidance) || 'Unavailable'}`);
-    if (text(jev.contextExcerpt)) lines.push(`Reviewed excerpt [${text(jev.contextSource) || 'stored context'}]: ${text(jev.contextExcerpt)}`);
+    lines.push('', t('SAVED JEV ASSESSMENT'),
+      `${t('Relationship reading')}: ${t(RELATIONSHIP_LABELS[jev.commercialRelationship] || 'Unclear relationship')}`,
+      `${t('Recommendation')}: ${text(jev.recommendation) ? knownLabel(text(jev.recommendation), BRIEF_RECOMMENDATIONS, text(jev.recommendation).replaceAll('_', ' ')) : t('Assessment available')}`,
+      `${t('Rules at JEV review')}: ${t(CLASSIFICATION_LABELS[jev.deterministicClassification] || 'Unavailable')}`,
+      `${t('Guidance')}: ${text(jev.guidance) || t('Unavailable')}`);
+    if (text(jev.contextExcerpt)) lines.push(`${t('Reviewed excerpt')} [${sourceLabel(jev.contextSource, 'stored context')}]: ${text(jev.contextExcerpt)}`);
   }
   const links = list(item.links).map(record).map(link => ({ ...link, url: safeExternalUrl(link.url) })).filter(link => link.url);
-  if (links.length) lines.push('', 'OBSERVED LINKS', ...links.map(link => `- ${link.url} (${text(link.source) || 'source unspecified'})`));
-  if (text(record(item.cta).keyword)) lines.push(`Observed CTA keyword: ${text(record(item.cta).keyword)}`);
-  if (text(item.promo_code)) lines.push(`Observed promo code: ${text(item.promo_code)}`);
-  if (related.length) lines.push('', 'RELATED LOADED POSTS', ...related.map(({ item: sibling, label }) => `- ${label}: @${text(sibling.account)} / ${text(sibling.shortcode)} · ${CLASSIFICATION_LABELS[sibling.classification] || 'Needs review'} · ${safeExternalUrl(sibling.permalink) || 'Link unavailable'}`));
-  lines.push('', 'Scope: this brief uses loaded evidence and saved assessments. Related posts are comparisons, not proof of a shared campaign. Promotion signals do not verify payment.');
+  if (links.length) lines.push('', t('OBSERVED LINKS'), ...links.map(link => `- ${link.url} (${sourceLabel(link.source)})`));
+  if (text(record(item.cta).keyword)) lines.push(`${t('Observed CTA keyword')}: ${text(record(item.cta).keyword)}`);
+  if (text(item.promo_code)) lines.push(`${t('Observed promo code')}: ${text(item.promo_code)}`);
+  if (related.length) lines.push('', t('RELATED LOADED POSTS'), ...related.map(({ item: sibling, label }) => `- ${t(label)}: @${text(sibling.account)} / ${text(sibling.shortcode)} · ${t(CLASSIFICATION_LABELS[sibling.classification] || 'Needs review')} · ${safeExternalUrl(sibling.permalink) || t('Link unavailable')}`));
+  lines.push('', t('Scope: this brief uses loaded evidence and saved assessments. Related posts are comparisons, not proof of a shared campaign. Promotion signals do not verify payment.'));
   return lines.join('\n');
 }
 

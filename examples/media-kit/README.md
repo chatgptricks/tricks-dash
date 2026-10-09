@@ -1,6 +1,14 @@
 # Ejemplo de media kit conectado a Sentient Dash
 
+[English instructions](README.en.md)
+
 Website de una cuenta con perfil, audiencia, rendimiento, posts e historial de seguidores. El servidor conserva la clave y consulta la API; el navegador solo recibe datos públicos a través de `/api/media-kit`, `/api/posts` y `/api/followers` del propio website. Usa Node.js 22 o posterior y ninguna dependencia adicional.
+
+## Interfaz en inglés y español
+
+El selector **EN / ES** cambia títulos, métricas, fechas, estados de carga, mensajes vacíos y errores sin volver a consultar la API. La preferencia se guarda en `sentient.lang` y `sentient.language`, las mismas claves compatibles del dashboard; si no hay una preferencia, se usa el idioma del navegador. Las fechas conservan la zona de Costa Rica. Nombres, biografías y captions se muestran como contenido original de la cuenta, sin traducirlos ni ejecutarlos como HTML.
+
+Puedes usar esta base para una página de creador o marca, un catálogo de posts, un reporte o una interfaz para tu aplicación. El diseño de media kit es solo un ejemplo; conserva la separación entre interfaz y servidor al adaptarlo.
 
 ## Ejecutar en tu computadora
 

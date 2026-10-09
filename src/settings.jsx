@@ -4,7 +4,8 @@ import { browserPopupRedirectResolver, getRedirectResult, onAuthStateChanged, si
 import { DevRolePreview, SettingsPanel } from './App';
 import { API_BASE, apiFetch } from './api';
 import { describeSignInError, firebaseAuth, startGoogleSignIn } from './firebase';
-import { PrefsProvider } from './prefsContext';
+import { PrefsProvider, usePrefs } from './prefsContext';
+import { LanguageSelector } from './LanguageSelector';
 import { decodeRouteState } from './urlCodec';
 import { clearSsoCookie, startSsoRefresh, trySsoSignIn } from './sso';
 import './styles.css';
@@ -13,40 +14,44 @@ const LEGACY_REFRESH_PASSWORD = 'authenticated';
 const ACTIVE_ROLE_PREVIEWS = new Set(['sales', 'pd', 'vc', 'trainee', 'admin']);
 
 function SettingsSignIn({ notice }) {
+  const { t, lang, setLang } = usePrefs();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const login = async () => {
     setBusy(true);
     setError('');
     const nextError = await startGoogleSignIn();
-    if (nextError) setError(describeSignInError(nextError));
+    if (nextError) setError(nextError);
     setBusy(false);
   };
   return (
     <main className="auth-screen">
       <section className="auth-card settings-access-card">
-        <span className="settings-command-kicker">Settings command center</span>
-        <h1>Sign in to continue</h1>
-        <p>Only Sentient administrators and developers can open this workspace.</p>
+        <LanguageSelector lang={lang} setLang={setLang} t={t} />
+        <span className="settings-command-kicker">{t("Settings command center")}</span>
+        <h1>{t("Sign in to continue")}</h1>
+        <p>{t("Only Sentient administrators and developers can open this workspace.")}</p>
         <button type="button" className="primary-button auth-google-button" onClick={login} disabled={busy}>
-          {busy ? 'Signing in…' : 'Sign in with Google'}
+          {busy ? t("Signing in…") : t("Sign in with Google")}
         </button>
-        {notice || error ? <p className="settings-notice-error">{notice || error}</p> : null}
+        {notice || error ? <p className="settings-notice-error">{notice || (error ? describeSignInError(error, lang) : null)}</p> : null}
       </section>
     </main>
   );
 }
 
 function SettingsRestricted({ email, onSignOut }) {
+  const { t, lang, setLang } = usePrefs();
   return (
     <main className="auth-screen">
       <section className="auth-card settings-access-card">
-        <span className="settings-command-kicker">Restricted workspace</span>
-        <h1>Admin or Dev access required</h1>
-        <p><strong>{email}</strong> can use the regular Sentient tools, but cannot manage shared settings.</p>
+        <LanguageSelector lang={lang} setLang={setLang} t={t} />
+        <span className="settings-command-kicker">{t("Restricted workspace")}</span>
+        <h1>{t("Admin or Dev access required")}</h1>
+        <p><strong>{email}</strong> {t("can use the regular Sentient tools, but cannot manage shared settings.")}</p>
         <div className="settings-access-actions">
-          <a className="ghost-button primary" href={import.meta.env.BASE_URL}>Back to Dashboard</a>
-          <button type="button" className="ghost-button" onClick={onSignOut}>Sign out</button>
+          <a className="ghost-button primary" href={import.meta.env.BASE_URL}>{t("Back to Dashboard")}</a>
+          <button type="button" className="ghost-button" onClick={onSignOut}>{t("Sign out")}</button>
         </div>
       </section>
     </main>

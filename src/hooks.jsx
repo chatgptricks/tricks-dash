@@ -24,6 +24,8 @@ import { clearSsoCookie, startSsoRefresh, trySsoSignIn } from "./sso";
 import ProductHeader from "./ProductHeader";
 import { SettingsMenu } from "./App";
 import { PrefsProvider } from "./prefsContext";
+import { useToolLanguage } from "./toolI18n";
+import { LanguageSelector } from "./LanguageSelector";
 import "./styles.css";
 import "./hooks.css";
 
@@ -46,24 +48,6 @@ const HOOKS_API_BASE = (
   (IS_LOCAL_PAGE && import.meta.env.VITE_HOOKS_API_BASE) || API_BASE
 ).replace(/\/$/, "");
 
-function fmt(value) {
-  const number = Number(value);
-  if (!Number.isFinite(number)) return "—";
-  return new Intl.NumberFormat("en-US", {
-    notation: number >= 10_000 ? "compact" : "standard",
-    maximumFractionDigits: 1,
-  }).format(number);
-}
-function dateLabel(value) {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime())
-    ? "Date unavailable"
-    : new Intl.DateTimeFormat("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      }).format(date);
-}
 function human(value) {
   return String(value || "").replaceAll("_", " ");
 }
@@ -99,12 +83,13 @@ async function request(path, options = {}) {
 }
 
 function Login({ error }) {
+  const { lang, setLang, t, errorText } = useToolLanguage();
   const [busy, setBusy] = useState(false);
   async function login() {
     setBusy(true);
     try {
       const issue = await startGoogleSignIn();
-      if (issue) window.alert(describeSignInError(issue));
+      if (issue) window.alert(describeSignInError(issue, lang));
     } finally {
       setBusy(false);
     }
@@ -112,35 +97,37 @@ function Login({ error }) {
   return (
     <main className="hooks-gate">
       <section>
-        <span>Sentient Dash · DEV tool</span>
-        <h1>Hooks</h1>
-        <p>Search proven openings and turn them into new drafts.</p>
+        <LanguageSelector {...{ lang, setLang, t }} />
+        <span>{t('Sentient Dash · DEV tool')}</span>
+        <h1>{t('Hooks')}</h1>
+        <p>{t('Search proven openings and turn them into new drafts.')}</p>
         <button onClick={login} disabled={busy}>
-          {busy ? "Signing in…" : "Sign in with Google"}
+          {t(busy ? "Signing in…" : "Sign in with Google")}
         </button>
-        {error && <p role="alert">{error}</p>}
+        {error && <p role="alert">{errorText(error)}</p>}
       </section>
     </main>
   );
 }
 
 function HookCard({ item, index, selected, onUse, onToggleSave, saving }) {
+  const { t, dateLabel, fmt } = useToolLanguage();
   return (
     <article className={`hook-card ${selected ? "is-selected" : ""}`}>
       <div className="hook-card-rank">{String(index + 1).padStart(2, "0")}</div>
       <div className="hook-card-body">
         <div className="hook-card-meta">
           <span className={`hook-origin is-${item.source_kind}`}>
-            {item.source_kind === "ocr" ? "OCR" : "Caption"}
+            {t(item.source_kind === "ocr" ? "OCR" : "Caption")}
           </span>
-          <span>@{item.account || "unknown"}</span>
+          <span>@{item.account || t("unknown")}</span>
           <span>{dateLabel(item.published_at)}</span>
         </div>
         <blockquote>{item.hook_text}</blockquote>
         <div className="hook-tags">
           {MATCH_LABELS[item.matchType] && (
-            <span className={`hook-match is-${item.matchType}`} title={MATCH_LABELS[item.matchType].title}>
-              {MATCH_LABELS[item.matchType].label}
+            <span className={`hook-match is-${item.matchType}`} title={t(MATCH_LABELS[item.matchType].title)}>
+              {t(MATCH_LABELS[item.matchType].label)}
             </span>
           )}
           {item.primary_topic && <span>{human(item.primary_topic)}</span>}
@@ -148,7 +135,7 @@ function HookCard({ item, index, selected, onUse, onToggleSave, saving }) {
             <span key={category}>{human(category)}</span>
           ))}
           {!item.categorized_at && (
-            <span className="is-pending">JEV pending</span>
+            <span className="is-pending">{t('JEV pending')}</span>
           )}
         </div>
         <div className="hook-performance">
@@ -157,18 +144,18 @@ function HookCard({ item, index, selected, onUse, onToggleSave, saving }) {
             {fmt(item.likes)}
           </strong>
           <span>
-            {item.likes == null
+            {t(item.likes == null
               ? "Performance unavailable"
-              : "Likes on original post"}
+              : "Likes on original post")}
           </span>
           {item.contextScore != null && (
-            <span>Context {Math.round(item.contextScore * 100)}%</span>
+            <span>{t("Context {percent}%", { percent: Math.round(item.contextScore * 100) })}</span>
           )}
         </div>
         <div className="hook-card-actions">
           <button className="hook-use" onClick={() => onUse(item)}>
             <WandSparkles size={15} />
-            Use this hook
+            {t('Use this hook')}
           </button>
           <button
             className={item.saved ? "is-saved" : ""}
@@ -177,11 +164,11 @@ function HookCard({ item, index, selected, onUse, onToggleSave, saving }) {
             onClick={() => onToggleSave(item)}
           >
             <Bookmark size={15} fill={item.saved ? "currentColor" : "none"} />
-            {item.saved ? "Saved" : "Save"}
+            {t(item.saved ? "Saved" : "Save")}
           </button>
           {item.permalink && (
             <a href={item.permalink} target="_blank" rel="noreferrer">
-              Original <ExternalLink size={13} />
+              {t('Original')} <ExternalLink size={13} />
             </a>
           )}
         </div>
@@ -191,12 +178,13 @@ function HookCard({ item, index, selected, onUse, onToggleSave, saving }) {
 }
 
 function DraftList({ drafts, activeId, onOpen, onDelete }) {
+  const { t, dateLabel } = useToolLanguage();
   return (
     <section className="hook-drafts">
       <header>
         <div>
-          <span>PRIVATE WORKSPACE</span>
-          <h2>Draft hooks</h2>
+          <span>{t('PRIVATE WORKSPACE')}</span>
+          <h2>{t('Draft hooks')}</h2>
         </div>
         <b>{drafts.length}</b>
       </header>
@@ -210,12 +198,12 @@ function DraftList({ drafts, activeId, onOpen, onDelete }) {
             >
               <span>{draft.text}</span>
               <small>
-                {draft.topic || "Untitled"} · {dateLabel(draft.updated_at)}
+                {draft.topic || t("Untitled")} · {dateLabel(draft.updated_at)}
               </small>
               <i
                 role="button"
                 tabIndex={0}
-                aria-label={`Delete ${draft.text}`}
+                aria-label={t("Delete {text}", { text: draft.text })}
                 onClick={(event) => {
                   event.stopPropagation();
                   onDelete(draft);
@@ -235,8 +223,7 @@ function DraftList({ drafts, activeId, onOpen, onDelete }) {
         </div>
       ) : (
         <p>
-          Save a hook from the editor and it will stay private to your
-          account.
+          {t('Save a hook from the editor and it will stay private to your account.')}
         </p>
       )}
     </section>
@@ -244,6 +231,7 @@ function DraftList({ drafts, activeId, onOpen, onDelete }) {
 }
 
 function HookLab() {
+  const { lang, setLang, t, fmt, errorText } = useToolLanguage("Hooks");
   const session = useRef(0), searchSequence = useRef(0), draftsSequence = useRef(0), editorRevision = useRef(0);
   const savingSourceIds = useRef(new Set());
   const [user, setUser] = useState(undefined);
@@ -545,33 +533,34 @@ function HookLab() {
     clearSsoCookie();
     setAuthError("");
     const issue = await startGoogleSignIn();
-    if (issue) setAuthError(describeSignInError(issue));
+    if (issue) setAuthError({ signInCode: issue.code || '' });
   }
 
   if (user === undefined)
-    return <main className="hooks-loading">Loading Hooks…</main>;
+    return <main className="hooks-loading">{t('Loading Hooks…')}</main>;
   if (!user) return <Login error={authError} />;
   if (viewer?.accessError)
     return (
       <main className="hooks-gate">
         <section>
-          <span>Sentient Dash · DEV tool</span>
-          <h1>Hooks</h1>
-          <p>Hooks could not verify your access: {viewer.accessError}</p>
+          <LanguageSelector {...{ lang, setLang, t }} />
+          <span>{t('Sentient Dash · DEV tool')}</span>
+          <h1>{t('Hooks')}</h1>
+          <p>{t("Hooks could not verify your access:")} {errorText(viewer.accessError)}</p>
           {authError && (
             <p className="hooks-auth-error" role="alert">
-              {authError}
+              {errorText(authError)}
             </p>
           )}
           <div className="hooks-gate-actions">
             <button onClick={useAnotherAccount}>
-              Use another Google account
+              {t('Use another Google account')}
             </button>
             <button
               className="is-secondary"
               onClick={() => window.location.reload()}
             >
-              Retry
+              {t('Retry')}
             </button>
           </div>
         </section>
@@ -581,22 +570,23 @@ function HookLab() {
     return (
       <main className="hooks-gate">
         <section>
-          <span>Sentient Dash · DEV tool</span>
-          <h1>Hooks</h1>
-          <p>This tool is available only to authorized accounts.</p>
+          <LanguageSelector {...{ lang, setLang, t }} />
+          <span>{t('Sentient Dash · DEV tool')}</span>
+          <h1>{t('Hooks')}</h1>
+          <p>{t('This tool is available only to authorized accounts.')}</p>
           {authError && (
             <p className="hooks-auth-error" role="alert">
-              {authError}
+              {errorText(authError)}
             </p>
           )}
           <button onClick={useAnotherAccount}>
-            Use another Google account
+            {t('Use another Google account')}
           </button>
         </section>
       </main>
     );
   if (!viewer)
-    return <main className="hooks-loading">Verifying access…</main>;
+    return <main className="hooks-loading">{t('Verifying access…')}</main>;
 
   const signOutNow = () => {
     clearSsoCookie();
@@ -611,7 +601,7 @@ function HookLab() {
         isDev={Boolean(viewer.is_dev)}
         account={<SettingsMenu email={user.email} avatarUrl={user.photoURL || viewer.avatar_url} isAdmin={Boolean(viewer.is_admin)} isDev={Boolean(viewer.is_dev)} onSignOut={signOutNow} />}
       >
-        <h1>Hooks</h1>
+        <h1>{t('Hooks')}</h1>
       </ProductHeader>
 
       <section className="hooks-toolbar product-page-controls">
@@ -625,15 +615,15 @@ function HookLab() {
           <label>
             <Search size={19} />
             <input
-              aria-label="Search hooks"
+              aria-label={t('Search hooks')}
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Try: prompts, AI jobs, creator growth…"
+              placeholder={t('Try: prompts, AI jobs, creator growth…')}
             />
             {query && (
               <button
                 type="button"
-                aria-label="Clear search"
+                aria-label={t('Clear search')}
                 onClick={() => {
                   setQuery("");
                   search("");
@@ -653,39 +643,35 @@ function HookLab() {
             ) : (
               <Search size={17} />
             )}
-            {loading ? "Searching" : "Search hooks"}
+            {t(loading ? "Searching" : "Search hooks")}
           </button>
-          <span className="hooks-search-method">Words + JEV context</span>
+          <span className="hooks-search-method">{t('Words + JEV context')}</span>
         </form>
       </section>
 
-      <section className="hooks-stats" aria-label="Hook library status">
+      <section className="hooks-stats" aria-label={t('Hook library status')}>
         <div>
           <strong>{fmt(status.total)}</strong>
-          <span>Source hooks</span>
+          <span>{t('Source hooks')}</span>
         </div>
         <div>
           <strong>{fmt(status.ocr)}</strong>
-          <span>Clean OCR openings</span>
+          <span>{t('Clean OCR openings')}</span>
         </div>
         <div>
           <strong>{fmt(status.categorized)}</strong>
-          <span>JEV categorized</span>
+          <span>{t('JEV categorized')}</span>
         </div>
         <button onClick={categorize} disabled={categorizing || !status.pending}>
           <Sparkles size={15} />
-          {categorizing
-            ? "Processing…"
-            : status.pending
-              ? `Process ${fmt(status.pending)} pending`
-              : "JEV caught up"}
+          {categorizing ? t("Processing…") : status.pending ? t("Process {count} pending", { count: fmt(status.pending) }) : t("JEV caught up")}
         </button>
       </section>
-      {warning && <div className="hooks-notice is-warning">{warning}</div>}
+      {warning && <div className="hooks-notice is-warning">{errorText(warning)}</div>}
       {error && (
         <div className="hooks-notice is-error" role="alert">
-          {error}
-          <button aria-label="Dismiss error" onClick={() => setError("")}>
+          {errorText(error)}
+          <button aria-label={t('Dismiss error')} onClick={() => setError("")}>
             <X size={14} />
           </button>
         </div>
@@ -695,9 +681,9 @@ function HookLab() {
         <section className="hooks-results">
           <header>
             <div>
-              <span>PROVEN LIBRARY</span>
+              <span>{t('PROVEN LIBRARY')}</span>
               <h2>
-                {searchedQuery ? `Results for “${searchedQuery}”` : "Best-performing hooks"}
+                {searchedQuery ? t("Results for “{query}”", { query: searchedQuery }) : t("Best-performing hooks")}
               </h2>
             </div>
             <b>{results.length}</b>
@@ -716,9 +702,9 @@ function HookLab() {
             ))
           ) : (
             <div className="hooks-empty">
-              <strong>{loading ? "Searching your hook library…" : error ? "Hook results could not be loaded." : "No hooks matched this search."}</strong>
+              <strong>{t(loading ? "Searching your hook library…" : error ? "Hook results could not be loaded." : "No hooks matched this search.")}</strong>
               <span>
-                {loading ? "Matching words and context." : error ? "Search again to retry. Your drafts remain available." : "Try a shorter phrase or a broader description of the topic."}
+                {t(loading ? "Matching words and context." : error ? "Search again to retry. Your drafts remain available." : "Try a shorter phrase or a broader description of the topic.")}
               </span>
             </div>
           )}
@@ -728,21 +714,21 @@ function HookLab() {
           <section className="hook-studio-panel">
             <header>
               <div>
-                <span>CREATE</span>
-                <h2>Build a new hook</h2>
+                <span>{t('CREATE')}</span>
+                <h2>{t('Build a new hook')}</h2>
               </div>
               <Sparkles size={20} />
             </header>
             <label className="hook-field">
-              <span>Topic or your own direction</span>
+              <span>{t('Topic or your own direction')}</span>
               <textarea
                 value={brief}
                 onChange={(event) => setBrief(event.target.value)}
-                placeholder="What is the post about? Add any angle, fact, or manual direction you want the AI to follow."
+                placeholder={t('What is the post about? Add any angle, fact, or manual direction you want the AI to follow.')}
               />
             </label>
             <div className="hook-sources">
-              <span>Inspiration sources</span>
+              <span>{t('Inspiration sources')}</span>
               {selectedItems.length ? (
                 <div>
                   {selectedItems.map((item) => (
@@ -755,7 +741,7 @@ function HookLab() {
                         )
                       }
                     >
-                      <b>{item.source_kind.toUpperCase()}</b>
+                      <b>{t(item.source_kind === "ocr" ? "OCR" : "Caption").toUpperCase()}</b>
                       {item.hook_text.slice(0, 62)}
                       <X size={12} />
                     </button>
@@ -763,8 +749,7 @@ function HookLab() {
                 </div>
               ) : (
                 <p>
-                  Select up to three proven hooks, or generate from the current
-                  search.
+                  {t('Select up to three proven hooks, or generate from the current search.')}
                 </p>
               )}
             </div>
@@ -778,36 +763,36 @@ function HookLab() {
               ) : (
                 <Sparkles size={17} />
               )}
-              {generating ? "Generating…" : "Generate 6 hooks"}
+              {t(generating ? "Generating…" : "Generate 6 hooks")}
             </button>
           </section>
 
           <section className="hook-editor">
             <header>
               <div>
-                <span>EDITABLE DRAFT</span>
-                <h2>Your hook</h2>
+                <span>{t('EDITABLE DRAFT')}</span>
+                <h2>{t('Your hook')}</h2>
               </div>
-              {activeDraft && <em>{editor === savedDraftText ? "Saved" : "Unsaved changes"}</em>}
+              {activeDraft && <em>{t(editor === savedDraftText ? "Saved" : "Unsaved changes")}</em>}
             </header>
             <textarea
-              aria-label="Editable hook"
+              aria-label={t('Editable hook')}
               value={editor}
               onChange={(event) => {
                 setEditor(event.target.value);
                 editorRevision.current += 1;
                 setCopied(false);
               }}
-              placeholder="Select a proven hook, choose a generated version, or write your own opening here."
+              placeholder={t('Select a proven hook, choose a generated version, or write your own opening here.')}
             />
             <label>
               <span>
-                Rewrite direction <small>optional</small>
+                {t('Rewrite direction')} <small>{t('optional')}</small>
               </span>
               <input
                 value={rewriteInstruction}
                 onChange={(event) => setRewriteInstruction(event.target.value)}
-                placeholder="Shorter, more controversial, make it Spanish…"
+                placeholder={t('Shorter, more controversial, make it Spanish…')}
               />
             </label>
             <div className="hook-editor-actions">
@@ -816,22 +801,22 @@ function HookLab() {
                 disabled={generating || !editor.trim()}
               >
                 <WandSparkles size={15} />
-                Generate versions
+                {t('Generate versions')}
               </button>
               <button
                 onClick={saveDraft}
                 disabled={savingDraft || !editor.trim()}
               >
                 <Bookmark size={15} />
-                {savingDraft
+                {t(savingDraft
                   ? "Saving…"
                   : activeDraft
                     ? "Update draft"
-                    : "Save draft"}
+                    : "Save draft")}
               </button>
               <button onClick={copy} disabled={!editor.trim()}>
                 <Copy size={15} />
-                {copied ? "Copied" : "Copy"}
+                {t(copied ? "Copied" : "Copy")}
               </button>
             </div>
           </section>
@@ -839,8 +824,8 @@ function HookLab() {
           {variants.length > 0 && (
             <section className="hook-variants">
               <header>
-                <span>6 VERSIONS</span>
-                <small>Click one to edit it</small>
+                <span>{t('6 VERSIONS')}</span>
+                <small>{t('Click one to edit it')}</small>
               </header>
               {variants.map((variant, index) => (
                 <button
@@ -879,8 +864,7 @@ function HookLab() {
 }
 
 mountApp(
-  <PrefsProvider lang="en" theme="dark">
+  <PrefsProvider theme="dark">
     <HookLab />
   </PrefsProvider>,
-  { lang: 'en' },
 );

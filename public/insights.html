@@ -5,7 +5,8 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <script src="/mobile-redirect.js?v=20260908-device"></script>
-<script src="/user-preferences.js?v=20260928-prefs1"></script>
+<script src="/user-preferences.js?v=20261009-i18n1"></script>
+<script src="/tool-translations.js?v=20261009-i18n1"></script>
 <script src="/role-preview.js?v=20260928-tracker" defer></script>
 <script src="/context-menu.js?v=20260901-context1" defer></script>
 <title>Insights · sentientdash.app</title>
@@ -219,7 +220,7 @@ tbody tr:hover{background:rgba(var(--edge),.03)}
 <link rel="stylesheet" href="/product-shell.css?v=20260905c">
 <link rel="stylesheet" href="/obsidian.css?v=20260928-visual1">
 <link rel="stylesheet" href="/product-motion.css?v=20261003-motion1">
-<link rel="stylesheet" href="/product-layout.css?v=20261004-shell1">
+<link rel="stylesheet" href="/product-layout.css?v=20261009-connections1">
 <script src="/visual-effects.js?v=20260928-visual1" defer></script>
 </head>
 <body>
@@ -300,7 +301,7 @@ tbody tr:hover{background:rgba(var(--edge),.03)}
       </select>
     </div>
     <div class="f"><label>Format</label>
-      <select id="ftype"><option value="">All</option><option>Video</option><option>Carousel</option><option>Image</option></select>
+      <select id="ftype"><option value="">All</option><option value="Video">Video</option><option value="Carousel">Carousel</option><option value="Image">Image</option></select>
     </div>
     <div class="f"><label>Rank by</label>
       <select id="metric">
@@ -330,9 +331,11 @@ tbody tr:hover{background:rgba(var(--edge),.03)}
 <script>
 const API = 'https://cortex-api-db2e.onrender.com';
 const $ = s => document.querySelector(s);
+const toolLocale = () => document.documentElement.lang === 'es' ? 'es-CR' : 'en-US';
+const toolText = text => window.SentientToolI18n?.translate(text, document.documentElement.lang) ?? text;
 const fmt = n => n===null||n===undefined||Number.isNaN(n) ? '—'
   : Math.abs(n)>=1e6 ? (n/1e6).toFixed(1)+'M'
-  : Math.abs(n)>=1e3 ? (n/1e3).toFixed(1)+'K' : Math.round(n).toLocaleString('en-US');
+  : Math.abs(n)>=1e3 ? (n/1e3).toFixed(1)+'K' : Math.round(n).toLocaleString(toolLocale());
 const xf  = n => (n===null||n===undefined||!isFinite(n)) ? '—' : n.toFixed(2)+'×';
 const pct = n => (n===null||n===undefined||!isFinite(n)) ? '—' : n.toFixed(1)+'%';
 const escapeHtml = value => String(value ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
@@ -621,7 +624,7 @@ async function shareLink(){
     await navigator.clipboard.writeText(location.href);
     btn.textContent='Copied'; setTimeout(()=>{btn.textContent='Copy link'},1600);
   }catch(e){
-    prompt('Copy this link:', location.href);
+    prompt(toolText('Copy this link:'), location.href);
   }
 }
 
@@ -682,7 +685,7 @@ function render(){
   writeUrl();
   const P = filtered();
   computeBaselines(P);
-  $('#scope').textContent = P.length.toLocaleString('en-US')+' posts · '+SEL.size+' accounts';
+  $('#scope').textContent = P.length.toLocaleString(toolLocale())+' posts · '+SEL.size+' accounts';
   if(!P.length){
     $('#app').innerHTML=sectionFollowerGrowth()+'<div class="empty">No posts match these filters.</div>';
     drawFollowerGrowth();
@@ -732,8 +735,8 @@ function compactCandidate(candidate){
   const label=`${candidate.format || 'Post'} · ${title}`.slice(0,96);
   const url=safeUrl(candidate.permalink);
   return url
-    ? `<a href="${escapeHtml(url)}" target="_blank" rel="noreferrer" title="Open post on Instagram">${escapeHtml(label)}</a>`
-    : `<span title="Post link unavailable">${escapeHtml(label)}</span>`;
+    ? `<a href="${escapeHtml(url)}" target="_blank" rel="noreferrer" title="Open post on Instagram" data-i18n-skip>${escapeHtml(label)}</a>`
+    : `<span title="Post link unavailable" data-i18n-skip>${escapeHtml(label)}</span>`;
 }
 function peakCandidateSummary(event){
   const candidates=event.candidate_posts || [];
@@ -1016,7 +1019,7 @@ function drawTopics(P){
     $(el).innerHTML=items.map(([w,v])=>{
       const sz=11+Math.round(v.length/max*9);
       const m=med(v);
-      return `<span style="font-size:${sz}px" title="${v.length} posts · median ${xf(m)} its account's normal">${escapeHtml(w)}<b>${xf(m)}</b></span>`;
+      return `<span style="font-size:${sz}px" title="${v.length} posts · median ${xf(m)} its account's normal"><span data-i18n-skip>${escapeHtml(w)}</span><b>${xf(m)}</b></span>`;
     }).join('');
   };
   paint('#wordCloud',top(wordStats,4)); paint('#tagCloud',top(tagStats,3));
@@ -1025,7 +1028,7 @@ function drawTopics(P){
   const perf=Object.entries(wordStats).filter(([,v])=>v.length>=6)
     .map(([k,v])=>({k,n:v.length,a:med(v)})).sort((a,b)=>b.a-a.a).slice(0,3);
   const notes=[];
-  if(perf.length) notes.push(`Top-performing words (by median): ${perf.map(p=>`<b>${escapeHtml(p.k)}</b> (${xf(p.a)}, ${p.n} posts)`).join(', ')}.`);
+  if(perf.length) notes.push(`Top-performing words (by median): ${perf.map(p=>`<b data-i18n-skip>${escapeHtml(p.k)}</b> (${xf(p.a)}, ${p.n} posts)`).join(', ')}.`);
   const audio=P.filter(p=>p.oa!=null);
   if(audio.length>8){
     const orig=med(audio.filter(p=>p.oa===1).map(idx).filter(x=>x!=null));
@@ -1126,7 +1129,7 @@ function sectionTop(P){
       <tbody>${rows.map((p,i)=>`<tr class="insight-post-row" style="cursor:pointer" data-url="${escapeHtml(safeUrl(p.u))}">
         <td style="text-align:left;color:var(--muted)">${i+1}</td>
         <td style="text-align:left"><span style="color:${textColorFor(p.a)}">@${escapeHtml(p.a)}</span></td>
-        <td style="text-align:left;max-width:340px;overflow:hidden;text-overflow:ellipsis;color:var(--muted-2)">${escapeHtml((p.ocr||'—').slice(0,90))}</td>
+        <td style="text-align:left;max-width:340px;overflow:hidden;text-overflow:ellipsis;color:var(--muted-2)" data-i18n-skip>${escapeHtml((p.ocr||'—').slice(0,90))}</td>
         <td>${new Date(p.ts).toISOString().slice(0,10)}</td>
         <td>${escapeHtml(p.pt==='clips'?'Reel':p.t)}</td>
         <td>${fmt(p.l)}</td><td>${p.v==null?'—':fmt(p.v)}</td><td>${pct(engPerView(p))}</td></tr>`).join('')}</tbody>
@@ -1141,6 +1144,7 @@ document.addEventListener('click', event => {
   if(url) window.open(url, '_blank', 'noopener');
 });
 
+window.__rerenderCharts = () => { if (RAW.length || FOLLOWER_GROWTH) render(); };
 window.__startInsightsBoot = boot;
 </script>
 
@@ -1206,9 +1210,7 @@ async function startSignIn() {
 function describeSignInError(err) {
   const code = err?.code || '';
   if (code === 'auth/popup-blocked') {
-    return String(document.documentElement.lang || navigator.language || '').toLowerCase().startsWith('es')
-      ? 'Tu navegador bloqueó la ventana de Google. Permite ventanas emergentes para sentientdash.app y vuelve a intentarlo.'
-      : 'Your browser blocked the Google sign-in window. Allow pop-ups for sentientdash.app and try again.';
+    return 'Your browser blocked the Google sign-in window. Allow pop-ups for sentientdash.app and try again.';
   }
   if (code === 'auth/unauthorized-domain') {
     return 'This domain (' + location.hostname + ') isn’t authorized in Firebase yet.';
@@ -1331,7 +1333,7 @@ function canvasOnPanel(canvas){
 
 async function exportPdf(){
   const btn = document.getElementById('pdfBtn');
-  const label = btn.textContent;
+  const label = 'Export PDF';
   btn.disabled = true; btn.textContent = 'Building…';
   try {
     const JsPDF = await loadJsPdf();
@@ -1351,9 +1353,9 @@ async function exportPdf(){
 
     // header
     text('Sentient Insights', 20, 'bold', 2);
-    const when = new Date().toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
+    const when = new Date().toLocaleString(toolLocale(), { dateStyle: 'medium', timeStyle: 'short' });
     doc.setTextColor(120);
-    text(`${document.getElementById('scope')?.textContent || ''}  ·  generated ${when}`, 9, 'normal', 10);
+    text(`${document.getElementById('scope')?.textContent || ''}  ·  ${toolText('generated')} ${when}`, 9, 'normal', 10);
 
     // the filters this report was built from
     const filters = [];
@@ -1364,7 +1366,7 @@ async function exportPdf(){
     });
     const accs = [...document.querySelectorAll('#accChips .chip.on')]
       .map(c => c.textContent).filter(t => t.startsWith('@'));
-    if(accs.length) filters.push(`Accounts: ${accs.join(', ')}`);
+    if(accs.length) filters.push(`${toolText('Accounts')}: ${accs.join(', ')}`);
     if(filters.length) text(filters.join('   |   '), 8, 'normal', 14);
     doc.setTextColor(0);
 
@@ -1375,7 +1377,7 @@ async function exportPdf(){
       note: k.querySelector('em')?.textContent?.trim() || '',
     }));
     if(kpis.length){
-      room(30); text('Summary', 12, 'bold', 8);
+      room(30); text(toolText('Summary'), 12, 'bold', 8);
       const colW = CW / 2;
       kpis.forEach((k, i) => {
         const col = i % 2, x = M + col * colW;
@@ -1456,7 +1458,7 @@ const PREF_LANG = 'sentient.lang', PREF_THEME = 'sentient.theme';
 const ES = {"Copy link": "Copiar link", "Dashboard": "Dashboard", "Insights": "Insights", "Tracker": "Tracker", "Sign in with your Google account to continue.": "Iniciá sesión con tu cuenta de Google para continuar.", "Sign in with Google": "Iniciar sesión con Google", "Sign out": "Cerrar sesión", "Copy a link to this exact view": "Copiar link a esta vista exacta", "Loading…": "Cargando…", "Loading...": "Cargando...", "Toggle theme": "Cambiar tema", "Language": "Idioma", "Accounts": "Cuentas", "All": "Todas", "Ours only": "Solo nuestras", "Competitors only": "Solo competidores", "From": "Desde", "To": "Hasta", "Quick range": "Rango rápido", "Format": "Formato", "Rank by": "Ordenar por", "All time": "Todo el tiempo", "Likes": "Likes", "Comments": "Comentarios", "Posts": "Posts", "Views (video)": "Vistas (video)", "Engagement / view": "Engagement / vista", "Hot posts": "Posts hot", "per day": "por día", "average": "promedio", "of total": "del total", "What format performs best": "Qué formato funciona mejor", "Performance by format": "Rendimiento por formato", "Slides per carousel": "Slides por carrusel", "Reel length": "Duración del reel", "number of slides": "cantidad de slides", "Production": "Producción", "Avg likes": "Likes prom.", "Avg views": "Vistas prom.", "Video": "Video", "Carousel": "Carrusel", "Image": "Imagen", "Settings": "Ajustes", "Accent color": "Color de acento", "Theme": "Tema", "Dark": "Oscuro", "Light": "Claro", "Admin": "Admin", "Open full settings": "Abrir Settings completo"};
 
 function readPref(key, allowed, fallback) {
-  try { const v = localStorage.getItem(key); if (allowed.includes(v)) return v; } catch {}
+  try { const v = localStorage.getItem(key) || (key === PREF_LANG ? localStorage.getItem('sentient.language') : null); if (allowed.includes(v)) return v; } catch {}
   return fallback;
 }
 let lang = readPref(PREF_LANG, ['en', 'es'],
@@ -1476,41 +1478,44 @@ function setTheme(next) {
   if (typeof window.__rerenderCharts === 'function') window.__rerenderCharts();
 }
 
+function translatedText(text) {
+  return window.SentientToolI18n?.translate(text, lang)
+    ?? (lang === 'es' && ES[text.trim()] ? text.replace(text.trim(), ES[text.trim()]) : text);
+}
 function translateNode(node) {
-  if (node.__en === undefined) node.__en = node.nodeValue;
-  const key = (node.__en || '').trim();
-  if (!key) return;
-  node.nodeValue = lang === 'es' && ES[key]
-    ? node.__en.replace(key, ES[key])
-    : node.__en;
+  // Renderers sometimes update an existing node instead of replacing it.
+  // Capture that new English value without treating our translation as source.
+  if (node.__en === undefined || (node.__translated !== undefined && node.nodeValue !== node.__translated)) node.__en = node.nodeValue;
+  const result = translatedText(node.__en || '');
+  node.__translated = result;
+  if (node.nodeValue !== result) node.nodeValue = result;
 }
 
 function applyI18n() {
-  document.documentElement.setAttribute('lang', lang);
-  // SCRIPT and STYLE hold text nodes too. Rewriting those would mean editing
-  // source code and CSS with a phrase dictionary -- harmless today only
-  // because neither is re-parsed after load.
+  if (document.documentElement.lang !== lang) document.documentElement.lang = lang;
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
     acceptNode(node) {
-      const tag = node.parentNode && node.parentNode.nodeName;
-      return (tag === 'SCRIPT' || tag === 'STYLE')
-        ? NodeFilter.FILTER_REJECT
-        : NodeFilter.FILTER_ACCEPT;
+      const parent = node.parentElement;
+      const tag = parent?.nodeName;
+      return (tag === 'SCRIPT' || tag === 'STYLE' || parent?.closest('[data-i18n-skip]'))
+        ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT;
     },
   });
   const nodes = [];
   while (walker.nextNode()) nodes.push(walker.currentNode);
   nodes.forEach(translateNode);
-  document.querySelectorAll('[placeholder],[title]').forEach((el) => {
-    for (const attr of ['placeholder', 'title']) {
-      const original = el.getAttribute(attr);
-      if (original === null) continue;
-      const store = '__en_' + attr;
-      if (el[store] === undefined) el[store] = original;
-      const key = (el[store] || '').trim();
-      el.setAttribute(attr, lang === 'es' && ES[key] ? ES[key] : el[store]);
+  document.querySelectorAll('[placeholder],[title],[aria-label]').forEach((el) => {
+    for (const attr of ['placeholder', 'title', 'aria-label']) {
+      const current = el.getAttribute(attr);
+      if (current === null) continue;
+      const store = '__en_' + attr, previous = '__translated_' + attr;
+      if (el[store] === undefined || (el[previous] !== undefined && current !== el[previous])) el[store] = current;
+      const result = translatedText(el[store] || '');
+      el[previous] = result;
+      if (current !== result) el.setAttribute(attr, result);
     }
   });
+  if (typeof CHARTS !== 'undefined') window.SentientToolI18n?.charts(CHARTS, lang);
   document.querySelectorAll('.lang-option').forEach((b) => {
     b.classList.toggle('is-on', b.dataset.lang === lang);
     b.setAttribute('aria-pressed', String(b.dataset.lang === lang));
@@ -1534,9 +1539,18 @@ const observer = new MutationObserver(() => {
 observer.observe(document.body, { childList: true, subtree: true });
 
 function setLang(next) {
+  if (next !== 'en' && next !== 'es') return;
+  const changed = lang !== next;
   lang = next;
+  try { localStorage.setItem(PREF_LANG, next); localStorage.setItem('sentient.language', next); } catch {}
+  if (document.documentElement.lang !== lang) document.documentElement.lang = lang;
+  // Rebuild from in-memory data to localize dates; no API refresh is started.
+  if (changed) window.__rerenderCharts?.();
   applyI18n();
 }
+window.addEventListener('storage', (event) => {
+  if (event.key === PREF_LANG || event.key === 'sentient.language') setLang(event.newValue);
+});
 
 document.querySelectorAll('.lang-option').forEach((b) => {
   b.addEventListener('click', () => { setLang(b.dataset.lang); window.SentientPreferences?.save('language', lang); });

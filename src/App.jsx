@@ -16,6 +16,9 @@ import {
   Check,
   CalendarDays,
   ChevronDown,
+  ChevronRight,
+  Bot,
+  Code2,
   Download,
   ExternalLink,
   Filter,
@@ -52,7 +55,8 @@ import { browserPopupRedirectResolver, getRedirectResult, onAuthStateChanged, si
 import { describeSignInError, firebaseAuth, startGoogleSignIn } from './firebase';
 import { clearSsoCookie, startSsoRefresh, trySsoSignIn } from './sso';
 import { PrefsProvider, usePrefs } from './prefsContext';
-import { ACCENT_CHOICES, accentHex } from './prefs';
+import { LanguageSelector } from './LanguageSelector';
+import { ACCENT_CHOICES, accentHex, readLang } from './prefs';
 import { API_BASE, apiFetch } from './api';
 import { downloadAccountMediaKit } from './accountMediaKit';
 import { mergeUserDrafts, saveUserProfile, userProfileDraft as userDraft } from './userAdmin';
@@ -260,6 +264,7 @@ function emojiFaviconHref(emoji) {
 }
 
 function useSectionFavicon(section) {
+  const { t, lang } = usePrefs();
   useEffect(() => {
     const config = SECTION_ICONS[section];
     if (!config) return;
@@ -271,8 +276,8 @@ function useSectionFavicon(section) {
     }
     link.type = 'image/svg+xml';
     link.href = emojiFaviconHref(config.emoji);
-    document.title = `${config.title} · sentientdash.app`;
-  }, [section]);
+    document.title = `${t(config.title)} · sentientdash.app`;
+  }, [section, lang]);
 }
 
 
@@ -342,7 +347,7 @@ export function SettingsMenu({ email, avatarUrl, isAdmin, isDev, onSignOut, show
                   type="button"
                   className={accent === value ? `accent-${value} is-on` : `accent-${value}`}
                   onClick={() => setAccent(value)}
-                  aria-label={`${value} accent`}
+                  aria-label={`${t(value)} · ${t('Accent color')}`}
                 />
               ))}
               <label className="settings-custom-color" title={t('Custom color')}>
@@ -363,9 +368,9 @@ export function SettingsMenu({ email, avatarUrl, isAdmin, isDev, onSignOut, show
               <button type="button" className={theme === 'light' ? 'is-on' : ''} onClick={() => setTheme('light')}><Sun size={13} />{t('Light')}</button>
             </div>
           </div> : null}
-          {!hideAppearanceControls ? <div className="settings-menu-section">
+          <div className="settings-menu-section">
             <span>{t('Language')}</span>
-            <div className="lang-toggle" role="group" aria-label="Language">
+            <div className="lang-toggle" role="group" aria-label={t("Language")}>
               {['en', 'es'].map((code) => (
                 <button
                   key={code}
@@ -374,22 +379,22 @@ export function SettingsMenu({ email, avatarUrl, isAdmin, isDev, onSignOut, show
                   onClick={() => setLang(code)}
                   aria-pressed={lang === code}
                 >
-                  {code === 'en' ? 'ENG' : 'ES'}
+                  {code === 'en' ? 'EN' : 'ES'}
                 </button>
               ))}
             </div>
-          </div> : null}
+          </div>
           {(isAdmin || isDev) && showSettingsLink ? (
             <div className="settings-menu-section settings-menu-admin">
               <span>{t('Command center')}</span>
-              <a className="settings-menu-link" href={`${import.meta.env.BASE_URL}settings.html`} target="sentient-settings">
-                <Settings size={13} />
-                {t('Settings')}
-              </a>
+              <a className="settings-menu-link" href={`${import.meta.env.BASE_URL}settings.html`} target="sentient-settings"><span className="settings-menu-link-icon"><Settings size={17} /></span><span className="settings-menu-link-copy"><strong>{t('Settings')}</strong><small>{t('Manage your workspace')}</small></span><ChevronRight size={15} className="settings-menu-link-arrow" /></a>
             </div>
           ) : null}
-          <a className="settings-menu-link" href={`${import.meta.env.BASE_URL}agents.html`}>Agent connections</a>
-          <a className="settings-menu-link" href={`${import.meta.env.BASE_URL}api.html`}>API connections</a>
+          <div className="settings-menu-section settings-menu-connections">
+            <span>{t('Connections')}</span>
+            <a className="settings-menu-link" href={`${import.meta.env.BASE_URL}agents.html`}><span className="settings-menu-link-icon"><Bot size={17} /></span><span className="settings-menu-link-copy"><strong>{t('Agent connections')}</strong><small>{t('Connect your AI tools')}</small></span><ChevronRight size={15} className="settings-menu-link-arrow" /></a>
+            <a className="settings-menu-link" href={`${import.meta.env.BASE_URL}api.html`}><span className="settings-menu-link-icon"><Code2 size={17} /></span><span className="settings-menu-link-copy"><strong>{t('API connections')}</strong><small>{t('Connect websites and apps')}</small></span><ChevronRight size={15} className="settings-menu-link-arrow" /></a>
+          </div>
           <div className="settings-menu-footer">
             <small>{email}</small>
             <button type="button" className="settings-menu-signout" onClick={onSignOut}>
@@ -419,7 +424,7 @@ const AUTO_POLL_MS = 3 * 60 * 1000;
 // blank wait; all normal reads are already guarded by apiFetch's short retry.
 const RECONNECT_POLL_MS = 3_000;
 
-const compactFormatter = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 });
+const compactFormatter = { format: (value) => new Intl.NumberFormat(readLang() === 'es' ? 'es-CR' : 'en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(value) };
 
 // The API returns the full post collection, so this compact fingerprint lets
 // an open dashboard distinguish a real server-side change from a routine
@@ -798,6 +803,7 @@ const readRolePreview = () => {
 const hasActiveRolePreview = () => ACTIVE_ROLE_PREVIEWS.has(readRolePreview());
 
 export function DevRolePreview({ isDev, canSwitchRoles = false, availableRoles = [] }) {
+  const { t } = usePrefs();
   const [open, setOpen] = useState(false);
   const requestedRole = readRolePreview();
   const options = [...new Set((isDev ? ROLE_SWITCHER_DEFAULTS[DEV_EMAIL] : availableRoles).filter((role) => ['sales', 'pd', 'vc', 'trainee', 'admin'].includes(role)))];
@@ -810,7 +816,7 @@ export function DevRolePreview({ isDev, canSwitchRoles = false, availableRoles =
     else window.sessionStorage.removeItem('sentient.queueRolePreview');
     window.location.reload();
   };
-  return <div className="dev-role-preview"><button type="button" onClick={() => setOpen((value) => !value)} aria-expanded={open}><span>{isDev ? 'DEV' : 'ROLE'}</span>{label}</button>{open ? <div className="dev-role-preview-panel"><strong>{isDev ? 'Role preview' : 'Active role'}</strong><p>{isDev ? 'Only visible to User 03.' : 'Switch among your assigned roles.'}</p><label>Active role<select value={active} onChange={choose}><option value="">{isDev ? 'Dev · full access' : 'Use my default role'}</option>{options.map((role) => <option key={role} value={role}>{({ sales: 'Sales', pd: 'Post Designer', vc: 'Viral Coordinator', trainee: 'Trainee', admin: 'Admin' })[role]}</option>)}</select></label></div> : null}</div>;
+  return <div className="dev-role-preview"><button type="button" onClick={() => setOpen((value) => !value)} aria-expanded={open}><span>{isDev ? 'DEV' : t("ROLE")}</span>{label}</button>{open ? <div className="dev-role-preview-panel"><strong>{isDev ? t("Role preview") : t("Active role")}</strong><p>{isDev ? t("Only visible to User 03.") : t("Switch among your assigned roles.")}</p><label>{t("Active role")}<select value={active} onChange={choose}><option value="">{isDev ? t("Dev · full access") : t("Use my default role")}</option>{options.map((role) => <option key={role} value={role}>{t(({ sales: 'Sales', pd: 'Post Designer', vc: 'Viral Coordinator', trainee: 'Trainee', admin: 'Admin' })[role])}</option>)}</select></label></div> : null}</div>;
 }
 
 function openToolTab(event, url, windowName) {
@@ -2047,15 +2053,15 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
                   <button className="search-clear" type="button" aria-label={t('Clear search')} onClick={() => setQuery('')}>
                     <X size={15} />
                   </button>
-                ) : <kbd className="search-kbd">⌘K</kbd>}
+                ) : <kbd className="search-kbd">{t("⌘K")}</kbd>}
               </div>
               <p className={loading ? 'results-count results-count-loading' : 'results-count'}>
-                {loading ? <><LoaderCircle className="spin" size={14} /><strong>Loading</strong></> : <><strong>{displayedPostCount.toLocaleString()}</strong> {t('posts')}</>}
+                {loading ? <><LoaderCircle className="spin" size={14} /><strong>{t("Loading")}</strong></> : <><strong>{displayedPostCount.toLocaleString(readLang() === 'es' ? 'es-CR' : 'en-US')}</strong> {t('posts')}</>}
               </p>
             </> : null}
           </ProductHeader>
-          {incomingData && !homeView ? <div className="live-data-notice" role="status"><LoaderCircle className="spin" size={16} /><span>New data is incoming</span></div> : null}
-          {connectionNotice ? <div className="connection-notice" role="status"><LoaderCircle size={15} /><span>{connectionNotice}</span><button type="button" onClick={() => dashboardLoader.current?.(undefined, { silent: true })}>Retry now</button></div> : null}
+          {incomingData && !homeView ? <div className="live-data-notice" role="status"><LoaderCircle className="spin" size={16} /><span>{t("New data is incoming")}</span></div> : null}
+          {connectionNotice ? <div className="connection-notice" role="status"><LoaderCircle size={15} /><span>{t(connectionNotice)}</span><button type="button" onClick={() => dashboardLoader.current?.(undefined, { silent: true })}>{t("Retry now")}</button></div> : null}
 
 
 
@@ -2071,7 +2077,7 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
             ref={groupTabsRef}
             className="group-tabs"
             role="tablist"
-            aria-label="Account group"
+            aria-label={t("Account group")}
           >
             {GROUP_TABS.map((tab) => (
               <button
@@ -2082,7 +2088,7 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
                 className={activeGroup === tab.value ? 'group-tab group-tab-active' : 'group-tab'}
                 onClick={() => startTransition(() => setActiveGroup(tab.value))}
               >
-                {tab.label}
+                {t(tab.label)}
               </button>
             ))}
             {/* Custom lists render as extra tabs after HOT. They're private
@@ -2104,8 +2110,8 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
               type="button"
               className="group-tab group-tab-add"
               onClick={() => setListEditor({ id: null, name: '', handles: [] })}
-              title="Create a custom list of accounts"
-              aria-label="Create a custom list"
+              title={t("Create a custom list of accounts")}
+              aria-label={t("Create a custom list")}
             >
               <Plus size={13} />
             </button>
@@ -2117,9 +2123,7 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
                   setListEditor({ id: activeList.id, name: activeList.name, handles: [...activeList.handles] })
                 }
                 title={`Edit "${activeList.name}"`}
-              >
-                Edit
-              </button>
+              > {t("Edit")} </button>
             ) : null}
 
           </div>
@@ -2189,7 +2193,7 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
                             }))}
                             aria-pressed={active}
                           >
-                            {option.label}<span>{categoryAccountCounts[option.value]}</span>
+                            {t(option.label)}<span>{categoryAccountCounts[option.value]}</span>
                           </button>
                         );
                       })}
@@ -2213,7 +2217,7 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
                           onClick={() => startTransition(() => setSortBy(option.value))}
                           aria-pressed={option.value === sortBy}
                         >
-                          {option.label}
+                          {t(option.label)}
                           {option.value === sortBy ? <Check size={14} /> : null}
                         </button>
                       ))}
@@ -2238,7 +2242,7 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
                     <p className="popover-subhead">{t('Flags')}</p>
                     <div className="chip-row">
                       <button type="button" className={promoOnly ? 'chip chip-active' : 'chip'} onClick={() => startTransition(() => setPromoOnly((value) => !value))} aria-pressed={promoOnly} title={`Only posts carrying ${PROMO_HASHTAG} or flagged as promo by hand`}><Megaphone size={12} />{t('Promo')}</button>
-                      <button type="button" className={showHidden ? 'chip chip-active' : 'chip'} onClick={() => startTransition(() => setShowHidden((value) => !value))} aria-pressed={showHidden} disabled={!hiddenCount} title={hiddenCount ? 'Show the posts you have hidden, so you can bring them back' : 'Nothing hidden yet'}>{showHidden ? <Eye size={12} /> : <EyeOff size={12} />}{t('Hidden')}<span>{hiddenCount}</span></button>
+                      <button type="button" className={showHidden ? 'chip chip-active' : 'chip'} onClick={() => startTransition(() => setShowHidden((value) => !value))} aria-pressed={showHidden} disabled={!hiddenCount} title={hiddenCount ? t("Show the posts you have hidden, so you can bring them back") : t("Nothing hidden yet")}>{showHidden ? <Eye size={12} /> : <EyeOff size={12} />}{t('Hidden')}<span>{hiddenCount}</span></button>
                     </div>
                   </FilterPopover>
 
@@ -2251,9 +2255,9 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
                     width={280}
                   >
                     <div className="date-fields">
-                      <label className="select-field"><span>{t('Range')}</span><select aria-label="Date range" value={datePreset} onChange={(event) => applyDatePreset(event.target.value)}>{datePreset === 'custom' ? <option value="custom">Custom range</option> : null}{datePresets.map((preset) => <option key={preset.value} value={preset.value}>{preset.label}</option>)}</select></label>
-                      <label className="date-field"><span>{t('From')}</span><input type="date" aria-label="Date from" value={dateFrom} min={ranges.dateMin} max={ranges.dateMax} onChange={(e) => { setDatePreset('custom'); setDateFrom(e.target.value); }} /></label>
-                      <label className="date-field"><span>{t('To')}</span><input type="date" aria-label="Date to" value={dateTo} min={ranges.dateMin} max={ranges.dateMax} onChange={(e) => { setDatePreset('custom'); setDateTo(e.target.value); }} /></label>
+                      <label className="select-field"><span>{t('Range')}</span><select aria-label={t("Date range")} value={datePreset} onChange={(event) => applyDatePreset(event.target.value)}>{datePreset === 'custom' ? <option value="custom">{t("Custom range")}</option> : null}{datePresets.map((preset) => <option key={preset.value} value={preset.value}>{t(preset.label)}</option>)}</select></label>
+                      <label className="date-field"><span>{t('From')}</span><input type="date" aria-label={t("Date from")} value={dateFrom} min={ranges.dateMin} max={ranges.dateMax} onChange={(e) => { setDatePreset('custom'); setDateFrom(e.target.value); }} /></label>
+                      <label className="date-field"><span>{t('To')}</span><input type="date" aria-label={t("Date to")} value={dateTo} min={ranges.dateMin} max={ranges.dateMax} onChange={(e) => { setDatePreset('custom'); setDateTo(e.target.value); }} /></label>
                     </div>
                   </FilterPopover>
 
@@ -2272,7 +2276,7 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
                         <span>{t('Likes')}</span>
                         <input
                           type="range"
-                          aria-label="Minimum likes"
+                          aria-label={t("Minimum likes")}
                           min={0}
                           max={LIKES_STOPS.length - 1}
                           step={1}
@@ -2302,11 +2306,11 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
                       <div className="engagement-numbers">
                         <label className="number-field">
                           <span>{t('Min likes')}</span>
-                          <input aria-label="Minimum likes" type="number" min={0} placeholder="0" title="Show posts with at least this many likes" value={minLikes} onChange={(e) => startTransition(() => setMinLikes(clampNumber(e.target.value, 0)))} />
+                          <input aria-label={t("Minimum likes")} type="number" min={0} placeholder="0" title={t("Show posts with at least this many likes")} value={minLikes} onChange={(e) => startTransition(() => setMinLikes(clampNumber(e.target.value, 0)))} />
                         </label>
                         <label className="number-field">
                           <span>{t('Min comments')}</span>
-                          <input aria-label="Minimum comments" placeholder="0" title="Show posts with at least this many comments" type="number" min={0} value={minComments} onChange={(e) => startTransition(() => setMinComments(clampNumber(e.target.value, ranges.commentsMin)))} />
+                          <input aria-label={t("Minimum comments")} placeholder="0" title={t("Show posts with at least this many comments")} type="number" min={0} value={minComments} onChange={(e) => startTransition(() => setMinComments(clampNumber(e.target.value, ranges.commentsMin)))} />
                         </label>
                       </div>
                     </div>
@@ -2338,7 +2342,7 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
 
           <section className="panel gallery">
           <div ref={resultsScrollRef} className="results-scroll">
-            {grouping && !filtered.length ? <p className="home-loading" role="status">Grouping similar posts… You can keep using Research.</p> : filtered.length ? (
+            {grouping && !filtered.length ? <p className="home-loading" role="status">{t("Grouping similar posts… You can keep using Research.")}</p> : filtered.length ? (
               <StackActions onSaved={applyStackResult} hideLauncher={isSidebarOpen}><div className="gallery-grid">
                 {visibleTopics.map((group, index) => <TopicStack key={group.id} posts={group.posts} visiblePosts={group.visiblePosts} total={group.total} renderLayer={(post) => <PostCardLayer post={post} />} renderCard={(post, expand, dragProps) => (
                   <PostCard
@@ -2366,8 +2370,8 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
             ) : (
               <div className="empty-state">
                 <p>{activeGroup === 'hot' && !showHotHistory && hotHistoryCount
-                  ? 'Nothing is hot right now.'
-                  : 'No posts match the current filters.'}</p>
+                  ? t("Nothing is hot right now.")
+                  : t("No posts match the current filters.")}</p>
                 <button className="ghost-button" onClick={onReset}>
                   {t('Clear filters')}
                 </button>
@@ -2381,34 +2385,28 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
             {activeGroup === 'hot' && !showHotHistory && hotHistoryCount ? (
               <div className="hot-history-cta">
                 <button className="ghost-button" onClick={() => startTransition(() => setShowHotHistory(true))}>
-                  <Flame size={13} />
-                  Show historical HOT posts
-                  <span>{hotHistoryCount.toLocaleString()}</span>
+                  <Flame size={13} /> {t("Show historical HOT posts")} <span>{hotHistoryCount.toLocaleString(readLang() === 'es' ? 'es-CR' : 'en-US')}</span>
                 </button>
-                <p>Older posts that went hot before the last {HOT_TAB_WINDOW_HOURS}h.</p>
+                <p>{t("Older posts that went hot before the last")} {HOT_TAB_WINDOW_HOURS}{t("h.")}</p>
               </div>
             ) : null}
             {activeGroup === 'hot' && showHotHistory ? (
               <div className="hot-history-cta">
-                <button className="ghost-button" onClick={() => startTransition(() => setShowHotHistory(false))}>
-                  Hide historical
-                </button>
+                <button className="ghost-button" onClick={() => startTransition(() => setShowHotHistory(false))}> {t("Hide historical")} </button>
               </div>
             ) : null}
             {!grouping && visibleStackCount < galleryTotal ? (
               <div className="load-more-end">
-                <button className="ghost-button load-more-button" onClick={() => setVisibleStackCount((count) => count + STACKS_PER_BATCH)}>
-                  Load {STACKS_PER_BATCH} more stacks
-                </button>
+                <button className="ghost-button load-more-button" onClick={() => setVisibleStackCount((count) => count + STACKS_PER_BATCH)}> {t("Load")} {STACKS_PER_BATCH} {t("more stacks")} </button>
               </div>
             ) : null}
           </div>
 
           <div className="pagination">
             <div className="pagination-copy">
-              {grouping ? 'Comparing similar posts…' : <>{filtered.length.toLocaleString()} posts in {galleryTotal.toLocaleString()} stacks · showing {galleryTotal ? 1 : 0}-{Math.min(visibleStackCount, galleryTotal)} stacks</>}
+              {grouping ? t("Comparing similar posts…") : <>{filtered.length.toLocaleString(readLang() === 'es' ? 'es-CR' : 'en-US')} {t("posts in")} {galleryTotal.toLocaleString(readLang() === 'es' ? 'es-CR' : 'en-US')} {t("stacks · showing")} {galleryTotal ? 1 : 0}-{Math.min(visibleStackCount, galleryTotal)} {t("stacks")}</>}
             </div>
-            {grouping || visibleStackCount < galleryTotal ? null : <span className="all-loaded">All matching stacks loaded</span>}
+            {grouping || visibleStackCount < galleryTotal ? null : <span className="all-loaded">{t("All matching stacks loaded")}</span>}
           </div>
         </section>
         </div> : null}
@@ -2417,7 +2415,7 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
         {isSidebarOpen ? <button
           className="sidebar-backdrop"
           type="button"
-          aria-label="Close selected post details"
+          aria-label={t("Close selected post details")}
           onClick={closeSidebar}
         /> : null}
 
@@ -2425,11 +2423,11 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
           className={isSidebarOpen ? 'right-rail obs-inspector is-open' : 'right-rail obs-inspector'}
           role="dialog"
           aria-modal={isSidebarOpen ? true : undefined}
-          aria-label="Selected post details"
+          aria-label={t("Selected post details")}
           aria-hidden={!isSidebarOpen}
         >
           {selected ? (
-            <button className="rail-close-button" type="button" aria-label="Close selected post details" onClick={closeSidebar}>
+            <button className="rail-close-button" type="button" aria-label={t("Close selected post details")} onClick={closeSidebar}>
               <X size={14} />
             </button>
           ) : null}
@@ -2448,7 +2446,7 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
           {selected ? (
             <PostDetailPanel
               post={selected}
-              captionExtra={<>{selected.account === 'chatgptricks' ? <CanvaLine url={canvaLinkForPost(selected.postDate)} /> : null}<button type="button" className="ghost-button caption-ai-button" onClick={() => setCaptionPost(selected)}><Sparkles size={13} />{t('Generate similar caption')}</button>{knownDev ? <DevJevTools post={selected} onGoldenNugget={(result) => rememberGoldenNugget(selected, result)} /> : null}{poolAccess ? <><button type="button" className="ghost-button" onClick={() => setAssignmentPost(selected)}><ListTodo size={13} />Send to Pool</button><QuickAddButton key={selected.postKey} post={selected} onQuickAdd={quickAddToPool} onAdded={closeSidebar} /></> : null}</>}
+              captionExtra={<>{selected.account === 'chatgptricks' ? <CanvaLine url={canvaLinkForPost(selected.postDate)} /> : null}<button type="button" className="ghost-button caption-ai-button" onClick={() => setCaptionPost(selected)}><Sparkles size={13} />{t('Generate similar caption')}</button>{knownDev ? <DevJevTools post={selected} onGoldenNugget={(result) => rememberGoldenNugget(selected, result)} /> : null}{poolAccess ? <><button type="button" className="ghost-button" onClick={() => setAssignmentPost(selected)}><ListTodo size={13} />{t("Send to Pool")}</button><QuickAddButton key={selected.postKey} post={selected} onQuickAdd={quickAddToPool} onAdded={closeSidebar} /></> : null}</>}
             />
           ) : null}
 
@@ -2530,6 +2528,7 @@ function CanvaLine({ url }) {
 }
 
 function DevJevTools({ post, onGoldenNugget }) {
+  const { t } = usePrefs();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState('');
   const [result, setResult] = useState(null);
@@ -2570,14 +2569,14 @@ function DevJevTools({ post, onGoldenNugget }) {
         <Sparkles size={13} /> Jev <span>DEV</span>
       </button>
       {open ? (
-        <section className="dev-jev-panel" aria-label="Jev developer tools">
-          <header><div><strong>Jev tools</strong><small>Only visible at DEV level</small></div><button type="button" onClick={() => setOpen(false)} aria-label="Close Jev tools"><X size={14} /></button></header>
+        <section className="dev-jev-panel" aria-label={t("Jev developer tools")}>
+          <header><div><strong>{t("Jev tools")}</strong><small>{t("Only visible at DEV level")}</small></div><button type="button" onClick={() => setOpen(false)} aria-label={t("Close Jev tools")}><X size={14} /></button></header>
           <div className="dev-jev-actions">
             {[['golden-nugget', 'Golden nugget'], ['classify', 'Classify'], ['queue-suggestions', 'Queue suggestion'], ['promo-review', 'Review promo'], ['audit-stack', 'Audit stack']].map(([action, label]) => <button type="button" key={action} onClick={() => run(action)} disabled={Boolean(busy)}>{busy === action ? <LoaderCircle className="spin" size={12} /> : null}{label}</button>)}
           </div>
-          <form className="dev-jev-search" onSubmit={(event) => { event.preventDefault(); run('search'); }}><input value={query} onChange={(event) => setQuery(event.target.value)} aria-label="Jev research query" placeholder="Research query…" /><button type="submit" disabled={Boolean(busy) || !query.trim()}>{busy === 'search' ? <LoaderCircle className="spin" size={12} /> : <Search size={12} />}</button></form>
+          <form className="dev-jev-search" onSubmit={(event) => { event.preventDefault(); run('search'); }}><input value={query} onChange={(event) => setQuery(event.target.value)} aria-label={t("Jev research query")} placeholder={t("Research query…")} /><button type="submit" disabled={Boolean(busy) || !query.trim()}>{busy === 'search' ? <LoaderCircle className="spin" size={12} /> : <Search size={12} />}</button></form>
           {error ? <p className="dev-jev-error" role="alert">{error}</p> : null}
-          {result ? <div className="dev-jev-result"><small>{result.action}</small>{result.action === 'golden-nugget' ? <><strong>{result.data.label === 'golden_nugget' ? 'Golden nugget candidate' : result.data.label === 'promising' ? 'Promising idea' : 'Not a priority yet'}</strong><span>Account: {result.data.targetAccount ? `@${result.data.targetAccount}` : 'none'} · score {Math.round(Number(result.data.score || 0) * 100)}%</span><span>{result.data.strongSignalCount}/7 strong signals · confidence {Math.round(Number(result.data.confidence || 0) * 100)}%</span><span>Strongest: {result.data.strengths.join(', ')}</span></> : result.action === 'classify' ? <><strong>{result.data.label}</strong><pre>{JSON.stringify(result.data.scores, null, 2)}</pre></> : result.action === 'queue-suggestions' ? <><strong>{result.data.needsQueue ? 'Queue recommended' : 'No Queue needed'}</strong><span>{result.data.tag} · {result.data.urgent ? 'urgent' : 'normal'}</span></> : result.action === 'promo-review' ? <><strong>{result.data.needsReview ? 'Human review recommended' : 'Classification clear'}</strong><span>Semantic promo: {Math.round(Number(result.data.semanticPromo || 0) * 100)}%</span></> : result.action === 'audit-stack' ? <><strong>{result.data.members.filter((item) => !item.sameStack).length} possible outliers</strong><span>{result.data.members.length} members checked</span></> : <><strong>{result.data.results.length} relevant results</strong>{result.data.results.slice(0, 5).map((item) => <span key={item.postKey}>{item.postKey} · {Math.round(item.score * 100)}%</span>)}</>}</div> : null}
+          {result ? <div className="dev-jev-result"><small>{result.action}</small>{result.action === 'golden-nugget' ? <><strong>{result.data.label === 'golden_nugget' ? t("Golden nugget candidate") : result.data.label === 'promising' ? t("Promising idea") : t("Not a priority yet")}</strong><span>{t("Account:")} {result.data.targetAccount ? `@${result.data.targetAccount}` : t("none")} {t("· score")} {Math.round(Number(result.data.score || 0) * 100)}%</span><span>{result.data.strongSignalCount}{t("/7 strong signals · confidence")} {Math.round(Number(result.data.confidence || 0) * 100)}%</span><span>{t("Strongest:")} {result.data.strengths.join(', ')}</span></> : result.action === 'classify' ? <><strong>{result.data.label}</strong><pre>{JSON.stringify(result.data.scores, null, 2)}</pre></> : result.action === 'queue-suggestions' ? <><strong>{result.data.needsQueue ? t("Queue recommended") : t("No Queue needed")}</strong><span>{result.data.tag} · {result.data.urgent ? 'urgent' : t("normal")}</span></> : result.action === 'promo-review' ? <><strong>{result.data.needsReview ? t("Human review recommended") : t("Classification clear")}</strong><span>{t("Semantic promo:")} {Math.round(Number(result.data.semanticPromo || 0) * 100)}%</span></> : result.action === 'audit-stack' ? <><strong>{result.data.members.filter((item) => !item.sameStack).length} {t("possible outliers")}</strong><span>{result.data.members.length} {t("members checked")}</span></> : <><strong>{result.data.results.length} {t("relevant results")}</strong>{result.data.results.slice(0, 5).map((item) => <span key={item.postKey}>{item.postKey} · {Math.round(item.score * 100)}%</span>)}</>}</div> : null}
         </section>
       ) : null}
     </div>
@@ -2696,6 +2695,7 @@ function DashboardSkeleton({ label = 'Loading the post library' }) {
 // Create/edit a custom account list. Kept as a small modal rather than a
 // wizard: a list is just a name plus a set of handles.
 export function ListEditor({ draft, accounts, onSave, onDelete, onClose }) {
+  const { t } = usePrefs();
   const [name, setName] = useState(draft.name);
   const [picked, setPicked] = useState(() => new Set(draft.handles));
   const [search, setSearch] = useState('');
@@ -2785,17 +2785,17 @@ export function ListEditor({ draft, accounts, onSave, onDelete, onClose }) {
     <div className="modal-backdrop" onClick={dismiss}>
       <div ref={dialogRef} className="modal list-editor" tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="list-editor-title" aria-busy={busy} onKeyDown={onKeyDown} onClick={(event) => event.stopPropagation()}>
         <div className="modal-header">
-          <h2 id="list-editor-title">{draft.id ? 'Edit list' : 'New list'}</h2>
-          <button type="button" className="icon-button" onClick={dismiss} aria-label="Close" disabled={busy}><X size={16} /></button>
+          <h2 id="list-editor-title">{draft.id ? t("Edit list") : t("New list")}</h2>
+          <button type="button" className="icon-button" onClick={dismiss} aria-label={t("Close")} disabled={busy}><X size={16} /></button>
         </div>
         <label className="modal-field">
-          <span>Name</span>
-          <input value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. AI news, Spanish, Competitors to watch" disabled={busy || confirmDelete} />
+          <span>{t("Name")}</span>
+          <input value={name} onChange={(event) => setName(event.target.value)} placeholder={t("e.g. AI news, Spanish, Competitors to watch")} disabled={busy || confirmDelete} />
         </label>
         <div className="list-editor-picker">
           <div className="account-multiselect-search">
             <Search size={14} />
-            <input type="search" value={search} placeholder="Search accounts" aria-label="Search accounts" onChange={(event) => setSearch(event.target.value)} disabled={busy || confirmDelete} />
+            <input type="search" value={search} placeholder={t("Search accounts")} aria-label={t("Search accounts")} onChange={(event) => setSearch(event.target.value)} disabled={busy || confirmDelete} />
           </div>
           <div className="account-multiselect-list account-multiselect-grid list-editor-grid">
             {visible.map((account) => (
@@ -2808,12 +2808,12 @@ export function ListEditor({ draft, accounts, onSave, onDelete, onClose }) {
           </div>
         </div>
         {error ? <p className="modal-error" role="alert">{error}</p> : null}
-        {confirmDelete ? <p role="status">Delete “{draft.name}”? The accounts and their posts will be kept.</p> : null}
+        {confirmDelete ? <p role="status">{t("Delete “")}{draft.name}{t("”? The accounts and their posts will be kept.")}</p> : null}
         <div className="modal-actions list-editor-actions">
-          {draft.id ? <button type="button" className="ghost-button danger" disabled={busy} onClick={() => { if (confirmDelete) remove(); else { setError(''); setConfirmDelete(true); } }}>{deleting ? 'Deleting…' : confirmDelete ? 'Confirm delete' : 'Delete list'}</button> : null}
-          <span className="list-editor-count">{picked.size} selected</span>
-          <button type="button" className="ghost-button" onClick={confirmDelete ? () => { setConfirmDelete(false); setError(''); } : dismiss} disabled={busy}>{confirmDelete ? 'Keep list' : 'Cancel'}</button>
-          {!confirmDelete ? <button type="button" className="primary-button" onClick={submit} disabled={busy}>{saving ? 'Saving...' : 'Save list'}</button> : null}
+          {draft.id ? <button type="button" className="ghost-button danger" disabled={busy} onClick={() => { if (confirmDelete) remove(); else { setError(''); setConfirmDelete(true); } }}>{deleting ? t("Deleting…") : confirmDelete ? t("Confirm delete") : t("Delete list")}</button> : null}
+          <span className="list-editor-count">{picked.size} {t("selected")}</span>
+          <button type="button" className="ghost-button" onClick={confirmDelete ? () => { setConfirmDelete(false); setError(''); } : dismiss} disabled={busy}>{confirmDelete ? t("Keep list") : t("Cancel")}</button>
+          {!confirmDelete ? <button type="button" className="primary-button" onClick={submit} disabled={busy}>{saving ? t("Saving...") : t("Save list")}</button> : null}
         </div>
       </div>
     </div>
@@ -2956,6 +2956,7 @@ export function FilterPopover({ id, icon, label, summary, isActive, width = 300,
 }
 
 export function AccountMultiSelect({ accounts, counts, selected, onChange, onAddAccount, inline = false }) {
+  const { t } = usePrefs();
   const [open, setOpen] = useState(inline);
   const [panelRect, setPanelRect] = useState(null);
   const [search, setSearch] = useState('');
@@ -3080,8 +3081,8 @@ export function AccountMultiSelect({ accounts, counts, selected, onChange, onAdd
                   ref={searchRef}
                   type="search"
                   value={search}
-                  aria-label="Search accounts"
-                  placeholder="Search accounts"
+                  aria-label={t("Search accounts")}
+                  placeholder={t("Search accounts")}
                   onChange={(event) => updateSearch(event.target.value)}
                   // Escape clears the query first and only closes the panel
                   // when it's already empty, so a mistyped search doesn't
@@ -3104,11 +3105,9 @@ export function AccountMultiSelect({ accounts, counts, selected, onChange, onAdd
               </div>
               <div className="account-multiselect-actions">
                 <button type="button" onClick={() => applyToVisible(true)}>
-                  {term ? `Use results (${visibleAccounts.length})` : 'Select all'}
+                  {term ? `Use results (${visibleAccounts.length})` : t("Select all")}
                 </button>
-                <button type="button" onClick={() => applyToVisible(false)}>
-                  Clear
-                </button>
+                <button type="button" onClick={() => applyToVisible(false)}> {t("Clear")} </button>
               </div>
               <div className="account-multiselect-list account-multiselect-grid">
                 {visibleAccounts.map((account) => (
@@ -3133,9 +3132,9 @@ export function AccountMultiSelect({ accounts, counts, selected, onChange, onAdd
                     <b>{counts[account.handle] ?? 0}</b>
                   </label>
                 ))}
-                {!accounts.length ? <p className="account-multiselect-empty">No accounts in this group yet.</p> : null}
+                {!accounts.length ? <p className="account-multiselect-empty">{t("No accounts in this group yet.")}</p> : null}
                 {accounts.length && !visibleAccounts.length ? (
-                  <p className="account-multiselect-empty">No accounts match &ldquo;{search}&rdquo;.</p>
+                  <p className="account-multiselect-empty">{t("No accounts match “")}{search}&rdquo;.</p>
                 ) : null}
               </div>
               {onAddAccount ? (
@@ -3147,9 +3146,7 @@ export function AccountMultiSelect({ accounts, counts, selected, onChange, onAdd
                     onAddAccount();
                   }}
                 >
-                  <Plus size={13} />
-                  Add account
-                </button>
+                  <Plus size={13} /> {t("Add account")} </button>
               ) : null}
     </>
   );
@@ -3223,7 +3220,7 @@ export function SettingsPanel({
   accounts = [], onRefresh, refreshing = false, refreshNotice, onAccountsChanged,
   initialTab, userEmail, userPhoto, isAdmin = false, isDev = false, canAccessNews = false, onSignOut,
 }) {
-  const { t, theme, accent } = usePrefs();
+  const { t, theme, accent, lang } = usePrefs();
   // Firebase roles gate paid operations. The compatibility marker remains
   // only for older admin endpoints still being migrated, never for refresh.
   const [password, setPassword] = useState(LEGACY_REFRESH_PASSWORD);
@@ -3803,7 +3800,7 @@ export function SettingsPanel({
     setMediaKitGenerating((current) => ({ ...current, [handle]: true }));
     setMediaKitErrors((current) => ({ ...current, [handle]: '' }));
     try {
-      await downloadAccountMediaKit(handle, { signal: controller.signal, theme, accent: accentHex(accent) });
+      await downloadAccountMediaKit(handle, { signal: controller.signal, theme, accent: accentHex(accent), lang });
     } catch (error) {
       if (error.name !== 'AbortError') {
         setMediaKitErrors((current) => ({ ...current, [handle]: error.message || 'Could not generate the media kit. Try again.' }));
@@ -4261,7 +4258,7 @@ export function SettingsPanel({
     if (!iso) return '—';
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) return '—';
-    return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    return d.toLocaleDateString(lang === 'es' ? 'es-CR' : 'en-US', { year: 'numeric', month: 'short', day: 'numeric' });
   };
 
   const handleAccountCreated = async (account, legacyPassword) => {
@@ -4325,7 +4322,7 @@ export function SettingsPanel({
             <p>{t('Manage the people, accounts, operations, notifications, and production controls shared by every Sentient tool.')}</p>
           </div>
           <div className="settings-command-access">
-            <span>{isDev ? 'DEV' : 'ADMIN'}</span>
+            <span>{isDev ? 'DEV' : t("ADMIN")}</span>
             <small>{userEmail}</small>
           </div>
         </section>
@@ -4353,7 +4350,7 @@ export function SettingsPanel({
             ))}
           </div>
 
-          {notice ? <p className="settings-notice">{notice}</p> : null}
+          {notice ? <p className="settings-notice">{t(notice)}</p> : null}
 
           {tab === 'overview' ? (
             <div className="settings-overview-grid">
@@ -4362,7 +4359,7 @@ export function SettingsPanel({
                 { tab: 'users', label: t('Users'), value: users.length, detail: `${users.filter((item) => item.is_admin).length} ${t('administrators')}`, icon: <Users size={18} /> },
                 { tab: 'usage', label: t('Usage'), value: '30d', detail: t('Activity and adoption'), icon: <BarChart3 size={18} /> },
                 { tab: 'notifications', label: t('Notifications'), value: slackStatus?.configured ? t('Live') : t('Check'), detail: slackStatus?.configured ? t('Slack delivery configured') : t('Slack status unavailable'), icon: <MessageSquare size={18} /> },
-                { tab: 'system', label: t('System'), value: disk ? `${disk.pct_used}%` : '—', detail: disk ? `${disk.free_mb.toLocaleString()} MB ${t('free')}` : t('Diagnostics and maintenance'), icon: <HardDrive size={18} /> },
+                { tab: 'system', label: t('System'), value: disk ? `${disk.pct_used}%` : '—', detail: disk ? `${disk.free_mb.toLocaleString(readLang() === 'es' ? 'es-CR' : 'en-US')} MB ${t('free')}` : t('Diagnostics and maintenance'), icon: <HardDrive size={18} /> },
                 { tab: 'reports', label: t('Reports'), value: report?.assignedPosts?.length ?? '—', detail: t('Assigned Queue posts'), icon: <TrendingUp size={18} /> },
               ].map((item) => (
                 <button type="button" className="settings-overview-card" key={item.tab} onClick={() => selectTab(item.tab)}>
@@ -4382,8 +4379,8 @@ export function SettingsPanel({
                   <section className="settings-section settings-account-backfill-progress" aria-live="polite">
                     <div className="settings-section-head">
                       <div>
-                        <span className="settings-command-kicker">Account onboarding</span>
-                        <h3>Initial history import</h3>
+                        <span className="settings-command-kicker">{t("Account onboarding")}</span>
+                        <h3>{t("Initial history import")}</h3>
                       </div>
                       <span className="settings-account-backfill-count">
                         {(() => {
@@ -4394,9 +4391,7 @@ export function SettingsPanel({
                         })()}
                       </span>
                     </div>
-                    <p className="wizard-hint">
-                      New accounts stay here while their history is collected. This status survives a reload and clears after the import finishes.
-                    </p>
+                    <p className="wizard-hint"> {t("New accounts stay here while their history is collected. This status survives a reload and clears after the import finishes.")} </p>
                     <div className="settings-account-backfill-list">
                       {accountBackfills.map((task) => {
                         const elapsedSec = Math.max(0, Math.round((accountBackfillNow - (task.startedAt || accountBackfillNow)) / 1000));
@@ -4430,7 +4425,7 @@ export function SettingsPanel({
                                   className="settings-account-backfill-dismiss"
                                   onClick={() => dismissAccountBackfill(task.handle)}
                                   aria-label={`Hide import status for ${task.handle}`}
-                                  title="Hide this status; the import continues on the server"
+                                  title={t("Hide this status; the import continues on the server")}
                                 >
                                   <X size={13} />
                                 </button>
@@ -4441,7 +4436,7 @@ export function SettingsPanel({
                               </div>
                             </div>
                             <span className="settings-account-backfill-percent">
-                              {percent != null ? `${percent}%` : task.phase === 'done' ? '100%' : 'Live'}
+                              {percent != null ? `${percent}%` : task.phase === 'done' ? '100%' : t("Live")}
                             </span>
                           </article>
                         );
@@ -4453,26 +4448,20 @@ export function SettingsPanel({
                   <div className="settings-section-head">
                     <h3>{t('Manage accounts')}</h3>
                     <div className="settings-section-actions">
-                      <span className="accounts-count">{sortedRoster.length} of {roster.length}</span>
+                      <span className="accounts-count">{sortedRoster.length} {t("of")} {roster.length}</span>
                       <button type="button" className="ghost-button primary" onClick={() => setShowAddAccount(true)}>
                         <Plus size={13} /> {t('Add account')}
                       </button>
                     </div>
                   </div>
-                  <p className="wizard-hint">
-                    Click a row to edit its label, category, subcategory, tool visibility, HOT threshold, or avatar, or pull more history. {isDev ? 'You can add another account while an import is running; the server queues it automatically.' : 'Add account sends a request to Dev. Only Dev can add new accounts.'}
-                    "Suggested" is the account's average first-hour likes (the same number the HOT check
-                    itself compares against), rounded up to the nearest hundred.
-                  </p>
-                  <p className="wizard-hint accounts-media-kit-hint">
-                    Generate a client-ready media kit with public account highlights, overall performance, and standout posts.
-                  </p>
+                  <p className="wizard-hint"> {t("Click a row to edit its label, category, subcategory, tool visibility, HOT threshold, or avatar, or pull more history.")} {isDev ? t("You can add another account while an import is running; the server queues it automatically.") : t("Add account sends a request to Dev. Only Dev can add new accounts.")} {t("\"Suggested\" is the account's average first-hour likes (the same number the HOT check itself compares against), rounded up to the nearest hundred.")} </p>
+                  <p className="wizard-hint accounts-media-kit-hint"> {t("Generate a client-ready media kit with public account highlights, overall performance, and standout posts.")} </p>
 
                   <div className="accounts-toolbar">
                     <input
                       type="text"
                       className="accounts-search"
-                      placeholder="Search by handle, label, category, or subcategory…"
+                      placeholder={t("Search by handle, label, category, or subcategory…")}
                       value={accountSearch}
                       onChange={(event) => setAccountSearch(event.target.value)}
                     />
@@ -4488,7 +4477,7 @@ export function SettingsPanel({
                           className={`chip-button${accountStatusFilter === option.value ? ' active' : ''}`}
                           onClick={() => setAccountStatusFilter(option.value)}
                         >
-                          {option.label}
+                          {t(option.label)}
                         </button>
                       ))}
                     </div>
@@ -4510,13 +4499,13 @@ export function SettingsPanel({
                             { key: 'is_active', label: 'Status' },
                           ].map((col) => (
                             <th key={col.key} className="accounts-th-sortable" onClick={() => toggleAccountSort(col.key)}>
-                              {col.label}
+                              {t(col.label)}
                               {accountSort.key === col.key ? (
                                 <ArrowUpDown size={11} className={accountSort.dir === 'desc' ? 'flip' : ''} />
                               ) : null}
                             </th>
                           ))}
-                          <th scope="col">Media kit</th>
+                          <th scope="col">{t("Media kit")}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -4556,12 +4545,12 @@ export function SettingsPanel({
                                   <span className="accounts-handle-text">
                                     <strong>@{account.handle}</strong>
                                     {account.is_canonical ? (
-                                      <span className="status-pill status-pill-canonical">Canonical</span>
+                                      <span className="status-pill status-pill-canonical">{t("Canonical")}</span>
                                     ) : null}
                                   </span>
                                 </td>
                                 <td>{ACCOUNT_GROUP_OPTIONS.find((option) => option.value === account.group)?.label || account.group}</td>
-                                <td>{ACCOUNT_SUBCATEGORY_OPTIONS.find((option) => option.value === account.subcategory)?.label || account.subcategory || 'Other'}</td>
+                                <td>{ACCOUNT_SUBCATEGORY_OPTIONS.find((option) => option.value === account.subcategory)?.label || account.subcategory || t("Other")}</td>
                                 <td className="accounts-cell-extraction" data-label={t('Extraction')}>
                                   <span className="account-extraction-badge">
                                     {t(SCRAPE_MODE_OPTIONS.find((option) => option.value === account.scrape_mode)?.label || 'Posts')}
@@ -4573,7 +4562,7 @@ export function SettingsPanel({
                                 <td>{account.hot_threshold ?? '—'}</td>
                                 <td>
                                   <span className={`status-pill ${isInactive ? 'status-pill-inactive' : 'status-pill-active'}`}>
-                                    {isInactive ? 'Inactive' : 'Active'}
+                                    {isInactive ? t("Inactive") : t("Active")}
                                   </span>
                                 </td>
                                 <td className="accounts-cell-media-kit" onClick={(event) => event.stopPropagation()}>
@@ -4582,12 +4571,12 @@ export function SettingsPanel({
                                     className="ghost-button account-media-kit-button"
                                     aria-label={`Download media kit for ${account.handle}`}
                                     aria-busy={Boolean(mediaKitGenerating[account.handle])}
-                                    title="Generate a client-ready PDF with public account highlights and top posts"
+                                    title={t("Generate a client-ready PDF with public account highlights and top posts")}
                                     disabled={Boolean(mediaKitGenerating[account.handle])}
                                     onClick={() => downloadMediaKit(account.handle)}
                                   >
                                     {mediaKitGenerating[account.handle] ? <LoaderCircle size={14} className="account-media-kit-spinner" /> : <Download size={14} />}
-                                    <span>{mediaKitGenerating[account.handle] ? 'Generating…' : 'Download PDF'}</span>
+                                    <span>{mediaKitGenerating[account.handle] ? t("Generating…") : t("Download PDF")}</span>
                                   </button>
                                   {mediaKitErrors[account.handle] ? <p className="account-media-kit-error" role="alert">{mediaKitErrors[account.handle]}</p> : null}
                                 </td>
@@ -4598,7 +4587,7 @@ export function SettingsPanel({
                                     <div className="account-manage-detail" onClick={(event) => event.stopPropagation()}>
                                       <div className="account-manage-fields">
                                         <label className="account-manage-field">
-                                          <span>Label</span>
+                                          <span>{t("Label")}</span>
                                           <input
                                             type="text"
                                             value={edit.label}
@@ -4612,7 +4601,7 @@ export function SettingsPanel({
                                           />
                                         </label>
                                         <label className="account-manage-field">
-                                          <span>Category</span>
+                                          <span>{t("Category")}</span>
                                           <select
                                             value={edit.group}
                                             onChange={(event) => {
@@ -4625,13 +4614,13 @@ export function SettingsPanel({
                                           >
                                             {ACCOUNT_GROUP_OPTIONS.map((option) => (
                                               <option key={option.value} value={option.value}>
-                                                {option.label}
+                                                {t(option.label)}
                                               </option>
                                             ))}
                                           </select>
                                         </label>
                                         <label className="account-manage-field">
-                                          <span>Subcategory</span>
+                                          <span>{t("Subcategory")}</span>
                                           <select
                                             value={edit.subcategory}
                                             onChange={(event) =>
@@ -4642,12 +4631,12 @@ export function SettingsPanel({
                                             }
                                           >
                                             {ACCOUNT_SUBCATEGORY_OPTIONS.map((option) => (
-                                              <option key={option.value} value={option.value}>{option.label}</option>
+                                              <option key={option.value} value={option.value}>{t(option.label)}</option>
                                             ))}
                                           </select>
                                         </label>
                                         <div className="account-manage-field account-tool-scope">
-                                          <span>Visible in tools</span>
+                                          <span>{t("Visible in tools")}</span>
                                           <div>
                                             <label>
                                               <input
@@ -4658,8 +4647,7 @@ export function SettingsPanel({
                                                   ...prev,
                                                   [account.handle]: { ...prev[account.handle], research_enabled: event.target.checked },
                                                 }))}
-                                              /> Research
-                                            </label>
+                                              /> {t("Research")} </label>
                                             <label>
                                               <input
                                                 type="checkbox"
@@ -4669,12 +4657,11 @@ export function SettingsPanel({
                                                   ...prev,
                                                   [account.handle]: { ...prev[account.handle], promos_enabled: event.target.checked },
                                                 }))}
-                                              /> Promos
-                                            </label>
+                                              /> {t("Promos")} </label>
                                           </div>
                                         </div>
                                         <label className="account-manage-field account-manage-field-narrow">
-                                          <span>HOT /hr</span>
+                                          <span>{t("HOT /hr")}</span>
                                           <input
                                             type="number"
                                             min={1}
@@ -4700,13 +4687,12 @@ export function SettingsPanel({
                                                   },
                                                 }))
                                               }
-                                            >
-                                              Suggested: {account.suggested_hot_threshold.toLocaleString()}
+                                            > {t("Suggested:")} {account.suggested_hot_threshold.toLocaleString(readLang() === 'es' ? 'es-CR' : 'en-US')}
                                             </button>
                                           ) : null}
                                         </label>
                                         <label className="account-manage-field">
-                                          <span>Extract</span>
+                                          <span>{t("Extract")}</span>
                                           <select
                                             value={edit.scrape_mode}
                                             aria-label={`Content to extract for ${account.handle}`}
@@ -4718,7 +4704,7 @@ export function SettingsPanel({
                                             }
                                           >
                                             {SCRAPE_MODE_OPTIONS.map((option) => (
-                                              <option key={option.value} value={option.value}>{option.label}</option>
+                                              <option key={option.value} value={option.value}>{t(option.label)}</option>
                                             ))}
                                           </select>
                                         </label>
@@ -4728,10 +4714,9 @@ export function SettingsPanel({
                                           onClick={() => saveAccount(account)}
                                           disabled={savingHandle === account.handle || !isDirty(account)}
                                         >
-                                          {savingHandle === account.handle ? '…' : 'Save'}
+                                          {savingHandle === account.handle ? '…' : t("Save")}
                                         </button>
-                                        <span className="account-manage-oldest-post" title="Published date of the oldest post we have on file for this account">
-                                          Oldest post: {fmtOldestPost(account.oldest_post_at)}
+                                        <span className="account-manage-oldest-post" title={t("Published date of the oldest post we have on file for this account")}> {t("Oldest post:")} {fmtOldestPost(account.oldest_post_at)}
                                         </span>
                                       </div>
 
@@ -4743,17 +4728,17 @@ export function SettingsPanel({
                                           disabled={avatarHandle === account.handle}
                                         >
                                           <ImagePlus size={13} />
-                                          {avatarHandle === account.handle ? 'Refreshing…' : 'Refresh avatar'}
+                                          {avatarHandle === account.handle ? t("Refreshing…") : t("Refresh avatar")}
                                         </button>
                                         <button
                                           type="button"
                                           className="ghost-button ghost-button-danger"
                                           onClick={() => toggleActive(account)}
                                           disabled={lifecycleHandle === account.handle || account.is_canonical}
-                                          title={account.is_canonical ? 'The canonical account cannot be deactivated.' : undefined}
+                                          title={account.is_canonical ? t("The canonical account cannot be deactivated.") : undefined}
                                         >
                                           <Power size={13} />
-                                          {lifecycleHandle === account.handle ? '…' : isInactive ? 'Reactivate' : 'Deactivate'}
+                                          {lifecycleHandle === account.handle ? '…' : isInactive ? t("Reactivate") : t("Deactivate")}
                                         </button>
                                         {isDev ? (
                                           <button
@@ -4761,10 +4746,10 @@ export function SettingsPanel({
                                             className="ghost-button ghost-button-danger"
                                             onClick={() => deleteAccount(account)}
                                             disabled={deletingHandle === account.handle || account.is_canonical}
-                                            title="Remove this account from Accounts while preserving its post history."
+                                            title={t("Remove this account from Accounts while preserving its post history.")}
                                           >
                                             <Trash2 size={13} />
-                                            {deletingHandle === account.handle ? 'Deleting…' : 'Delete account'}
+                                            {deletingHandle === account.handle ? t("Deleting…") : t("Delete account")}
                                           </button>
                                         ) : null}
                                         {!isInactive ? (
@@ -4776,7 +4761,7 @@ export function SettingsPanel({
                                                 setImportFrom((prev) => ({ ...prev, [account.handle]: event.target.value }))
                                               }
                                               aria-label={`Extract from for ${account.handle}`}
-                                              title="Optional: only posts from this date on"
+                                              title={t("Optional: only posts from this date on")}
                                             />
                                             <input
                                               type="number"
@@ -4788,11 +4773,11 @@ export function SettingsPanel({
                                                 setImportCount((prev) => ({ ...prev, [account.handle]: event.target.value }))
                                               }
                                               aria-label={`Number of posts to extract for ${account.handle}`}
-                                              title="How many posts to pull (default 2000)"
+                                              title={t("How many posts to pull (default 2000)")}
                                               className="account-manage-import-count"
                                             />
                                             <span className="account-manage-import-cost">
-                                              {edit.scrape_mode === 'both' ? 'Limit / source' : 'Limit'}
+                                              {edit.scrape_mode === 'both' ? t("Limit / source") : t("Limit")}
                                             </span>
                                             <button
                                               type="button"
@@ -4800,7 +4785,7 @@ export function SettingsPanel({
                                               onClick={() => runImport(account.handle)}
                                               disabled={importing === account.handle}
                                             >
-                                              {importing === account.handle ? '…' : 'Extract history'}
+                                              {importing === account.handle ? '…' : t("Extract history")}
                                             </button>
                                           </div>
                                         ) : null}
@@ -4817,7 +4802,7 @@ export function SettingsPanel({
                         })}
                         {!sortedRoster.length ? (
                           <tr>
-                            <td colSpan={10} className="accounts-table-empty">No accounts match.</td>
+                            <td colSpan={10} className="accounts-table-empty">{t("No accounts match.")}</td>
                           </tr>
                         ) : null}
                       </tbody>
@@ -4841,9 +4826,7 @@ export function SettingsPanel({
                       <span>{refreshing ? t('Refreshing…') : t('Refresh')}</span>
                     </button>
                   </div>
-                  <p className="wizard-hint">
-                    Runs the engagement cycle for every account. Normally happens on its own every 30 minutes.
-                  </p>
+                  <p className="wizard-hint"> {t("Runs the engagement cycle for every account. Normally happens on its own every 30 minutes.")} </p>
                   {refreshNotice ? (
                     <p className={refreshNotice.type === 'error' ? 'settings-notice-error' : 'settings-notice'}>
                       {refreshNotice.text}
@@ -4853,7 +4836,7 @@ export function SettingsPanel({
 
                 <section className="settings-section system-card">
                   <div className="settings-section-head">
-                    <h3>Catch up missing posts</h3>
+                    <h3>{t("Catch up missing posts")}</h3>
                     <button
                       type="button"
                       className="ghost-button settings-refresh"
@@ -4861,12 +4844,10 @@ export function SettingsPanel({
                       disabled={catchingUpPosts}
                     >
                       <RefreshCw size={14} className={catchingUpPosts ? 'spin' : ''} />
-                      <span>{catchingUpPosts ? 'Catching up…' : 'Catch up posts'}</span>
+                      <span>{catchingUpPosts ? t("Catching up…") : t("Catch up posts")}</span>
                     </button>
                   </div>
-                  <p className="wizard-hint">
-                    Queues a durable seven-day full-library recovery across active accounts, including the dedicated Reels source. It keeps running even when this page is closed or refreshed.
-                  </p>
+                  <p className="wizard-hint"> {t("Queues a durable seven-day full-library recovery across active accounts, including the dedicated Reels source. It keeps running even when this page is closed or refreshed.")} </p>
                   {catchUpNotice ? (
                     <p className={catchUpNotice.type === 'error' ? 'settings-notice-error' : 'settings-notice'}>
                       {catchUpNotice.text}
@@ -4876,7 +4857,7 @@ export function SettingsPanel({
 
                 <section className="settings-section system-card">
                   <div className="settings-section-head">
-                    <h3>Group recent posts</h3>
+                    <h3>{t("Group recent posts")}</h3>
                     <button
                       type="button"
                       className="ghost-button settings-refresh"
@@ -4884,12 +4865,10 @@ export function SettingsPanel({
                       disabled={regroupingPosts}
                     >
                       <Layers size={14} className={regroupingPosts ? 'spin' : ''} />
-                      <span>{regroupingPosts ? 'Grouping…' : 'Group last 72 hours'}</span>
+                      <span>{regroupingPosts ? t("Grouping…") : t("Group last 72 hours")}</span>
                     </button>
                   </div>
-                  <p className="wizard-hint">
-                    Rebuilds stacks for posts published during the last 72 hours using the time-weighted similarity rules.
-                  </p>
+                  <p className="wizard-hint"> {t("Rebuilds stacks for posts published during the last 72 hours using the time-weighted similarity rules.")} </p>
                   {regroupNotice ? (
                     <p className={regroupNotice.type === 'error' ? 'settings-notice-error' : 'settings-notice'}>
                       {regroupNotice.text}
@@ -4915,12 +4894,10 @@ export function SettingsPanel({
                         />
                       </div>
                       <p className="wizard-hint">
-                        {disk.pct_used}% used -- {disk.used_mb.toLocaleString()} MB / {disk.total_mb.toLocaleString()} MB
-                        ({disk.free_mb.toLocaleString()} MB free)
-                      </p>
+                        {disk.pct_used}{t("% used --")} {disk.used_mb.toLocaleString(readLang() === 'es' ? 'es-CR' : 'en-US')} {t("MB /")} {disk.total_mb.toLocaleString(readLang() === 'es' ? 'es-CR' : 'en-US')} {t("MB (")}{disk.free_mb.toLocaleString(readLang() === 'es' ? 'es-CR' : 'en-US')} {t("MB free)")} </p>
                     </>
                   ) : (
-                    <p className="wizard-hint">Loading…</p>
+                    <p className="wizard-hint">{t("Loading…")}</p>
                   )}
                 </section>
 
@@ -4935,8 +4912,8 @@ export function SettingsPanel({
                     {slackStatus
                       ? slackStatus.configured
                         ? `Configured -- alerting for: ${slackStatus.alert_groups}`
-                        : 'No Slack webhook configured on the server.'
-                      : 'Loading…'}
+                        : t("No Slack webhook configured on the server.")
+                      : t("Loading…")}
                   </p>
                   <div className="settings-section-head">
                     <button
@@ -4955,21 +4932,19 @@ export function SettingsPanel({
                   <h3>
                     <Megaphone size={13} /> {t('Custom alert')}
                   </h3>
-                  <p className="wizard-hint">
-                    Send a one-off Slack message for anything that doesn't fit HOT posts, disk, or snapshot alerts.
-                  </p>
+                  <p className="wizard-hint"> {t("Send a one-off Slack message for anything that doesn't fit HOT posts, disk, or snapshot alerts.")} </p>
                   <div className="custom-alert-form">
                     <input
                       type="text"
                       className="custom-alert-title"
-                      placeholder="Title (optional)"
+                      placeholder={t("Title (optional)")}
                       value={customAlertTitle}
                       onChange={(event) => setCustomAlertTitle(event.target.value)}
                       maxLength={120}
                     />
                     <textarea
                       className="custom-alert-message"
-                      placeholder="What do you want to notify? (You can paste an image here too)"
+                      placeholder={t("What do you want to notify? (You can paste an image here too)")}
                       value={customAlertMessage}
                       onChange={(event) => setCustomAlertMessage(event.target.value)}
                       onPaste={handleCustomAlertPaste}
@@ -4978,13 +4953,13 @@ export function SettingsPanel({
                     />
                     {customAlertImagePreview ? (
                       <div className="custom-alert-preview">
-                        <img src={customAlertImagePreview} alt="Attachment preview" />
+                        <img src={customAlertImagePreview} alt={t("Attachment preview")} />
                         <button
                           type="button"
                           className="custom-alert-preview-remove"
                           onClick={clearCustomAlertImage}
-                          aria-label="Remove attached image"
-                          title="Remove image"
+                          aria-label={t("Remove attached image")}
+                          title={t("Remove image")}
                         >
                           <X size={12} />
                         </button>
@@ -5004,7 +4979,7 @@ export function SettingsPanel({
                         onClick={() => customAlertFileInputRef.current?.click()}
                         disabled={customAlertSending}
                       >
-                        <ImagePlus size={13} /> {customAlertImage ? 'Change image' : 'Upload image'}
+                        <ImagePlus size={13} /> {customAlertImage ? t("Change image") : t("Upload image")}
                       </button>
                       <button
                         type="button"
@@ -5012,7 +4987,7 @@ export function SettingsPanel({
                         onClick={sendCustomAlert}
                         disabled={customAlertSending || !slackStatus?.configured || !customAlertMessage.trim()}
                       >
-                        {customAlertSending ? 'Sending…' : 'Send alert'}
+                        {customAlertSending ? t("Sending…") : t("Send alert")}
                       </button>
                     </div>
                   </div>
@@ -5025,22 +5000,22 @@ export function SettingsPanel({
                 <section className="settings-section system-card system-card-wide">
                   <h3>{t('Recent Apify runs')}</h3>
                   <div className="settings-table">
-                    {apifyLoading ? <p className="wizard-hint">Loading…</p> : null}
+                    {apifyLoading ? <p className="wizard-hint">{t("Loading…")}</p> : null}
                     {apifyRuns.map((run) => (
                       <div className="settings-row" key={run.id}>
                         <div className="settings-row-account">
                           <strong>{run.status}</strong>
-                          <span>{run.startedAt ? new Date(run.startedAt).toLocaleString() : '—'} · {run.id}</span>
+                          <span>{run.startedAt ? new Date(run.startedAt).toLocaleString(readLang() === 'es' ? 'es-CR' : 'en-US') : '—'} · {run.id}</span>
                         </div>
                         <div className="settings-row-controls">
                           <span className="settings-unit">
                             {typeof run.usd === 'number' ? `$${run.usd.toFixed(2)}` : '—'}
                           </span>
-                          {run.status === 'SUCCEEDED' ? <button type="button" className="ghost-button" disabled={Boolean(recoveringApifyRun)} onClick={() => recoverBatchRun(run)}>{recoveringApifyRun === run.id ? 'Recovering…' : 'Recover all accounts'}</button> : null}
+                          {run.status === 'SUCCEEDED' ? <button type="button" className="ghost-button" disabled={Boolean(recoveringApifyRun)} onClick={() => recoverBatchRun(run)}>{recoveringApifyRun === run.id ? t("Recovering…") : t("Recover all accounts")}</button> : null}
                         </div>
                       </div>
                     ))}
-                    {!apifyLoading && !apifyRuns.length ? <p className="wizard-hint">No runs found.</p> : null}
+                    {!apifyLoading && !apifyRuns.length ? <p className="wizard-hint">{t("No runs found.")}</p> : null}
                   </div>
                 </section>
 
@@ -5052,8 +5027,8 @@ export function SettingsPanel({
                   </div>
                   <p className="wizard-hint">
                     {ocrStatus
-                      ? `${ocrStatus.remaining.toLocaleString()} covers still need OCR (${ocrStatus.with_text_total.toLocaleString()} already have text).`
-                      : 'Loading…'}
+                      ? `${ocrStatus.remaining.toLocaleString(readLang() === 'es' ? 'es-CR' : 'en-US')} covers still need OCR (${ocrStatus.with_text_total.toLocaleString(readLang() === 'es' ? 'es-CR' : 'en-US')} already have text).`
+                      : t("Loading…")}
                   </p>
                   <div className="settings-section-head">
                     <button
@@ -5062,7 +5037,7 @@ export function SettingsPanel({
                       onClick={startOcrSweep}
                       disabled={ocrStarting || Boolean(ocrStatus?.running)}
                     >
-                      {ocrStatus?.running ? `Running… (${ocrStatus.done} done)` : 'Run OCR sweep'}
+                      {ocrStatus?.running ? `Running… (${ocrStatus.done} done)` : t("Run OCR sweep")}
                     </button>
                   </div>
                 </section>
@@ -5074,17 +5049,14 @@ export function SettingsPanel({
               <div className="settings-list-width">
                 <section className="settings-section">
                   <h3>{t('Who can sign in')}</h3>
-                  <p className="wizard-hint">
-                    Admins and Devs manage shared access here. Every listed person has Dashboard and Post Designer
-                    access; the Queue role below grants an additional operating perspective when needed.
-                  </p>
+                  <p className="wizard-hint"> {t("Admins and Devs manage shared access here. Every listed person has Dashboard and Post Designer access; the Queue role below grants an additional operating perspective when needed.")} </p>
                   <form className="add-user-form" onSubmit={addUser}>
                     <label className="modal-field">
                       <span>{t('Display name')}</span>
                       <input
                         value={newUserDisplayName}
                         onChange={(event) => setNewUserDisplayName(event.target.value)}
-                        placeholder="e.g. User 03"
+                        placeholder={t("e.g. User 03")}
                         required
                       />
                     </label>
@@ -5094,19 +5066,19 @@ export function SettingsPanel({
                         type="email"
                         value={newUserEmail}
                         onChange={(event) => setNewUserEmail(event.target.value)}
-                        placeholder="name@example.com"
+                        placeholder={t("name@example.com")}
                         required
                       />
                     </label>
                     <label className="modal-field">
                       <span>{t('Queue role')}</span>
                       <select value={newUserOperatingRole} onChange={(event) => setNewUserOperatingRole(event.target.value)}>
-                        <option value="pd">Post Designer only</option><option value="sales">Sales</option><option value="vc">Viral Coordinator</option><option value="trainee">Trainee</option>
+                        <option value="pd">{t("Post Designer only")}</option><option value="sales">{t("Sales")}</option><option value="vc">{t("Viral Coordinator")}</option><option value="trainee">{t("Trainee")}</option>
                       </select>
                     </label>
                     <label className="modal-field">
                       <span>{t('Slack user ID')}</span>
-                      <input value={newUserSlackId} onChange={(event) => setNewUserSlackId(event.target.value.toUpperCase())} placeholder="U0123456789" />
+                      <input value={newUserSlackId} onChange={(event) => setNewUserSlackId(event.target.value.toUpperCase())} placeholder={t("U0123456789")} />
                     </label>
                     <label className="modal-field-checkbox">
                       <input type="checkbox" checked={newUserIsAdmin} onChange={(event) => setNewUserIsAdmin(event.target.checked)} />
@@ -5121,13 +5093,10 @@ export function SettingsPanel({
 
                 <section className="settings-section">
                   <h3>{t('People with access')}</h3>
-                  <p className="wizard-hint">
-                    Each badge shows identity, roles, and managed accounts. Open the gear to edit.
-                    Changes are only marked saved after the server confirms them.
-                  </p>
-                  <input className="settings-user-search" aria-label="Search users by name, email, or role" placeholder="Search people or roles…" value={userSearch} onChange={(event) => setUserSearch(event.target.value)} />
+                  <p className="wizard-hint"> {t("Each badge shows identity, roles, and managed accounts. Open the gear to edit. Changes are only marked saved after the server confirms them.")} </p>
+                  <input className="settings-user-search" aria-label={t("Search users by name, email, or role")} placeholder={t("Search people or roles…")} value={userSearch} onChange={(event) => setUserSearch(event.target.value)} />
                   <div className="settings-table settings-user-grid">
-                    {usersLoading ? <p className="wizard-hint">Loading…</p> : null}
+                    {usersLoading ? <p className="wizard-hint">{t("Loading…")}</p> : null}
                     {users.filter((person) => `${person.display_name} ${person.email} ${person.operating_roles} ${person.role}`.toLowerCase().includes(userSearch.trim().toLowerCase())).map((user) => {
                       const designer = designerAccounts.find((item) => item.email === user.email) || { email: user.email, accounts: [] };
                       const available = roster.filter((account) => account.group === 'sentient' && account.is_active !== false && !designer.accounts.includes(account.handle));
@@ -5165,7 +5134,7 @@ export function SettingsPanel({
                             className="settings-user-card-gear"
                             aria-expanded={editorOpen}
                             aria-label={`${editorOpen ? 'Close' : 'Open'} admin options for ${user.email}`}
-                            title={editorOpen ? 'Close admin options' : 'Manage user'}
+                            title={editorOpen ? t("Close admin options") : t("Manage user")}
                             onClick={() => setOpenUserEditorEmail((current) => current === user.email ? '' : user.email)}
                           >
                             {editorOpen ? <X size={15} /> : <Settings size={15} />}
@@ -5185,10 +5154,10 @@ export function SettingsPanel({
                             </div>
                           </header>
                           <div className="settings-user-badge-meta">
-                            <span>Slack ID</span>
-                            <code>{draft.slack_user_id || 'Not linked'}</code>
+                            <span>{t("Slack ID")}</span>
+                            <code>{draft.slack_user_id || t("Not linked")}</code>
                           </div>
-                          <div className="settings-user-badge-accounts" title={managedAccounts.length ? `${managedAccounts.length} managed Queue account${managedAccounts.length === 1 ? '' : 's'}` : 'No managed Queue accounts'}>
+                          <div className="settings-user-badge-accounts" title={managedAccounts.length ? `${managedAccounts.length} managed Queue account${managedAccounts.length === 1 ? '' : 's'}` : t("No managed Queue accounts")}>
                             {managedAccounts.slice(0, 7).map(({ handle, account }) => {
                               const image = account?.avatarUrl
                                 || (account?.has_avatar ? `${API_BASE}/api/dashboard/avatar/${encodeURIComponent(handle)}` : '')
@@ -5199,27 +5168,27 @@ export function SettingsPanel({
                               </span>;
                             })}
                             {managedAccounts.length > 7 ? <span className="settings-user-accounts-more">+{managedAccounts.length - 7}</span> : null}
-                            {!managedAccounts.length ? <span className="settings-user-no-accounts">No accounts</span> : null}
+                            {!managedAccounts.length ? <span className="settings-user-no-accounts">{t("No accounts")}</span> : null}
                           </div>
-                          {dirty || saveState === 'saving' || saveState === 'checking' || saveState === 'error' ? <span className={`settings-user-save-state is-${saveState || 'dirty'}`} role="status">{saveState === 'saving' ? 'Saving…' : saveState === 'checking' ? 'Confirming with server…' : saveState === 'error' ? 'Not confirmed · draft kept' : 'Unsaved changes'}</span> : null}
+                          {dirty || saveState === 'saving' || saveState === 'checking' || saveState === 'error' ? <span className={`settings-user-save-state is-${saveState || 'dirty'}`} role="status">{saveState === 'saving' ? t("Saving…") : saveState === 'checking' ? t("Confirming with server…") : saveState === 'error' ? t("Not confirmed · draft kept") : t("Unsaved changes")}</span> : null}
                           {editorOpen ? <section className="settings-user-admin-panel">
                             <div className="settings-user-editor">
-                              <label><span>Display name</span><input aria-label={`Display name for ${user.email}`} value={draft.display_name} onChange={(event) => changeUserDraft(user.email, { display_name: event.target.value })} disabled={userActionEmail === user.email} /></label>
-                              <label><span>Queue role</span><select value={draft.operating_role} onChange={(event) => changeUserDraft(user.email, { operating_role: event.target.value })} disabled={userActionEmail === user.email}><option value="pd">Post Designer</option><option value="sales">Sales</option><option value="vc">Viral Coordinator</option><option value="trainee">Trainee</option></select></label>
-                              <label><span>Time zone</span><select value={draft.time_zone} onChange={(event) => changeUserDraft(user.email, { time_zone: event.target.value })} disabled={userActionEmail === user.email}><option value="">Automatic browser zone</option><option value="America/Costa_Rica">Costa Rica (UTC−6)</option><option value="America/Bogota">Colombia (UTC−5)</option></select></label>
-                              <label><span>Minutes per PP</span><input type="number" min="1" max="240" value={draft.minutes_per_pp} placeholder="Default" onChange={(event) => changeUserDraft(user.email, { minutes_per_pp: event.target.value })} disabled={userActionEmail === user.email} /></label>
-                              <label><span>Slack user ID</span><input value={draft.slack_user_id} placeholder="U0123456789" onChange={(event) => changeUserDraft(user.email, { slack_user_id: event.target.value.toUpperCase() })} disabled={userActionEmail === user.email} /></label>
-                              <label className="settings-user-admin-toggle"><input type="checkbox" checked={draft.role === 'admin'} onChange={(event) => changeUserDraft(user.email, { role: event.target.checked ? 'admin' : 'viewer' })} disabled={userActionEmail === user.email || user.email === userEmail} /><span>Admin access</span></label>
+                              <label><span>{t("Display name")}</span><input aria-label={`Display name for ${user.email}`} value={draft.display_name} onChange={(event) => changeUserDraft(user.email, { display_name: event.target.value })} disabled={userActionEmail === user.email} /></label>
+                              <label><span>{t("Queue role")}</span><select value={draft.operating_role} onChange={(event) => changeUserDraft(user.email, { operating_role: event.target.value })} disabled={userActionEmail === user.email}><option value="pd">{t("Post Designer")}</option><option value="sales">{t("Sales")}</option><option value="vc">{t("Viral Coordinator")}</option><option value="trainee">{t("Trainee")}</option></select></label>
+                              <label><span>{t("Time zone")}</span><select value={draft.time_zone} onChange={(event) => changeUserDraft(user.email, { time_zone: event.target.value })} disabled={userActionEmail === user.email}><option value="">{t("Automatic browser zone")}</option><option value="America/Costa_Rica">{t("Costa Rica (UTC−6)")}</option><option value="America/Bogota">{t("Colombia (UTC−5)")}</option></select></label>
+                              <label><span>{t("Minutes per PP")}</span><input type="number" min="1" max="240" value={draft.minutes_per_pp} placeholder={t("Default")} onChange={(event) => changeUserDraft(user.email, { minutes_per_pp: event.target.value })} disabled={userActionEmail === user.email} /></label>
+                              <label><span>{t("Slack user ID")}</span><input value={draft.slack_user_id} placeholder={t("U0123456789")} onChange={(event) => changeUserDraft(user.email, { slack_user_id: event.target.value.toUpperCase() })} disabled={userActionEmail === user.email} /></label>
+                              <label className="settings-user-admin-toggle"><input type="checkbox" checked={draft.role === 'admin'} onChange={(event) => changeUserDraft(user.email, { role: event.target.checked ? 'admin' : 'viewer' })} disabled={userActionEmail === user.email || user.email === userEmail} /><span>{t("Admin access")}</span></label>
                             </div>
                             <footer className="settings-user-savebar">
-                              <span className={`settings-user-save-state is-${saveState || (dirty ? 'dirty' : 'saved')}`}>{saveState === 'saving' ? 'Saving…' : saveState === 'checking' ? 'Confirming…' : saveState === 'error' ? 'Draft kept' : dirty ? 'Unsaved changes' : 'All changes saved'}</span>
-                              <button type="button" className="ghost-button" disabled={!dirty || Boolean(userActionEmail) || addingUser} onClick={() => { changeUserDraft(user.email, userDraft(user)); setUserSaveState((current) => ({ ...current, [user.email]: 'saved' })); setUserSaveErrors((current) => ({ ...current, [user.email]: '' })); }}>Discard</button>
-                              <button type="button" className="ghost-button primary" disabled={(!dirty && saveState !== 'error') || Boolean(userActionEmail) || addingUser} onClick={() => updateUser(user, draft)}>{userActionEmail === user.email ? 'Saving…' : saveState === 'error' ? 'Retry save' : 'Save changes'}</button>
-                              <button type="button" className="ghost-button ghost-button-danger" onClick={() => removeUser(user.email)} disabled={Boolean(userActionEmail) || addingUser || user.email === userEmail}>Remove</button>
+                              <span className={`settings-user-save-state is-${saveState || (dirty ? 'dirty' : 'saved')}`}>{saveState === 'saving' ? t("Saving…") : saveState === 'checking' ? t("Confirming…") : saveState === 'error' ? t("Draft kept") : dirty ? t("Unsaved changes") : t("All changes saved")}</span>
+                              <button type="button" className="ghost-button" disabled={!dirty || Boolean(userActionEmail) || addingUser} onClick={() => { changeUserDraft(user.email, userDraft(user)); setUserSaveState((current) => ({ ...current, [user.email]: 'saved' })); setUserSaveErrors((current) => ({ ...current, [user.email]: '' })); }}>{t("Discard")}</button>
+                              <button type="button" className="ghost-button primary" disabled={(!dirty && saveState !== 'error') || Boolean(userActionEmail) || addingUser} onClick={() => updateUser(user, draft)}>{userActionEmail === user.email ? t("Saving…") : saveState === 'error' ? t("Retry save") : t("Save changes")}</button>
+                              <button type="button" className="ghost-button ghost-button-danger" onClick={() => removeUser(user.email)} disabled={Boolean(userActionEmail) || addingUser || user.email === userEmail}>{t("Remove")}</button>
                             </footer>
                             {userSaveErrors[user.email] ? <p className="settings-user-save-error" role="alert">{userSaveErrors[user.email]}</p> : null}
                             <div className="settings-user-admin-accounts">
-                              <span className="settings-row-accounts-label">Managed Queue accounts</span>
+                              <span className="settings-row-accounts-label">{t("Managed Queue accounts")}</span>
                               <div className="settings-user-admin-account-chips">
                                 {managedAccounts.map(({ handle, account }) => {
                                   const image = account?.avatarUrl || ACCOUNT_PROFILE_IMAGES[handle];
@@ -5230,17 +5199,17 @@ export function SettingsPanel({
                               </div>
                               <div className="queue-designer-add">
                                 <select value={designerAccountChoice[user.email] || ''} onChange={(event) => setDesignerAccountChoice((current) => ({ ...current, [user.email]: event.target.value }))}>
-                                  <option value="">Choose Sentient account</option>
+                                  <option value="">{t("Choose Sentient account")}</option>
                                   {available.map((account) => <option key={account.handle} value={account.handle}>@{account.handle}</option>)}
                                 </select>
-                                <button type="button" className="ghost-button" disabled={!designerAccountChoice[user.email] || userActionEmail === user.email} onClick={() => addDesignerAccount(user.email)}>Assign</button>
+                                <button type="button" className="ghost-button" disabled={!designerAccountChoice[user.email] || userActionEmail === user.email} onClick={() => addDesignerAccount(user.email)}>{t("Assign")}</button>
                               </div>
                             </div>
                           </section> : null}
                         </div>
                       );
                     })}
-                    {!usersLoading && !users.length ? <p className="wizard-hint">No one loaded yet.</p> : null}
+                    {!usersLoading && !users.length ? <p className="wizard-hint">{t("No one loaded yet.")}</p> : null}
                   </div>
                 </section>
               </div>
@@ -5249,34 +5218,32 @@ export function SettingsPanel({
               {tab === 'usage' ? (
               <section className="settings-section usage-section">
                 <h3>{t('Usage')}</h3>
-                <p className="wizard-hint">
-                  Who actually opens sentientdash.app, how often, and when — last {usage?.days ?? 30} days.
-                </p>
+                <p className="wizard-hint"> {t("Who actually opens sentientdash.app, how often, and when — last")} {usage?.days ?? 30} {t("days.")} </p>
                 {usageLoading && !usage ? (
-                  <p className="wizard-hint">Loading…</p>
+                  <p className="wizard-hint">{t("Loading…")}</p>
                 ) : !usage ? (
-                  <p className="wizard-hint">Couldn't load usage data.</p>
+                  <p className="wizard-hint">{t("Couldn't load usage data.")}</p>
                 ) : (
                   <>
                     <div className="usage-kpis">
                       <div className="usage-kpi">
-                        <b>Active, 7d</b>
+                        <b>{t("Active, 7d")}</b>
                         <strong>{usage.active_users_7d}</strong>
-                        <em>of {usage.total_users} people</em>
+                        <em>{t("of")} {usage.total_users} {t("people")}</em>
                       </div>
                       <div className="usage-kpi">
-                        <b>Active, 30d</b>
+                        <b>{t("Active, 30d")}</b>
                         <strong>{usage.active_users_30d}</strong>
-                        <em>of {usage.total_users} people</em>
+                        <em>{t("of")} {usage.total_users} {t("people")}</em>
                       </div>
                       <div className="usage-kpi">
-                        <b>Requests, 30d</b>
-                        <strong>{usage.total_events_in_range.toLocaleString('en-US')}</strong>
-                        <em>across everyone</em>
+                        <b>{t("Requests, 30d")}</b>
+                        <strong>{usage.total_events_in_range.toLocaleString(readLang() === 'es' ? 'es-CR' : 'en-US')}</strong>
+                        <em>{t("across everyone")}</em>
                       </div>
                     </div>
 
-                    <h4 className="usage-subhead">Daily activity per person</h4>
+                    <h4 className="usage-subhead">{t("Daily activity per person")}</h4>
                     <div className="usage-heatmap-scroll">
                       <div
                         className="usage-grid"
@@ -5309,7 +5276,7 @@ export function SettingsPanel({
 
                     <div className="usage-secondary">
                       <div>
-                        <h4 className="usage-subhead">When the team is online (UTC)</h4>
+                        <h4 className="usage-subhead">{t("When the team is online (UTC)")}</h4>
                         <div
                           className="usage-grid usage-dowhour-grid"
                           style={{ gridTemplateColumns: '48px repeat(24, 1fr)' }}
@@ -5337,7 +5304,7 @@ export function SettingsPanel({
                       </div>
 
                       <div>
-                        <h4 className="usage-subhead">Per-person detail</h4>
+                        <h4 className="usage-subhead">{t("Per-person detail")}</h4>
                         <div className="usage-detail-list">
                           {usage.users.map((person) => (
                             <div className="usage-detail-row" key={person.email}>
@@ -5346,19 +5313,19 @@ export function SettingsPanel({
                                 <span className={`usage-role-pill ${person.role}`}>{person.role}</span>
                               </div>
                               <div className="usage-detail-stats">
-                                <span>{person.total_all_time.toLocaleString('en-US')} total</span>
-                                <span>{person.last_7d} last 7d</span>
-                                <span>{person.active_days} active days</span>
+                                <span>{person.total_all_time.toLocaleString(readLang() === 'es' ? 'es-CR' : 'en-US')} {t("total")}</span>
+                                <span>{person.last_7d} {t("last 7d")}</span>
+                                <span>{person.active_days} {t("active days")}</span>
                                 <span>
                                   {person.last_seen
                                     ? `last seen ${formatElapsed(new Date(person.last_seen).getTime())} ago`
-                                    : 'never signed in'}
+                                    : t("never signed in")}
                                 </span>
                               </div>
                               <div className="usage-detail-sections">
-                                <span title="Dashboard requests">Dash {person.sections.dashboard}</span>
-                                <span title="Insights requests">Insights {person.sections.insights}</span>
-                                <span title="Admin panel requests">Admin {person.sections.admin}</span>
+                                <span title={t("Dashboard requests")}>{t("Dash")} {person.sections.dashboard}</span>
+                                <span title={t("Insights requests")}>{t("Insights")} {person.sections.insights}</span>
+                                <span title={t("Admin panel requests")}>{t("Admin")} {person.sections.admin}</span>
                               </div>
                             </div>
                           ))}
@@ -5374,18 +5341,15 @@ export function SettingsPanel({
               <div className="settings-list-width">
                 <section className="settings-section">
                   <h3>{t('Queue production report')}</h3>
-                  <p className="wizard-hint">
-                    Same data Queue's own Admin overlay used to show in a second, separate panel --
-                    one Reports tab here instead of two admin tools telling the same story.
-                  </p>
+                  <p className="wizard-hint"> {t("Same data Queue's own Admin overlay used to show in a second, separate panel -- one Reports tab here instead of two admin tools telling the same story.")} </p>
                   {reportError ? <p className="settings-notice-error">{reportError}</p> : null}
-                  {reportLoading && !report ? <p className="wizard-hint">Loading…</p> : null}
+                  {reportLoading && !report ? <p className="wizard-hint">{t("Loading…")}</p> : null}
                 </section>
 
                 {report ? (
                   <>
                     <section className="settings-section">
-                      <h3>Status</h3>
+                      <h3>{t("Status")}</h3>
                       <div className="system-tab-grid">
                         {[
                           ['pool', 'In pool'],
@@ -5399,7 +5363,7 @@ export function SettingsPanel({
                               <h3>{label}</h3>
                             </div>
                             <p className="wizard-hint">
-                              <strong>{report.totals?.[status]?.count || 0}</strong> requests ·{' '}
+                              <strong>{report.totals?.[status]?.count || 0}</strong> {t("requests ·")}{' '}
                               {report.totals?.[status]?.points || 0} PP
                             </p>
                           </div>
@@ -5408,15 +5372,15 @@ export function SettingsPanel({
                     </section>
 
                     <section className="settings-section">
-                      <h3>Urgency</h3>
+                      <h3>{t("Urgency")}</h3>
                       <div className="system-tab-grid">
                         <div className="system-card">
-                          <div className="settings-section-head"><h3>Urgent</h3></div>
-                          <p className="wizard-hint"><strong>{report.priorities?.urgent?.count || 0}</strong> requests · {report.priorities?.urgent?.points || 0} PP</p>
+                          <div className="settings-section-head"><h3>{t("Urgent")}</h3></div>
+                          <p className="wizard-hint"><strong>{report.priorities?.urgent?.count || 0}</strong> {t("requests ·")} {report.priorities?.urgent?.points || 0} PP</p>
                         </div>
                         <div className="system-card">
-                          <div className="settings-section-head"><h3>Regular</h3></div>
-                          <p className="wizard-hint"><strong>{report.priorities?.normal?.count || 0}</strong> requests · {report.priorities?.normal?.points || 0} PP</p>
+                          <div className="settings-section-head"><h3>{t("Regular")}</h3></div>
+                          <p className="wizard-hint"><strong>{report.priorities?.normal?.count || 0}</strong> {t("requests ·")} {report.priorities?.normal?.points || 0} PP</p>
                         </div>
                       </div>
                     </section>
@@ -5429,19 +5393,17 @@ export function SettingsPanel({
                             <div className="settings-row-account">
                               <strong>{designer.email}</strong>
                               <span>
-                                {designer.activeRequests} active · {designer.productionPoints} PP ·{' '}
-                                {designer.urgentRequests} urgent
-                              </span>
+                                {designer.activeRequests} {t("active ·")} {designer.productionPoints} {t("PP ·")}{' '}
+                                {designer.urgentRequests} {t("urgent")} </span>
                             </div>
                             <div className="settings-row-controls">
                               <span className="settings-unit">
-                                {designer.closedRequests} closed ·{' '}
-                                {designer.averageActualMinutes == null ? '—' : `${designer.averageActualMinutes} min`} avg
-                              </span>
+                                {designer.closedRequests} {t("closed ·")}{' '}
+                                {designer.averageActualMinutes == null ? '—' : `${designer.averageActualMinutes} min`} {t("avg")} </span>
                             </div>
                           </div>
                         ))}
-                        {!(report.designers || []).length ? <p className="wizard-hint">No designer activity yet.</p> : null}
+                        {!(report.designers || []).length ? <p className="wizard-hint">{t("No designer activity yet.")}</p> : null}
                       </div>
                     </section>
 
@@ -5451,20 +5413,20 @@ export function SettingsPanel({
                         {(report.assignedPosts || []).map((post) => (
                           <div className="settings-row" key={post.id}>
                             <div className="settings-row-account">
-                              <strong>{post.post?.title || post.post?.account || 'Post'}</strong>
+                              <strong>{post.post?.title || post.post?.account || t("Post")}</strong>
                               <span>
                                 {post.designerEmail || '—'} ·{' '}
-                                {post.scheduledDate ? `${post.scheduledDate} ${String(post.scheduledStartMinutes ?? '')}` : 'Unscheduled'}
+                                {post.scheduledDate ? `${post.scheduledDate} ${String(post.scheduledStartMinutes ?? '')}` : t("Unscheduled")}
                               </span>
                             </div>
                             <div className="settings-row-controls">
-                              {post.priority === 'urgent' ? <span className="settings-unit">Urgent</span> : null}
+                              {post.priority === 'urgent' ? <span className="settings-unit">{t("Urgent")}</span> : null}
                               <span className="settings-unit">{post.productionPoints} PP</span>
                               <span className="settings-unit" style={{ textTransform: 'capitalize' }}>{(post.status || '').replace('_', ' ')}</span>
                             </div>
                           </div>
                         ))}
-                        {!(report.assignedPosts || []).length ? <p className="wizard-hint">Nothing assigned right now.</p> : null}
+                        {!(report.assignedPosts || []).length ? <p className="wizard-hint">{t("Nothing assigned right now.")}</p> : null}
                       </div>
                     </section>
                   </>
@@ -5481,6 +5443,7 @@ export function SettingsPanel({
 }
 
 function NewAccountRequestForm({ onClose }) {
+  const { t } = usePrefs();
   const [handle, setHandle] = useState('');
   const [group, setGroup] = useState('competitors');
   const [reason, setReason] = useState('');
@@ -5507,14 +5470,14 @@ function NewAccountRequestForm({ onClose }) {
     } finally { setBusy(false); }
   };
   return <div className="modal-backdrop"><form className="modal-card wizard-card" onClick={(event) => event.stopPropagation()} onSubmit={submit}>
-    <div className="modal-header"><h2>Add account</h2><button type="button" className="icon-button" onClick={onClose} aria-label="Close"><X size={16} /></button></div>
-    <div className="wizard-steps" role="list"><div className="wizard-step wizard-step-active" role="listitem"><span className="wizard-step-dot">1</span><span className="wizard-step-label">Account</span></div><div className="wizard-step" role="listitem"><span className="wizard-step-dot">2</span><span className="wizard-step-label">Details</span></div><div className="wizard-step" role="listitem"><span className="wizard-step-dot">3</span><span className="wizard-step-label">Confirm</span></div></div>
-    <p className="wizard-hint">Add an Instagram account to your workspace.</p>
-    <label className="modal-field">Instagram username<input required maxLength={31} placeholder="@username" value={handle} onChange={(event) => setHandle(event.target.value)} disabled={busy || sent} /></label>
-    <label className="modal-field">Group<select value={group} onChange={(event) => setGroup(event.target.value)} disabled={busy || sent}>{ACCOUNT_GROUP_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
-    <label className="modal-field">Notes<textarea maxLength={1000} placeholder="Optional context" value={reason} onChange={(event) => setReason(event.target.value)} disabled={busy || sent} /></label>
+    <div className="modal-header"><h2>{t("Add account")}</h2><button type="button" className="icon-button" onClick={onClose} aria-label={t("Close")}><X size={16} /></button></div>
+    <div className="wizard-steps" role="list"><div className="wizard-step wizard-step-active" role="listitem"><span className="wizard-step-dot">1</span><span className="wizard-step-label">{t("Account")}</span></div><div className="wizard-step" role="listitem"><span className="wizard-step-dot">2</span><span className="wizard-step-label">{t("Details")}</span></div><div className="wizard-step" role="listitem"><span className="wizard-step-dot">3</span><span className="wizard-step-label">{t("Confirm")}</span></div></div>
+    <p className="wizard-hint">{t("Add an Instagram account to your workspace.")}</p>
+    <label className="modal-field">{t("Instagram username")}<input required maxLength={31} placeholder={t("@username")} value={handle} onChange={(event) => setHandle(event.target.value)} disabled={busy || sent} /></label>
+    <label className="modal-field">{t("Group")}<select value={group} onChange={(event) => setGroup(event.target.value)} disabled={busy || sent}>{ACCOUNT_GROUP_OPTIONS.map((option) => <option key={option.value} value={option.value}>{t(option.label)}</option>)}</select></label>
+    <label className="modal-field">{t("Notes")}<textarea maxLength={1000} placeholder={t("Optional context")} value={reason} onChange={(event) => setReason(event.target.value)} disabled={busy || sent} /></label>
     {notice ? <p className="wizard-notice" role="status">{notice}</p> : null}
-    <button type={sent ? 'button' : 'submit'} className="primary-button" disabled={busy} onClick={sent ? onClose : undefined}>{sent ? 'Done' : busy ? 'Adding…' : 'Add account'}</button>
+    <button type={sent ? 'button' : 'submit'} className="primary-button" disabled={busy} onClick={sent ? onClose : undefined}>{sent ? t("Done") : busy ? t("Adding…") : t("Add account")}</button>
   </form></div>;
 }
 
@@ -5704,8 +5667,8 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
     <div className="modal-backdrop">
       <form className="modal-card wizard-card" onClick={(event) => event.stopPropagation()} onSubmit={submit}>
         <div className="modal-header">
-          <h2>Add account</h2>
-          <button type="button" className="icon-button" onClick={onClose} aria-label="Close">
+          <h2>{t("Add account")}</h2>
+          <button type="button" className="icon-button" onClick={onClose} aria-label={t("Close")}>
             <X size={16} />
           </button>
         </div>
@@ -5743,7 +5706,7 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
                 )}
               </div>
               <label className="modal-field wizard-handle-field">
-                <span>Instagram handle</span>
+                <span>{t("Instagram handle")}</span>
                 <div className="wizard-handle-input">
                   <input
                     value={handle}
@@ -5756,7 +5719,7 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
                       event.preventDefault();
                       lookupHandle();
                     }}
-                    placeholder="e.g. natgeo"
+                    placeholder={t("e.g. natgeo")}
                     autoFocus
                     required
                   />
@@ -5766,28 +5729,28 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
                     onClick={lookupHandle}
                     disabled={!validInstagramHandle || previewStatus === 'loading'}
                   >
-                    {previewStatus === 'loading' ? 'Checking…' : 'Check'}
+                    {previewStatus === 'loading' ? t("Checking…") : t("Check")}
                   </button>
                 </div>
-                <small>Use 1–30 letters, numbers, periods, or underscores. Invalid handles are rejected before any Apify lookup.</small>
+                <small>{t("Use 1–30 letters, numbers, periods, or underscores. Invalid handles are rejected before any Apify lookup.")}</small>
               </label>
             </div>
             {preview ? (
               <p className="wizard-preview-meta">
                 {preview.full_name || `@${preview.handle}`}
                 {typeof preview.followers_count === 'number' ? ` · ${compactFormatter.format(preview.followers_count)} followers` : ''}
-                {preview.private ? ' · Private' : ''}
+                {preview.private ? t(" · Private") : ''}
               </p>
             ) : previewStatus === 'error' ? (
               <p className="wizard-preview-meta wizard-preview-meta-error">
-                {previewError || "Couldn't find that account -- double-check the handle."}
+                {previewError || t("Couldn't find that account -- double-check the handle.")}
               </p>
             ) : cleanHandle.length >= 3 && previewStatus === 'idle' ? (
-              <p className="wizard-preview-meta">Press Enter to check the account, or just continue.</p>
+              <p className="wizard-preview-meta">{t("Press Enter to check the account, or just continue.")}</p>
             ) : null}
             <label className="modal-field">
-              <span>Display label (optional)</span>
-              <input value={label} onChange={(event) => setLabel(event.target.value)} placeholder="Defaults to the handle" />
+              <span>{t("Display label (optional)")}</span>
+              <input value={label} onChange={(event) => setLabel(event.target.value)} placeholder={t("Defaults to the handle")} />
             </label>
           </div>
         ) : null}
@@ -5795,7 +5758,7 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
         {step === 1 ? (
           <div className="wizard-panel">
             <label className="modal-field">
-              <span>Group</span>
+              <span>{t("Group")}</span>
               <select value={group} onChange={(event) => {
                 const nextGroup = event.target.value;
                 const defaults = accountScopeDefaults(nextGroup);
@@ -5805,30 +5768,30 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
               }}>
                 {ACCOUNT_GROUP_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>
-                    {option.label}
+                    {t(option.label)}
                   </option>
                 ))}
               </select>
             </label>
             <label className="modal-field">
-              <span>Subcategory</span>
+              <span>{t("Subcategory")}</span>
               <select value={subcategory} onChange={(event) => setSubcategory(event.target.value)}>
                 {ACCOUNT_SUBCATEGORY_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>{option.label}</option>
+                  <option key={option.value} value={option.value}>{t(option.label)}</option>
                 ))}
               </select>
             </label>
             <div className="modal-field wizard-tool-scope">
-              <span>Visible in tools</span>
+              <span>{t("Visible in tools")}</span>
               <div>
-                <label><input type="checkbox" checked={researchEnabled} disabled={group === 'leads'} onChange={(event) => setResearchEnabled(event.target.checked)} /> Research</label>
-                <label><input type="checkbox" checked={promosEnabled} disabled={group === 'leads'} onChange={(event) => setPromosEnabled(event.target.checked)} /> Promos</label>
+                <label><input type="checkbox" checked={researchEnabled} disabled={group === 'leads'} onChange={(event) => setResearchEnabled(event.target.checked)} /> {t("Research")}</label>
+                <label><input type="checkbox" checked={promosEnabled} disabled={group === 'leads'} onChange={(event) => setPromosEnabled(event.target.checked)} /> {t("Promos")}</label>
               </div>
-              <p className="wizard-hint">Leads default to Promos only. Competitors default to both tools.</p>
+              <p className="wizard-hint">{t("Leads default to Promos only. Competitors default to both tools.")}</p>
             </div>
             <div className="modal-field">
-              <span>Content to scrape</span>
-              <div className="wizard-scope-toggle" role="radiogroup" aria-label="Content to scrape">
+              <span>{t("Content to scrape")}</span>
+              <div className="wizard-scope-toggle" role="radiogroup" aria-label={t("Content to scrape")}>
                 {SCRAPE_MODE_OPTIONS.map((option) => (
                   <button
                     key={option.value}
@@ -5839,16 +5802,15 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
                     onClick={() => setScrapeMode(option.value)}
                     title={option.hint}
                   >
-                    {option.label}
+                    {t(option.label)}
                   </button>
                 ))}
               </div>
               <p className="wizard-hint">
-                {SCRAPE_MODE_OPTIONS.find((option) => option.value === scrapeMode)?.hint}. This choice is also used by future automatic refreshes.
-              </p>
+                {SCRAPE_MODE_OPTIONS.find((option) => option.value === scrapeMode)?.hint}{t(". This choice is also used by future automatic refreshes.")} </p>
             </div>
             <label className="modal-field">
-              <span>HOT threshold (likes in the first hour)</span>
+              <span>{t("HOT threshold (likes in the first hour)")}</span>
               <input
                 type="number"
                 min={0}
@@ -5868,35 +5830,29 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
               />
             </label>
             <div className="modal-field">
-              <span>History to import</span>
-              <div className="wizard-scope-toggle" role="radiogroup" aria-label="History to import">
+              <span>{t("History to import")}</span>
+              <div className="wizard-scope-toggle" role="radiogroup" aria-label={t("History to import")}>
                 <button
                   type="button"
                   role="radio"
                   aria-checked={importScope === 'all'}
                   className={importScope === 'all' ? 'wizard-scope-option wizard-scope-option-active' : 'wizard-scope-option'}
                   onClick={() => setImportScope('all')}
-                >
-                  All selected content
-                </button>
+                > {t("All selected content")} </button>
                 <button
                   type="button"
                   role="radio"
                   aria-checked={importScope === 'range'}
                   className={importScope === 'range' ? 'wizard-scope-option wizard-scope-option-active' : 'wizard-scope-option'}
                   onClick={() => setImportScope('range')}
-                >
-                  Date range
-                </button>
+                > {t("Date range")} </button>
                 <button
                   type="button"
                   role="radio"
                   aria-checked={importScope === 'count'}
                   className={importScope === 'count' ? 'wizard-scope-option wizard-scope-option-active' : 'wizard-scope-option'}
                   onClick={() => setImportScope('count')}
-                >
-                  Content count
-                </button>
+                > {t("Content count")} </button>
               </div>
             </div>
             {importScope === 'range' ? (
@@ -5913,7 +5869,7 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
             ) : importScope === 'count' ? (
               <>
                 <label className="modal-field">
-                  <span>How many of the most recent items</span>
+                  <span>{t("How many of the most recent items")}</span>
                   <input
                     type="number"
                     min={1}
@@ -5927,12 +5883,10 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
                     }}
                   />
                 </label>
-                <p className="wizard-hint">
-                  Newest first. The limit applies to each selected source; choosing Both can run one Posts import and one Reels import.
-                </p>
+                <p className="wizard-hint"> {t("Newest first. The limit applies to each selected source; choosing Both can run one Posts import and one Reels import.")} </p>
               </>
             ) : (
-              <p className="wizard-hint">Imports up to the most recent 2,000 items per selected source. Use a date range or a count for a narrower, faster import.</p>
+              <p className="wizard-hint">{t("Imports up to the most recent 2,000 items per selected source. Use a date range or a count for a narrower, faster import.")}</p>
             )}
           </div>
         ) : null}
@@ -5948,28 +5902,24 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
                 )}
               </div>
               <div>
-                <p className="wizard-summary-handle">@{cleanHandle || 'handle'}</p>
+                <p className="wizard-summary-handle">@{cleanHandle || t("handle")}</p>
                 <p className="wizard-summary-meta">
                   {ACCOUNT_GROUP_OPTIONS.find((option) => option.value === group)?.label} · {ACCOUNT_SUBCATEGORY_OPTIONS.find((option) => option.value === subcategory)?.label}
                 </p>
                 <p className="wizard-summary-meta">
-                  {[researchEnabled && 'Research', promosEnabled && 'Promos'].filter(Boolean).join(' + ') || 'No tool visibility'} · HOT at {hotThresholdValue}+ likes/hr
-                </p>
-                <p className="wizard-summary-meta">
-                  Scraping {SCRAPE_MODE_OPTIONS.find((option) => option.value === scrapeMode)?.label}
+                  {[researchEnabled && 'Research', promosEnabled && 'Promos'].filter(Boolean).join(' + ') || t("No tool visibility")} {t("· HOT at")} {hotThresholdValue}{t("+ likes/hr")} </p>
+                <p className="wizard-summary-meta"> {t("Scraping")} {SCRAPE_MODE_OPTIONS.find((option) => option.value === scrapeMode)?.label}
                 </p>
                 <p className="wizard-summary-meta">
                   {importScope === 'count'
-                    ? `Importing the ${importCountValue.toLocaleString()} most recent items${scrapeMode === 'both' ? ' per source' : ''}`
+                    ? `Importing the ${importCountValue.toLocaleString(readLang() === 'es' ? 'es-CR' : 'en-US')} most recent items${scrapeMode === 'both' ? ' per source' : ''}`
                     : importScope === 'range'
                     ? `Importing ${importFrom || '…'} to ${importTo || '…'}`
                     : `Importing up to 2,000 most recent ${scrapeMode === 'both' ? 'items per source' : 'items'}`}
                 </p>
               </div>
             </div>
-            <p className="wizard-hint">
-              Post history import runs in the background after this -- you can keep using the dashboard while it works.
-            </p>
+            <p className="wizard-hint"> {t("Post history import runs in the background after this -- you can keep using the dashboard while it works.")} </p>
           </div>
         ) : null}
 
@@ -5977,15 +5927,13 @@ function AddAccountWizard({ onClose, onAccountCreated }) {
 
         <div className="modal-actions wizard-actions">
           <button type="button" className="ghost-button" onClick={step === 0 ? onClose : goBack}>
-            {step === 0 ? 'Cancel' : 'Back'}
+            {step === 0 ? t("Cancel") : t("Back")}
           </button>
           {step < WIZARD_STEPS.length - 1 ? (
-            <button type="button" className="ghost-button primary" onClick={goNext}>
-              Next
-            </button>
+            <button type="button" className="ghost-button primary" onClick={goNext}> {t("Next")} </button>
           ) : (
             <button type="submit" className="ghost-button primary" disabled={submitting}>
-              {submitting ? 'Creating…' : 'Add account'}
+              {submitting ? t("Creating…") : t("Add account")}
             </button>
           )}
         </div>
@@ -6046,6 +5994,7 @@ function describeBackfillProgress(progress, elapsedSec) {
 // action; every bit of task metadata is optional and belongs to each person’s
 // independent Queue task on the backend.
 function AssignPostModal({ post, userEmail, isAdmin, accounts, onClose, onAssigned }) {
+  const { t } = usePrefs();
   const [productionPoints, setProductionPoints] = useState(3);
   const [note, setNote] = useState('');
   const [notes, setNotes] = useState('');
@@ -6129,10 +6078,10 @@ function AssignPostModal({ post, userEmail, isAdmin, accounts, onClose, onAssign
       <form className="queue-assign-modal" onSubmit={submit} aria-labelledby="queue-assign-title">
         <div className="queue-assign-head">
           <div>
-            <p className="section-label">Queue</p>
-            <h2 id="queue-assign-title">Send to Pool</h2>
+            <p className="section-label">{t("Queue")}</p>
+            <h2 id="queue-assign-title">{t("Send to Pool")}</h2>
           </div>
-          <button type="button" className="icon-button" aria-label="Close assignment dialog" onClick={onClose} disabled={saving}>
+          <button type="button" className="icon-button" aria-label={t("Close assignment dialog")} onClick={onClose} disabled={saving}>
             <X size={16} />
           </button>
         </div>
@@ -6141,33 +6090,33 @@ function AssignPostModal({ post, userEmail, isAdmin, accounts, onClose, onAssign
           {cover ? <img src={cover} alt="" /> : <div className="queue-assign-cover-fallback">@</div>}
           <div>
             <strong>@{post.account}</strong>
-            <p>{post.headline || post.excerpt || post.caption || 'Instagram post'}</p>
+            <p>{post.headline || post.excerpt || post.caption || t("Instagram post")}</p>
           </div>
         </div>
 
         <div className="queue-assign-grid">
           <label>
-            <span>Production points <i>required</i></span>
+            <span>{t("Production points")} <i>{t("required")}</i></span>
             <input type="number" min="1" step="1" value={productionPoints} onChange={(event) => setProductionPoints(event.target.value)} />
           </label>
         </div>
 
         <label className="queue-assign-note">
-          <span>Brief or note <i>optional</i></span>
-          <textarea value={note} onChange={(event) => setNote(event.target.value)} placeholder="What should this person do with this post?" rows={3} />
+          <span>{t("Brief or note")} <i>{t("optional")}</i></span>
+          <textarea value={note} onChange={(event) => setNote(event.target.value)} placeholder={t("What should this person do with this post?")} rows={3} />
         </label>
 
-        <label className="queue-assign-note"><span>Extra notes <i>optional</i></span><textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={2} /></label>
-        <label className="queue-assign-note"><span>Reference links <i>optional</i></span><textarea value={references} onChange={(event) => setReferences(event.target.value)} placeholder="One link per line" rows={2} /></label>
+        <label className="queue-assign-note"><span>{t("Extra notes")} <i>{t("optional")}</i></span><textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={2} /></label>
+        <label className="queue-assign-note"><span>{t("Reference links")} <i>{t("optional")}</i></span><textarea value={references} onChange={(event) => setReferences(event.target.value)} placeholder={t("One link per line")} rows={2} /></label>
 
         <label className="queue-assign-files">
-          <span>Files <i>optional · up to 20 MB each</i></span>
+          <span>{t("Files")} <i>{t("optional · up to 20 MB each")}</i></span>
           <input type="file" multiple onChange={(event) => setAttachmentFiles([...event.target.files])} />
           {attachmentFiles.length ? <small>{attachmentFiles.map((file) => file.name).join(' · ')}</small> : null}
         </label>
 
         <fieldset className="queue-assign-fieldset queue-tag-fieldset">
-          <legend>Tags <i>optional</i></legend>
+          <legend>{t("Tags")} <i>{t("optional")}</i></legend>
           <div className="queue-tag-picker">
             {tagOptions.map((tag) => (
               <button type="button" key={tag} className={tags.has(tag) ? 'queue-tag-option is-selected' : 'queue-tag-option'} onClick={() => toggleTag(tag)}>
@@ -6179,10 +6128,10 @@ function AssignPostModal({ post, userEmail, isAdmin, accounts, onClose, onAssign
 
         {error ? <p className="queue-assign-error" role="alert">{error}</p> : null}
         <div className="queue-assign-actions">
-          <button type="button" className="ghost-button" onClick={onClose} disabled={saving}>Cancel</button>
+          <button type="button" className="ghost-button" onClick={onClose} disabled={saving}>{t("Cancel")}</button>
           <button type="submit" className="primary-button" disabled={saving}>
             <ListTodo size={15} />
-            {saving ? 'Saving…' : 'Send to Pool'}
+            {saving ? t("Saving…") : t("Send to Pool")}
           </button>
         </div>
       </form>
@@ -6191,6 +6140,7 @@ function AssignPostModal({ post, userEmail, isAdmin, accounts, onClose, onAssign
 }
 
 function LoginScreen({ notice }) {
+  const { t, lang, setLang } = usePrefs();
   const [signingIn, setSigningIn] = useState(false);
   const [error, setError] = useState('');
 
@@ -6198,43 +6148,43 @@ function LoginScreen({ notice }) {
     setSigningIn(true);
     setError('');
     const err = await startGoogleSignIn();
-    if (err) setError(describeSignInError(err));
+    if (err) setError(err);
     setSigningIn(false);
   };
 
   return (
     <div className="auth-screen">
       <div className="auth-card">
+        <LanguageSelector lang={lang} setLang={setLang} t={t} />
         <h1><Wordmark /></h1>
-        <p>Sign in with your Google account to continue.</p>
+        <p>{t("Sign in with your Google account to continue.")}</p>
         <button type="button" className="primary-button auth-google-button" onClick={handleSignIn} disabled={signingIn}>
-          {signingIn ? 'Signing in…' : 'Sign in with Google'}
+          {signingIn ? t("Signing in…") : t("Sign in with Google")}
         </button>
-        {notice ? <p className="settings-notice">{notice}</p> : null}
-        {error ? <p className="settings-notice">{error}</p> : null}
+        {notice ? <p className="settings-notice">{t(notice)}</p> : null}
+        {error ? <p className="settings-notice">{describeSignInError(error, lang)}</p> : null}
       </div>
     </div>
   );
 }
 
 function NotAuthorizedScreen({ email, onSignOut }) {
+  const { t, lang, setLang } = usePrefs();
   return (
     <div className="auth-screen">
       <div className="auth-card">
+        <LanguageSelector lang={lang} setLang={setLang} t={t} />
         <h1><Wordmark /></h1>
         <p>
-          {email ? <strong>{email}</strong> : 'This Google account'} isn&rsquo;t authorized for sentientdash.app. Ask for
-          access, then sign in again.
-        </p>
-        <button type="button" className="ghost-button" onClick={onSignOut}>
-          Sign out
-        </button>
+          {email ? <strong>{email}</strong> : t("This Google account")} {t("isn’t authorized for sentientdash.app. Ask for access, then sign in again.")} </p>
+        <button type="button" className="ghost-button" onClick={onSignOut}> {t("Sign out")} </button>
       </div>
     </div>
   );
 }
 
 function App() {
+  const { t } = usePrefs();
   const [authUser, setAuthUser] = useState(undefined); // undefined = loading, null = signed out
   const [unauthorized, setUnauthorized] = useState(false);
   const [authNotice, setAuthNotice] = useState('');
@@ -6356,7 +6306,7 @@ function App() {
     return <NotAuthorizedScreen email={authUser.email} onSignOut={handleSignOut} />;
   }
   if (authorization?.user !== authUser) {
-    return <div className="auth-screen"><div className="auth-card" role="status"><h1><Wordmark /></h1><p>{accessError || 'Checking workspace access…'}</p>{accessError ? <button type="button" className="ghost-button" onClick={() => setAccessAttempt((attempt) => attempt + 1)}>Try again</button> : null}<button type="button" className="ghost-button" onClick={handleSignOut}>Sign out</button></div></div>;
+    return <div className="auth-screen"><div className="auth-card" role="status"><h1><Wordmark /></h1><p>{(accessError ? t(accessError) : null) || t("Checking workspace access…")}</p>{accessError ? <button type="button" className="ghost-button" onClick={() => setAccessAttempt((attempt) => attempt + 1)}>{t("Try again")}</button> : null}<button type="button" className="ghost-button" onClick={handleSignOut}>{t("Sign out")}</button></div></div>;
   }
   return <Dashboard key={authUser.uid || authUser.email} userEmail={authUser.email} userPhoto={authUser.photoURL || ''} initialAccess={authorization.access} sessionVersion={authorization.version} sessionVersionRef={authVersion} onSignOut={handleSignOut} onUnauthorized={handleUnauthorized} />;
 }

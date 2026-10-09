@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { usePrefs } from './prefsContext';
 import { ImageOff } from 'lucide-react';
 import { obsidianCardHandlers } from './obsidian-card';
 
@@ -19,11 +20,12 @@ export default function ResearchCard({ className = '', source, meta, avatar, mar
 }
 
 export function CardMedia({ src, fallbackSrc, alt = '', label = 'No preview' }) {
+  const { t } = usePrefs();
   // Remember failures by URL so replacing the source retries the new image
   // without an effect, and a failed fallback cannot create an error loop.
   const [failed, setFailed] = useState([]);
   const current = [src, fallbackSrc].find(url => url && !failed.includes(url));
   return current
     ? <img className="product-card-image" src={current} alt={alt} loading="lazy" decoding="async" referrerPolicy="no-referrer" onError={() => setFailed(previous => [...previous, current])} />
-    : <div className="product-card-placeholder" role="img" aria-label={label}><ImageOff size={24} aria-hidden="true" /><span>{label}</span></div>;
+    : <div className="product-card-placeholder" role="img" aria-label={t(label)}><ImageOff size={24} aria-hidden="true" /><span>{t(label)}</span></div>;
 }

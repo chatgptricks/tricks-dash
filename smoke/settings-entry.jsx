@@ -116,7 +116,7 @@ const clickTab = async (label) => {
     checks['Successful report downloads server PDF with its attachment name'] = mediaKitDownloads.length === 1
       && mediaKitDownloads[0].filename === 'chatgptricks-media-kit-2026-10-09.pdf'
       && Buffer.from(await mediaKitBlobs[0].arrayBuffer()).equals(Buffer.from(mediaKitPdf))
-      && mediaKitRequests[0].url === 'https://api.test/api/admin/accounts/chatgptricks/media-kit.pdf?theme=dark&accent=%23fb7185'
+      && mediaKitRequests[0].url === 'https://api.test/api/admin/accounts/chatgptricks/media-kit.pdf?theme=dark&accent=%23fb7185&lang=en'
       && mediaKitRequests[0].options.cache === 'no-store' && !mediaKitButton().disabled
       && !document.querySelector('.accounts-detail-row');
     await act(async () => { document.querySelector('.settings-menu-trigger').click(); });
@@ -134,7 +134,7 @@ const clickTab = async (label) => {
     checks['Failed report retains a local row error and stays retryable'] = /Report data temporarily unavailable/.test(document.querySelector('.account-media-kit-error')?.textContent || '')
       && !mediaKitButton().disabled && mediaKitDownloads.length === 1
       && !document.querySelector('.accounts-detail-row');
-    checks['Later download reads the current theme and custom accent from shared preferences'] = mediaKitRequests[1].url === 'https://api.test/api/admin/accounts/chatgptricks/media-kit.pdf?theme=light&accent=%23123abc'
+    checks['Later download reads the current theme and custom accent from shared preferences'] = mediaKitRequests[1].url === 'https://api.test/api/admin/accounts/chatgptricks/media-kit.pdf?theme=light&accent=%23123abc&lang=en'
       && document.documentElement.dataset.theme === 'light' && document.documentElement.dataset.accent === '#123abc';
     mediaKitMode = 'pending';
     await act(async () => { mediaKitButton().click(); await new Promise((resolve) => setTimeout(resolve, 20)); });

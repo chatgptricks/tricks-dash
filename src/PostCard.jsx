@@ -3,6 +3,7 @@
 import { memo, useEffect, useRef, useState } from 'react';
 import { Check, ExternalLink, PenLine, Eye, EyeOff, ListTodo, LoaderCircle, Megaphone, MoreHorizontal, RefreshCw, Search, Sparkles, Trash2, Video, Zap } from 'lucide-react';
 import { usePrefs } from './prefsContext';
+import { readLang } from './prefs';
 import { API_BASE, IG_HANDLE } from './api';
 import { encodeRouteState } from './urlCodec';
 import { CoverImage, HotBadge, hotEffects, posterTheme, formatElapsed } from './postDetail';
@@ -27,8 +28,8 @@ export const PROMO_HASHTAG_RE = /#aitoolsentient\b/i;
 
 const suggestionLink = post => `/queue.html?r=${encodeRouteState({ suggest: post.permalink, sourceAccount: post.account, sourceShortcode: post.shortcode })}`;
 
-const currencyFormatter = new Intl.NumberFormat('en-US');
-const compactFormatter = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 });
+const currencyFormatter = { format: (value) => new Intl.NumberFormat(readLang() === 'es' ? 'es-CR' : 'en-US').format(value) };
+const compactFormatter = { format: (value) => new Intl.NumberFormat(readLang() === 'es' ? 'es-CR' : 'en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(value) };
 
 // Instagram hides or under-reports the like count on some posts, and Apify
 // then returns null/0/1/2/3. Those aren't real engagement numbers, so showing
@@ -41,13 +42,13 @@ function formatLikes(value) {
 }
 
 const DASHBOARD_TIME_ZONE = 'America/Costa_Rica';
-const dateFormatter = new Intl.DateTimeFormat('en-US', {
+const dateFormatter = { format: (value) => new Intl.DateTimeFormat(readLang() === 'es' ? 'es-CR' : 'en-US', {
   month: 'short',
   day: 'numeric',
   hour: 'numeric',
   minute: '2-digit',
   timeZone: DASHBOARD_TIME_ZONE,
-});
+}).format(value) };
 
 function formatDate(iso) {
   const date = iso ? new Date(iso) : null;
@@ -74,6 +75,7 @@ function freshnessFraction(timestampMs) {
 // Shared by the card menu and the detail rail. The control owns the short
 // confirmation window so its parent closes only after the write succeeds.
 export function QuickAddButton({ post, onQuickAdd, onAdded, className = 'ghost-button', role, label = 'Quick add' }) {
+  const { t } = usePrefs();
   const [phase, setPhase] = useState('idle');
   const closeTimer = useRef(null);
 
@@ -97,12 +99,12 @@ export function QuickAddButton({ post, onQuickAdd, onAdded, className = 'ghost-b
       type="button"
       role={role}
       className={`${className} quick-add-button is-${phase}`.trim()}
-      title="Quick add to Pool with defaults"
+      title={t("Quick add to Pool with defaults")}
       onClick={add}
       disabled={phase !== 'idle'}
     >
       {phase === 'adding' ? <LoaderCircle className="spin" size={13} /> : phase === 'added' ? <Check size={13} /> : <Zap size={13} />}
-      {phase === 'adding' ? 'Adding…' : phase === 'added' ? 'Added' : label}
+      {phase === 'adding' ? t("Adding…") : phase === 'added' ? t("Added") : t(label)}
     </button>
   );
 }
@@ -192,7 +194,7 @@ export function PostMenu({ post, isPromo, onFlags, onReload, onAssign, onQuickAd
           event.stopPropagation();
           setOpen((value) => !value);
         }}
-        aria-label={isStack ? 'Stack menu' : 'Post menu'}
+        aria-label={isStack ? t("Stack menu") : t("Post menu")}
         aria-expanded={open}
       >
         <MoreHorizontal size={16} />
@@ -200,9 +202,9 @@ export function PostMenu({ post, isPromo, onFlags, onReload, onAssign, onQuickAd
       {open ? (
         <div className="post-menu-panel" role="menu" onClick={(event) => event.stopPropagation()}>
           {isStack ? <>
-            <p className="post-menu-note">{t('Entire stack')} · {scope.length} posts</p>
+            <p className="post-menu-note">{t('Entire stack')} · {scope.length} {t("posts")}</p>
             <button role="menuitem" disabled={Boolean(busy)} onClick={(event) => runBatch(event, 'reload', onReload)}><RefreshCw size={13} className={busy === 'reload' ? 'spin' : ''} />{t('Reload counts')} · {scope.length}</button>
-            {promoScope.length > 0 && <button role="menuitem" disabled={Boolean(busy)} onClick={(event) => runBatch(event, 'promo', (member) => onFlags(member, { is_promo: !promoScope.every((item) => item.isPromo) }))}><Megaphone size={13} />{promoScope.every((item) => item.isPromo) ? t('Remove promo') : t('Mark as promo')} · {promoScope.length} Ours</button>}
+            {promoScope.length > 0 && <button role="menuitem" disabled={Boolean(busy)} onClick={(event) => runBatch(event, 'promo', (member) => onFlags(member, { is_promo: !promoScope.every((item) => item.isPromo) }))}><Megaphone size={13} />{promoScope.every((item) => item.isPromo) ? t('Remove promo') : t('Mark as promo')} · {promoScope.length} {t("Ours")}</button>}
             <button role="menuitem" disabled={Boolean(busy)} onClick={(event) => runBatch(event, 'hide', (member) => onFlags(member, { hidden: !scope.every((item) => item.hidden) }))}><EyeOff size={13} />{scope.every((item) => item.hidden) ? t('Unhide') : t('Hide')} · {scope.length}</button>
             <button role="menuitem" disabled={Boolean(busy)} onClick={(event) => run(event, 'ungroup', () => stackActions.separate(scope.map(stackPostKey)))}>{t('Ungroup stack')}</button>
           </> : <>
@@ -215,11 +217,9 @@ export function PostMenu({ post, isPromo, onFlags, onReload, onAssign, onQuickAd
               onAssign(post);
             }}
           >
-            <ListTodo size={13} />
-            Send to Pool
-          </button> : null}
+            <ListTodo size={13} /> {t("Send to Pool")} </button> : null}
           {canSuggest && post.permalink ? <a role="menuitem" href={suggestionLink(post)}><PenLine size={13} />{t('Suggest post')}</a> : null}
-          {canPool ? <QuickAddButton post={post} onQuickAdd={onQuickAdd} onAdded={() => { setOpen(false); onQuickAddSuccess?.(); }} className="" role="menuitem" label="Quick add to Pool" /> : null}
+          {canPool ? <QuickAddButton post={post} onQuickAdd={onQuickAdd} onAdded={() => { setOpen(false); onQuickAddSuccess?.(); }} className="" role="menuitem" label={t("Quick add to Pool")} /> : null}
           {stackActions ? <button type="button" role="menuitem" onClick={(event) => run(event, 'similar', () => stackActions.findSimilar(post))} disabled={Boolean(busy)}><Search size={13} className={busy === 'similar' ? 'spin' : ''} />{busy === 'similar' ? t('Searching…') : t('Find similar')}</button> : null}
           {stackActions && Number(post.stackSize) > 1 ? <button type="button" role="menuitem" onClick={(event) => run(event, 'separate', () => stackActions.separate([post.postKey || `${post.account}:${post.shortcode}`]))} disabled={Boolean(busy)}>↗ {t('Separate from stack')}</button> : null}
           {post.group === 'sentient' && <button
@@ -229,7 +229,7 @@ export function PostMenu({ post, isPromo, onFlags, onReload, onAssign, onQuickAd
             disabled={Boolean(busy)}
           >
             <Megaphone size={13} />
-            {post.isPromo ? 'Remove promo' : 'Mark as promo'}
+            {post.isPromo ? t("Remove promo") : t("Mark as promo")}
           </button>}
           <button
             type="button"
@@ -238,7 +238,7 @@ export function PostMenu({ post, isPromo, onFlags, onReload, onAssign, onQuickAd
             disabled={Boolean(busy)}
           >
             {post.hidden ? <Eye size={13} /> : <EyeOff size={13} />}
-            {post.hidden ? 'Unhide' : 'Hide'}
+            {post.hidden ? t("Unhide") : t("Hide")}
           </button>
           <button
             type="button"
@@ -247,15 +247,15 @@ export function PostMenu({ post, isPromo, onFlags, onReload, onAssign, onQuickAd
             disabled={Boolean(busy)}
           >
             <RefreshCw size={13} className={busy === 'reload' ? 'spin' : ''} />
-            {busy === 'reload' ? 'Reloading...' : 'Reload counts'}
+            {busy === 'reload' ? t("Reloading...") : t("Reload counts")}
           </button>
           {/* Promo is inferred from the caption hashtag as well as the flag,
               so say so rather than showing a toggle that looks stuck on. */}
           {isPromo && !post.isPromo ? (
-            <p className="post-menu-note">Tagged {PROMO_HASHTAG}</p>
+            <p className="post-menu-note">{t("Tagged")} {PROMO_HASHTAG}</p>
           ) : null}
           </>}
-          {note ? <p className="post-menu-note" role="status">{note}</p> : null}
+          {note ? <p className="post-menu-note" role="status">{t(note)}</p> : null}
         </div>
       ) : null}
     </div>
@@ -266,6 +266,7 @@ export function PostMenu({ post, isPromo, onFlags, onReload, onAssign, onQuickAd
 // than an SVG/icon set: the filled wedge is just one angle, so a continuous
 // fraction draws as easily as a stepped one -- no extra markup either way.
 const FreshnessRing = memo(function FreshnessRing({ timestamp }) {
+  const { t } = usePrefs();
   const fraction = freshnessFraction(timestamp);
   // Without this the ring only visibly moves when something else causes the
   // card to re-render (the 3-minute poll, a filter change) -- ticking on its
@@ -290,7 +291,7 @@ const FreshnessRing = memo(function FreshnessRing({ timestamp }) {
         background: `conic-gradient(var(--accent) 0deg ${filledDeg}deg, rgba(255,255,255,.16) ${filledDeg}deg 360deg)`,
       }}
       role="img"
-      aria-label={`New post, fading over its first ${FRESHNESS_WINDOW_HOURS} hours -- about ${leftLabel} left`}
+      aria-label={t('New post, fading over its first {hours} hours -- about {left} left', { hours: FRESHNESS_WINDOW_HOURS, left: leftLabel })}
       title={`New post · fades out over its first ${FRESHNESS_WINDOW_HOURS}h (~${leftLabel} left)`}
     />
   );
@@ -381,18 +382,16 @@ export const PostCard = memo(function PostCard({ post, goldenNugget, priority, s
 
       <CoverImage className={`post-media ${posterTheme(post.type)}${post.isVideo && post.showsHotBadge ? ' has-video-hot' : ''}`} post={post} priority={priority}>
         {post.showsHotBadge ? <><span className="obs-metal" aria-hidden="true" /><span className="obs-foil" aria-hidden="true" /><span className="obs-glare" aria-hidden="true" /></> : <span className="obs-soft-glare" aria-hidden="true" />}
-        {post.isDeleted ? <div className="post-deleted-overlay" title="Deleted from Instagram" aria-label="Deleted from Instagram"><Trash2 size={42} strokeWidth={2.4} /></div> : null}
+        {post.isDeleted ? <div className="post-deleted-overlay" title={t("Deleted from Instagram")} aria-label={t("Deleted from Instagram")}><Trash2 size={42} strokeWidth={2.4} /></div> : null}
         {post.isVideo ? (
           <div className="media-badge">
-            <Video size={13} />
-            Video
-          </div>
+            <Video size={13} /> {t("Video")} </div>
         ) : null}
         {post.showsHotBadge ? <HotBadge post={post} /> : null}
-        {goldenNugget ? <div className={`golden-nugget-badge${isPromisingNugget ? ' is-promising' : ''}`} title={`${isPromisingNugget ? 'Promising idea' : 'Golden nugget'}${goldenNugget.targetAccount ? ` for @${goldenNugget.targetAccount}` : ''}`}><Sparkles size={12} />{isPromisingNugget ? 'Promising' : 'Golden nugget'}</div> : null}
+        {goldenNugget ? <div className={`golden-nugget-badge${isPromisingNugget ? ' is-promising' : ''}`} title={`${isPromisingNugget ? 'Promising idea' : 'Golden nugget'}${goldenNugget.targetAccount ? ` for @${goldenNugget.targetAccount}` : ''}`}><Sparkles size={12} />{isPromisingNugget ? t("Promising") : t("Golden nugget")}</div> : null}
         {isPromo ? (
           <div className="promo-ribbon" title={`Promo (${PROMO_HASHTAG})`}>
-            <span>Promo</span>
+            <span>{t("Promo")}</span>
           </div>
         ) : null}
         {post.queueState && post.queueState !== 'cancelled' ? (
@@ -402,24 +401,24 @@ export const PostCard = memo(function PostCard({ post, goldenNugget, priority, s
         ) : null}
         {post.queueAttribution ? (
           <div className="queue-attribution-badge" title={`Created through Queue by ${post.queueAttribution.designerEmail}`}>
-            <Check size={11} />{post.queueAttribution.designerEmail?.split('@')[0] || 'Queue'}
+            <Check size={11} />{post.queueAttribution.designerEmail?.split('@')[0] || t("Queue")}
           </div>
         ) : null}
       </CoverImage>
 
       <div className="post-editorial-actions" onClick={stopAction}>
-        <button type="button" onClick={(event) => { sendCardToSide(event.currentTarget.closest('.post-card'), post.postKey); onSelect(post.postKey); }}>View details</button>
-        {post.queueRequestId && post.queueState !== 'cancelled' ? <a className="editorial-primary" href={`/queue.html?r=${encodeRouteState({ task: post.queueRequestId })}`}>Open in Queue</a> : canPool ? <button type="button" className="editorial-primary" onClick={() => onAssign(post)}>Send to Pool</button> : canSuggest ? <a className="editorial-primary" href={suggestionLink(post)}>Suggest post</a> : null}
-        <a href={post.permalink} target="_blank" rel="noreferrer">Original <ExternalLink size={11} /></a>
+        <button type="button" onClick={(event) => { sendCardToSide(event.currentTarget.closest('.post-card'), post.postKey); onSelect(post.postKey); }}>{t("View details")}</button>
+        {post.queueRequestId && post.queueState !== 'cancelled' ? <a className="editorial-primary" href={`/queue.html?r=${encodeRouteState({ task: post.queueRequestId })}`}>{t("Open in Queue")}</a> : canPool ? <button type="button" className="editorial-primary" onClick={() => onAssign(post)}>{t("Send to Pool")}</button> : canSuggest ? <a className="editorial-primary" href={suggestionLink(post)}>{t("Suggest post")}</a> : null}
+        <a href={post.permalink} target="_blank" rel="noreferrer">{t("Original")} <ExternalLink size={11} /></a>
       </div>
 
       <div className="post-copy">
-        <div className="post-likes" title={post.likesUpdatedAt ? `${t('Updated')} ${formatElapsed(new Date(post.likesUpdatedAt).getTime()) || '—'} ${t('ago')}` : t('Update time unavailable')}>{formatLikes(post.likes)} likes</div>
+        <div className="post-likes" title={post.likesUpdatedAt ? `${t('Updated')} ${formatElapsed(new Date(post.likesUpdatedAt).getTime()) || '—'} ${t('ago')}` : t('Update time unavailable')}>{formatLikes(post.likes)} {t("likes")}</div>
         {!hideCaption ? <p>
           <strong title={accountLabel}>{accountLabel}</strong> {post.headline || post.excerpt}
         </p> : null}
         <div className="post-footer">
-          <span>{post.comments != null && Number.isFinite(Number(post.comments)) ? compactFormatter.format(post.comments) : '—'} comments</span>
+          <span>{post.comments != null && Number.isFinite(Number(post.comments)) ? compactFormatter.format(post.comments) : '—'} {t("comments")}</span>
           <span>{formatDate(post.postDate)}</span>
         </div>
       </div>

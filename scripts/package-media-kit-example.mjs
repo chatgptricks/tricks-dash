@@ -2,7 +2,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 
 // Fixed file selection prevents local .env secrets from entering this public
 // download. Store ZIP entries with a fixed timestamp so builds are repeatable.
-const files = ['.env.example', '.gitignore', 'README.md', 'client.js', 'index.html', 'server.mjs', 'server.test.mjs', 'styles.css'];
+const files = ['.env.example', '.gitignore', 'README.md', 'README.en.md', 'client.js', 'index.html', 'server.mjs', 'server.test.mjs', 'styles.css'];
 const root = new URL('../', import.meta.url);
 const localEntries = [];
 const centralEntries = [];

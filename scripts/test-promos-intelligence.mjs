@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { PROMO_BRIEF_ES } from '../src/promoBriefCopy.js';
 import {
   CLASSIFICATION_LABELS, RELATIONSHIP_LABELS, promoKey, normalizeClient,
   safeExternalUrl, inspectPromo, selectPromos, summarizePromos,
@@ -129,6 +130,39 @@ assert.ok(brief.includes('Same topic stack: @creator / same-stack'));
 assert.ok(brief.includes('not proof of a shared campaign'));
 assert.ok(brief.includes('Promotion signals do not verify payment'));
 assert.ok(!brief.includes('50 related'), 'Do not imply unseen siblings were reviewed');
+
+const spanishSource = {
+  ...origin,
+  client: 'Brand', product: 'Product',
+  evidence: [{ rule: 'sponsored', family: 'explicit', source: 'caption', text: 'Unknown client' }],
+  links: [{ url: 'https://example.com/offer', source: 'custom_saved_source' }],
+  client_candidates: [{ name: 'Candidate Brand', source: 'mention' }],
+  jev_review: {
+    commercialRelationship: 'editorial_mention', recommendation: 'conflicting_evidence',
+    deterministicClassification: 'disclosed', guidance: 'Needs review',
+    contextSource: 'first_comment', contextExcerpt: 'Promotion signals do not verify payment.',
+  },
+  cta: { keyword: 'BUY_NOW' }, promo_code: 'SAVE20',
+};
+const originalSpanishSource = structuredClone(spanishSource);
+const spanishBrief = buildReviewBrief(spanishSource, relatedRows, copy => PROMO_BRIEF_ES[copy] ?? copy);
+for (const expected of [
+  'BRIEF DE REVISIÓN DE PROMOCIONES', 'Marca: Brand', 'Producto: Product',
+  'Clasificación: Promoción declarada', 'Estado de revisión: nuevo',
+  'Prioridad de revisión: alta (solo priorización; no es una probabilidad)',
+  'JEV y la etiqueta no coinciden', 'Compara ambas con la publicación original.',
+  'EVIDENCIA GUARDADA DE REGLAS', '- sponsored [Texto de la publicación]: Unknown client',
+  'Recomendación: Evidencia contradictoria', 'Lectura de la relación: Mención editorial sin una oferta',
+  'Orientación: Needs review', 'Fragmento revisado [Primer comentario]: Promotion signals do not verify payment.',
+  'Candidate Brand (Mención)', 'https://example.com/offer (custom_saved_source)',
+  'Palabra clave de llamada a la acción observada: BUY_NOW', 'Código promocional observado: SAVE20',
+  'Mismo grupo temático: @creator / same-stack', 'no pruebas de una campaña compartida',
+]) assert.ok(spanishBrief.includes(expected), `Spanish brief preserves meaning and source values: ${expected}`);
+assert.equal(spanishBrief.includes('SAVED JEV ASSESSMENT'), false);
+assert.deepEqual(spanishSource, originalSpanishSource, 'Localization must not modify detector or source data');
+const unknownStatusBrief = buildReviewBrief({ ...spanishSource, review_status: 'future_review_state' }, [], copy => PROMO_BRIEF_ES[copy] ?? copy);
+assert.ok(unknownStatusBrief.includes('Estado de revisión: future_review_state'), 'Unknown enum values stay available verbatim');
+assert.equal(buildReviewBrief(spanishSource, relatedRows), buildReviewBrief(spanishSource, relatedRows, copy => copy), 'Default brief behavior remains English');
 
 console.log('PASS Promos intelligence: evidence triage, corrected labels, bounded summaries, safe links, search, deterministic ordering, related-post semantics and faithful briefs');
 

@@ -5,7 +5,8 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <script src="/mobile-redirect.js?v=20260908-device"></script>
-<script src="/user-preferences.js?v=20260928-prefs1"></script>
+<script src="/user-preferences.js?v=20261009-i18n1"></script>
+<script src="/tool-translations.js?v=20261009-i18n1"></script>
 <script src="/role-preview.js?v=20260928-tracker" defer></script>
 <script src="/context-menu.js?v=20260901-context1" defer></script>
 <title>Tracker · sentientdash.app</title>
@@ -301,7 +302,7 @@ table.hist-table td{text-align:left;padding:11px 8px;white-space:nowrap}
 <link rel="stylesheet" href="/product-shell.css?v=20260905c">
 <link rel="stylesheet" href="/obsidian.css?v=20260928-visual1">
 <link rel="stylesheet" href="/product-motion.css?v=20261003-motion1">
-<link rel="stylesheet" href="/product-layout.css?v=20261004-shell1">
+<link rel="stylesheet" href="/product-layout.css?v=20261009-connections1">
 <script src="/visual-effects.js?v=20260928-visual1" defer></script>
 </head>
 <body>
@@ -397,6 +398,8 @@ function wireAvatarFallbacks(root=document){
   });
 }
 const $ = s => document.querySelector(s);
+const toolLocale = () => document.documentElement.lang === 'es' ? 'es-CR' : 'en-US';
+const toolText = text => window.SentientToolI18n?.translate(text, document.documentElement.lang) ?? text;
 // Abbreviated form is kept only for the chart y-axis (readability at a
 // glance); every number a person actually reads as "how many followers"
 // uses the exact figure per explicit request -- no rounding to 4.7M.
@@ -411,11 +414,11 @@ const fmtAxis = value => {
   const n = asNumber(value);
   if (n === null) return '—';
   return Math.abs(n)>=1e6 ? (n/1e6).toFixed(1)+'M'
-    : Math.abs(n)>=1e3 ? (n/1e3).toFixed(1)+'K' : Math.round(n).toLocaleString('en-US');
+    : Math.abs(n)>=1e3 ? (n/1e3).toFixed(1)+'K' : Math.round(n).toLocaleString(toolLocale());
 };
 const fmt = value => {
   const n = asNumber(value);
-  return n === null ? '—' : Math.round(n).toLocaleString('en-US');
+  return n === null ? '—' : Math.round(n).toLocaleString(toolLocale());
 };
 const signed = value => {
   const n = asNumber(value);
@@ -425,7 +428,7 @@ const pct = value => {
   const n = asNumber(value);
   return n === null ? '—' : (n>0?'+':'')+n.toFixed(1)+'%';
 };
-const dt = s => s ? new Date(s).toLocaleString(undefined,{dateStyle:'medium',timeStyle:'short'}) : '—';
+const dt = s => s ? new Date(s).toLocaleString(toolLocale(),{dateStyle:'medium',timeStyle:'short'}) : '—';
 
 let SUMMARY = null;
 let DETAIL_CACHE = {};
@@ -486,7 +489,7 @@ async function shareLink(){
   try{
     await navigator.clipboard.writeText(location.href);
     btn.textContent='Copied'; setTimeout(()=>{btn.textContent='Copy link'},1600);
-  }catch(e){ prompt('Copy this link:', location.href); }
+  }catch(e){ prompt(toolText('Copy this link:'), location.href); }
 }
 
 async function boot(){
@@ -668,7 +671,7 @@ async function refreshAccountNow(handle, btn){
     delete DETAIL_CACHE[handle];
     render();
   }catch(e){
-    if(session === TRACKER_SESSION) alert(refreshErrorMessage(e, 'Could not refresh @'+handle+': '));
+    if(session === TRACKER_SESSION) alert(toolText(refreshErrorMessage(e, 'Could not refresh @'+handle+': ')));
   }finally{
     if(btn){ btn.disabled = false; delete btn.dataset.running; }
     if(icon){ icon.classList.remove('is-spinning'); }
@@ -689,7 +692,7 @@ async function refreshAllAccountsNow(btn){
     await loadSummary();
     render();
   }catch(e){
-    if(session === TRACKER_SESSION) alert(refreshErrorMessage(e, 'Could not refresh accounts: '));
+    if(session === TRACKER_SESSION) alert(toolText(refreshErrorMessage(e, 'Could not refresh accounts: ')));
   }finally{
     if(btn){ btn.disabled = false; delete btn.dataset.running; btn.textContent = btn.dataset.label || '↻ Refresh all'; }
     applyRefreshAllowance();
@@ -858,7 +861,7 @@ function escapeHtml(value){ return escapeAttribute(value).replace(/'/g, '&#39;')
 function trackingSinceNote(){
   if(!SUMMARY.tracking_since) return `<div class="note">No follower history recorded yet -- the first daily snapshot runs at 7am CST, or use <b>Settings → System</b> to capture one right now. Growth columns fill in day by day from there; there's no way to recover Instagram's past follower counts for an account that just started being tracked.</div>`;
   const days = Math.max(1, Math.round((Date.now()-new Date(SUMMARY.tracking_since).getTime())/864e5));
-  return `<div class="note">Tracking since <b>${new Date(SUMMARY.tracking_since).toLocaleDateString()}</b> (${days} day${days===1?'':'s'} of history so far). Follower deltas need that many days of snapshots to fill in -- a fresh account naturally shows "—" for windows it hasn't lived through yet.</div>`;
+  return `<div class="note">Tracking since <b>${new Date(SUMMARY.tracking_since).toLocaleDateString(toolLocale())}</b> (${days} day${days===1?'':'s'} of history so far). Follower deltas need that many days of snapshots to fill in -- a fresh account naturally shows "—" for windows it hasn't lived through yet.</div>`;
 }
 
 function renderLeaderboard(){
@@ -935,7 +938,7 @@ function renderLeaderboard(){
             <td><div class="acct-cell">
               <img class="acct-avatar" src="${API}/api/dashboard/avatar/${encodeURIComponent(r.handle)}" referrerpolicy="no-referrer" data-avatar-handle="${escapeAttribute(r.handle)}">
               <div class="acct-name"><strong>@${escapeHtml(r.handle)}${r.verified?' <span title="Verified" style="color:#4aa8ff">✓</span>':''}${r.private?' <span class="na" title="Private account">🔒</span>':''}</strong>
-                <span class="na" style="font-size:10px">${r.full_name && r.full_name.toLowerCase()!==r.handle.toLowerCase() ? escapeHtml(r.full_name) : ' '}</span>
+                <span class="na" style="font-size:10px" data-i18n-skip>${r.full_name && r.full_name.toLowerCase()!==r.handle.toLowerCase() ? escapeHtml(r.full_name) : ' '}</span>
                 <span class="pill ${r.group==='sentient'?'s':'c'}">${r.group==='sentient'?'ours':'competitor'}</span>
               </div>
             </div></td>
@@ -946,7 +949,7 @@ function renderLeaderboard(){
             <td>${r.posts_count!=null?fmt(r.posts_count):'<span class="na">—</span>'}</td>
             <td>${r.avg_likes_30d!=null?fmt(r.avg_likes_30d)+' <span class="na">('+ (r.posts_30d||0) +' posts)</span>':'<span class="na">—</span>'}</td>
             <td>${r.engagement_trend_pct!=null?pct(r.engagement_trend_pct):'<span class="na">—</span>'}</td>
-            <td>${r.captured_at?`<span class="na" title="${dt(r.captured_at)}">${new Date(r.captured_at).toLocaleDateString()}</span>`:'<span class="na">—</span>'}</td>
+            <td>${r.captured_at?`<span class="na" title="${dt(r.captured_at)}">${new Date(r.captured_at).toLocaleDateString(toolLocale())}</span>`:'<span class="na">—</span>'}</td>
           </tr>`).join('') || '<tr><td colspan="10" class="tracker-empty">No accounts match this view. Try another name or clear the filters.</td></tr>'}</tbody>
       </table>
       </div>
@@ -1086,8 +1089,8 @@ function renderHistoricalStats(dayRows){
         const estimated = Boolean(h.estimated);
         const prev = rows[i-1] || null;
         const d = new Date(`${trackerDateKey(h.date)}T12:00:00`);
-        const dateLabel = d.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
-        const dow = d.toLocaleDateString(undefined,{weekday:'short'});
+        const dateLabel = d.toLocaleDateString(toolLocale(),{month:'short',day:'numeric',year:'numeric'});
+        const dow = d.toLocaleDateString(toolLocale(),{weekday:'short'});
         const rate = rateOf(h), prevRate = prev?rateOf(prev):null;
         const delta = dailyDelta(h, prev);
         const deltaCls = delta==null ? 'flat' : delta>0 ? 'up' : delta<0 ? 'down' : 'flat';
@@ -1141,7 +1144,7 @@ async function renderDetail(handle){
         <img src="${API}/api/dashboard/avatar/${encodeURIComponent(handle)}" referrerpolicy="no-referrer" data-avatar-handle="${escapeAttribute(handle)}">
         <div>
           <h2><a class="instagram-account-link" href="https://www.instagram.com/${encodeURIComponent(handle)}/" target="_blank" rel="noreferrer" title="Open @${escapeAttribute(handle)} on Instagram">@${escapeHtml(handle)}</a>${row.verified?' <span title="Verified" style="color:#4aa8ff;font-size:14px">✓</span>':''}${row.private?' <span class="na" title="Private account" style="font-size:13px">🔒</span>':''}</h2>
-          ${row.full_name && row.full_name.toLowerCase()!==handle.toLowerCase() ? `<span>${escapeHtml(row.full_name)} · </span>` : ''}
+          ${row.full_name && row.full_name.toLowerCase()!==handle.toLowerCase() ? `<span data-i18n-skip>${escapeHtml(row.full_name)} · </span>` : ''}
           <span class="pill ${row.group==='sentient'?'s':'c'}">${row.group==='sentient'?'ours':'competitor'}</span>
           ${row.rank_by_followers ? ' <span>rank #'+row.rank_by_followers+' by followers</span>' : ''}
         </div>
@@ -1185,7 +1188,7 @@ async function renderDetail(handle){
 
   if(visibleDayHist.length){
     CHARTS.push(new Chart($('#cFollowers'),{type:'line',
-      data:{labels:visibleDayHist.map(h=>new Date(`${trackerDateKey(h.date)}T12:00:00`).toLocaleDateString()),
+      data:{labels:visibleDayHist.map(h=>new Date(`${trackerDateKey(h.date)}T12:00:00`).toLocaleDateString(toolLocale())),
         datasets:[{label:'Followers',data:visibleDayHist.map(h=>h.followers ?? null),borderColor:'#f5ff00',
           backgroundColor:'#f5ff0022',fill:true,tension:.3,spanGaps:false,pointRadius:visibleDayHist.length>1?2:4,
           pointBackgroundColor:visibleDayHist.map(h=>h.estimated ? '#9ca3af' : '#f5ff00'),
@@ -1211,6 +1214,7 @@ async function renderDetail(handle){
   }
 }
 
+window.__rerenderCharts = () => { if (SUMMARY) render(); };
 window.__startInsightsBoot = boot;
 </script>
 
@@ -1276,9 +1280,7 @@ async function startSignIn() {
 function describeSignInError(err) {
   const code = err?.code || '';
   if (code === 'auth/popup-blocked') {
-    return String(document.documentElement.lang || navigator.language || '').toLowerCase().startsWith('es')
-      ? 'Tu navegador bloqueó la ventana de Google. Permite ventanas emergentes para sentientdash.app y vuelve a intentarlo.'
-      : 'Your browser blocked the Google sign-in window. Allow pop-ups for sentientdash.app and try again.';
+    return 'Your browser blocked the Google sign-in window. Allow pop-ups for sentientdash.app and try again.';
   }
   if (code === 'auth/unauthorized-domain') {
     return 'This domain (' + location.hostname + ') isn’t authorized in Firebase yet.';
@@ -1373,7 +1375,7 @@ const PREF_LANG = 'sentient.lang', PREF_THEME = 'sentient.theme';
 const ES = {"Copy link": "Copiar link", "Dashboard": "Dashboard", "Insights": "Insights", "Tracker": "Tracker", "Sign in with your Google account to continue.": "Iniciá sesión con tu cuenta de Google para continuar.", "Sign in with Google": "Iniciar sesión con Google", "Sign out": "Cerrar sesión", "Copy a link to this exact view": "Copiar link a esta vista exacta", "Loading…": "Cargando…", "Loading...": "Cargando...", "Toggle theme": "Cambiar tema", "Language": "Idioma", "Accounts tracked": "Cuentas seguidas", "Leader": "Líder", "Top 7d grower": "Mayor crecimiento 7d", "Leaderboard": "Tabla de posiciones", "All tracked accounts": "Todas las cuentas seguidas", "Search accounts": "Buscar cuentas", "All accounts": "Todas las cuentas", "Favourites": "Favoritos", "Ours": "Nuestras", "Competitors": "Competidores", "Account": "Cuenta", "Followers": "Seguidores", "Posts": "Posts", "1 day": "1 día", "7 days": "7 días", "30 days": "30 días", "Avg likes (30d)": "Likes prom. (30d)", "Engagement trend": "Tendencia de engagement", "Last snapshot": "Última captura", "with follower data": "con datos de seguidores", "followers": "seguidores", "Historical stats": "Estadísticas históricas", "Total followers": "Seguidores totales", "Date": "Fecha", "No snapshot": "Sin captura", "Settings": "Ajustes", "Accent color": "Color de acento", "Theme": "Tema", "Dark": "Oscuro", "Light": "Claro", "Admin": "Admin", "Open full settings": "Abrir Settings completo"};
 
 function readPref(key, allowed, fallback) {
-  try { const v = localStorage.getItem(key); if (allowed.includes(v)) return v; } catch {}
+  try { const v = localStorage.getItem(key) || (key === PREF_LANG ? localStorage.getItem('sentient.language') : null); if (allowed.includes(v)) return v; } catch {}
   return fallback;
 }
 let lang = readPref(PREF_LANG, ['en', 'es'],
@@ -1393,41 +1395,44 @@ function setTheme(next) {
   if (typeof window.__rerenderCharts === 'function') window.__rerenderCharts();
 }
 
+function translatedText(text) {
+  return window.SentientToolI18n?.translate(text, lang)
+    ?? (lang === 'es' && ES[text.trim()] ? text.replace(text.trim(), ES[text.trim()]) : text);
+}
 function translateNode(node) {
-  if (node.__en === undefined) node.__en = node.nodeValue;
-  const key = (node.__en || '').trim();
-  if (!key) return;
-  node.nodeValue = lang === 'es' && ES[key]
-    ? node.__en.replace(key, ES[key])
-    : node.__en;
+  // Renderers sometimes update an existing node instead of replacing it.
+  // Capture that new English value without treating our translation as source.
+  if (node.__en === undefined || (node.__translated !== undefined && node.nodeValue !== node.__translated)) node.__en = node.nodeValue;
+  const result = translatedText(node.__en || '');
+  node.__translated = result;
+  if (node.nodeValue !== result) node.nodeValue = result;
 }
 
 function applyI18n() {
-  document.documentElement.setAttribute('lang', lang);
-  // SCRIPT and STYLE hold text nodes too. Rewriting those would mean editing
-  // source code and CSS with a phrase dictionary -- harmless today only
-  // because neither is re-parsed after load.
+  if (document.documentElement.lang !== lang) document.documentElement.lang = lang;
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
     acceptNode(node) {
-      const tag = node.parentNode && node.parentNode.nodeName;
-      return (tag === 'SCRIPT' || tag === 'STYLE')
-        ? NodeFilter.FILTER_REJECT
-        : NodeFilter.FILTER_ACCEPT;
+      const parent = node.parentElement;
+      const tag = parent?.nodeName;
+      return (tag === 'SCRIPT' || tag === 'STYLE' || parent?.closest('[data-i18n-skip]'))
+        ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT;
     },
   });
   const nodes = [];
   while (walker.nextNode()) nodes.push(walker.currentNode);
   nodes.forEach(translateNode);
-  document.querySelectorAll('[placeholder],[title]').forEach((el) => {
-    for (const attr of ['placeholder', 'title']) {
-      const original = el.getAttribute(attr);
-      if (original === null) continue;
-      const store = '__en_' + attr;
-      if (el[store] === undefined) el[store] = original;
-      const key = (el[store] || '').trim();
-      el.setAttribute(attr, lang === 'es' && ES[key] ? ES[key] : el[store]);
+  document.querySelectorAll('[placeholder],[title],[aria-label]').forEach((el) => {
+    for (const attr of ['placeholder', 'title', 'aria-label']) {
+      const current = el.getAttribute(attr);
+      if (current === null) continue;
+      const store = '__en_' + attr, previous = '__translated_' + attr;
+      if (el[store] === undefined || (el[previous] !== undefined && current !== el[previous])) el[store] = current;
+      const result = translatedText(el[store] || '');
+      el[previous] = result;
+      if (current !== result) el.setAttribute(attr, result);
     }
   });
+  if (typeof CHARTS !== 'undefined') window.SentientToolI18n?.charts(CHARTS, lang);
   document.querySelectorAll('.lang-option').forEach((b) => {
     b.classList.toggle('is-on', b.dataset.lang === lang);
     b.setAttribute('aria-pressed', String(b.dataset.lang === lang));
@@ -1451,9 +1456,18 @@ const observer = new MutationObserver(() => {
 observer.observe(document.body, { childList: true, subtree: true });
 
 function setLang(next) {
+  if (next !== 'en' && next !== 'es') return;
+  const changed = lang !== next;
   lang = next;
+  try { localStorage.setItem(PREF_LANG, next); localStorage.setItem('sentient.language', next); } catch {}
+  if (document.documentElement.lang !== lang) document.documentElement.lang = lang;
+  // Rebuild from in-memory data to localize dates; no API refresh is started.
+  if (changed) window.__rerenderCharts?.();
   applyI18n();
 }
+window.addEventListener('storage', (event) => {
+  if (event.key === PREF_LANG || event.key === 'sentient.language') setLang(event.newValue);
+});
 
 document.querySelectorAll('.lang-option').forEach((b) => {
   b.addEventListener('click', () => { setLang(b.dataset.lang); window.SentientPreferences?.save('language', lang); });

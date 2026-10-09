@@ -3,3 +3,11 @@
 .contents{max-height:calc(100vh - 140px);overflow-y:auto;padding-right:8px}
 ul{padding-left:22px;margin:0 0 22px}
 
+html{scroll-padding-top:var(--guide-header-offset,140px)}
+.header-title{display:flex;align-items:center;gap:20px;flex-wrap:wrap}
+.language-selector{display:flex;gap:6px}
+.language-option{font-size:12px;padding:6px 10px;color:var(--muted)}
+.language-option[aria-current="page"]{color:#c2f6de;background:#173727;border-color:#57836e}
+.contents{top:var(--guide-header-offset,140px);max-height:calc(100vh - var(--guide-header-offset,140px) - 20px)}
+@media(max-width:500px){.top-inner{gap:12px}.header-title{gap:14px}.language-option{font-size:12px;padding:6px 9px}}
+@media(max-width:600px){table.columns-2{min-width:0;table-layout:fixed}table.columns-2 th,table.columns-2 td{overflow-wrap:anywhere;padding:12px}table.columns-2 th:first-child{width:45%}}

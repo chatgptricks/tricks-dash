@@ -26,7 +26,7 @@ export default function TopicStack({ posts, visiblePosts = posts, renderCard, re
   const coverPool = filtered ? visiblePosts : posts;
   const newest = [...coverPool].sort((a, b) => (postTime(b) - postTime(a)) || postIdentity(a).localeCompare(postIdentity(b)))[0];
   const oldestTime = Math.min(...posts.map(postTime));
-  const cardWithTiming = (post, child) => { const isOldest = postTime(post) === oldestTime; const info = isOldest ? null : elapsed(postTime(post) - oldestTime); return <div className="stack-card-timing">{child}{isOldest ? <span className="stack-time-mark" title="Oldest post"><Clock3 size={13} /></span> : <span className="stack-time-mark" title={info.exact}><Clock3 size={13} /><b>{info.label}</b></span>}</div>; };
+  const cardWithTiming = (post, child) => { const isOldest = postTime(post) === oldestTime; const info = isOldest ? null : elapsed(postTime(post) - oldestTime); return <div className="stack-card-timing">{child}{isOldest ? <span className="stack-time-mark" title={t("Oldest post")}><Clock3 size={13} /></span> : <span className="stack-time-mark" title={info.exact}><Clock3 size={13} /><b>{info.label}</b></span>}</div>; };
   const dialog = useRef(null);
   const cardsRef = useRef(null);
   const stackRef = useRef(null);
@@ -203,7 +203,7 @@ export default function TopicStack({ posts, visiblePosts = posts, renderCard, re
       const post = ranked.filter(post => postIdentity(post) !== postIdentity(newest))[index];
       return <div className="obs-deck-layer" style={{'--layer':index+1,'--layer-angle':`${index%2 ? 1 : -1}deg`,zIndex:-(index+1)}} key={index} aria-hidden="true" inert>{renderLayer ? renderLayer(post || newest) : renderCard(post || newest, () => {})}</div>;
     })}
-    {total > 5 ? <span className="obs-deck-overflow" aria-hidden="true">+{total-5} more</span> : null}
+    {total > 5 ? <span className="obs-deck-overflow" aria-hidden="true">+{total-5} {t("more")}</span> : null}
     <>
       {/* Keep relative clocks inside the expanded stack. The dashboard cover
           should stay clear for the image, menu, and primary post badges. */}

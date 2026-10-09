@@ -10,6 +10,14 @@ production publishing uses the separate workflow below.
 
 Use npm (`package-lock.json` is the single lockfile; CI runs `npm ci`).
 
+## Languages
+
+Every interface, help page and generated export must support English and Spanish.
+Use the shared per-user language preference and keep a visible language selector
+on sign-in and standalone help pages. Translate interface copy, dates and numbers;
+preserve source posts, account names and stable API fields. Add both languages
+when introducing or changing a product surface.
+
 ## Setup
 
 ```bash
@@ -100,7 +108,8 @@ The versioned Cortex `/api/v1/accounts` API provides public profiles, media
 kit metrics, paginated posts, and daily follower history. It reads stored
 dashboard data without starting a refresh. Unknown measurements remain null.
 See the [Spanish integration guide](public/api-guide.md), also available at
-`/api-guide.html`, and the [runnable website example](examples/media-kit/README.md).
+`/api-guide.html`, the [English integration guide](public/api-guide.en.md) at
+`/api-guide.en.html`, and the [runnable website example](examples/media-kit/README.md).
 The guide covers websites, applications, reports and automations. Its hosted
 HTML is generated from the Markdown reference by `scripts/build-api-guide.mjs`
 during each build. Run `npm run test:website-api` to verify key management and

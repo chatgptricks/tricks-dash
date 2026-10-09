@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="es">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -9,14 +9,15 @@
 </head>
 <body>
   <main>
-    <header><p class="eyebrow">Media kit</p><h1 id="name">Cargando perfil</h1><p id="bio"></p><a id="profile" hidden>Ver perfil de Instagram</a></header>
-    <p id="status" role="status" aria-live="polite">Consultando datos</p>
+    <div class="language-bar"><span id="language-label" data-i18n="language">Language</span><div class="language-options" role="group" aria-labelledby="language-label"><button type="button" data-language="en" lang="en" aria-label="English">EN</button><button type="button" data-language="es" lang="es" aria-label="Español">ES</button></div></div>
+    <header><p class="eyebrow" data-i18n="mediaKit">Media kit</p><h1 id="name">Loading profile</h1><p id="bio"></p><a id="profile" data-i18n="viewProfile" hidden>View Instagram profile</a></header>
+    <p id="status" role="status" aria-live="polite">Loading data</p>
     <div id="content" hidden>
-      <section aria-labelledby="audience-title"><h2 id="audience-title">Audiencia y rendimiento</h2><p class="muted">Rendimiento de los posts públicos analizados</p><dl id="metrics" class="metrics"></dl><p id="freshness" class="muted"></p></section>
-      <section id="recent" hidden><h2>Últimos 30 días</h2><dl id="recent-metrics" class="metrics"></dl></section>
-      <section><h2>Posts destacados</h2><div id="best-posts" class="posts"></div></section>
-      <section><h2>Publicaciones recientes</h2><div id="posts" class="posts"></div><p id="posts-status" class="muted"></p></section>
-      <section><h2>Historial de seguidores</h2><p class="muted">Muestras guardadas por el dashboard</p><div class="table-wrap"><table><thead><tr><th scope="col">Fecha</th><th scope="col">Seguidores</th></tr></thead><tbody id="history"></tbody></table></div><p id="history-status" class="muted"></p></section>
+      <section aria-labelledby="audience-title"><h2 id="audience-title" data-i18n="audience">Audience and performance</h2><p class="muted" data-i18n="performanceNote">Performance of the public posts analyzed</p><dl id="metrics" class="metrics"></dl><p id="freshness" class="muted"></p></section>
+      <section id="recent" hidden><h2 data-i18n="recent">Last 30 days</h2><dl id="recent-metrics" class="metrics"></dl></section>
+      <section><h2 data-i18n="featured">Featured posts</h2><div id="best-posts" class="posts"></div></section>
+      <section><h2 data-i18n="recentPosts">Recent posts</h2><div id="posts" class="posts"></div><p id="posts-status" class="muted"></p></section>
+      <section><h2 data-i18n="history">Follower history</h2><p class="muted" data-i18n="historyNote">Snapshots stored by the dashboard</p><div class="table-wrap"><table><thead><tr><th scope="col" data-i18n="date">Date</th><th scope="col" data-i18n="followers">Followers</th></tr></thead><tbody id="history"></tbody></table></div><p id="history-status" class="muted"></p></section>
     </div>
   </main>
 </body>

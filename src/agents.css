@@ -3,6 +3,9 @@
 body { margin: 0; }
 .agents-page { max-width: 820px; margin: 0 auto; padding: 28px 24px 60px; }
 .agents-page header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 48px; }
+.agents-page .connection-nav { display: flex; align-items: center; justify-content: flex-end; gap: 16px; flex-wrap: wrap; }
+.agents-page .sentient-language-option { padding: 8px 10px; }
+.agents-page .sentient-language-option[aria-pressed="true"] { background: #c3f78e; border-color: #c3f78e; color: #12200d; }
 .agents-page a { color: #c3f78e; text-decoration: none; }
 .agents-page h1 { font-size: clamp(28px, 5vw, 42px); letter-spacing: -.04em; }
 .agents-page h2 { font-size: 22px; margin-top: 0; }
@@ -28,6 +31,8 @@ body { margin: 0; }
 @media (max-width: 540px) {
   .agents-page { padding: 20px 16px 40px; }
   .agents-page header { margin-bottom: 32px; }
+  .agents-page header { gap: 16px; align-items: flex-start; }
+  .agents-page .connection-nav { gap: 10px; flex-direction: column; align-items: flex-end; }
   .agents-page section { padding: 20px; }
   .agent-fields { grid-template-columns: 1fr; gap: 0; }
   .agents-page li { align-items: flex-start; flex-direction: column; }

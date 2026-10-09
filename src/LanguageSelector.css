@@ -1,0 +1,3 @@
+.sentient-language-selector { display: inline-flex; gap: 4px; }
+.sentient-language-option { border: 1px solid var(--border, #415647); border-radius: 8px; padding: 7px 10px; min-height: 36px; color: inherit; background: transparent; font: inherit; cursor: pointer; }
+.sentient-language-option[aria-pressed="true"] { background: var(--accent, #c3f78e); border-color: var(--accent, #c3f78e); color: var(--accent-ink, #12200d); }

@@ -11,7 +11,9 @@ import { coordinatorFor, devAccessFor } from '../public/product-navigation';
 import TopicStack from './TopicStack';
 import PromoReviewDialog from './PromoReviewDialog';
 import { SettingsMenu } from './App';
-import { PrefsProvider } from './prefsContext';
+import { PrefsProvider, usePrefs } from './prefsContext';
+import { makeT, readLang } from './prefs';
+import { LanguageSelector } from './LanguageSelector';
 import { CLASSIFICATION_LABELS, promoKey, safeExternalUrl, selectPromos, groupPromos } from './promosIntelligence';
 import './styles.css';
 import './promos.css';
@@ -53,24 +55,26 @@ async function request(path, { signal, timeout = 45000, ...options } = {}) {
 const jsonOptions = (method, payload) => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
 function dateLabel(value) {
   const date = new Date(value || '');
-  return Number.isNaN(date.getTime()) ? 'Date unavailable' : date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  return Number.isNaN(date.getTime()) ? makeT(readLang())('Date unavailable') : date.toLocaleDateString(readLang() === 'es' ? 'es-CR' : 'en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 function Login() {
+  const { t, lang, setLang } = usePrefs();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   async function login() {
     setBusy(true); setError('');
-    try { const issue = await startGoogleSignIn(); if (issue) setError(describeSignInError(issue)); }
-    catch (issue) { setError(describeSignInError(issue)); }
+    try { const issue = await startGoogleSignIn(); if (issue) setError(issue); }
+    catch (issue) { setError(issue); }
     finally { setBusy(false); }
   }
-  return <main className="promo-auth"><section><span className="promo-kicker">Sentient Dash</span><h1>Promos</h1><p>Review promotion signals, check the evidence, and improve detection together.</p><button className="promo-primary" onClick={login} disabled={busy}>{busy ? 'Signing in…' : 'Sign in with Google'}</button>{error && <p className="promo-error" role="alert">{error}</p>}</section></main>;
+  return <main className="promo-auth"><section><LanguageSelector lang={lang} setLang={setLang} t={t} /><span className="promo-kicker">Sentient Dash</span><h1>{t("Promos")}</h1><p>{t("Review promotion signals, check the evidence, and improve detection together.")}</p><button className="promo-primary" onClick={login} disabled={busy}>{busy ? t("Signing in…") : t("Sign in with Google")}</button>{error && <p className="promo-error" role="alert">{describeSignInError(error, lang)}</p>}</section></main>;
 }
 
 function PromoCard({ item, onSelect }) {
-  const evidence = item.evidence?.[0]?.text || item.jev_review?.contextExcerpt || 'No evidence excerpt';
-  const client = item.client || 'Unknown brand';
+  const { t } = usePrefs();
+  const evidence = item.evidence?.[0]?.text || item.jev_review?.contextExcerpt || t('No evidence excerpt');
+  const client = item.client || t('Unknown brand');
   const primary = safeExternalUrl(item.cover_url?.startsWith('/') ? `${API_BASE}${item.cover_url}` : item.cover_url) || safeExternalUrl(item.cover_source_url);
   const permalink = safeExternalUrl(item.permalink);
   const review = item.classification_source === 'jev_semantic_scan' ? 'JEV candidate' : item.jev_review ? 'JEV checked' : item.review_status;
@@ -82,44 +86,48 @@ function PromoCard({ item, onSelect }) {
     onSelect(item);
   }
   return <ResearchCard className="promo-card" data-promo-key={promoKey(item)} role="button" tabIndex={0}
-    aria-label={`Review ${item.client || 'unknown brand'} on @${item.account}`}
+    aria-label={t('Review {brand} on @{account}', { brand: item.client || t('Unknown brand'), account: item.account })}
     onClick={event => { if (!event.target.closest('button, a')) openReview(event); }}
     onKeyDown={event => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); openReview(event); } }}
     source={`@${item.account}`} meta={dateLabel(item.published_at || item.first_detected_at)}
-    marker={<span className="promo-review">{review}</span>}
-    media={<CardMedia src={primary} fallbackSrc={safeExternalUrl(item.cover_source_url)} alt={`Post by @${item.account}`} label="Post preview unavailable" />}
-    actions={<><button type="button" onClick={openReview} aria-label={`Review promotion on @${item.account}`}><ScanEye size={16} /><span>Review</span></button>{permalink && <a href={permalink} target="_blank" rel="noopener noreferrer" aria-label={`Open original post by @${item.account}`}><ArrowUpRight size={16} /><span>Original</span></a>}</>}
-    footer={<span className="promo-card-foot">{item.cta?.keyword ? `Keyword: ${item.cta.keyword}` : item.promo_code ? `Code: ${item.promo_code}` : item.links?.length ? 'Commercial link found' : `Detected ${dateLabel(item.first_detected_at)}`}</span>}
+    marker={<span className="promo-review">{t(review)}</span>}
+    media={<CardMedia src={primary} fallbackSrc={safeExternalUrl(item.cover_source_url)} alt={t('Post by @{account}', { account: item.account })} label={t("Post preview unavailable")} />}
+    actions={<><button type="button" onClick={openReview} aria-label={t('Review promotion on @{account}', { account: item.account })}><ScanEye size={16} /><span>{t("Review")}</span></button>{permalink && <a href={permalink} target="_blank" rel="noopener noreferrer" aria-label={t('Open original post by @{account}', { account: item.account })}><ArrowUpRight size={16} /><span>{t("Original")}</span></a>}</>}
+    footer={<span className="promo-card-foot">{item.cta?.keyword ? `${t('Keyword')}: ${item.cta.keyword}` : item.promo_code ? `${t('Code')}: ${item.promo_code}` : item.links?.length ? t("Commercial link found") : `${t('Detected')} ${dateLabel(item.first_detected_at)}`}</span>}
   >
     <div className="promo-card-top"><Badge value={item.classification} /></div>
     <h2 className="promo-opportunity-title">{client}</h2>
-    <p className="promo-product">{item.product || 'Product not identified'}</p>
+    <p className="promo-product">{item.product || t("Product not identified")}</p>
     <p className="promo-evidence">“{evidence}”</p>
   </ResearchCard>;
 }
 
-function Badge({ value }) { return <span className={`promo-badge ${value}`}>{CLASSIFICATION_LABELS[value] || 'Needs review'}</span>; }
+function Badge({ value }) {
+  const { t } = usePrefs(); return <span className={`promo-badge ${value}`}>{t(CLASSIFICATION_LABELS[value] || "Needs review")}</span>; }
 
 function PromoResults({ items, onSelect }) {
+  const { t } = usePrefs();
   const groups = groupPromos(items);
-  return <section className="promo-grid promo-grid-stacks product-card-grid" aria-label="Promotion review results">
+  return <section className="promo-grid promo-grid-stacks product-card-grid" aria-label={t("Promotion review results")}>
     {groups.map(group => {
       const posts = group.items.map(item => ({ ...item, postDate: item.published_at || item.first_detected_at, publishedAt: item.published_at || item.first_detected_at, timestamp: Date.parse(item.published_at || item.first_detected_at || '') || 0 }));
       return <div className={posts.length > 1 ? 'promo-result-stack' : 'promo-result-single'} key={group.key}>
         {posts.length > 1 ? <TopicStack posts={posts} visiblePosts={posts} total={posts.length} renderLayer={() => <div className="promo-stack-layer" />} renderCard={post => <PromoCard item={post} onSelect={onSelect} />} /> : <PromoCard item={posts[0]} onSelect={onSelect} />}
-        {posts.length > 1 && <p className="promo-stack-context">{group.kind === 'brand' ? group.label : 'Same topic'} · {posts.length} loaded posts</p>}
+        {posts.length > 1 && <p className="promo-stack-context">{group.kind === 'brand' ? group.label : t("Same topic")} · {posts.length} {t("loaded posts")}</p>}
       </div>;
     })}
   </section>;
 }
 
 function DetectionTools({ job, onStart, onReconnect }) {
+  const { t } = usePrefs();
   const [limit, setLimit] = useState('500');
   const running = isRunning(job);
-  return <details className="promo-detection-tools"><summary>Detection tools <span>Scan stored posts and find missed signals</span></summary><div className="promo-detection-body"><p>Rule scans analyze the last 30 days of stored competitor posts. JEV discovery checks stored candidates using AI. Existing human corrections are kept.</p><label>Maximum posts <select value={limit} onChange={e => setLimit(e.target.value)} disabled={running}><option value="100">100 posts</option><option value="500">500 posts</option><option value="2000">2,000 posts</option></select></label><div className="promo-tool-actions"><button disabled={running} onClick={() => onStart('rules', Number(limit))}>Scan with rules</button><button disabled={running} onClick={() => onStart('jev', Number(limit))}>Find missed promos with JEV</button></div></div>{job && <div className="promo-job" role="status"><strong>{job.kind === 'jev' ? 'JEV discovery' : 'Rule scan'} · {job.status === 'done' ? 'Complete' : job.status === 'failed' ? 'Failed' : job.status === 'reconnecting' ? 'Status unavailable' : 'In progress'}</strong><span>{job.error || `${job.processed || 0}${job.total ? ` / ${job.total}` : ''} posts checked${job.found != null ? ` · ${job.found} candidates found` : ''}`}</span>{job.status === 'reconnecting' && <button onClick={onReconnect}>Reconnect to this scan</button>}</div>}</details>;
+  return <details className="promo-detection-tools"><summary>{t("Detection tools")} <span>{t("Scan stored posts and find missed signals")}</span></summary><div className="promo-detection-body"><p>{t("Rule scans analyze the last 30 days of stored competitor posts. JEV discovery checks stored candidates using AI. Existing human corrections are kept.")}</p><label>{t("Maximum posts")} <select value={limit} onChange={e => setLimit(e.target.value)} disabled={running}><option value="100">{t("100 posts")}</option><option value="500">{t("500 posts")}</option><option value="2000">{t("2,000 posts")}</option></select></label><div className="promo-tool-actions"><button disabled={running} onClick={() => onStart('rules', Number(limit))}>{t("Scan with rules")}</button><button disabled={running} onClick={() => onStart('jev', Number(limit))}>{t("Find missed promos with JEV")}</button></div></div>{job && <div className="promo-job" role="status"><strong>{job.kind === 'jev' ? t("JEV discovery") : t("Rule scan")} · {job.status === 'done' ? t("Complete") : job.status === 'failed' ? t("Failed") : job.status === 'reconnecting' ? t("Status unavailable") : t("In progress")}</strong><span>{job.error || `${job.processed || 0}${job.total ? ` / ${job.total}` : ''} posts checked${job.found != null ? ` · ${job.found} candidates found` : ''}`}</span>{job.status === 'reconnecting' && <button onClick={onReconnect}>{t("Reconnect to this scan")}</button>}</div>}</details>;
 }
 
 function PromosApp() {
+  const { t } = usePrefs();
   const [user, setUser] = useState(undefined);
   const [viewer, setViewer] = useState(null);
   const [accessError, setAccessError] = useState('');
@@ -273,27 +281,27 @@ function PromosApp() {
     return () => { controller.abort(); clearTimeout(timer); };
   }, [job?.id, pollAttempt, user]);
 
-  if (user === undefined) return <main className="promo-loading">Loading Promos…</main>;
+  if (user === undefined) return <main className="promo-loading">{t("Loading Promos…")}</main>;
   if (!user) return <Login />;
   const coordinator = coordinatorFor(viewer);
   const isDev = devAccessFor(viewer);
   const setFilter = (name, value) => setFilters(current => ({ ...current, [name]: value }));
-  return <main className="promo-shell product-page"><ProductHeader current="promos" coordinator={coordinator} isDev={isDev} canAccessNews={Boolean(viewer?.can_access_news || viewer?.canAccessNews)} account={<SettingsMenu email={user.email} avatarUrl={user.photoURL || viewer?.avatar_url || viewer?.avatarUrl} isAdmin={Boolean(viewer?.is_admin || viewer?.isAdmin)} isDev={isDev} onSignOut={() => { clearSsoCookie(); signOut(firebaseAuth); }} />}><h1>Promos</h1><button className="promo-scan" onClick={() => openDetail(items[0])} disabled={!items.length || opening}>{opening ? 'Opening…' : 'Review next'}</button></ProductHeader>
-    <section className="product-page-heading"><p>Paid partnership and promotion signals</p></section>
-    {accessError ? <div className="promo-alert" role="alert">{accessError}<button onClick={() => setAccessAttempt(value => value + 1)}>Retry access check</button></div> : !viewer ? <div className="promo-empty">Checking account access…</div> : <>
+  return <main className="promo-shell product-page"><ProductHeader current="promos" coordinator={coordinator} isDev={isDev} canAccessNews={Boolean(viewer?.can_access_news || viewer?.canAccessNews)} account={<SettingsMenu email={user.email} avatarUrl={user.photoURL || viewer?.avatar_url || viewer?.avatarUrl} isAdmin={Boolean(viewer?.is_admin || viewer?.isAdmin)} isDev={isDev} onSignOut={() => { clearSsoCookie(); signOut(firebaseAuth); }} />}><h1>{t("Promos")}</h1><button className="promo-scan" onClick={() => openDetail(items[0])} disabled={!items.length || opening}>{opening ? t("Opening…") : t("Review next")}</button></ProductHeader>
+    <section className="product-page-heading"><p>{t("Paid partnership and promotion signals")}</p></section>
+    {accessError ? <div className="promo-alert" role="alert">{accessError}<button onClick={() => setAccessAttempt(value => value + 1)}>{t("Retry access check")}</button></div> : !viewer ? <div className="promo-empty">{t("Checking account access…")}</div> : <>
       <DetectionTools job={job} onStart={startJob} onReconnect={() => { setJob(current => ({ ...current, status: 'running', error: '' })); setPollAttempt(value => value + 1); }} />
-      <section className="promo-toolbar product-page-controls" aria-label="Filter promotion reviews">
-        <label className="promo-search"><span>Search loaded posts</span><input aria-label="Search loaded posts" type="search" placeholder="Brand, account, keyword or evidence…" value={filters.search} onChange={e => setFilter('search', e.target.value)} /></label>
-        <label><span>Review status</span><select aria-label="Review status" value={filters.review} onChange={e => setFilter('review', e.target.value)}><option value="new">New</option><option value="reviewed">Reviewed</option><option value="dismissed">Dismissed</option><option value="">All reviews</option></select></label>
-        <label><span>Classification</span><select aria-label="Classification" value={filters.classification} onChange={e => setFilter('classification', e.target.value)}><option value="">All classifications</option>{Object.entries(CLASSIFICATION_LABELS).map(([key, label]) => <option value={key} key={key}>{label}</option>)}</select></label>
-        <label><span>Account · loaded</span><select aria-label="Account · loaded" value={filters.account} onChange={e => setFilter('account', e.target.value)}><option value="">All accounts</option>{accounts.map(account => <option key={account} value={account}>@{account}</option>)}</select></label>
-        <label><span>Review focus</span><select aria-label="Review focus" value={filters.focus} onChange={e => setFilter('focus', e.target.value)}><option value="all">All posts</option><option value="conflicts">Conflicting signals</option><option value="needs_review">Needs classification</option><option value="missing_client">Missing brand</option><option value="weak_evidence">Indirect evidence</option><option value="multi_brand">Multiple brand candidates</option><option value="related">Related posts</option><option value="unreviewed_jev">No JEV check</option></select></label>
-        <label><span>Sort by</span><select aria-label="Sort by" value={filters.sort} onChange={e => setFilter('sort', e.target.value)}><option value="priority">Review priority</option><option value="newest">Newest post</option><option value="oldest">Oldest post</option></select></label>
+      <section className="promo-toolbar product-page-controls" aria-label={t("Filter promotion reviews")}>
+        <label className="promo-search"><span>{t("Search loaded posts")}</span><input aria-label={t("Search loaded posts")} type="search" placeholder={t("Brand, account, keyword or evidence…")} value={filters.search} onChange={e => setFilter('search', e.target.value)} /></label>
+        <label><span>{t("Review status")}</span><select aria-label={t("Review status")} value={filters.review} onChange={e => setFilter('review', e.target.value)}><option value="new">{t("New")}</option><option value="reviewed">{t("Reviewed")}</option><option value="dismissed">{t("Dismissed")}</option><option value="">{t("All reviews")}</option></select></label>
+        <label><span>{t("Classification")}</span><select aria-label={t("Classification")} value={filters.classification} onChange={e => setFilter('classification', e.target.value)}><option value="">{t("All classifications")}</option>{Object.entries(CLASSIFICATION_LABELS).map(([key, label]) => <option value={key} key={key}>{t(label)}</option>)}</select></label>
+        <label><span>{t("Account · loaded")}</span><select aria-label={t("Account · loaded")} value={filters.account} onChange={e => setFilter('account', e.target.value)}><option value="">{t("All accounts")}</option>{accounts.map(account => <option key={account} value={account}>@{account}</option>)}</select></label>
+        <label><span>{t("Review focus")}</span><select aria-label={t("Review focus")} value={filters.focus} onChange={e => setFilter('focus', e.target.value)}><option value="all">{t("All posts")}</option><option value="conflicts">{t("Conflicting signals")}</option><option value="needs_review">{t("Needs classification")}</option><option value="missing_client">{t("Missing brand")}</option><option value="weak_evidence">{t("Indirect evidence")}</option><option value="multi_brand">{t("Multiple brand candidates")}</option><option value="related">{t("Related posts")}</option><option value="unreviewed_jev">{t("No JEV check")}</option></select></label>
+        <label><span>{t("Sort by")}</span><select aria-label={t("Sort by")} value={filters.sort} onChange={e => setFilter('sort', e.target.value)}><option value="priority">{t("Review priority")}</option><option value="newest">{t("Newest post")}</option><option value="oldest">{t("Oldest post")}</option></select></label>
       </section>
-      <div className="promo-results-heading"><div><strong>{items.length} {items.length === 1 ? 'post' : 'posts'}</strong><span className="promo-scope-note">{data.items.length} loaded · Grouped automatically by topic or brand{data.next_cursor ? ' · More available' : ''}</span></div><button disabled={loading || loadingMore} onClick={() => load()}>{loading ? 'Refreshing…' : 'Refresh'}</button></div>
-      {notice && <p className="promo-notice" role="status">{notice}</p>}{opening && <p className="promo-notice" role="status">Loading full post evidence…</p>}{error && <div className="promo-alert" role="alert">{error}<button onClick={() => load()}>Reload queue</button></div>}
-      {loading && !data.items.length ? <div className="promo-empty" role="status">Loading promotion signals…</div> : items.length ? <PromoResults items={items} onSelect={openDetail} /> : <div className="promo-empty"><strong>{data.items.length ? 'No loaded posts match these filters.' : 'No posts in this review queue.'}</strong><span>{data.items.length ? 'Try another focus or search, or load more posts.' : 'Change the review status or scan stored posts to look for promotion signals.'}</span><button onClick={() => setFilters(INITIAL_FILTERS)}>Reset filters</button></div>}
-      {data.next_cursor && <button className="promo-load-more" disabled={loadingMore || loading} onClick={() => load({ append: true })}>{loadingMore ? 'Loading more…' : `Load more posts · ${data.items.length} loaded`}</button>}
+      <div className="promo-results-heading"><div><strong>{items.length} {items.length === 1 ? t("post") : t("posts")}</strong><span className="promo-scope-note">{data.items.length} {t("loaded · Grouped automatically by topic or brand")}{data.next_cursor ? t(" · More available") : ''}</span></div><button disabled={loading || loadingMore} onClick={() => load()}>{loading ? t("Refreshing…") : t("Refresh")}</button></div>
+      {notice && <p className="promo-notice" role="status">{t(notice)}</p>}{opening && <p className="promo-notice" role="status">{t("Loading full post evidence…")}</p>}{error && <div className="promo-alert" role="alert">{t(error)}<button onClick={() => load()}>{t("Reload queue")}</button></div>}
+      {loading && !data.items.length ? <div className="promo-empty" role="status">{t("Loading promotion signals…")}</div> : items.length ? <PromoResults items={items} onSelect={openDetail} /> : <div className="promo-empty"><strong>{data.items.length ? t("No loaded posts match these filters.") : t("No posts in this review queue.")}</strong><span>{data.items.length ? t("Try another focus or search, or load more posts.") : t("Change the review status or scan stored posts to look for promotion signals.")}</span><button onClick={() => setFilters(INITIAL_FILTERS)}>{t("Reset filters")}</button></div>}
+      {data.next_cursor && <button className="promo-load-more" disabled={loadingMore || loading} onClick={() => load({ append: true })}>{loadingMore ? t("Loading more…") : `${t('Load more posts')} · ${data.items.length} ${t('loaded')}`}</button>}
     </>}
     <PromoReviewDialog item={selected} relatedItems={data.items} onClose={closeDetail} onSave={(payload, options) => mutateSelected(detailPath(selected), jsonOptions('PATCH', payload), options)} onJevReview={() => mutateSelected(`${detailPath(selected)}/jev-review`, { method: 'POST', timeout: 90000 })} onSelect={item => openDetail(item, { throwOnError: true })} position={{ index: position, total: items.length }} onPrevious={!opening && position > 0 ? () => openDetail(items[position - 1], { throwOnError: true }) : undefined} onNext={!opening && position >= 0 && position < items.length - 1 ? () => openDetail(items[position + 1], { throwOnError: true }) : undefined} />
   </main>;

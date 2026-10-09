@@ -80,18 +80,20 @@ const prefersSpanish = () => {
   return String(document.documentElement.lang || navigator.language || '').toLowerCase().startsWith('es');
 };
 
-export function describeSignInError(err) {
+export function describeSignInError(err, language) {
+  const spanish = language ? language === 'es' : prefersSpanish();
   const code = err?.code || '';
   if (code === 'auth/unauthorized-domain') {
-    return `This domain (${typeof window !== 'undefined' ? window.location.hostname : ''}) isn't authorized in Firebase yet.`;
+    const domain = typeof window !== 'undefined' ? window.location.hostname : '';
+    return spanish ? `Este dominio (${domain}) todavía no está autorizado en Firebase.` : `This domain (${domain}) isn't authorized in Firebase yet.`;
   }
   if (code === 'auth/popup-blocked') {
-    return prefersSpanish()
+    return spanish
       ? 'Tu navegador bloqueó la ventana de Google. Permite ventanas emergentes para sentientdash.app y vuelve a intentarlo.'
       : 'Your browser blocked the Google sign-in window. Allow pop-ups for sentientdash.app and try again.';
   }
   if (code === 'auth/network-request-failed') {
-    return 'Network error reaching Google. Check your connection and try again.';
+    return spanish ? 'No se pudo conectar con Google. Revisa tu conexión e inténtalo de nuevo.' : 'Network error reaching Google. Check your connection and try again.';
   }
-  return code ? `Sign-in failed (${code}). Try again.` : 'Sign-in failed. Try again.';
+  return spanish ? code ? `No se pudo iniciar sesión (${code}). Inténtalo de nuevo.` : 'No se pudo iniciar sesión. Inténtalo de nuevo.' : code ? `Sign-in failed (${code}). Try again.` : 'Sign-in failed. Try again.';
 }
