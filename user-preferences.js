@@ -43,6 +43,10 @@
   let current = {};
   let pending = {};
   let timer = 0;
+  const LANGUAGE_PENDING = 'sentient.language.pending';
+  const pendingLanguage = () => {
+    try { const value = localStorage.getItem(LANGUAGE_PENDING); return PREFERENCES.language.valid(value) ? value : undefined; } catch { return undefined; }
+  };
 
   const cacheKeys = (key) => {
     const spec = PREFERENCES[key];
@@ -84,6 +88,9 @@
       });
       // A rejected value will never succeed; only retry transient failures.
       if (!response.ok && response.status >= 500) throw new Error(String(response.status));
+      if (response.ok && changes.language === pendingLanguage()) {
+        try { localStorage.removeItem(LANGUAGE_PENDING); } catch { /* cache unavailable */ }
+      }
     } catch {
       for (const [key, value] of Object.entries(changes)) if (!(key in pending)) pending[key] = value;
       schedule(5000);
@@ -109,6 +116,9 @@
     if (stored == null) delete current[key];
     else current[key] = stored;
     writeCache(key, stored);
+    if (key === 'language' && stored) {
+      try { localStorage.setItem(LANGUAGE_PENDING, stored); } catch { /* cache unavailable */ }
+    }
     pending[key] = stored;
     schedule();
   };
@@ -124,6 +134,8 @@
     } catch {
       return null;
     }
+    const selectedLanguage = pendingLanguage();
+    if (selectedLanguage && !('language' in pending)) pending.language = selectedLanguage;
     // First sign-in after preferences moved to the server: keep this
     // browser's settings by uploading any the server does not have yet.
     for (const key of Object.keys(PREFERENCES)) {
@@ -159,4 +171,9 @@
   const get = (key) => (loaded ? current[key] : readCache(key));
 
   window.SentientPreferences = { load, save, get };
+  window.addEventListener('storage', (event) => {
+    if (event.key !== LANGUAGE_PENDING || !PREFERENCES.language.valid(event.newValue)) return;
+    save('language', event.newValue);
+    window.dispatchEvent(new window.CustomEvent('sentient-preferences', { detail: { ...current } }));
+  });
 })();

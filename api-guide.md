@@ -11,7 +11,7 @@ La API ofrece **lectura de datos públicos guardados de las cuentas seleccionada
 | Método | `GET` en los cinco endpoints de esta guía |
 | Formato | JSON, `schema_version: "1.0"` |
 | Límite | 60 consultas por minuto por clave |
-| Configuración de conexiones | [API connections](https://sentientdash.app/api.html) |
+| Configuración de conexiones | [Conexiones API](https://sentientdash.app/api.html) |
 
 ## 1 Elegir los datos y la forma de integración
 
@@ -30,15 +30,15 @@ Actualmente los perfiles expuestos son de Instagram. La API lee la base del dash
 ## 2 Crear y administrar una conexión
 
 1. Entra a [sentientdash.app](https://sentientdash.app) con tu cuenta de Admin o Dev.
-2. Abre el menú del engranaje y elige **API connections**, o abre [la pantalla de conexiones](https://sentientdash.app/api.html).
-3. En **Connect an integration**, escribe un nombre reconocible en **Connection name**, por ejemplo `Website de la marca`, `Reporte mensual` o `App de analítica`.
-4. Selecciona la vigencia en **Expires in**: 30, 90 o 365 días.
-5. En **Allowed accounts**, marca las cuentas que la integración podrá consultar. Usa **Search accounts** para encontrarlas. La clave conserva esta selección; no recibe automáticamente cuentas nuevas que agregues al dashboard.
-6. Pulsa **Generate API key**. En **Your API key**, usa **Copy API key** y guárdala como secreto privado del servidor. Después pulsa **I saved the key**. La clave comienza con `sad_api_` y se muestra una sola vez.
+2. Abre el menú del engranaje y elige **Conexiones API**, o abre [la pantalla de conexiones](https://sentientdash.app/api.html).
+3. En **Conectar una integración**, escribe un nombre reconocible en **Nombre de la conexión**, por ejemplo `Website de la marca`, `Reporte mensual` o `App de analítica`.
+4. Selecciona la vigencia en **Vence en**: 30, 90 o 365 días.
+5. En **Cuentas permitidas**, marca las cuentas que la integración podrá consultar. Usa **Buscar cuentas** para encontrarlas. La clave conserva esta selección; no recibe automáticamente cuentas nuevas que agregues al dashboard.
+6. Pulsa **Generar clave API**. En **Tu clave API**, usa **Copiar clave API** y guárdala como secreto privado del servidor. Después pulsa **Ya guardé la clave**. La clave comienza con `sad_api_` y se muestra una sola vez.
 
 Crea una clave por integración o entorno para poder identificarla y revocarla por separado. Puedes autorizar hasta 100 cuentas activas por clave y mantener hasta 20 claves activas por propietario. El límite de 60 consultas por minuto se comparte entre todos los endpoints y cuentas consultados con una misma clave.
 
-En **Your API keys** puedes ver el alcance, vencimiento y último uso. Para bloquear una conexión, pulsa **Revoke** y después **Confirm revoke**. Si pierdes una clave o necesitas cambiar las cuentas autorizadas, crea una nueva y revoca la anterior. Para rotar una clave sin interrumpir tu aplicación, configura primero la nueva en el servidor, comprueba una consulta y revoca la anterior.
+En **Tus claves API** puedes ver el alcance, vencimiento y último uso. Para bloquear una conexión, pulsa **Revocar** y después **Confirmar revocación**. Si pierdes una clave o necesitas cambiar las cuentas autorizadas, crea una nueva y revoca la anterior. Para rotar una clave sin interrumpir tu aplicación, configura primero la nueva en el servidor, comprueba una consulta y revoca la anterior.
 
 Solo Admin o Dev puede crear claves. Si el propietario pierde ese permiso o se elimina su acceso al dashboard, sus claves dejan de consultar datos. La revocación y la caducidad bloquean las lecturas futuras; los datos que tu integración ya recibió pueden permanecer en su caché o almacenamiento. Para retirar datos publicados inmediatamente, retíralos también de tu aplicación.
 
@@ -471,4 +471,4 @@ Antes de publicar, verifica estos puntos:
 - La fecha mostrada representa la captura de los datos y no solo la hora de respuesta.
 - Existe una forma de reemplazar o revocar la clave y limpiar datos publicados en la aplicación.
 
-Puedes volver a [API connections](https://sentientdash.app/api.html) para crear y administrar claves, [descargar esta guía](https://sentientdash.app/api-guide.md) o [descargar el proyecto de referencia](https://sentientdash.app/media-kit-example.zip).
+Puedes volver a [Conexiones API](https://sentientdash.app/api.html) para crear y administrar claves, [descargar esta guía](https://sentientdash.app/api-guide.md) o [descargar el proyecto de referencia](https://sentientdash.app/media-kit-example.zip).

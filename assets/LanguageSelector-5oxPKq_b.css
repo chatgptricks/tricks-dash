@@ -1,0 +1,1 @@
+.sentient-language-selector{gap:4px;display:inline-flex}.sentient-language-option{border:1px solid var(--border,#415647);min-height:36px;color:inherit;font:inherit;cursor:pointer;background:0 0;border-radius:8px;padding:7px 10px}.sentient-language-option[aria-pressed=true]{background:var(--accent,#c3f78e);border-color:var(--accent,#c3f78e);color:var(--accent-ink,#12200d)}
