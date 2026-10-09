@@ -78,7 +78,7 @@ async function request(path, options = {}) {
   try {
     response = await apiFetch(`${base}${path}`, { ...options, signal: controller.signal });
   } catch (reason) {
-    if (controller.signal.aborted) throw new Error("Hooks took too long to respond. Please try again.");
+    if (controller.signal.aborted) throw new Error("Hooks took too long to respond. Please try again.", { cause: reason });
     throw reason;
   } finally {
     clearTimeout(timer);

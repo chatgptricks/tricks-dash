@@ -3,6 +3,17 @@ import { act } from 'react';
 const ok = (body) => ({ ok: true, status: 200, json: async () => body, text: async () => JSON.stringify(body) });
 const users = [{ email: 'user03@example.com', display_name: 'User 03', role: 'admin', operating_role: 'vc', operating_roles: '["vc","pd","dev"]', is_admin: 1, slack_user_id: 'U0000000012', avatar_url: '/api/dashboard/user-avatar/U0000000012' }];
 const accounts = [{ handle: 'chatgptricks', label: 'ChatGPTricks', group: 'sentient', group_name: 'sentient', subcategory: 'ai_automation', research_enabled: true, promos_enabled: false, hot_threshold: 600, scrape_mode: 'posts', is_active: true, followers: 1, total_posts: 1, avg_likes: 1 }];
+accounts.push({ ...accounts[0], handle: 'fixture.account', label: 'Fixture account' });
+const mediaKitPdf = new Uint8Array([37, 80, 68, 70, 45, ...new TextEncoder().encode('1.7\nSettings media kit fixture\n%%EOF\n')]);
+const mediaKitRequests = [], mediaKitDownloads = [], mediaKitBlobs = [];
+let mediaKitMode = 'success';
+let resolveMediaKit = null;
+const createObjectURL = (blob) => { mediaKitBlobs.push(blob); return `blob:settings-media-kit-${mediaKitBlobs.length}`; };
+URL.createObjectURL = createObjectURL;
+window.URL.createObjectURL = createObjectURL;
+URL.revokeObjectURL = () => {};
+window.URL.revokeObjectURL = () => {};
+window.HTMLAnchorElement.prototype.click = function () { mediaKitDownloads.push({ filename: this.download, href: this.href }); };
 // Import cards come from the server-owned queue, never from browser storage.
 const backfillStatus = { running: true, active: null, queue: [], tasks: [{
   handle: 'newaccount', status: 'running', requested_at: new Date(Date.now() - 18_000).toISOString(),
@@ -22,6 +33,12 @@ const stubFetch = async (url, options = {}) => {
     return ok({ ok: true, slackDelivered: true });
   }
   if (value.includes('/api/admin/accounts/backfill-status')) return ok(backfillStatus);
+  if (/\/api\/admin\/accounts\/[^/]+\/media-kit\.pdf$/.test(value)) {
+    mediaKitRequests.push({ url: value, options });
+    if (mediaKitMode === 'pending') await new Promise((resolve) => { resolveMediaKit = resolve; });
+    if (mediaKitMode === 'error') return new Response(JSON.stringify({ detail: 'Report data temporarily unavailable. Retry the download.' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+    return new Response(mediaKitPdf, { headers: { 'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="chatgptricks-media-kit-2026-10-09.pdf"' } });
+  }
   if (value.includes('/api/dashboard/me')) return ok({ email: users[0].email, is_admin: true, is_dev: true });
   if (value.includes('/api/admin/accounts')) return ok({ accounts });
   if (value.includes('/api/admin/users')) {
@@ -72,6 +89,44 @@ const clickTab = async (label) => {
 
     await clickTab('Accounts');
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 50)); });
+    const mediaKitButton = () => document.querySelector('[aria-label="Download media kit for chatgptricks"]');
+    checks['Media kit has its own Accounts column and generates on click'] = document.querySelectorAll('.accounts-table th').length === 9
+      && [...document.querySelectorAll('.accounts-table th')].some((node) => /Media kit/i.test(node.textContent))
+      && Boolean(mediaKitButton()) && mediaKitRequests.length === 0;
+    mediaKitMode = 'pending';
+    await act(async () => { mediaKitButton().click(); await new Promise((resolve) => setTimeout(resolve, 20)); });
+    checks['Pending report disables only that account and does not expand its row'] = mediaKitButton().disabled
+      && /Generating/i.test(mediaKitButton().textContent)
+      && !document.querySelector('[aria-label="Download media kit for fixture.account"]').disabled
+      && !document.querySelector('.accounts-detail-row') && mediaKitRequests.length === 1;
+    await act(async () => { mediaKitButton().click(); await new Promise((resolve) => setTimeout(resolve, 10)); });
+    checks['Pending report cannot start duplicate downloads'] = mediaKitRequests.length === 1;
+    mediaKitMode = 'success';
+    await act(async () => { resolveMediaKit(); await new Promise((resolve) => setTimeout(resolve, 30)); });
+    checks['Successful report downloads server PDF with its attachment name'] = mediaKitDownloads.length === 1
+      && mediaKitDownloads[0].filename === 'chatgptricks-media-kit-2026-10-09.pdf'
+      && Buffer.from(await mediaKitBlobs[0].arrayBuffer()).equals(Buffer.from(mediaKitPdf))
+      && mediaKitRequests[0].url === 'https://api.test/api/admin/accounts/chatgptricks/media-kit.pdf'
+      && mediaKitRequests[0].options.cache === 'no-store' && !mediaKitButton().disabled
+      && !document.querySelector('.accounts-detail-row');
+    mediaKitMode = 'error';
+    await act(async () => { mediaKitButton().click(); await new Promise((resolve) => setTimeout(resolve, 30)); });
+    checks['Failed report retains a local row error and stays retryable'] = /Report data temporarily unavailable/.test(document.querySelector('.account-media-kit-error')?.textContent || '')
+      && !mediaKitButton().disabled && mediaKitDownloads.length === 1
+      && !document.querySelector('.accounts-detail-row');
+    mediaKitMode = 'pending';
+    await act(async () => { mediaKitButton().click(); await new Promise((resolve) => setTimeout(resolve, 20)); });
+    checks['Report retry clears stale error while generating'] = !document.querySelector('.account-media-kit-error') && mediaKitButton().disabled;
+    mediaKitMode = 'success';
+    await act(async () => { resolveMediaKit(); await new Promise((resolve) => setTimeout(resolve, 30)); });
+    checks['Report retry makes a fresh request and completes without editing the account'] = mediaKitRequests.length === 3
+      && mediaKitDownloads.length === 2 && !mediaKitButton().disabled
+      && !document.querySelector('.account-media-kit-error') && !document.querySelector('.accounts-detail-row');
+    const accountSearch = document.querySelector('.accounts-search');
+    const accountSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+    await act(async () => { accountSetter.call(accountSearch, 'no-account-matches-fixture'); accountSearch.dispatchEvent(new window.Event('input', { bubbles: true })); });
+    checks['Empty account results span the Media kit column'] = document.querySelector('.accounts-table-empty')?.colSpan === 9;
+    await act(async () => { accountSetter.call(accountSearch, ''); accountSearch.dispatchEvent(new window.Event('input', { bubbles: true })); });
     checks['Account import progress comes from the server queue'] = Boolean(document.querySelector('.settings-account-backfill-progress'))
       && /@newaccount/.test(document.body.textContent)
       && !window.localStorage.getItem('sentientdash.settings.accountBackfills.v1');
@@ -85,6 +140,7 @@ const clickTab = async (label) => {
       await new Promise((resolve) => setTimeout(resolve, 20));
     });
     const scrapeSelect = document.querySelector('[aria-label="Content to extract for chatgptricks"]');
+    checks['Expanded account details span the Media kit column'] = document.querySelector('.accounts-detail-row td')?.colSpan === 9;
     checks['Existing account exposes Reels extraction'] = scrapeSelect?.value === 'posts'
       && [...(scrapeSelect?.options || [])].map((option) => option.value).join('|') === 'posts|reels|both';
     checks['Account exposes category, subcategory, and tool scopes'] = [...document.querySelectorAll('.account-manage-field select')]

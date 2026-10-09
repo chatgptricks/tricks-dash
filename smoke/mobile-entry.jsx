@@ -55,12 +55,17 @@ const fetchStub = async (url, options = {}) => {
     mediaRequests.push(params);
     if (params.get('list') === '1') return ok({ source: 'instagram', items: mediaMode === 'single-video'
       ? [{ index: 2, kind: 'video' }]
+      : mediaMode === 'single-image' ? [{ index: 1, kind: 'image', filename: '01.jpg' }]
       : [{ index: 1, kind: 'image', filename: '01.jpg' }, { index: 2, kind: 'video' }] });
     if (mediaMode === 'pending') return new Promise((resolve, reject) => {
       const abort = () => { mediaAborted = true; reject(new DOMException('Download cancelled.', 'AbortError')); };
       if (options.signal?.aborted) abort();
       else options.signal?.addEventListener('abort', abort, { once: true });
     });
+    if (params.get('only')?.includes(',')) return {
+      ...ok({}, { 'content-type': 'application/zip', 'x-slide-count': '2' }),
+      blob: async () => new Blob([new Uint8Array([0x50, 0x4b, 0x03, 0x04])], { type: 'application/zip' }),
+    };
     const video = params.get('only') === '2';
     const type = video ? 'video/mp4' : 'image/jpeg';
     return {
@@ -132,14 +137,16 @@ const fill = async (node, value) => act(async () => {
     const downloadButton = document.querySelector('.m-post-detail .m-action-grid button');
     checks['Mobile media download action renders'] = /Download media/.test(downloadButton?.textContent || '');
     await click(downloadButton);
-    checks['Mobile carousel downloads original image and video separately'] = downloads.length === 2
-      && downloads[0].blob?.type === 'image/jpeg' && downloads[1].blob?.type === 'video/mp4';
-    checks['Mobile media retains response filename and uses MIME fallback'] = downloads[0]?.name === 'slide-one.jpg'
-      && /\.mp4$/i.test(downloads[1]?.name || '');
-    checks['Mobile media uses listed item indexes, never the ZIP endpoint'] = mediaRequests.length === 3
+    checks['Mobile carousel downloads one ZIP with original image and video'] = downloads.length === 1
+      && downloads[0].blob?.type === 'application/zip' && /\.zip$/i.test(downloads[0].name);
+    checks['Mobile carousel ZIP requests precisely the listed item indexes'] = mediaRequests.length === 2
       && mediaRequests[0].get('list') === '1'
-      && mediaRequests.slice(1).map((params) => params.get('only')).join('|') === '1|2'
-      && downloads.every(({ name }) => !/\.zip$/i.test(name));
+      && mediaRequests[1].get('only') === '1,2';
+    mediaMode = 'single-image';
+    await click(downloadButton);
+    checks['Mobile single image retains server filename and native image type'] = downloads.length === 2
+      && downloads[1].name === 'slide-one.jpg' && downloads[1].blob?.type === 'image/jpeg'
+      && mediaRequests.slice(-2).map((params) => params.get('list') || params.get('only')).join('|') === '1|1';
     mediaMode = 'single-video';
     await click(downloadButton);
     checks['Mobile single video downloads one MP4'] = downloads.length === 3

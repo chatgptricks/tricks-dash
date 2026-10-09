@@ -3,7 +3,9 @@ import * as esbuild from 'esbuild';
 import path from 'node:path';
 
 const dom = new JSDOM('<!doctype html><html><head><title>Sentient Dash</title></head><body><div id="root"></div></body></html>', { url: 'https://sentientdash.app/mobile/', pretendToBeVisual: true });
-for (const key of ['window', 'document', 'navigator', 'history', 'location', 'HTMLElement', 'Element', 'Node', 'Event', 'KeyboardEvent', 'MouseEvent', 'requestAnimationFrame', 'cancelAnimationFrame', 'getComputedStyle', 'localStorage', 'sessionStorage', 'URL', 'URLSearchParams', 'Blob', 'FormData']) {
+// Keep Node's standards-complete Blob for binary response fixtures. jsdom's
+// Blob does not expose arrayBuffer(), which ZIP signature validation needs.
+for (const key of ['window', 'document', 'navigator', 'history', 'location', 'HTMLElement', 'Element', 'Node', 'Event', 'KeyboardEvent', 'MouseEvent', 'requestAnimationFrame', 'cancelAnimationFrame', 'getComputedStyle', 'localStorage', 'sessionStorage', 'URL', 'URLSearchParams', 'FormData']) {
   if (dom.window[key] !== undefined) { try { globalThis[key] = dom.window[key]; } catch {} }
 }
 globalThis.addEventListener = dom.window.addEventListener.bind(dom.window);

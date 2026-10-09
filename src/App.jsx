@@ -16,6 +16,7 @@ import {
   Check,
   CalendarDays,
   ChevronDown,
+  Download,
   ExternalLink,
   Filter,
   Flame,
@@ -53,6 +54,7 @@ import { clearSsoCookie, startSsoRefresh, trySsoSignIn } from './sso';
 import { PrefsProvider, usePrefs } from './prefsContext';
 import { ACCENT_CHOICES, accentHex } from './prefs';
 import { API_BASE, apiFetch } from './api';
+import { downloadAccountMediaKit } from './accountMediaKit';
 import { mergeUserDrafts, saveUserProfile, userProfileDraft as userDraft } from './userAdmin';
 import { clearDashboardSnapshot, readDashboardSnapshot, writeDashboardSnapshot } from './dashboardCache';
 import { DashboardCatalogueError, loadCompleteDashboardCatalogue } from './dashboardCatalogue';
@@ -3301,6 +3303,16 @@ export function SettingsPanel({
   const [avatarHandle, setAvatarHandle] = useState('');
   const [lifecycleHandle, setLifecycleHandle] = useState('');
   const [deletingHandle, setDeletingHandle] = useState('');
+  const [mediaKitGenerating, setMediaKitGenerating] = useState({});
+  const [mediaKitErrors, setMediaKitErrors] = useState({});
+  const mediaKitRequests = useRef(new Map());
+  useEffect(() => {
+    const requests = mediaKitRequests.current;
+    return () => {
+      requests.forEach((controller) => controller.abort());
+      requests.clear();
+    };
+  }, []);
   const [importFrom, setImportFrom] = useState({});
   const [importCount, setImportCount] = useState({});
   const [importing, setImporting] = useState('');
@@ -3780,6 +3792,24 @@ export function SettingsPanel({
       setNotice('Network error while saving.');
     } finally {
       setSavingHandle('');
+    }
+  };
+
+  const downloadMediaKit = async (handle) => {
+    if (mediaKitRequests.current.has(handle)) return;
+    const controller = new AbortController();
+    mediaKitRequests.current.set(handle, controller);
+    setMediaKitGenerating((current) => ({ ...current, [handle]: true }));
+    setMediaKitErrors((current) => ({ ...current, [handle]: '' }));
+    try {
+      await downloadAccountMediaKit(handle, { signal: controller.signal });
+    } catch (error) {
+      if (error.name !== 'AbortError') {
+        setMediaKitErrors((current) => ({ ...current, [handle]: error.message || 'Could not generate the media kit. Try again.' }));
+      }
+    } finally {
+      mediaKitRequests.current.delete(handle);
+      if (!controller.signal.aborted) setMediaKitGenerating((current) => ({ ...current, [handle]: false }));
     }
   };
 
@@ -4432,6 +4462,9 @@ export function SettingsPanel({
                     "Suggested" is the account's average first-hour likes (the same number the HOT check
                     itself compares against), rounded up to the nearest hundred.
                   </p>
+                  <p className="wizard-hint accounts-media-kit-hint">
+                    Media kits are generated on click with all available metrics, follower history, and top posts from the latest stored data.
+                  </p>
 
                   <div className="accounts-toolbar">
                     <input
@@ -4480,6 +4513,7 @@ export function SettingsPanel({
                               ) : null}
                             </th>
                           ))}
+                          <th scope="col">Media kit</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -4534,10 +4568,25 @@ export function SettingsPanel({
                                     {isInactive ? 'Inactive' : 'Active'}
                                   </span>
                                 </td>
+                                <td className="accounts-cell-media-kit" onClick={(event) => event.stopPropagation()}>
+                                  <button
+                                    type="button"
+                                    className="ghost-button account-media-kit-button"
+                                    aria-label={`Download media kit for ${account.handle}`}
+                                    aria-busy={Boolean(mediaKitGenerating[account.handle])}
+                                    title="Generate a PDF with all available account metrics and best posts"
+                                    disabled={Boolean(mediaKitGenerating[account.handle])}
+                                    onClick={() => downloadMediaKit(account.handle)}
+                                  >
+                                    {mediaKitGenerating[account.handle] ? <LoaderCircle size={14} className="account-media-kit-spinner" /> : <Download size={14} />}
+                                    <span>{mediaKitGenerating[account.handle] ? 'Generating…' : 'Download PDF'}</span>
+                                  </button>
+                                  {mediaKitErrors[account.handle] ? <p className="account-media-kit-error" role="alert">{mediaKitErrors[account.handle]}</p> : null}
+                                </td>
                               </tr>
                               {isOpen ? (
                                 <tr className="accounts-detail-row">
-                                  <td colSpan={8}>
+                                  <td colSpan={9}>
                                     <div className="account-manage-detail" onClick={(event) => event.stopPropagation()}>
                                       <div className="account-manage-fields">
                                         <label className="account-manage-field">
@@ -4760,7 +4809,7 @@ export function SettingsPanel({
                         })}
                         {!sortedRoster.length ? (
                           <tr>
-                            <td colSpan={8} className="accounts-table-empty">No accounts match.</td>
+                            <td colSpan={9} className="accounts-table-empty">No accounts match.</td>
                           </tr>
                         ) : null}
                       </tbody>

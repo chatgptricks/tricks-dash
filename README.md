@@ -67,6 +67,14 @@ durable Apify queue. Posts, covers, avatars, and Queue attachments are read
 from the live API; the frontend does not bundle a second account dataset or
 local cover archive.
 
+Settings > Accounts includes a Media kit column. Each Download PDF click
+generates an authenticated account report from current stored data: profile
+and follower history, performance across historical and recent periods,
+format and publishing patterns, top posts, and the complete metric inventory
+with sample sizes and definitions. Downloads do not refresh or scrape the
+account. Historical totals describe the saved post sample; unavailable
+measurements stay unavailable rather than becoming zero.
+
 Production publishing is a separate two-branch workflow: source on `main`,
 static output on `gh-pages`. The ignored local `FOR_CODEX.md` contains the
 operational handover and deployment steps. Frontend checks do not validate
