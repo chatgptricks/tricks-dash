@@ -330,6 +330,7 @@ function ProfileSheet({ user, viewer, installPrompt, onInstall, onSettings, onSi
   return <Sheet title={displayName(user.email)} onClose={onClose}>
     <div className="m-profile-card"><Avatar person={profilePerson} /><div><strong>{user.email}</strong>{secondaryRoles.length ? <span>{secondaryRoles.join(' · ')}</span> : null}</div></div>
     {(viewer.is_admin || viewer.is_dev) ? <button className="m-menu-row" onClick={onSettings}><Settings size={18} /><span>{t('settings')}</span><ChevronRight size={17} /></button> : null}
+    <a className="m-menu-row" href="/api.html"><ExternalLink size={18} /><span>{prefs.language === 'es' ? 'Conexiones API' : 'API connections'}</span><ChevronRight size={17} /></a>
     {installPrompt ? <button className="m-menu-row" onClick={onInstall}><Download size={18} /><span>{t('install')}</span><ChevronRight size={17} /></button> : null}
     {ios ? <div className="m-install-tip"><Download size={18} /><div><strong>{t('install')}</strong><p>{t('iosInstall')}</p></div></div> : null}
     <section className="m-pref-section"><label>{t('language')}</label><div className="m-segment"><button className={prefs.language === 'en' ? 'is-on' : ''} onClick={() => prefs.setLanguage('en')}>EN</button><button className={prefs.language === 'es' ? 'is-on' : ''} onClick={() => prefs.setLanguage('es')}>ES</button></div></section>

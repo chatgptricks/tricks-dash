@@ -5,10 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "prebuild": "node scripts/package-media-kit-example.mjs",
     "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint .",
-    "test": "npm run test:product && npm run test:queue && npm run test:resilience && npm run test:users && npm run test:media-kit && npm run smoke:recovery && npm run smoke:research && npm run smoke:queue && npm run smoke:settings && npm run smoke:mobile && npm run smoke:roles && npm run smoke:hooks && npm run smoke:vault && node smoke/static-pages.mjs && node smoke/tracker.mjs && node smoke/insights-extras.mjs && node smoke/sign-in.mjs && npm run test:promos && npm run smoke:tool-reliability && npm run smoke:agents",
+    "test": "npm run test:product && npm run test:queue && npm run test:resilience && npm run test:users && npm run test:media-kit && npm run smoke:recovery && npm run smoke:research && npm run smoke:queue && npm run smoke:settings && npm run smoke:mobile && npm run smoke:roles && npm run smoke:hooks && npm run smoke:vault && node smoke/static-pages.mjs && node smoke/tracker.mjs && node smoke/insights-extras.mjs && node smoke/sign-in.mjs && npm run test:promos && npm run smoke:tool-reliability && npm run smoke:agents && npm run test:website-api",
     "test:product": "node scripts/test-topics.mjs && npm run test:stacks && node smoke/run-product.mjs",
     "test:stacks": "node scripts/test-stack-operations.mjs",
     "test:queue": "node scripts/test-queue.mjs && npm run test:queue-refresh",
@@ -39,6 +40,7 @@
     "smoke:media": "node smoke/media-download.mjs",
     "smoke:caption": "node smoke/caption-generator.mjs",
     "smoke:agents": "node smoke/agent-connections.mjs",
+    "test:website-api": "node smoke/api-connections.mjs && node --test examples/media-kit/server.test.mjs",
     "smoke:suggestions": "node smoke/queue-suggestions.mjs",
     "smoke:queue-reuse": "node smoke/queue-reuse.mjs"
   },

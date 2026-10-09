@@ -24,7 +24,7 @@ export default [
     },
   },
   {
-    files: ['mcp/**', 'scripts/**', 'smoke/**', 'vite.config.js', 'eslint.config.js'],
+    files: ['mcp/**', 'scripts/**', 'smoke/**', 'examples/**', 'vite.config.js', 'eslint.config.js'],
     languageOptions: { globals: { ...globals.node, ...globals.browser } },
   },
 ];

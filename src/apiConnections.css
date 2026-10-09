@@ -1,0 +1,19 @@
+.api-connections-page header nav { display: flex; align-items: center; gap: 18px; }
+.api-connections-page code { font-family: ui-monospace, monospace; overflow-wrap: anywhere; }
+.api-connections-page #api-issued-key { margin-bottom: 18px; }
+.api-account-fieldset { border: 1px solid #415647; border-radius: 12px; padding: 18px; margin: 8px 0 20px; min-width: 0; }
+.api-account-fieldset legend { padding: 0 8px; font-weight: 600; }
+.api-account-options { max-height: 280px; overflow-y: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.agents-page .api-account-option { display: flex; gap: 10px; align-items: flex-start; padding: 12px; margin: 0; border: 1px solid #304334; border-radius: 9px; cursor: pointer; overflow-wrap: anywhere; }
+.agents-page .api-account-option input { width: 18px; height: 18px; padding: 0; margin: 2px 0 0; flex-shrink: 0; accent-color: #c3f78e; }
+.api-account-option span { min-width: 0; }
+.api-account-option small { display: block; margin-top: 4px; color: #b2bfb4; }
+.agents-page .api-selection-count { font-size: 13px; margin-bottom: 0; }
+.api-form-help { font-size: 14px; }
+.api-key-details { min-width: 0; overflow-wrap: anywhere; }
+.api-guide-link { display: inline-flex; align-items: center; min-height: 44px; }
+@media (max-width: 540px) {
+  .api-connections-page header { align-items: flex-start; gap: 16px; }
+  .api-connections-page header nav { gap: 10px; flex-direction: column; align-items: flex-end; }
+  .api-account-options { grid-template-columns: 1fr; }
+}

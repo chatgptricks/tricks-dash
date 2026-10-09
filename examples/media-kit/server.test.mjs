@@ -1,0 +1,132 @@
+import assert from 'node:assert/strict';
+import { createServer } from 'node:http';
+import { once } from 'node:events';
+import { test } from 'node:test';
+import { createMediaKitServer } from './server.mjs';
+
+const KEY = 'sad_api_test_secret_server_only';
+const fixture = {
+  schema_version: '1.0',
+  generated_at: '2026-10-09T14:00:00Z',
+  data_updated_at: { profile: '2026-10-08T12:00:00Z', engagement: null },
+  data: { account: { handle: 'test_account', followers: null }, summary: { all_time: { post_count: 0 } } },
+};
+
+async function listen(server) {
+  server.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  return `http://127.0.0.1:${server.address().port}`;
+}
+
+async function setup(t, handler, options = {}) {
+  const calls = [];
+  const upstream = createServer((request, response) => {
+    calls.push({ path: request.url, auth: request.headers.authorization });
+    if (handler) return handler(request, response);
+    response.setHeader('Content-Type', 'application/json');
+    response.end(JSON.stringify(fixture));
+  });
+  const upstreamBase = await listen(upstream);
+  const website = createMediaKitServer({ apiKey: KEY, account: 'test_account', baseUrl: `${upstreamBase}/api/v1`, ...options });
+  const url = await listen(website);
+  t.after(() => {
+    website.closeAllConnections();
+    upstream.closeAllConnections();
+    return Promise.all([new Promise((done) => website.close(done)), new Promise((done) => upstream.close(done))]);
+  });
+  return { url, calls };
+}
+
+test('key stays on the server and static files cannot disclose .env or source', async (t) => {
+  const { url, calls } = await setup(t);
+  for (const path of ['/', '/client.js', '/styles.css']) {
+    const response = await fetch(`${url}${path}`);
+    assert.equal(response.status, 200);
+    assert.ok(!(await response.text()).includes(KEY));
+  }
+  for (const path of ['/.env', '/.env.example', '/server.mjs', '/server.test.mjs']) {
+    assert.equal((await fetch(`${url}${path}`)).status, 404);
+  }
+  const response = await fetch(`${url}/api/media-kit`);
+  assert.deepEqual(await response.json(), fixture);
+  assert.deepEqual(calls, [{ path: '/api/v1/accounts/test_account/media-kit', auth: `Bearer ${KEY}` }]);
+});
+
+test('canonical pagination, cache expiry, and shared concurrent requests', async (t) => {
+  let now = 0;
+  const { url, calls } = await setup(t, null, { now: () => now });
+  const first = await fetch(`${url}/api/posts?to=2026-10-09&offset=0&limit=20&from=2026-10-01`);
+  assert.equal(first.headers.get('x-data-cache'), 'MISS');
+  const second = await fetch(`${url}/api/posts?from=2026-10-01&to=2026-10-09`);
+  assert.equal(second.headers.get('x-data-cache'), 'HIT');
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].path, '/api/v1/accounts/test_account/posts?limit=20&offset=0&from=2026-10-01&to=2026-10-09');
+  now = 300001;
+  await Promise.all(Array.from({ length: 5 }, () => fetch(`${url}/api/posts?from=2026-10-01&to=2026-10-09`)));
+  assert.equal(calls.length, 2);
+});
+
+test('visitor parameters cannot change the upstream, account, dates or bounds', async (t) => {
+  const { url, calls } = await setup(t);
+  for (const query of [
+    'url=https://example.com', 'account=another', 'limit=101', 'limit=0', 'limit=2.5',
+    'offset=100001', 'limit=1&limit=2', 'from=2026-02-30', 'from=2026-10-09&to=2026-10-01', 'to=',
+  ]) {
+    assert.equal((await fetch(`${url}/api/posts?${query}`)).status, 422, query);
+  }
+  assert.equal((await fetch(`${url}/api/media-kit?limit=20`)).status, 422);
+  assert.equal((await fetch(`${url}/api/another`)).status, 404);
+  assert.equal((await fetch(`${url}/api/posts`, { method: 'POST' })).status, 405);
+  assert.equal(calls.length, 0);
+});
+
+test('upstream key errors keep their status, hide bodies, and are cached briefly', async (t) => {
+  let now = 0;
+  const { url, calls } = await setup(t, (_request, response) => {
+    response.writeHead(401);
+    response.end(`Sensitive upstream diagnostics: ${KEY}`);
+  }, { now: () => now });
+  const response = await fetch(`${url}/api/media-kit`);
+  assert.equal(response.status, 401);
+  assert.ok(!(await response.text()).includes(KEY));
+  const cached = await fetch(`${url}/api/media-kit`);
+  assert.equal(cached.headers.get('x-data-cache'), 'HIT');
+  assert.equal(calls.length, 1);
+  now = 10001;
+  assert.equal((await fetch(`${url}/api/media-kit`)).status, 401);
+  assert.equal(calls.length, 2);
+});
+
+test('upstream 429 preserves Retry-After without exposing diagnostics', async (t) => {
+  const { url } = await setup(t, (_request, response) => {
+    response.writeHead(429, { 'Retry-After': '37' });
+    response.end('Limited');
+  });
+  const response = await fetch(`${url}/api/followers`);
+  assert.equal(response.status, 429);
+  assert.equal(response.headers.get('retry-after'), '37');
+  assert.match((await response.json()).error.message, /límite/);
+});
+
+test('public proxy has an upstream request budget of its own', async (t) => {
+  const { url, calls } = await setup(t, null, { upstreamBudget: 2 });
+  assert.equal((await fetch(`${url}/api/posts?offset=0`)).status, 200);
+  assert.equal((await fetch(`${url}/api/posts?offset=1`)).status, 200);
+  const limited = await fetch(`${url}/api/posts?offset=2`);
+  assert.equal(limited.status, 429);
+  assert.ok(Number(limited.headers.get('retry-after')) > 0);
+  assert.equal(calls.length, 2);
+});
+
+test('slow upstream ends with 504 and malformed successful response with 502', async (t) => {
+  const slow = await setup(t, () => {}, { timeoutMs: 20 });
+  assert.equal((await fetch(`${slow.url}/api/media-kit`)).status, 504);
+  const malformed = await setup(t, (_request, response) => response.end('{broken'));
+  assert.equal((await fetch(`${malformed.url}/api/media-kit`)).status, 502);
+});
+
+test('invalid startup configuration is rejected before serving requests', () => {
+  assert.throws(() => createMediaKitServer({ apiKey: '', account: 'test' }), /API_KEY/);
+  assert.throws(() => createMediaKitServer({ apiKey: KEY, account: '@test' }), /ACCOUNT/);
+  assert.throws(() => createMediaKitServer({ apiKey: KEY, account: 'test', baseUrl: 'http://external.example/api/v1' }), /HTTPS/);
+});

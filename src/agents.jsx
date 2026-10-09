@@ -76,7 +76,7 @@ function AgentConnections() {
   return <main className="agents-page">
     <header><a href="/">Sentient Dash</a>{user ? <button onClick={() => signOut(firebaseAuth)}>Sign out</button> : null}</header>
     <h1>Agent connections</h1>
-    <p>Connect your agent to Sentient Dash with its own access code.</p>
+    <p>Connect your agent to Sentient Dash with its own access code. To update a website or media kit, use <a href={`${import.meta.env.BASE_URL}api.html`}>API connections</a>.</p>
     {error ? <p className="agent-error" role="alert">{error}</p> : null}
     {notice ? <p className="agent-notice" role="status">{notice}</p> : null}
     {user === undefined ? <p>Checking sign-in…</p> : !user ? <section>

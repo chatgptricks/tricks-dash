@@ -389,6 +389,7 @@ export function SettingsMenu({ email, avatarUrl, isAdmin, isDev, onSignOut, show
             </div>
           ) : null}
           <a className="settings-menu-link" href={`${import.meta.env.BASE_URL}agents.html`}>Agent connections</a>
+          <a className="settings-menu-link" href={`${import.meta.env.BASE_URL}api.html`}>API connections</a>
           <div className="settings-menu-footer">
             <small>{email}</small>
             <button type="button" className="settings-menu-signout" onClick={onSignOut}>

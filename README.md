@@ -88,3 +88,17 @@ The [Sentient Dash MCP server](mcp/README.md) exposes typed Cortex tools over
 stdio or authenticated Streamable HTTP, including product discovery,
 Research, Queue, analytics, and restricted subtools. Follow its connection
 guide for Muse, Dots, or another MCP host.
+
+## Website data API
+
+Open **API connections** from the account menu or `/api.html` to create a
+read-only website key with an explicit account selection and expiry. Admin
+and Dev users can issue keys; every request checks the owner's current access.
+Keys can be revoked and are only shown once. Keep them in server secrets.
+
+The versioned Cortex `/api/v1/accounts` API provides public profiles, media
+kit metrics, paginated posts, and daily follower history. It reads stored
+dashboard data without starting a refresh. Unknown measurements remain null.
+See the [Spanish integration guide](public/api-guide.md), also available at
+`/api-guide.html`, and the [runnable website example](examples/media-kit/README.md).
+Run `npm run test:website-api` to verify key management and the example proxy.
