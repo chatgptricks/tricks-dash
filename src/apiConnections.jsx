@@ -84,7 +84,7 @@ function ApiConnections() {
       if (current !== generation.current) return;
       setKeys(items => items.map(item => item.id === connection.id ? { ...item, revoked_at: new Date().toISOString() } : item));
       if (issued?.connection.id === connection.id) setIssued(null);
-      setRevoke(null); setNotice('API key revoked. The website can no longer fetch new data with it.');
+      setRevoke(null); setNotice('API key revoked. This connection can no longer fetch new data with it.');
     } catch (e) {
       if (current === generation.current && e.name !== 'AbortError') setError(e.message);
     } finally { if (current === generation.current) setBusy(false); }
@@ -105,21 +105,21 @@ function ApiConnections() {
   return <main className="agents-page api-connections-page">
     <header><a href={import.meta.env.BASE_URL}>Sentient Dash</a><nav aria-label="API navigation"><a href={GUIDE_URL}>Integration guide</a>{user ? <button onClick={() => signOut(firebaseAuth)}>Sign out</button> : null}</nav></header>
     <h1>API connections</h1>
-    <p>Keep a media kit or website updated with profile data, performance, posts and follower history from Sentient Dash.</p>
+    <p>Connect websites, applications and external tools to profile data, performance, posts and follower history stored in Sentient Dash.</p>
     {error ? <p className="agent-error" role="alert">{error}</p> : null}
     {notice ? <p className="agent-notice" role="status">{notice}</p> : null}
     {user === undefined ? <p>Checking sign-in…</p> : !user ? <section>
-      <h2>Sign in to connect a website</h2><p>Use your authorized Sentient account.</p>
+      <h2>Sign in to manage API connections</h2><p>Use your authorized Sentient account.</p>
       <button className="agent-primary" disabled={busy} onClick={login}>Sign in with Google</button>
     </section> : <>
       <p className="agent-owner">API keys belong to {user.email}.</p>
       {keys === null ? <section><h2>Your API keys</h2><p>Loading API access…</p>{error ? <button onClick={load}>Try again</button> : null}</section> : <>
         {canCreate ? <section>
-          <h2>Connect a website</h2>
-          <p>Each key grants read access to the accounts you select. Create a separate key for each website.</p>
+          <h2>Connect an integration</h2>
+          <p>Each key grants read access to the accounts you select. Create a separate key for each integration.</p>
           <form onSubmit={create}>
             <div className="agent-fields">
-              <label>Website name<input required maxLength={80} value={name} onChange={e => setName(e.target.value)} placeholder="User 10 media kit" disabled={busy} /></label>
+              <label>Connection name<input required maxLength={80} value={name} onChange={e => setName(e.target.value)} placeholder="Company website" disabled={busy} /></label>
               <label>Expires in<select value={days} onChange={e => setDays(Number(e.target.value))} disabled={busy}><option value={30}>30 days</option><option value={90}>90 days</option><option value={365}>1 year</option></select></label>
             </div>
             <fieldset className="api-account-fieldset" disabled={busy}>
@@ -134,10 +134,10 @@ function ApiConnections() {
               </div>
               <p className="api-selection-count" aria-live="polite">{handles.length} account{handles.length === 1 ? '' : 's'} selected</p>
             </fieldset>
-            <p className="api-form-help">The key will appear once. Save it in your website’s server secrets. It expires automatically and can be revoked below.</p>
+            <p className="api-form-help">The key will appear once. Save it in your integration’s server secrets. It expires automatically and can be revoked below.</p>
             <button className="agent-primary" disabled={busy || !name.trim() || !handles.length}>{busy ? 'Working…' : 'Generate API key'}</button>
           </form>
-        </section> : <section><h2>Website API access</h2><p>An Admin or Dev can create website API keys. Existing keys stop working if their owner loses this access. You can still revoke your own keys below.</p></section>}
+        </section> : <section><h2>API access</h2><p>An Admin or Dev can create API keys. Existing keys stop working if their owner loses this access. You can still revoke your own keys below.</p></section>}
         {issued ? <section className="agent-issued" aria-labelledby="api-issued-title">
           <h2 id="api-issued-title">Your API key</h2>
           <p>Copy and save this key now. Closing this page or hiding the key removes it from view.</p>
@@ -148,7 +148,7 @@ function ApiConnections() {
         </section> : null}
         <section>
           <h2>Your API keys</h2>
-          {!keys.length ? <p>No websites connected yet.</p> : <ul>{keys.map(connection => {
+          {!keys.length ? <p>No API connections yet.</p> : <ul>{keys.map(connection => {
             const active = !connection.revoked_at && new Date(connection.expires_at) > new Date();
             return <li key={connection.id}>
               <div className="api-key-details"><h3>{connection.name}</h3>
@@ -166,8 +166,8 @@ function ApiConnections() {
     <section>
       <h2>Integration details</h2>
       <label htmlFor="api-data-base">API base URL<input id="api-data-base" readOnly value={DATA_URL} /></label>
-      <div className="agent-actions"><button onClick={() => copy(DATA_URL)}>Copy API URL</button><a className="api-guide-link" href={GUIDE_URL}>Read the guide for User 10</a></div>
-      <p>Profile and media kit, paginated public posts, and daily follower history. Up to 60 requests per minute per key. Fetch from your website’s server and cache the response for five minutes.</p>
+      <div className="agent-actions"><button onClick={() => copy(DATA_URL)}>Copy API URL</button><a className="api-guide-link" href={GUIDE_URL}>Read the API guide</a></div>
+      <p>Profile and media kit, paginated public posts, and daily follower history. Up to 60 requests per minute per key. Fetch from your server and cache the response for five minutes.</p>
       <p>Each request reads the latest stored dashboard data. Check the timestamps to show when it was measured.</p>
     </section>
   </main>;

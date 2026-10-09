@@ -75,8 +75,8 @@ try {
     page.setDefaultTimeout(10000);
     const errors = [], consoleMessages = [], requests = [], secrets = [], connections = [];
     const accounts = [
-      { handle: 'sergio', public_name: 'User 10 — creator and presenter' },
-      { handle: 'sergio_studio', public_name: 'User 10 Studio' },
+      { handle: 'creator', public_name: 'Creator — public profile' },
+      { handle: 'creator_studio', public_name: 'Creator Studio' },
       { handle: 'unselected_brand', public_name: 'Unselected account' },
       { handle: 'long_account_handle_for_layout_validation', public_name: 'A long account name that must wrap safely on a narrow phone display' },
     ];
@@ -96,7 +96,7 @@ try {
       } else if (request.method() === 'POST') {
         assert.equal(token, 'Bearer tok');
         assert.equal(request.headers()['content-type'], 'application/json');
-        assert.deepEqual(request.postDataJSON(), { name: 'User 10 media kit', account_handles: ['sergio', 'sergio_studio'], expires_in_days: 30 });
+        assert.deepEqual(request.postDataJSON(), { name: 'Website integration', account_handles: ['creator', 'creator_studio'], expires_in_days: 30 });
         if (failCreate) {
           await route.fulfill({ status: 403, contentType: 'application/json', body: '{"detail":"Creation denied"}' });
           return;
@@ -105,8 +105,8 @@ try {
         const key = `sad_api_test_${creationCount}_${'x'.repeat(43)}`; // Fabricated, never a production credential.
         secrets.push(key);
         const connection = {
-          id: `test-${creationCount}`, name: 'User 10 media kit', key_prefix: key.slice(0, 16),
-          account_handles: ['sergio', 'sergio_studio'], expires_at: '2099-01-01T00:00:00Z',
+          id: `test-${creationCount}`, name: 'Website integration', key_prefix: key.slice(0, 16),
+          account_handles: ['creator', 'creator_studio'], expires_at: '2099-01-01T00:00:00Z',
           created_at: '2026-10-09T12:00:00Z', revoked_at: null, last_used_at: null,
         };
         connections.unshift(connection);
@@ -135,11 +135,11 @@ try {
     });
     const createButton = page.getByRole('button', { name: 'Generate API key', exact: true });
     const prepareCreation = async () => {
-      await page.getByLabel('Website name').fill('  User 10 media kit  ');
+      await page.getByLabel('Connection name').fill('  Website integration  ');
       await page.getByLabel('Expires in').selectOption('30');
       await page.getByLabel('Search accounts').fill('');
-      await page.getByRole('checkbox', { name: '@sergio User 10 — creator and presenter', exact: true }).check();
-      await page.getByRole('checkbox', { name: '@sergio_studio User 10 Studio', exact: true }).check();
+      await page.getByRole('checkbox', { name: '@creator Creator — public profile', exact: true }).check();
+      await page.getByRole('checkbox', { name: '@creator_studio Creator Studio', exact: true }).check();
     };
     const assertNoLeaks = async () => {
       const storage = await page.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } }));
@@ -159,22 +159,24 @@ try {
     };
 
     await page.goto(origin);
-    await page.getByText('No websites connected yet.', { exact: true }).waitFor();
+    await page.getByText('No API connections yet.', { exact: true }).waitFor();
+    assert.equal(await page.getByRole('link', { name: 'Read the API guide', exact: true }).getAttribute('href'), '/api-guide.html');
+    assert.equal(await page.getByLabel('Connection name').getAttribute('placeholder'), 'Company website');
     assert.equal(await createButton.isDisabled(), true);
-    await page.getByLabel('Website name').fill('  User 10 media kit  ');
+    await page.getByLabel('Connection name').fill('  Website integration  ');
     assert.equal(await createButton.isDisabled(), true);
-    await page.getByRole('checkbox', { name: '@sergio User 10 — creator and presenter', exact: true }).check();
+    await page.getByRole('checkbox', { name: '@creator Creator — public profile', exact: true }).check();
     assert.equal(await createButton.isEnabled(), true);
     await page.getByLabel('Search accounts').fill('studio');
     assert.equal(await page.getByRole('checkbox').count(), 1);
-    await page.getByRole('checkbox', { name: '@sergio_studio User 10 Studio', exact: true }).check();
+    await page.getByRole('checkbox', { name: '@creator_studio Creator Studio', exact: true }).check();
     await page.getByText('2 accounts selected', { exact: true }).waitFor();
     await page.getByLabel('Search accounts').fill('no-match');
     await page.getByText('No matching accounts.', { exact: true }).waitFor();
     assert.equal(await page.getByText('2 accounts selected', { exact: true }).count(), 1);
     await page.getByLabel('Search accounts').fill('');
-    assert.equal(await page.getByRole('checkbox', { name: '@sergio User 10 — creator and presenter', exact: true }).isChecked(), true);
-    assert.equal(await page.getByRole('checkbox', { name: '@sergio_studio User 10 Studio', exact: true }).isChecked(), true);
+    assert.equal(await page.getByRole('checkbox', { name: '@creator Creator — public profile', exact: true }).isChecked(), true);
+    assert.equal(await page.getByRole('checkbox', { name: '@creator_studio Creator Studio', exact: true }).isChecked(), true);
     assert.equal(await page.getByRole('checkbox', { name: '@unselected_brand Unselected account', exact: true }).isChecked(), false);
     await page.getByLabel('Expires in').selectOption('30');
     await assertFits();
@@ -182,7 +184,7 @@ try {
 
     await createButton.click();
     await page.getByRole('alert').filter({ hasText: 'Creation denied' }).waitFor();
-    assert.equal(await page.getByLabel('Website name').inputValue(), '  User 10 media kit  ');
+    assert.equal(await page.getByLabel('Connection name').inputValue(), '  Website integration  ');
     assert.equal(await page.getByLabel('Expires in').inputValue(), '30');
     assert.equal(await page.getByText('2 accounts selected', { exact: true }).count(), 1);
     assert.equal(await page.getByLabel('API key', { exact: true }).count(), 0);
@@ -191,7 +193,7 @@ try {
     await createButton.click();
     await page.getByRole('heading', { name: 'Your API key', exact: true }).waitFor();
     assert.equal(await page.getByLabel('API key', { exact: true }).inputValue(), secrets[0]);
-    assert.equal(await page.getByLabel('Website name').inputValue(), '');
+    assert.equal(await page.getByLabel('Connection name').inputValue(), '');
     assert.equal(await page.getByText('0 accounts selected', { exact: true }).count(), 1);
     assert.equal(await createButton.isDisabled(), true);
     await assertNoLeaks();
@@ -225,11 +227,11 @@ try {
     await createButton.click();
     await page.getByRole('heading', { name: 'Your API key', exact: true }).waitFor();
     await page.getByRole('button', { name: 'Sign out', exact: true }).click();
-    await page.getByRole('heading', { name: 'Sign in to connect a website', exact: true }).waitFor();
+    await page.getByRole('heading', { name: 'Sign in to manage API connections', exact: true }).waitFor();
     assert.equal(await page.getByLabel('API key', { exact: true }).count(), 0);
     assert.equal((await page.locator('body').innerText()).includes(secrets[2]), false);
     await page.getByRole('button', { name: 'Sign in with Google', exact: true }).click();
-    await page.getByRole('heading', { name: 'Connect a website', exact: true }).waitFor();
+    await page.getByRole('heading', { name: 'Connect an integration', exact: true }).waitFor();
     assert.equal(await page.getByLabel('API key', { exact: true }).count(), 0);
 
     await prepareCreation();
@@ -241,18 +243,18 @@ try {
     assert.ok(releaseCreate, 'The pending create request reached the server.');
     await page.evaluate(() => window.__apiSmokeSetUser('second@sentientagency.io', 'tok-two'));
     await page.getByText('API keys belong to second@sentientagency.io.', { exact: true }).waitFor();
-    await page.getByText('No websites connected yet.', { exact: true }).waitFor();
+    await page.getByText('No API connections yet.', { exact: true }).waitFor();
     releaseCreate();
-    await page.getByLabel('Website name').fill('Session changed');
+    await page.getByLabel('Connection name').fill('Session changed');
     assert.equal(await page.getByLabel('API key', { exact: true }).count(), 0);
     assert.equal((await page.locator('body').innerText()).includes(secrets[3]), false);
     assert.equal(await page.getByText('0 accounts selected', { exact: true }).count(), 1);
 
     canCreate = false;
     await page.evaluate(() => window.__apiSmokeSetUser('owner@sentientagency.io'));
-    await page.getByRole('heading', { name: 'Website API access', exact: true }).waitFor();
+    await page.getByRole('heading', { name: 'API access', exact: true }).waitFor();
     assert.equal(await createButton.count(), 0);
-    assert.equal(await page.getByLabel('Website name').count(), 0);
+    assert.equal(await page.getByLabel('Connection name').count(), 0);
     const pending = page.locator('li').filter({ hasText: heldCreate.key_prefix });
     await pending.getByText('Read only · Active', { exact: true }).waitFor();
     await pending.getByRole('button', { name: 'Revoke', exact: true }).click();

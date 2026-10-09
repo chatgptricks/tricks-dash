@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "prebuild": "node scripts/package-media-kit-example.mjs",
+    "prebuild": "node scripts/build-api-guide.mjs && node scripts/package-media-kit-example.mjs",
     "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint .",
