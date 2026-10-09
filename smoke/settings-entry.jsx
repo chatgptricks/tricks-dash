@@ -7,6 +7,8 @@ accounts.push({ ...accounts[0], handle: 'fixture.account', label: 'Fixture accou
 const mediaKitPdf = new Uint8Array([37, 80, 68, 70, 45, ...new TextEncoder().encode('1.7\nSettings media kit fixture\n%%EOF\n')]);
 const mediaKitRequests = [], mediaKitDownloads = [], mediaKitBlobs = [];
 let mediaKitMode = 'success';
+window.localStorage.setItem('sentient.theme', 'dark');
+window.localStorage.setItem('sentient.accent', 'coral');
 let resolveMediaKit = null;
 const createObjectURL = (blob) => { mediaKitBlobs.push(blob); return `blob:settings-media-kit-${mediaKitBlobs.length}`; };
 URL.createObjectURL = createObjectURL;
@@ -33,7 +35,7 @@ const stubFetch = async (url, options = {}) => {
     return ok({ ok: true, slackDelivered: true });
   }
   if (value.includes('/api/admin/accounts/backfill-status')) return ok(backfillStatus);
-  if (/\/api\/admin\/accounts\/[^/]+\/media-kit\.pdf$/.test(value)) {
+  if (/\/api\/admin\/accounts\/[^/]+\/media-kit\.pdf$/.test(new URL(value, window.location.href).pathname)) {
     mediaKitRequests.push({ url: value, options });
     if (mediaKitMode === 'pending') await new Promise((resolve) => { resolveMediaKit = resolve; });
     if (mediaKitMode === 'error') return new Response(JSON.stringify({ detail: 'Report data temporarily unavailable. Retry the download.' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
@@ -106,14 +108,26 @@ const clickTab = async (label) => {
     checks['Successful report downloads server PDF with its attachment name'] = mediaKitDownloads.length === 1
       && mediaKitDownloads[0].filename === 'chatgptricks-media-kit-2026-10-09.pdf'
       && Buffer.from(await mediaKitBlobs[0].arrayBuffer()).equals(Buffer.from(mediaKitPdf))
-      && mediaKitRequests[0].url === 'https://api.test/api/admin/accounts/chatgptricks/media-kit.pdf'
+      && mediaKitRequests[0].url === 'https://api.test/api/admin/accounts/chatgptricks/media-kit.pdf?theme=dark&accent=%23fb7185'
       && mediaKitRequests[0].options.cache === 'no-store' && !mediaKitButton().disabled
       && !document.querySelector('.accounts-detail-row');
+    await act(async () => { document.querySelector('.settings-menu-trigger').click(); });
+    await act(async () => {
+      [...document.querySelectorAll('.settings-menu-panel button')].find((node) => node.textContent.trim() === 'Light').click();
+      const color = document.querySelector('.settings-menu-panel input[type="color"]');
+      Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(color, '#123abc');
+      color.dispatchEvent(new window.Event('input', { bubbles: true }));
+      color.dispatchEvent(new window.Event('change', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 30));
+    });
+    await act(async () => { document.querySelector('.settings-menu-trigger').click(); });
     mediaKitMode = 'error';
     await act(async () => { mediaKitButton().click(); await new Promise((resolve) => setTimeout(resolve, 30)); });
     checks['Failed report retains a local row error and stays retryable'] = /Report data temporarily unavailable/.test(document.querySelector('.account-media-kit-error')?.textContent || '')
       && !mediaKitButton().disabled && mediaKitDownloads.length === 1
       && !document.querySelector('.accounts-detail-row');
+    checks['Later download reads the current theme and custom accent from shared preferences'] = mediaKitRequests[1].url === 'https://api.test/api/admin/accounts/chatgptricks/media-kit.pdf?theme=light&accent=%23123abc'
+      && document.documentElement.dataset.theme === 'light' && document.documentElement.dataset.accent === '#123abc';
     mediaKitMode = 'pending';
     await act(async () => { mediaKitButton().click(); await new Promise((resolve) => setTimeout(resolve, 20)); });
     checks['Report retry clears stale error while generating'] = !document.querySelector('.account-media-kit-error') && mediaKitButton().disabled;

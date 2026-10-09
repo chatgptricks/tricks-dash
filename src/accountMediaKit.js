@@ -15,8 +15,13 @@ function pdfFilename(disposition, handle) {
 
 // Each download requests a fresh server-rendered report. The server reads
 // the stored account history; downloading never starts a paid refresh.
-export async function downloadAccountMediaKit(handle, { signal } = {}) {
-  const response = await apiFetch(`${API_BASE}/api/admin/accounts/${encodeURIComponent(handle)}/media-kit.pdf`, {
+export async function downloadAccountMediaKit(handle, { signal, theme = 'light', accent = '#00A991' } = {}) {
+  const selectedAccent = typeof accent === 'string' ? accent.trim() : '';
+  const appearance = new URLSearchParams({
+    theme: theme === 'dark' ? 'dark' : 'light',
+    accent: /^#[0-9a-f]{6}$/i.test(selectedAccent) ? selectedAccent : '#00A991',
+  });
+  const response = await apiFetch(`${API_BASE}/api/admin/accounts/${encodeURIComponent(handle)}/media-kit.pdf?${appearance}`, {
     cache: 'no-store',
     headers: { Accept: 'application/pdf' },
     signal,

@@ -71,7 +71,8 @@ Settings > Accounts includes a Media kit column. Each Download PDF click
 generates an authenticated sales overview from current stored data: profile,
 follower trends and growth, historical/recent performance, content patterns,
 top posts, and a compact summary of every available metric type. Values use
-at most two decimals, with concise source and coverage notes. Downloads do not refresh or scrape the
+at most two decimals, with concise source and coverage notes. The PDF follows
+the user's current theme and accent at download time. Downloads do not refresh or scrape the
 account. Historical totals describe the saved post sample; unavailable
 measurements stay unavailable rather than becoming zero.
 

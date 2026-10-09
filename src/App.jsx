@@ -3222,7 +3222,7 @@ export function SettingsPanel({
   accounts = [], onRefresh, refreshing = false, refreshNotice, onAccountsChanged,
   initialTab, userEmail, userPhoto, isAdmin = false, isDev = false, canAccessNews = false, onSignOut,
 }) {
-  const { t } = usePrefs();
+  const { t, theme, accent } = usePrefs();
   // Firebase roles gate paid operations. The compatibility marker remains
   // only for older admin endpoints still being migrated, never for refresh.
   const [password, setPassword] = useState(LEGACY_REFRESH_PASSWORD);
@@ -3802,7 +3802,7 @@ export function SettingsPanel({
     setMediaKitGenerating((current) => ({ ...current, [handle]: true }));
     setMediaKitErrors((current) => ({ ...current, [handle]: '' }));
     try {
-      await downloadAccountMediaKit(handle, { signal: controller.signal });
+      await downloadAccountMediaKit(handle, { signal: controller.signal, theme, accent: accentHex(accent) });
     } catch (error) {
       if (error.name !== 'AbortError') {
         setMediaKitErrors((current) => ({ ...current, [handle]: error.message || 'Could not generate the media kit. Try again.' }));

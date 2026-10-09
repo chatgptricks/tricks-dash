@@ -23,6 +23,7 @@ const base = server.resolvedUrls.local[0].replace(/\/$/, '');
 const chrome = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const email = 'user03@example.com';
 const viewer = { email, is_admin: true, is_dev: true };
+const preferences = { theme: 'dark', accent: 'coral', language: 'en', effects: 'off' };
 const accounts = [
   { handle: 'chatgptricks', label: 'ChatGPTricks', group: 'sentient', subcategory: 'ai_automation', followers: 1438276, total_posts: 2490, avg_likes: 12834, hot_threshold: 13000, is_active: true },
   { handle: 'fixture.account', label: 'Fixture account', group: 'sentient', subcategory: 'ai_automation', followers: 328417, total_posts: 892, avg_likes: 3219, hot_threshold: 3300, is_active: true },
@@ -37,12 +38,15 @@ try {
   await context.addInitScript(() => {
     localStorage.setItem('sentient.lang', 'en');
     localStorage.setItem('sentient.theme', 'dark');
+    localStorage.setItem('sentient.accent', 'coral');
     localStorage.setItem('sentient.effects', 'off');
   });
   await context.route('**/*', async (route) => {
     const request = route.request(), url = new URL(request.url());
     if (/\/api\/admin\/accounts\/[^/]+\/media-kit\.pdf$/.test(url.pathname)) {
-      requests.push({ path: url.pathname, headers: request.headers() });
+      requests.push({ path: url.pathname, headers: request.headers(), theme: url.searchParams.get('theme'), accent: url.searchParams.get('accent') });
+      assert.equal(url.hash, '', 'Accent colors must be query encoded, not URL fragments');
+      assert.match(url.searchParams.get('accent'), /^#[0-9a-f]{6}$/i);
       assert.equal(request.method(), 'GET');
       assert.equal(request.headers().authorization, 'Bearer tok');
       assert.equal(request.headers().accept, 'application/pdf');
@@ -51,7 +55,10 @@ try {
       return route.fulfill({ contentType: 'application/pdf', headers: { 'Access-Control-Allow-Origin': '*', 'Content-Disposition': `attachment; filename*=UTF-8''${filename}`, 'Access-Control-Expose-Headers': 'Content-Disposition', 'Cache-Control': 'private, no-store' }, body: pdf });
     }
     if (url.pathname.startsWith('/api/')) {
-      if (url.pathname.endsWith('/me/preferences')) return route.fulfill({ json: { preferences: { theme: 'dark', language: 'en', effects: 'off' } }, headers: { 'Access-Control-Allow-Origin': '*' } });
+      if (url.pathname.endsWith('/me/preferences')) {
+        if (request.method() === 'POST') Object.assign(preferences, request.postDataJSON()?.preferences || {});
+        return route.fulfill({ json: { preferences }, headers: { 'Access-Control-Allow-Origin': '*' } });
+      }
       assert.equal(request.method(), 'GET', `Settings fixture forbids mutations: ${url.pathname}`);
       let body = {};
       if (url.pathname.endsWith('/me')) body = viewer;
@@ -74,6 +81,20 @@ try {
   await page.goto(`${base}/settings.html?settingsTab=accounts`);
   await page.getByRole('tab', { name: 'Accounts', exact: true }).click();
   const button = page.getByRole('button', { name: 'Download media kit for chatgptricks', exact: true });
+  const setAppearance = async (theme, accent) => {
+    await page.locator('.settings-menu-trigger').click();
+    const menu = page.locator('.settings-menu-panel');
+    await menu.getByRole('button', { name: theme === 'light' ? 'Light' : 'Dark', exact: true }).click();
+    if (accent.startsWith('#')) {
+      await menu.locator('input[type="color"]').evaluate((input, value) => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, value);
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      }, accent);
+    } else await menu.getByRole('button', { name: `${accent} accent`, exact: true }).click();
+    await page.locator('.settings-menu-trigger').click();
+    await page.waitForFunction((value) => document.documentElement.dataset.theme === value, theme);
+  };
   await button.waitFor();
   assert.equal(requests.length, 0, 'Opening Accounts must not generate reports');
   await page.screenshot({ path: path.join(output, 'accounts-desktop.png'), fullPage: true });
@@ -95,6 +116,8 @@ try {
     await page.waitForFunction(() => !document.querySelector('[aria-label="Download media kit for chatgptricks"]').disabled);
   };
   await verifyDownload(await firstDownload);
+  assert.deepEqual({ theme: requests[0].theme, accent: requests[0].accent }, { theme: 'dark', accent: '#fb7185' });
+  await setAppearance('light', 'blue');
   mode = 'error';
   await button.click();
   await page.locator('.account-media-kit-error').waitFor();
@@ -102,12 +125,17 @@ try {
   assert.equal(await button.isDisabled(), false);
   assert.equal(await page.locator('.accounts-detail-row').count(), 0);
   await page.screenshot({ path: path.join(output, 'accounts-error.png'), fullPage: true });
+  assert.deepEqual({ theme: requests[1].theme, accent: requests[1].accent }, { theme: 'light', accent: '#60a5fa' }, 'Changed shared preferences must be used for the next request');
+  await setAppearance('light', '#123abc');
   mode = 'success';
   await verifyDownload(await Promise.all([page.waitForEvent('download'), button.click()]).then(([download]) => download));
   assert.equal(await page.locator('.account-media-kit-error').count(), 0);
+  assert.deepEqual({ theme: requests[2].theme, accent: requests[2].accent }, { theme: 'light', accent: '#123abc' }, 'A custom accent must reach the fresh retried download');
+  await setAppearance('dark', '#123abc');
   await verifyDownload(await Promise.all([page.waitForEvent('download'), button.click()]).then(([download]) => download));
   assert.equal(requests.length, 4, 'Successful repeat and failed/retried downloads must each fetch a fresh report');
   assert.ok(requests.every((request) => request.path === '/api/admin/accounts/chatgptricks/media-kit.pdf'));
+  assert.deepEqual({ theme: requests[3].theme, accent: requests[3].accent }, { theme: 'dark', accent: '#123abc' }, 'Theme changes must not retain the first request appearance');
   await page.locator('.accounts-row[data-context-handle="chatgptricks"]').click();
   assert.equal(await page.locator('.accounts-detail-row td').getAttribute('colspan'), '9');
   await page.locator('.accounts-row[data-context-handle="chatgptricks"]').click();
@@ -121,7 +149,7 @@ try {
     }
   }
   assert.deepEqual(errors, []);
-  console.log(`PASS Native Settings media kit download, fresh authenticated request, pending isolation, error/retry, PDF bytes/name, table spans and 1440/390px layout. Screenshots: ${output}`);
+  console.log(`PASS Native Settings media kit download, fresh authenticated current theme/accent, pending isolation, error/retry, PDF bytes/name, table spans and 1440/390px layout. Screenshots: ${output}`);
 } finally {
   releaseReport?.();
   await browser?.close();

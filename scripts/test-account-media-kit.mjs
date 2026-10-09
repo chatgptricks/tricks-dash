@@ -34,7 +34,7 @@ const download = await downloadAccountMediaKit('chatgptricks');
 assert.equal(download.filename, 'chatgptricks-media-kit-2026-10-09.pdf');
 assert.equal(downloads.length, 1);
 assert.equal(downloads[0].filename, download.filename);
-assert.equal(requests[0].url, 'https://api.test/api/admin/accounts/chatgptricks/media-kit.pdf');
+assert.equal(requests[0].url, 'https://api.test/api/admin/accounts/chatgptricks/media-kit.pdf?theme=light&accent=%2300A991');
 assert.equal(requests[0].options.cache, 'no-store', 'Each click must generate a fresh server report');
 assert.equal(String(requests[0].options.method || 'GET').toUpperCase(), 'GET');
 assert.deepEqual(Buffer.from(await blobs[0].arrayBuffer()), pdfBytes, 'The original PDF bytes must reach the browser download');
@@ -44,7 +44,7 @@ assert.ok(revoked.includes(downloads[0].href), 'The download object URL must eve
 
 response = () => new Response(pdfBytes, { headers: { 'Content-Type': 'application/pdf', 'Content-Disposition': "attachment; filename*=UTF-8''sales%20kit.pdf" } });
 await downloadAccountMediaKit('fixture.account');
-assert.equal(requests.at(-1).url, 'https://api.test/api/admin/accounts/fixture.account/media-kit.pdf');
+assert.equal(requests.at(-1).url, 'https://api.test/api/admin/accounts/fixture.account/media-kit.pdf?theme=light&accent=%2300A991');
 assert.equal(downloads.at(-1).filename, 'sales kit.pdf', 'UTF-8 attachment names must be decoded');
 
 response = () => new Response(pdfBytes, { headers: { 'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="../../unsafe.pdf"' } });
@@ -58,11 +58,34 @@ assert.equal(downloads.at(-1).filename, 'fixture.account-media-kit.pdf', 'An inv
 
 response = () => new Response(pdfBytes, { headers: { 'Content-Type': 'application/pdf' } });
 await downloadAccountMediaKit('account/name');
-assert.equal(requests.at(-1).url, 'https://api.test/api/admin/accounts/account%2Fname/media-kit.pdf', 'Handles must be encoded as one path segment');
+assert.equal(requests.at(-1).url, 'https://api.test/api/admin/accounts/account%2Fname/media-kit.pdf?theme=light&accent=%2300A991', 'Handles must be encoded as one path segment');
 const beforeRepeat = requests.length;
 await downloadAccountMediaKit('chatgptricks');
 await downloadAccountMediaKit('chatgptricks');
 assert.equal(requests.length, beforeRepeat + 2, 'Repeated clicks must make separate fresh report requests');
+
+const appearance = { theme: 'dark', accent: '#fb7185' };
+await downloadAccountMediaKit('chatgptricks', appearance);
+let appearanceUrl = new URL(requests.at(-1).url);
+assert.equal(appearanceUrl.searchParams.get('theme'), 'dark');
+assert.equal(appearanceUrl.searchParams.get('accent'), '#fb7185');
+assert.equal(appearanceUrl.hash, '', 'The accent hash must be query-encoded, not treated as a URL fragment');
+assert.match(requests.at(-1).url, /accent=%23fb7185/);
+appearance.theme = 'light';
+appearance.accent = '#123abc';
+await downloadAccountMediaKit('chatgptricks', appearance);
+appearanceUrl = new URL(requests.at(-1).url);
+assert.equal(appearanceUrl.searchParams.get('theme'), 'light', 'Changed appearance must be read again on each download');
+assert.equal(appearanceUrl.searchParams.get('accent'), '#123abc', 'The latest custom accent must replace the earlier preset');
+await downloadAccountMediaKit('chatgptricks', { theme: 'light', accent: ' #Ab12Ef ' });
+assert.equal(new URL(requests.at(-1).url).searchParams.get('accent'), '#Ab12Ef', 'Valid custom six-digit colors may be mixed-case and are trimmed');
+for (const invalidAccent of ['#123', '#123abc&theme=dark', 'javascript:alert(1)', null, 123456]) {
+  await downloadAccountMediaKit('chatgptricks', { theme: 'system', accent: invalidAccent });
+  const fallbackUrl = new URL(requests.at(-1).url);
+  assert.equal(fallbackUrl.searchParams.get('theme'), 'light');
+  assert.equal(fallbackUrl.searchParams.get('accent'), '#00A991');
+  assert.equal([...fallbackUrl.searchParams].length, 2, 'Invalid appearance input must not add request parameters');
+}
 
 const beforeFailure = downloads.length;
 for (const [label, makeResponse, expected] of [
@@ -87,4 +110,4 @@ await assert.rejects(downloadAccountMediaKit('chatgptricks', { signal: controlle
 assert.equal(requests.at(-1).options.signal, controller.signal, 'Account report requests must carry the cancellation signal');
 assert.equal(downloads.length, beforeAbort, 'A report cancelled during generation must not start a late browser download');
 while (scheduled.length) scheduled.shift()();
-console.log('PASS Account media kit uses fresh encoded API requests, preserves PDF bytes, sanitizes filenames, releases downloads, and recovers from invalid/error responses.');
+console.log('PASS Account media kit uses fresh encoded appearance-aware API requests, applies each current theme/custom accent, preserves PDF bytes, sanitizes filenames, releases downloads, and recovers from invalid/error responses.');
