@@ -68,10 +68,10 @@ from the live API; the frontend does not bundle a second account dataset or
 local cover archive.
 
 Settings > Accounts includes a Media kit column. Each Download PDF click
-generates an authenticated account report from current stored data: profile
-and follower history, performance across historical and recent periods,
-format and publishing patterns, top posts, and the complete metric inventory
-with sample sizes and definitions. Downloads do not refresh or scrape the
+generates an authenticated sales overview from current stored data: profile,
+follower trends and growth, historical/recent performance, content patterns,
+top posts, and a compact summary of every available metric type. Values use
+at most two decimals, with concise source and coverage notes. Downloads do not refresh or scrape the
 account. Historical totals describe the saved post sample; unavailable
 measurements stay unavailable rather than becoming zero.
 
