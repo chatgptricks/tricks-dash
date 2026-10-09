@@ -4463,7 +4463,7 @@ export function SettingsPanel({
                     itself compares against), rounded up to the nearest hundred.
                   </p>
                   <p className="wizard-hint accounts-media-kit-hint">
-                    Media kits are generated on click with all available metrics, follower history, and top posts from the latest stored data.
+                    Generate a client-ready media kit with public account highlights, overall performance, and standout posts.
                   </p>
 
                   <div className="accounts-toolbar">
@@ -4574,7 +4574,7 @@ export function SettingsPanel({
                                     className="ghost-button account-media-kit-button"
                                     aria-label={`Download media kit for ${account.handle}`}
                                     aria-busy={Boolean(mediaKitGenerating[account.handle])}
-                                    title="Generate a PDF with all available account metrics and best posts"
+                                    title="Generate a client-ready PDF with public account highlights and top posts"
                                     disabled={Boolean(mediaKitGenerating[account.handle])}
                                     onClick={() => downloadMediaKit(account.handle)}
                                   >

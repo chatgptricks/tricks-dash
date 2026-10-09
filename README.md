@@ -68,13 +68,14 @@ from the live API; the frontend does not bundle a second account dataset or
 local cover archive.
 
 Settings > Accounts includes a Media kit column. Each Download PDF click
-generates an authenticated sales overview from current stored data: profile,
-follower trends and growth, historical/recent performance, content patterns,
-top posts, and a compact summary of every available metric type. Values use
-at most two decimals, with concise source and coverage notes. The PDF follows
-the user's current theme and accent at download time. Downloads do not refresh or scrape the
-account. Historical totals describe the saved post sample; unavailable
-measurements stay unavailable rather than becoming zero.
+generates an authenticated, client-shareable sales overview: public profile,
+audience size, selected public performance highlights, and standout historical
+and recent posts. The two-page PDF excludes internal labels, tracking metrics,
+model signals, contact information, and granular appendices. Values use at
+most two decimals, and the PDF follows the user's current theme and accent.
+Downloads read the latest available data without starting a refresh or scrape.
+Performance figures describe analyzed public posts; unavailable measurements
+are never replaced with zero.
 
 Production publishing is a separate two-branch workflow: source on `main`,
 static output on `gh-pages`. The ignored local `FOR_CODEX.md` contains the
