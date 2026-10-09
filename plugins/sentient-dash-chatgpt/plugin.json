@@ -1,0 +1,42 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "sentient-dash-chatgpt",
+  "version": "0.1.0",
+  "description": "Connect ChatGPT to SentientDash research, production queues, account analytics, and permitted product tools through OAuth.",
+  "author": {
+    "name": "Sentient",
+    "url": "https://sentientdash.app"
+  },
+  "homepage": "https://sentientdash.app",
+  "keywords": [
+    "sentientdash",
+    "social media",
+    "research",
+    "production",
+    "analytics"
+  ],
+  "extensions": {
+    "com.openai": {
+      "onboardingSkill": "./skills/setup/SKILL.md",
+      "interface": {
+        "displayName": "SentientDash for ChatGPT",
+        "shortDescription": "Research, queue, and analytics",
+        "longDescription": "Find and compare posts, inspect production work, review account performance, and perform requested actions within your SentientDash permissions. Sign in with your authorized Sentient account and review the requested access. Includes guided setup and workflows for Research, Queue, Tracker, Insights, and role-specific tools.",
+        "developerName": "Sentient",
+        "category": "Productivity",
+        "capabilities": [
+          "Read",
+          "Write"
+        ],
+        "websiteURL": "https://sentientdash.app",
+        "logo": "./assets/icon.png",
+        "composerIcon": "./assets/icon.png",
+        "defaultPrompt": [
+          "Show my SentientDash queue and highlight work that needs attention.",
+          "Find promising recent posts in SentientDash Research and explain why they stand out.",
+          "Compare my SentientDash accounts using their latest stored metrics."
+        ]
+      }
+    }
+  }
+}

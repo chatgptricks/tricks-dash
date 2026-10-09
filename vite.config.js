@@ -35,6 +35,7 @@ export default defineConfig(({ command }) => ({
         queue: resolve(__dirname, 'queue.html'),
         settings: resolve(__dirname, 'settings.html'),
         agents: resolve(__dirname, 'agents.html'),
+        oauth: resolve(__dirname, 'oauth.html'),
         api: resolve(__dirname, 'api.html'),
         promos: resolve(__dirname, 'promos.html'),
         news: resolve(__dirname, 'news.html'),

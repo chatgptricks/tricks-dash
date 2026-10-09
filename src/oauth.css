@@ -1,0 +1,7 @@
+.oauth-page { max-width: 760px; }
+.oauth-page .oauth-access { color: #c3f78e; font-weight: 600; }
+.oauth-page .oauth-permissions { list-style: disc; padding-left: 22px; margin: 20px 0; }
+.oauth-page .oauth-permissions li { display: list-item; border: 0; padding: 6px 0; color: #eaf1eb; line-height: 1.6; }
+.oauth-page .oauth-consent h2 { overflow-wrap: anywhere; }
+.oauth-page .oauth-expiry, .oauth-page .oauth-manage { font-size: 13px; }
+.oauth-page .agent-actions { margin-top: 24px; }

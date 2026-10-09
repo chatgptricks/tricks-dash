@@ -5,10 +5,12 @@ import { API_BASE, apiFetch } from './api';
 import { firebaseAuth, startGoogleSignIn } from './firebase';
 import { PrefsProvider } from './prefsContext';
 import { ConnectionLanguageSelector, connectionRequestError, useConnectionLanguage } from './connectionI18n';
+import { oauthFetch } from './oauthApi';
 import './agents.css';
 
 const URL = `${API_BASE}/api/dashboard/me/agent-connections`;
 const MCP_URL = `${API_BASE}/mcp`;
+const OAUTH_CONNECTIONS_PATH = '/api/dashboard/me/oauth-connections';
 function AgentConnections() {
   const { lang, setLang, t, formatDate, errorText } = useConnectionLanguage('Agent connections');
   const [user, setUser] = useState(undefined);
@@ -21,11 +23,16 @@ function AgentConnections() {
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
   const [revoke, setRevoke] = useState(null);
+  const [oauthConnections, setOauthConnections] = useState(null);
+  const [oauthError, setOauthError] = useState('');
+  const [oauthRevoke, setOauthRevoke] = useState(null);
+  const [oauthBusy, setOauthBusy] = useState(false);
   const generation = useRef(0);
   useEffect(() => onAuthStateChanged(firebaseAuth, next => {
     generation.current += 1;
     setUser(next); setConnections(null); setIssued(null); setNotice('');
     setError(''); setBusy(false); setRevoke(null);
+    setOauthConnections(null); setOauthError(''); setOauthRevoke(null); setOauthBusy(false);
   }), []);
   const request = async (path, options = {}) => {
     const response = await apiFetch(path, options);
@@ -40,7 +47,31 @@ function AgentConnections() {
       if (current === generation.current) { setConnections(data.connections); setError(''); }
     } catch (e) { if (current === generation.current) setError(e); }
   };
-  useEffect(() => { if (user) load(); }, [user]);
+  const loadOauth = async () => {
+    const current = generation.current;
+    setOauthError('');
+    try {
+      const data = await oauthFetch(OAUTH_CONNECTIONS_PATH);
+      if (current === generation.current) setOauthConnections(data.connections);
+    } catch (failure) {
+      if (failure.name !== 'AbortError' && current === generation.current) setOauthError(failure);
+    }
+  };
+  useEffect(() => { if (user) { load(); loadOauth(); } }, [user]);
+  const removeOauth = async connection => {
+    if (oauthBusy) return;
+    const current = generation.current;
+    setOauthBusy(true); setOauthError('');
+    try {
+      await oauthFetch(`${OAUTH_CONNECTIONS_PATH}/${encodeURIComponent(connection.id)}`, { method: 'DELETE' });
+      if (current === generation.current) {
+        setOauthConnections(items => items.map(item => item.id === connection.id ? { ...item, revoked_at: new Date().toISOString() } : item));
+        setOauthRevoke(null); setNotice('OAuth connection revoked.');
+      }
+    } catch (failure) {
+      if (failure.name !== 'AbortError' && current === generation.current) setOauthError(failure);
+    } finally { if (current === generation.current) setOauthBusy(false); }
+  };
   const create = async event => {
     event.preventDefault(); if (busy) return;
     const current = generation.current;
@@ -111,6 +142,20 @@ function AgentConnections() {
               <p>{t('Expires {date}', { date: formatDate(connection.expires_at) })} · {connection.last_used_at ? t('Last used {date}', { date: formatDate(connection.last_used_at, true) }) : t('Not used yet')}</p>
             </div>
             {active ? revoke === connection.id ? <div className="agent-actions"><button disabled={busy} onClick={() => remove(connection)}>{t('Confirm revoke')}</button><button disabled={busy} onClick={() => setRevoke(null)}>{t('Cancel')}</button></div> : <button disabled={busy} onClick={() => setRevoke(connection.id)}>{t('Revoke')}</button> : null}
+          </li>;
+        })}</ul>}
+      </section>
+      <section aria-labelledby="oauth-connections-heading"><h2 id="oauth-connections-heading">{t('OAuth connections')}</h2>
+        <p>{t('These connections were approved through sign-in. Revoking one stops future access and does not affect your agent codes.')}</p>
+        {oauthError ? <p className="agent-error" role="alert">{errorText(oauthError)}</p> : null}
+        {oauthConnections === null ? <>{!oauthError ? <p>{t('Loading OAuth connections…')}</p> : <button onClick={loadOauth}>{t('Try again')}</button>}</> : !oauthConnections.length ? <p>{t('No OAuth connections yet.')}</p> : <ul>{oauthConnections.map(connection => {
+          const active = !connection.revoked_at && new Date(connection.expires_at) > new Date();
+          return <li key={connection.id}>
+            <div><h3 style={{ overflowWrap: 'anywhere' }}>{connection.client_name}</h3><p>{t(connection.access_mode === 'full' ? 'Full account access' : 'Read only')} · {t(connection.revoked_at ? 'Revoked' : active ? 'Active' : 'Expired')}</p>
+              <p>{t('Created {date}', { date: formatDate(connection.created_at) })} · {t('Expires {date}', { date: formatDate(connection.expires_at) })}</p>
+              <p>{connection.last_used_at ? t('Last used {date}', { date: formatDate(connection.last_used_at, true) }) : t('Not used yet')}</p>
+            </div>
+            {active ? oauthRevoke === connection.id ? <div className="agent-actions"><button disabled={oauthBusy} onClick={() => removeOauth(connection)}>{t('Confirm revoke')}</button><button disabled={oauthBusy} onClick={() => setOauthRevoke(null)}>{t('Cancel')}</button></div> : <button disabled={oauthBusy} onClick={() => setOauthRevoke(connection.id)}>{t('Revoke')}</button> : null}
           </li>;
         })}</ul>}
       </section>

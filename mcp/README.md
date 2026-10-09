@@ -1,6 +1,6 @@
 # Sentient Dash MCP
 
-MCP server for Muse, Dots, and any agent host supporting stdio or Streamable HTTP. Uses the official MCP SDK and discovers typed tools from Cortex's live OpenAPI schema at startup. No database access or separate permission system: Cortex checks the user's Firebase token and roles for every action.
+MCP server for ChatGPT, Muse, Dots, and agent hosts supporting stdio or Streamable HTTP. Uses the official MCP SDK and discovers typed tools from Cortex's live OpenAPI schema at startup. Cortex checks the connection owner's current roles for every action. Hosted Cortex supports OAuth and existing agent codes; the optional standalone Node server keeps its existing bearer-credential flow.
 
 ## Connect locally
 
@@ -28,11 +28,17 @@ The token file can contain a **connection code** generated at `/agents.html` (`s
 
 Use `https://cortex-api-db2e.onrender.com/mcp` with the connection code as the bearer credential. Cortex hosts the MCP alongside its normal API, so no additional service is needed. Full-access codes enable actions there; read-only codes hide and reject action tools.
 
+### ChatGPT OAuth
+
+Configure the hosted MCP URL with OAuth and dynamic client registration (DCR), or use the package in `plugins/sentient-dash-chatgpt`. ChatGPT discovers protected-resource and authorization-server metadata, registers its callback, and uses authorization code with PKCE S256. The browser opens `https://sentientdash.app/oauth.html`: sign in to SentientDash, review the requested permissions, then authorize or cancel. No agent code needs to be pasted into ChatGPT.
+
+`sentient:read` allows read tools; adding `sentient:write` allows action tools within the owner's existing roles. Actions still require `confirm: true`. A read-only OAuth connection can discover action tools and receives a scope-upgrade challenge when attempting one. Access tokens expire after 15 minutes; refresh tokens rotate within a 90-day connection. Manage or revoke OAuth connections separately from agent codes at `/agents.html`. OAuth tokens are accepted only by the hosted MCP and cannot call the public REST API or manage credentials.
+
 ### Optional separate Node server
 
 Run `node server.mjs --http`. Defaults to `127.0.0.1:3100/mcp`; this is an HTTP listener, not a published service. Deploy behind an HTTPS reverse proxy. Set `SENTIENT_MCP_HOST=0.0.0.0`, `PORT`, and `SENTIENT_MCP_ALLOWED_HOSTS` to the exact proxy Host names. Browser Origin requests are rejected. Never put a shared user token in the remote server environment: each client supplies `Authorization: Bearer <connection-code>` (Firebase ID tokens remain supported) on every request. The server authenticates that user before discovery and forwards their token to Cortex. Stateless HTTP uses JSON responses; no persisted sessions.
 
-Remote clients must support custom bearer headers. OAuth-only clients need a future OAuth authorization integration; this server does not advertise an OAuth flow; the signed-in product page issues user-owned agent connection keys. Muse/Dots configuration has not been validated against their specific hosts.
+The standalone Node HTTP server requires custom bearer headers and does not host OAuth endpoints. OAuth clients use hosted Cortex instead. Muse/Dots configuration has not been validated against their specific hosts.
 
 ## Agent workflow
 
@@ -56,4 +62,4 @@ Open **Agent connections** from your account menu, name the agent, select full a
 
 Raw codes are never stored server-side: Cortex keeps SHA-256 hashes plus connection metadata. Codes cannot create more codes or access authentication endpoints. Key-management endpoints are excluded from MCP tools. The MCP deployment must set `SENTIENT_MCP_ALLOW_WRITES=true` for full-access connections to execute mutation tools; read-only connection restrictions are independently enforced by Cortex.
 
-Muse and Dots need support for stdio credentials or custom bearer headers. OAuth-only integrations still require an OAuth adapter. The hosted Cortex MCP is at `https://cortex-api-db2e.onrender.com/mcp` once the matching backend release is deployed. Full-access codes expose actions there without the standalone Node server write opt-in.
+Muse and Dots can continue using stdio credentials or custom bearer headers. The hosted Cortex MCP is at `https://cortex-api-db2e.onrender.com/mcp`; it supports both agent codes and ChatGPT OAuth. Full-access codes expose actions there without the standalone Node server write opt-in.

@@ -109,6 +109,11 @@ try {
         await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ preferences: { language: storedLanguage } }) });
         return;
       }
+      if (new URL(req.url()).pathname === '/api/dashboard/me/oauth-connections') {
+        assert.equal(req.headers()['x-queue-role-preview'], undefined);
+        await route.fulfill({ status: 200, contentType: 'application/json', body: '{"connections":[]}' });
+        return;
+      }
       assert.equal(new URL(req.url()).pathname.startsWith('/api/dashboard/me/agent-connections'), true);
       if (req.method() === "POST") {
         const payload = req.postDataJSON();

@@ -40,6 +40,9 @@ export function catalogue(spec) {
   for (const [path, item] of Object.entries(spec.paths || {})) {
     if (
       path.startsWith("/api/dashboard/me/agent-connections") ||
+      path.startsWith("/api/dashboard/me/api-keys") ||
+      path.startsWith("/api/dashboard/me/oauth") ||
+      path.startsWith("/api/v1/") ||
       !path.startsWith("/api/") ||
       /\/api\/(auth|slack)(\/|$)|\/covers\/|\/avatar\/|\/user-avatar\/|\/alert-image\/|\/live$/.test(
         path,
