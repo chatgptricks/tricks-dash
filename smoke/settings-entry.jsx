@@ -1,7 +1,7 @@
 import { act } from 'react';
 
 const ok = (body) => ({ ok: true, status: 200, json: async () => body, text: async () => JSON.stringify(body) });
-const users = [{ email: 'developer@example.test', display_name: 'Developer', role: 'admin', operating_role: 'vc', operating_roles: '["vc","pd","dev"]', is_admin: 1, slack_user_id: 'U0000000012', avatar_url: '/api/dashboard/user-avatar/U0000000012' }];
+const users = [{ email: 'developer@example.test', display_name: 'Developer', role: 'admin', operating_role: 'vc', operating_roles: '["vc","pd","dev"]', is_admin: 1, slack_user_id: 'U0123456789', avatar_url: '/api/dashboard/user-avatar/U0123456789' }];
 const accounts = [{ handle: 'chatgptricks', label: 'ChatGPTricks', group: 'sentient', group_name: 'sentient', subcategory: 'ai_automation', research_enabled: true, promos_enabled: false, hot_threshold: 600, scrape_mode: 'posts', is_active: true, followers: 1, total_posts: 1, avg_likes: 1 }];
 accounts.push({ ...accounts[0], handle: 'fixture.account', label: 'Fixture account', scrape_mode: 'reels' });
 accounts.push({ ...accounts[0], handle: 'fixture.both', label: 'Both fixture', scrape_mode: 'both' });

@@ -104,7 +104,7 @@ const fetchStub = async (url, options = {}) => {
     { handle: 'reels.fixture', label: 'Reels fixture', group: 'sentient', is_active: true, total_posts: 1, hot_threshold: 600, scrape_mode: 'reels' },
     { handle: 'both.fixture', label: 'Both fixture', group: 'sentient', is_active: false, total_posts: 1, hot_threshold: 600, scrape_mode: 'both' },
   ] });
-  if (value.includes('/api/admin/users')) return ok({ users: [{ email: 'developer@example.test', display_name: 'Developer', operating_role: 'vc', operating_roles: ['vc', 'pd'], is_admin: true, slack_user_id: 'U0000000012' }] });
+  if (value.includes('/api/admin/users')) return ok({ users: [{ email: 'developer@example.test', display_name: 'Developer', operating_role: 'vc', operating_roles: ['vc', 'pd'], is_admin: true, slack_user_id: 'U0123456789' }] });
   if (value.includes('/api/admin/usage')) return ok({ active_users_7d: 1, active_users_30d: 1, total_events_in_range: 10, users: [] });
   if (value.includes('/api/admin/disk-status')) return ok({ pct_used: 25, free_mb: 750 });
   if (value.includes('/api/admin/slack-status')) return ok({ configured: true, alert_groups: 'queue' });
