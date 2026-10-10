@@ -36,6 +36,13 @@ function postIdentity(post, index) {
   return shortcode ? `${account}:${shortcode}` : `${account}:row:${post?.rank ?? index}`;
 }
 
+function hasCollaborationMetadata(catalogue) {
+  return Array.isArray(catalogue?.posts) && catalogue.posts.length > 0
+    && catalogue.posts.every(post => Object.hasOwn(post, 'isCollab')
+      && (post.isCollab === null || typeof post.isCollab === 'boolean')
+      && Array.isArray(post.collaborators));
+}
+
 function normaliseSources(sources) {
   if (!Array.isArray(sources)) return null;
   const result = new Map();
@@ -159,6 +166,7 @@ async function fetchRevision(manifest, signal, onProgress, startingBounds = new 
     summary: catalogueSummary(posts),
     rawTotal: rawPosts.length,
     revision: manifest.revision,
+    projectionGeneration: Number(manifest.projectionGeneration) || 0,
     sources: manifest.sources,
     metricsAvailable: Boolean(manifest.metricsAvailable),
   };
@@ -179,6 +187,7 @@ async function refreshCatalogueMetrics(catalogue, signal, unchanged = false) {
   if (!catalogue.metricsAvailable || !Array.isArray(catalogue.posts)) return unchanged ? { notModified: true } : catalogue;
   let cursor = { at: catalogue.metricsAt || '', code: '' };
   const updates = new Map();
+  const collaborationUpdates = new Map();
   let hasMore = true;
   while (hasMore) {
     const params = new URLSearchParams({ after_at: cursor.at, after_code: cursor.code });
@@ -190,6 +199,13 @@ async function refreshCatalogueMetrics(catalogue, signal, unchanged = false) {
       throw new DashboardCatalogueError('The metric update stream was invalid.');
     }
     for (const item of data.updates) updates.set(item.shortcode, item);
+    for (const item of data.collaborationUpdates || []) {
+      if (!item.account || !item.shortcode || !Array.isArray(item.collaborators)) continue;
+      collaborationUpdates.set(postIdentity(item), {
+        isCollab: typeof item.isCollab === 'boolean' ? item.isCollab : null,
+        collaborators: item.collaborators,
+      });
+    }
     if (data.hasMore && data.cursor.at === cursor.at && data.cursor.code === cursor.code) {
       throw new DashboardCatalogueError('The metric update stream did not advance.');
     }
@@ -197,13 +213,17 @@ async function refreshCatalogueMetrics(catalogue, signal, unchanged = false) {
     hasMore = Boolean(data.hasMore);
   }
   let changed = false;
-  const posts = catalogue.posts.map((post) => {
+  const posts = catalogue.posts.map((post, index) => {
     const patch = updates.get(post.shortcode);
-    if (!patch) return post;
-    const comments = patch.comments ?? post.comments;
-    if (post.likes === patch.likes && post.comments === comments && post.likesUpdatedAt === patch.likesUpdatedAt) return post;
+    const collaboration = collaborationUpdates.get(postIdentity(post, index));
+    if (!patch && !collaboration) return post;
+    const metrics = patch ? { likes: patch.likes, comments: patch.comments ?? post.comments, likesUpdatedAt: patch.likesUpdatedAt } : {};
+    const metricsChanged = patch && (post.likes !== metrics.likes || post.comments !== metrics.comments || post.likesUpdatedAt !== metrics.likesUpdatedAt);
+    const collaborationChanged = collaboration && (post.isCollab !== collaboration.isCollab
+      || JSON.stringify(post.collaborators) !== JSON.stringify(collaboration.collaborators));
+    if (!metricsChanged && !collaborationChanged) return post;
     changed = true;
-    return { ...post, likes: patch.likes, comments, likesUpdatedAt: patch.likesUpdatedAt };
+    return { ...post, ...metrics, ...collaboration };
   });
   if (unchanged && !changed) return { notModified: true, metricsAt: cursor.at };
   return { ...catalogue, posts, metricsAt: cursor.at, summary: catalogueSummary(posts) };
@@ -213,16 +233,22 @@ export async function loadCompleteDashboardCatalogue({ signal, etag = '', onProg
   // A persisted full library remains complete after an ID-bounded delta is
   // merged in. Normal reloads should not pull all historical posts again just
   // because the scheduler inserted one newer row.
+  // Older persisted libraries have no coauthor projection. Refill them once,
+  // including existing IDs, before resuming conditional and append-only reads.
+  const collaborationReady = hasCollaborationMetadata(cachedCatalogue);
   for (let attempt = 0; attempt < 2; attempt += 1) {
-    const manifestResult = await fetchManifest(signal, attempt === 0 ? etag : '');
+    const manifestResult = await fetchManifest(signal, attempt === 0 && collaborationReady ? etag : '');
     if (manifestResult.notModified) return refreshCatalogueMetrics({ ...cachedCatalogue, etag }, signal, true);
     try {
       const cachedSources = normaliseSources(cachedCatalogue?.sources);
       const currentSources = normaliseSources(manifestResult.manifest.sources);
       if (!currentSources) throw new DashboardCatalogueError('The post catalogue named an invalid source.');
-      const canDelta = Array.isArray(cachedCatalogue?.posts)
+      const canDelta = collaborationReady && Array.isArray(cachedCatalogue?.posts)
         && cachedCatalogue.posts.length > 0
         && cachedSources
+        // Metadata refreshes can change historical rows while ingestion adds
+        // newer IDs. Such a generation must replace the full projection.
+        && (Number(cachedCatalogue.projectionGeneration) || 0) === (Number(manifestResult.manifest.projectionGeneration) || 0)
         && currentSources.size > 0
         && currentSources.size === cachedSources.size
         // A reset/restore or removed source is not an append-only delta. A

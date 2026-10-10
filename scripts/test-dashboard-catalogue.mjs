@@ -14,20 +14,20 @@ const bundle = await build({
   }],
 });
 const { loadCompleteDashboardCatalogue } = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString('base64')}`);
-const post = (shortcode, likes = 10) => ({ account: 'test', shortcode, likes });
+const post = (shortcode, likes = 10) => ({ account: 'test', shortcode, likes, isCollab: null, collaborators: [] });
 const sources = (canonical, dashboard = 3) => [{ source: 'canonical', upperBound: canonical }, { source: 'dashboard', upperBound: dashboard }];
 const cachedCatalogue = {
   posts: [post('old-canonical'), post('old-dashboard')],
   sources: sources(5),
 };
 const calls = [];
-function serve(manifestSources, pages) {
+function serve(manifestSources, pages, projectionGeneration) {
   calls.length = 0;
   globalThis.fetch = async (input, options = {}) => {
     const url = new URL(input);
     calls.push({ path: url.pathname, params: url.searchParams, headers: options.headers });
     if (url.pathname.endsWith('/manifest')) {
-      return Response.json({ revision: 'new-revision', sources: manifestSources }, { headers: { ETag: '"new-revision"' } });
+      return Response.json({ revision: 'new-revision', sources: manifestSources, projectionGeneration }, { headers: { ETag: '"new-revision"' } });
     }
     assert.ok(url.pathname.endsWith('/page'), `Unexpected network request: ${url}`);
     const source = url.searchParams.get('source');
@@ -54,6 +54,38 @@ try {
   assert.deepEqual(ids(appended), ['new-post', 'old-canonical', 'old-dashboard']);
   assert.equal(pageCalls().length, 1);
   assert.equal(pageCalls()[0].params.get('after_id'), '5', 'Pure growth should keep the bounded delta path');
+
+  // A cached catalogue from before collaboration metadata shipped cannot use
+  // an unchanged ETag or a growing watermark to skip older source records.
+  for (const [label, legacyPosts] of [
+    ['missing both fields', cachedCatalogue.posts.map(({ isCollab: _isCollab, collaborators: _collaborators, ...value }) => value)],
+    ['missing state', cachedCatalogue.posts.map(({ isCollab: _isCollab, ...value }) => value)],
+    ['missing collaborators', cachedCatalogue.posts.map(({ collaborators: _collaborators, ...value }) => value)],
+  ]) {
+    for (const upperBound of [5, 6]) {
+      serve(sources(upperBound), refreshed);
+      const upgraded = await loadCompleteDashboardCatalogue({ etag: '"legacy-unchanged"', cachedCatalogue: { ...cachedCatalogue, posts: legacyPosts } });
+      assert.notEqual(upgraded.delta, true, `${label}/${upperBound}: upgrade must refetch the full snapshot`);
+      assert.deepEqual(ids(upgraded), ['updated-canonical', 'updated-dashboard']);
+      assert.ok(pageCalls().every(call => call.params.get('after_id') === '0'), `${label}/${upperBound}: older rows must be fetched`);
+      assert.equal(calls.find(call => call.path.endsWith('/manifest')).headers?.['If-None-Match'], undefined, `${label}/${upperBound}: legacy ETag must be ignored`);
+      assert.ok(upgraded.posts.every(value => Object.hasOwn(value, 'isCollab') && Array.isArray(value.collaborators)));
+    }
+  }
+
+  serve(sources(6), refreshed, 2);
+  const changedProjection = await loadCompleteDashboardCatalogue({ cachedCatalogue: { ...cachedCatalogue, projectionGeneration: 1 } });
+  assert.notEqual(changedProjection.delta, true, 'A new metadata projection generation must refresh historical IDs even while source bounds grow');
+  assert.deepEqual(ids(changedProjection), ['updated-canonical', 'updated-dashboard']);
+  assert.ok(pageCalls().every(call => call.params.get('after_id') === '0'));
+  assert.equal(changedProjection.projectionGeneration, 2);
+  serve(sources(6), { canonical: [{ id: 6, value: post('new-post') }] }, 2);
+  const stableProjection = await loadCompleteDashboardCatalogue({ cachedCatalogue: { ...cachedCatalogue, projectionGeneration: 2 } });
+  assert.equal(stableProjection.delta, true, 'Matching projection generations retain the efficient growth path');
+  assert.deepEqual(ids(stableProjection), ['new-post', 'old-canonical', 'old-dashboard']);
+  assert.equal(pageCalls().length, 1);
+  assert.equal(pageCalls()[0].params.get('after_id'), '5');
+  assert.equal(stableProjection.projectionGeneration, 2);
 
   for (const [label, manifestSources, expected] of [
     ['same bounds with a new revision', sources(5), ['updated-canonical', 'updated-dashboard']],
@@ -118,10 +150,52 @@ try {
   assert.equal(appendedWithMetrics.posts.find(p => p.shortcode === 'old-canonical').likes, 77);
   assert.equal(appendCalls.filter(path => path.endsWith('/page')).length, 1);
 
+  const collabCached = {
+    ...metricCached,
+    posts: [
+      { ...post('shared-code'), account: 'chatgptricks', isCollab: true, collaborators: ['openai'] },
+      { ...post('shared-code'), account: 'openai', isCollab: true, collaborators: ['chatgptricks'] },
+      post('old-canonical'),
+      { ...post('old-dashboard'), isCollab: true, collaborators: ['previous-partner'] },
+    ],
+  };
+  const collabCalls = [];
+  globalThis.fetch = async input => {
+    const url = new URL(input);
+    collabCalls.push(url.pathname);
+    if (url.pathname.endsWith('/manifest')) return new Response(null, { status: 304 });
+    assert.ok(url.pathname.endsWith('/metrics'), 'Metadata-only changes must not download historical pages');
+    return Response.json({
+      updates: [],
+      collaborationUpdates: [
+        { account: 'chatgptricks', shortcode: 'shared-code', isCollab: false, collaborators: [] },
+        { account: 'test', shortcode: 'old-canonical', isCollab: true, collaborators: ['openai'] },
+        { account: 'test', shortcode: 'old-dashboard', isCollab: null, collaborators: [] },
+        { account: 'unknown', shortcode: 'shared-code', isCollab: false, collaborators: [] },
+      ],
+      cursor: { at: stamp, code: 'shared-code' }, hasMore: false,
+    });
+  };
+  const collabOnly = await loadCompleteDashboardCatalogue({ etag: '"unchanged"', cachedCatalogue: collabCached });
+  assert.notEqual(collabOnly.notModified, true, 'Collaboration-only updates must produce fresh catalogue rows');
+  assert.equal(collabOnly.posts[0].isCollab, false, 'Reliable empty metadata removes a previous collab flag');
+  assert.deepEqual(collabOnly.posts[0].collaborators, []);
+  assert.equal(collabOnly.posts[1].isCollab, true, 'The same shortcode on another account must retain its own state');
+  assert.deepEqual(collabOnly.posts[1].collaborators, ['chatgptricks']);
+  assert.equal(collabOnly.posts[2].isCollab, true);
+  assert.deepEqual(collabOnly.posts[2].collaborators, ['openai']);
+  assert.equal(collabOnly.posts[3].isCollab, null, 'Unknown metadata must replace an earlier flag without converting to false');
+  assert.deepEqual(collabOnly.posts[3].collaborators, []);
+  assert.deepEqual(collabOnly.posts.map(value => value.likes), [10, 10, 10, 10], 'Metadata-only updates preserve engagement');
+  assert.equal(collabOnly.summary['Total likes'], 40);
+  assert.equal(collabCalls.filter(value => value.endsWith('/page')).length, 0);
+  assert.deepEqual(await loadCompleteDashboardCatalogue({ etag: '"unchanged"', cachedCatalogue: collabOnly }), { notModified: true, metricsAt: stamp }, 'Repeated metadata must settle to unchanged');
+
   globalThis.fetch = async (input) => new URL(input).pathname.endsWith('/manifest')
     ? new Response(null, { status: 304 }) : new Response(null, { status: 404 });
   assert.deepEqual(await loadCompleteDashboardCatalogue({ etag: '"unchanged"', cachedCatalogue: metricCached }), { notModified: true });
   console.log('PASS metric deltas: unchanged manifests, bounded pagination, stable repeats, new posts with older metric changes and independent deployment propagation');
+  console.log('PASS collaboration metadata: legacy full upgrades despite ETags/growth, projection generation invalidation, account-scoped metadata-only changes, false/null replacements and stable repeats');
   console.log('PASS catalogue: bounded growth, changed revisions, source changes, watermark rollback, cold loads and conditional reads');
 } finally {
   globalThis.fetch = originalFetch;

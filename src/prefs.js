@@ -333,6 +333,8 @@ const ES = {
   'Hide historical': 'Ocultar históricos',
   'Instagram': 'Instagram',
   'Mark as promo': 'Marcar como promo',
+  'Collabs': 'Colaboraciones',
+  'Show only confirmed collaborations': 'Mostrar solo colaboraciones confirmadas',
   'Remove promo': 'Quitar promo',
   'Hide': 'Ocultar',
   'Unhide': 'Mostrar',

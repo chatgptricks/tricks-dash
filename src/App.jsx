@@ -136,6 +136,7 @@ const URL_DEFAULTS = {
   to: '',
   range: 'all',
   promo: '',
+  collab: '',
   post: '',
   view: '',
   settingsTab: '',
@@ -442,7 +443,7 @@ function dashboardDataRevision(posts = [], summary = {}) {
   posts.forEach((post) => add([
     post.account, post.shortcode, post.postDate, post.likes, post.comments, post.likesUpdatedAt,
     post.isHot, post.hotRateMultiplier, post.queueState, post.queueRequestId,
-    post.isPromo, post.hidden, post.permalink, post.imagePath, post.stackId, post.stackSize,
+    post.isPromo, post.isCollab, Array.isArray(post.collaborators) ? post.collaborators.join(',') : '', post.hidden, post.permalink, post.imagePath, post.stackId, post.stackSize,
   ].join('|')));
   return `${posts.length}:${hash >>> 0}`;
 }
@@ -649,6 +650,8 @@ function normalizePost(post, now = Date.now()) {
     isHot,
     showsHotBadge,
     isHotRecent,
+    isCollab: typeof post.isCollab === 'boolean' ? post.isCollab : null,
+    collaborators: Array.isArray(post.collaborators) ? post.collaborators : [],
     timestamp,
   };
 }
@@ -868,6 +871,7 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
   const dashboardSummaryRef = useRef({});
   const dashboardAccountsRef = useRef([]);
   const dashboardCatalogueRevisionRef = useRef('');
+  const dashboardProjectionGenerationRef = useRef(0);
   const dashboardMetricsAtRef = useRef('');
   const dashboardFlightRef = useRef(null);
   const dashboardAliveRef = useRef(true);
@@ -1075,7 +1079,8 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
           etag: dashboardEtagRef.current,
           cachedCatalogue: dashboardPostsRef.current.length && dashboardSourcesRef.current.length
             ? { posts: dashboardPostsRef.current, sources: dashboardSourcesRef.current,
-                revision: dashboardCatalogueRevisionRef.current, metricsAvailable: true, metricsAt: dashboardMetricsAtRef.current }
+                revision: dashboardCatalogueRevisionRef.current, projectionGeneration: dashboardProjectionGenerationRef.current,
+                metricsAvailable: true, metricsAt: dashboardMetricsAtRef.current }
             : null,
         }),
         apiFetch(`${API_BASE}/api/dashboard/accounts`, { signal }).then(async (accountsResponse) => {
@@ -1116,6 +1121,7 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
       const nextEtag = catalogue.etag;
       if (nextEtag) dashboardEtagRef.current = nextEtag;
       dashboardCatalogueRevisionRef.current = catalogue.revision || dashboardCatalogueRevisionRef.current;
+      dashboardProjectionGenerationRef.current = Number(catalogue.projectionGeneration) || 0;
       const nextRevision = dashboardDataRevision(catalogue.posts, catalogue.summary || {});
       const hasIncomingData = silent && dashboardRevisionRef.current !== null && dashboardRevisionRef.current !== nextRevision;
       if (hasIncomingData) {
@@ -1134,6 +1140,7 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
           accounts: resolvedAccounts.accounts,
           catalogueComplete: true,
           catalogueRevision: catalogue.revision,
+          projectionGeneration: dashboardProjectionGenerationRef.current,
           catalogueSources: dashboardSourcesRef.current,
           metricsAt: dashboardMetricsAtRef.current,
         }, userEmail).catch(() => {});
@@ -1208,6 +1215,7 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
           dashboardSummaryRef.current = snapshot.summary || {};
           dashboardAccountsRef.current = snapshot.accounts;
           dashboardCatalogueRevisionRef.current = snapshot.catalogueRevision || '';
+          dashboardProjectionGenerationRef.current = Number(snapshot.projectionGeneration) || 0;
           dashboardMetricsAtRef.current = snapshot.metricsAt || '';
           setDashboard({ posts: snapshot.posts, summary: snapshot.summary || {} });
           setAccounts(snapshot.accounts);
@@ -1451,6 +1459,7 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
   // hand from the card menu. Both count -- the hashtag is the automatic
   // signal, the manual flag is the correction when it's missing.
   const [promoOnly, setPromoOnly] = useState(initialUrl.promo === '1');
+  const [collabOnly, setCollabOnly] = useState(initialUrl.collab === '1');
   // HOT tab: false shows only what's hot now, true adds everything older.
   const [showHotHistory, setShowHotHistory] = useState(false);
   const { t } = usePrefs();
@@ -1542,6 +1551,7 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
       to: dateTo,
       range: datePreset,
       promo: promoOnly ? '1' : '',
+      collab: collabOnly ? '1' : '',
       // Only when the sidebar is actually open. `selected` falls back to the
       // first result so the preview pane always has something to show, and an
       // effect writes that back into selectedKey -- meaning selectedKey is set
@@ -1553,7 +1563,7 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
     try { sessionStorage.setItem('sentient.research.return', '/index.html' + window.location.search); } catch {}
   }, [
     query, activeGroup, selectedAccounts, selectedCategories, accountsInScope, activeType, mediaFilter,
-    sortBy, minLikes, minComments, dateFrom, dateTo, datePreset, promoOnly, selectedKey,
+    sortBy, minLikes, minComments, dateFrom, dateTo, datePreset, promoOnly, collabOnly, selectedKey,
     isSidebarOpen, ranges.likesMin, ranges.commentsMin,
   ]);
 
@@ -1611,6 +1621,7 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
       // be effectively irreversible from the UI.
       if (showHidden ? !post.hidden : Boolean(post.hidden)) continue;
       if (promoOnly && !(post.isPromo || PROMO_HASHTAG_RE.test(post.caption || ''))) continue;
+      if (collabOnly && post.isCollab !== true) continue;
       if (!effectiveAccounts.has(post.account)) continue;
       if (selectedCategories.size && !selectedCategories.has(accountCategoryByHandle.get(post.account) || 'other')) continue;
       if (activeType !== 'All posts' && post.postType !== activeType) continue;
@@ -1653,7 +1664,7 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
     });
 
     return output;
-  }, [posts, activeGroup, effectiveAccounts, selectedCategories, accountCategoryByHandle, activeType, mediaFilter, minLikes, minComments, dateFrom, dateTo, searchTerms, sortBy, showHidden, promoOnly, activeList, showHotHistory]);
+  }, [posts, activeGroup, effectiveAccounts, selectedCategories, accountCategoryByHandle, activeType, mediaFilter, minLikes, minComments, dateFrom, dateTo, searchTerms, sortBy, showHidden, promoOnly, collabOnly, activeList, showHotHistory]);
 
   // Leaving the HOT tab collapses history again, so coming back always
   // opens on "what's hot now" rather than a stale expanded state.
@@ -1663,7 +1674,7 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
 
   useEffect(() => {
     setVisibleStackCount(STACKS_PER_BATCH);
-  }, [deferredQuery, activeGroup, selectedAccounts, selectedCategories, activeType, mediaFilter, minLikes, minComments, dateFrom, dateTo, sortBy, showHidden, showHotHistory]);
+  }, [deferredQuery, activeGroup, selectedAccounts, selectedCategories, activeType, mediaFilter, minLikes, minComments, dateFrom, dateTo, sortBy, showHidden, promoOnly, collabOnly, showHotHistory]);
 
   const { groups: topics, loading: grouping } = useTopicGroups(filtered, posts, sortBy);
   const visibleTopics = topics.slice(0, visibleStackCount);
@@ -1679,6 +1690,7 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
     minComments > 0,
     sortBy !== 'newest',
     promoOnly,
+    collabOnly,
     showHidden,
   ].filter(Boolean).length;
   // The unfiltered All view reports the database total even when the browser
@@ -1769,9 +1781,10 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
     ? ACCOUNT_SUBCATEGORY_OPTIONS.find((option) => selectedCategories.has(option.value))?.label
     : (selectedCategories.size ? String(selectedCategories.size) : '');
   const typeSummary = [
-    activeType !== 'All posts' ? TYPE_LABELS[activeType] ?? activeType : '',
-    promoOnly ? 'Promo' : '',
-    showHidden ? 'Hidden' : '',
+    activeType !== 'All posts' ? t(TYPE_LABELS[activeType] ?? activeType) : '',
+    promoOnly ? t('Promo') : '',
+    collabOnly ? t('Collabs') : '',
+    showHidden ? t('Hidden') : '',
   ].filter(Boolean).join(', ');
   const dateSummary = datePreset !== 'all' && datePreset !== 'custom'
     ? datePresets.find((option) => option.value === datePreset)?.label
@@ -1805,6 +1818,7 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
       setDateTo('');
       setDatePreset('all');
       setPromoOnly(false);
+      setCollabOnly(false);
       setShowHidden(false);
       setVisibleStackCount(STACKS_PER_BATCH);
     });
@@ -1920,6 +1934,7 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
       accounts: dashboardAccountsRef.current,
       catalogueComplete: true,
       catalogueRevision: dashboardCatalogueRevisionRef.current,
+      projectionGeneration: dashboardProjectionGenerationRef.current,
       catalogueSources: dashboardSourcesRef.current,
     }, userEmail).catch(() => {});
   }, [ownsDashboardSession, userEmail]);
@@ -1934,6 +1949,7 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
       accounts: dashboardAccountsRef.current,
       catalogueComplete: true,
       catalogueRevision: dashboardCatalogueRevisionRef.current,
+      projectionGeneration: dashboardProjectionGenerationRef.current,
       catalogueSources: dashboardSourcesRef.current,
     }, userEmail).catch(() => {});
   }, [ownsDashboardSession, userEmail]);
@@ -2242,6 +2258,7 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
                     <p className="popover-subhead">{t('Flags')}</p>
                     <div className="chip-row">
                       <button type="button" className={promoOnly ? 'chip chip-active' : 'chip'} onClick={() => startTransition(() => setPromoOnly((value) => !value))} aria-pressed={promoOnly} title={`Only posts carrying ${PROMO_HASHTAG} or flagged as promo by hand`}><Megaphone size={12} />{t('Promo')}</button>
+                      <button type="button" className={collabOnly ? 'chip chip-active' : 'chip'} onClick={() => startTransition(() => setCollabOnly((value) => !value))} aria-pressed={collabOnly} title={t('Show only confirmed collaborations')}><Users size={12} />{t('Collabs')}</button>
                       <button type="button" className={showHidden ? 'chip chip-active' : 'chip'} onClick={() => startTransition(() => setShowHidden((value) => !value))} aria-pressed={showHidden} disabled={!hiddenCount} title={hiddenCount ? t("Show the posts you have hidden, so you can bring them back") : t("Nothing hidden yet")}>{showHidden ? <Eye size={12} /> : <EyeOff size={12} />}{t('Hidden')}<span>{hiddenCount}</span></button>
                     </div>
                   </FilterPopover>
