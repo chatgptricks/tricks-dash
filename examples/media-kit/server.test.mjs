@@ -139,6 +139,45 @@ test('invalid or misplaced Promo filters are rejected before an upstream request
   assert.equal(calls.length, 0);
 });
 
+test('collaboration metadata passes through catalog and standout responses without coercing unknown state', async (t) => {
+  const states = [
+    { shortcode: 'CollabPost', caption: 'Original coauthored text', is_promo: false, is_collab: true, collaborators: ['coauthor_one'] },
+    { shortcode: 'SoloPromo', caption: '#aitoolsentient original text', is_promo: true, is_collab: false, collaborators: [] },
+    { shortcode: 'UnknownPost', caption: '@mentioned_user original text', is_promo: false, is_collab: null, collaborators: [] },
+  ];
+  const posts = { schema_version: '1.0', data: states, pagination: { limit: 20, offset: 0, total: 3, has_more: false, next_offset: null } };
+  const report = {
+    ...fixture,
+    data: {
+      ...fixture.data,
+      best_posts: {
+        all_time: states.map(({ caption, ...post }) => ({ ...post, public_caption: caption, metrics: { likes: null, comments: null, video_views: null, video_plays: null } })),
+      },
+    },
+  };
+  const { url, calls } = await setup(t, (request, response) => {
+    response.setHeader('Content-Type', 'application/json');
+    response.end(JSON.stringify(request.url.includes('/media-kit') ? report : posts));
+  });
+
+  for (const [path, expected] of [['/api/posts', posts], ['/api/media-kit', report]]) {
+    const response = await fetch(`${url}${path}`);
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), expected);
+    const cached = await fetch(`${url}${path}`);
+    assert.equal(cached.headers.get('x-data-cache'), 'HIT');
+    const payload = await cached.json();
+    assert.deepEqual(payload, expected);
+    const rows = path === '/api/posts' ? payload.data : payload.data.best_posts.all_time;
+    assert.deepEqual(rows.map(({ is_collab, collaborators }) => [is_collab, collaborators]), [[true, ['coauthor_one']], [false, []], [null, []]]);
+    assert.ok(!JSON.stringify(payload).includes(KEY));
+  }
+  for (const path of ['/api/posts?is_collab=true', '/api/posts?is_collab=false', '/api/media-kit?is_collab=true']) {
+    assert.equal((await fetch(`${url}${path}`)).status, 422, path);
+  }
+  assert.equal(calls.length, 2);
+});
+
 test('upstream key errors keep their status, hide bodies, and are cached briefly', async (t) => {
   let now = 0;
   const { url, calls } = await setup(t, (_request, response) => {

@@ -110,6 +110,10 @@ media kit standout posts include `is_promo`, recognizing the manual Research
 mark or the `#aitoolsentient` caption hashtag. The posts endpoint accepts the
 optional `is_promo=true|false` filter before pagination; omitting it returns
 both kinds. It reads stored dashboard data without starting a refresh.
+Posts and media kit standout posts also include `is_collab` (`true`, `false`,
+or `null` when collaboration metadata is unavailable) and `collaborators`,
+an array of normalized Instagram handles excluding the queried account.
+They use stored coauthor metadata, independently of mentions, tags or Promo.
 Unknown measurements remain null.
 See the [Spanish integration guide](public/api-guide.md), also available at
 `/api-guide.html`, the [English integration guide](public/api-guide.en.md) at

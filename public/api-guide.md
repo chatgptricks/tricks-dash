@@ -212,7 +212,7 @@ Los contadores son mediciones acumuladas de cada publicación. `last_30_days` se
 
 No sumes los promedios de likes y comentarios para reconstruir `engagements.average`: pueden tener distintas poblaciones medidas. No multipliques `engagement_rate_pct` ni `follower_growth.30d.pct` por 100: ya son porcentajes. Las vistas y reproducciones no equivalen a personas únicas ni a alcance único.
 
-Cada post destacado incluye `shortcode`, `permalink`, `public_caption`, `format`, `published_at`, `is_promo`, `metrics: { likes, comments, video_views, video_plays }`, `engagements` y `engagement_rate_pct`. Usa `public_caption` como texto y `permalink` como enlace. `is_promo` es el booleano Promo descrito en la sección siguiente. `/media-kit` conserva sus resúmenes agregados y no acepta el filtro `is_promo` ni separa resúmenes por estado Promo. La API JSON no entrega archivos de imágenes, videos ni rutas de almacenamiento internas.
+Cada post destacado incluye `shortcode`, `permalink`, `public_caption`, `format`, `published_at`, `is_promo`, `is_collab`, `collaborators`, `metrics: { likes, comments, video_views, video_plays }`, `engagements` y `engagement_rate_pct`. Usa `public_caption` como texto y `permalink` como enlace. `is_promo`, `is_collab` y `collaborators` se describen en la sección siguiente. `/media-kit` conserva sus resúmenes agregados y no acepta el filtro `is_promo` ni separa resúmenes por estado Promo. La API JSON no entrega archivos de imágenes, videos ni rutas de almacenamiento internas.
 
 Si falta `last_30_days` o `follower_growth`, oculta ese bloque o explica que no hay datos suficientes. Para una cuenta privada, el catálogo público y los posts destacados están vacíos. Los posts ocultos, eliminados, sin fecha utilizable o con fecha futura quedan fuera de la exportación pública.
 
@@ -267,6 +267,8 @@ curl --fail-with-body \
       "permalink": "https://www.instagram.com/p/ExamplePost01/",
       "format": "Image",
       "is_promo": false,
+      "is_collab": null,
+      "collaborators": [],
       "likes": 500,
       "comments": 50,
       "video_views": null,
@@ -285,6 +287,33 @@ curl --fail-with-body \
 ```
 
 Los posts se ordenan del más reciente al más antiguo y se deduplican por publicación. `shortcode` identifica el post; `published_at` es su fecha de publicación y `metrics_updated_at` indica la fecha disponible de actualización de métricas. `caption` puede ser `null`. `format` describe el formato almacenado: `Image`, `Carousel`, `Video` o `Reel`; maneja también valores desconocidos en tu interfaz. Aquí las métricas son campos planos; en los posts destacados de `/media-kit` están dentro de `metrics` y el texto se llama `public_caption`.
+
+### Colaboraciones
+
+Los posts del catálogo `/posts` y los destacados de `best_posts.all_time` y `best_posts.last_30_days` en `/media-kit` incluyen los siguientes campos:
+
+| Campo | Significado |
+| --- | --- |
+| `is_collab` | `true`, `false` o `null`, según la evidencia de coautoría guardada |
+| `collaborators` | Arreglo de handles válidos en minúsculas, sin `@` y sin duplicados; excluye la cuenta consultada |
+
+`is_collab` es `true` cuando los datos explícitos de coautoría confirman al menos otro participante. Es `false` solo cuando hay una lista explícita válida vacía, o cuando esa lista contiene únicamente la cuenta consultada y el propietario confirmado es esa misma cuenta. Es `null` cuando no hay evidencia válida suficiente: por ejemplo, faltan metadatos utilizables o solo aparece la cuenta consultada sin poder confirmar quién es el propietario. Si hay otro participante válido, conserva `true` aunque otras entradas de los metadatos sean inutilizables.
+
+La lista contiene los handles válidos disponibles de otros participantes respecto a la cuenta consultada; puede estar incompleta cuando faltan handles o hay entradas inutilizables. Si los datos explícitos de coautores confirman su participación, también puede incluir al propietario conocido de la publicación. Un propietario distinto por sí solo, sin evidencia explícita de coautores, no confirma una colaboración.
+
+Estos ejemplos muestran únicamente los campos de colaboración de tres posts ficticios:
+
+```json
+[
+  { "is_collab": true, "collaborators": ["cuenta_colaboradora"] },
+  { "is_collab": false, "collaborators": [] },
+  { "is_collab": null, "collaborators": [] }
+]
+```
+
+Conserva `null` como “Desconocido”; no lo conviertas en `false`. Una lista vacía de `collaborators` tampoco confirma por sí sola que el post no sea una colaboración. Usa `is_collab === true`, `is_collab === false` e `is_collab === null` para distinguir los estados.
+
+La coautoría procede de los metadatos explícitos guardados. Las menciones en el caption, los usuarios etiquetados y la marca Promo no confirman colaboración; estos campos son independientes de `is_promo`. No se ofrece un parámetro de consulta `is_collab`. Los resúmenes del media kit y el filtro Promo de `/posts` conservan su comportamiento.
 
 ### Historial de seguidores
 
@@ -442,7 +471,7 @@ Abre [http://localhost:3000](http://localhost:3000). El comando utiliza la [opci
 
 El ejemplo ofrece `/api/media-kit`, `/api/posts` y `/api/followers` en el servidor de tu website. La cuenta se fija en su configuración privada. Mantiene caché de cinco minutos, timeout de diez segundos, caché breve de fallos y presupuesto de 50 consultas al dashboard por minuto en cada proceso. Valida los parámetros y aplica un tope propio de `offset=100000`. Estas son decisiones del ejemplo, no cambios al contrato de la API.
 
-El proxy acepta `/api/posts?is_promo=true` y `/api/posts?is_promo=false`; al omitir ese parámetro consulta todos los estados. Lo reenvía al backend antes de la paginación y conserva `is_promo` y `pagination.total` en la respuesta. Mantiene cachés separadas por recurso y parámetros, incluido el filtro Promo. El filtro no se acepta en `/api/media-kit` ni `/api/followers`.
+El proxy acepta `/api/posts?is_promo=true` y `/api/posts?is_promo=false`; al omitir ese parámetro consulta todos los estados. Lo reenvía al backend antes de la paginación y conserva `is_promo`, `is_collab`, `collaborators` y `pagination.total` en la respuesta, sin convertir `null` en `false`. Mantiene cachés separadas por recurso y parámetros, incluido el filtro Promo. El filtro no se acepta en `/api/media-kit` ni `/api/followers`.
 
 Para publicarlo, configura las variables privadas en el hosting y usa `node server.mjs` como comando de inicio. El hosting aporta `PORT`. Sirve el dominio por HTTPS. En despliegues con varias instancias, usa caché compartida y límites en el hosting: la caché del ejemplo vive en la memoria de un proceso. Las pruebas `node --test server.test.mjs` usan un backend falso y no necesitan una clave real.
 
@@ -486,7 +515,7 @@ El proxy del proyecto descargable conserva los estados útiles de la API y el he
 
 La ruta pública actual es `/api/v1` y las respuestas declaran `schema_version: "1.0"`. Lee los campos necesarios para tu aplicación, tolera campos adicionales y comprueba los objetos opcionales antes de utilizarlos. No uses rutas internas del dashboard ni de MCP con una clave de integración.
 
-El campo `is_promo` y su filtro opcional son adiciones compatibles y conservan `schema_version: "1.0"`. El campo aparece en el catálogo de `/posts` y en los posts destacados de `/media-kit`; el filtro pertenece únicamente a `/posts`.
+Los campos `is_promo`, `is_collab` y `collaborators`, junto con el filtro opcional Promo, son adiciones compatibles y conservan `schema_version: "1.0"`. Los campos aparecen en el catálogo de `/posts` y en los posts destacados de `/media-kit`; el filtro `is_promo` pertenece únicamente a `/posts` y no hay filtro `is_collab`.
 
 Antes de publicar, verifica estos puntos:
 

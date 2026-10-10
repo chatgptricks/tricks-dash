@@ -38,6 +38,10 @@ El catálogo `/api/posts` acepta `is_promo=true` para consultar solo posts Promo
 
 Cada post del catálogo y cada post destacado del media kit incluyen el booleano `is_promo`: es `true` si está marcado manualmente como Promo o si su caption coincide con `/#aitoolsentient\b/i`, sin distinguir mayúsculas y minúsculas, igual que en Research. El media kit conserva sus resúmenes agregados. Esta ampliación mantiene `schema_version: "1.0"`.
 
+También incluyen `is_collab: true|false|null` y `collaborators: string[]`. La coautoría se basa en datos explícitos guardados: `true` confirma otro participante; `false` requiere una lista válida explícita vacía, o una lista con solo la cuenta consultada y propietario confirmado igual a esa cuenta; `null` significa que no hay evidencia válida suficiente, incluida una lista con solo la cuenta consultada sin propietario confirmado. Otro participante válido conserva `true` aunque otras entradas sean inutilizables; la lista contiene los handles disponibles y puede estar incompleta. Los handles son válidos, normalizados a minúsculas, sin `@`, sin duplicados y excluyen la cuenta consultada. El propietario conocido puede aparecer cuando los datos explícitos de coautores confirman la participación de la cuenta consultada.
+
+El proxy conserva estos campos también en caché. No conviertas `null` en `false` ni deduzcas el estado a partir de una lista vacía. Las menciones, los usuarios etiquetados y Promo no confirman coautoría. No hay filtro `is_collab` ni cambios en los resúmenes; sigue `schema_version: "1.0"`. Puedes adaptar tu interfaz para presentar los tres estados.
+
 - Caché de datos por cinco minutos en memoria; consolida consultas simultáneas a la misma URL.
 - Caché de fallos por diez segundos, timeout de diez segundos y límite de 50 consultas al backend por minuto en cada proceso.
 - Solo sirve tres endpoints de una cuenta fija; valida fechas, parámetros y paginación. El proxy admite `limit` de 1 a 100 y `offset` de 0 a 100000, sin aceptar destino ni cuenta arbitrarios.
@@ -54,6 +58,6 @@ El historial contiene muestras guardadas por el dashboard, no el historial compl
 node --test server.test.mjs
 ```
 
-Las pruebas levantan un backend local falso. Verifican que la clave se envía solo al backend, que no se pueden descargar `.env` ni fuentes del servidor, caché y consolidación, validación de consultas, errores y `Retry-After`, límites y timeouts. No necesitan una clave real ni consultan Instagram o la API de producción.
+Las pruebas levantan un backend local falso. Verifican que la clave se envía solo al backend, que no se pueden descargar `.env` ni fuentes del servidor, caché y consolidación, validación de consultas, conservación de coautoría y sus tres estados en catálogo y destacados, errores y `Retry-After`, límites y timeouts. No necesitan una clave real ni consultan Instagram o la API de producción.
 
 La [guía completa de integración](https://sentientdash.app/api-guide.html) explica endpoints, campos, paginación y solución de errores.

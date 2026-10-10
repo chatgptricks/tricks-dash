@@ -38,6 +38,10 @@ The `/api/posts` catalog accepts `is_promo=true` to request only Promo posts, `i
 
 Each catalog post and media kit standout post includes the `is_promo` boolean: it is `true` when manually marked as Promo or when its caption matches `/#aitoolsentient\b/i`, case-insensitively, as in Research. The media kit keeps its aggregate summaries. This addition retains `schema_version: "1.0"`.
 
+They also include `is_collab: true|false|null` and `collaborators: string[]`. Coauthor information is based on explicit stored data: `true` confirms another participant; `false` requires a valid explicit empty list, or a list containing only the requested account with that same account as its confirmed owner; `null` means there is insufficient valid evidence, including a list containing only the requested account without a confirmed owner. Another valid participant keeps the state `true` even when other entries are unusable; the list contains available handles and may be incomplete. Handles are valid, normalized to lowercase, without `@` or duplicates, and exclude the requested account. The known owner may appear when explicit coauthor data confirms the requested account's participation.
+
+The proxy preserves these fields in cached responses too. Do not convert `null` to `false` or infer the state from an empty list. Mentions, tagged users and Promo do not confirm coauthor status. There is no `is_collab` filter or change to summaries; `schema_version: "1.0"` is retained. You can adapt your interface to present the three states.
+
 - Five-minute in-memory data cache; simultaneous requests to the same URL share one upstream request.
 - Ten-second failure cache, ten-second timeout, and a budget of 50 upstream requests per minute per process.
 - Three endpoints for one fixed account, with date, parameter, and pagination validation. The proxy accepts `limit` from 1 to 100 and `offset` from 0 to 100000; visitors cannot choose another account or data origin.
@@ -54,6 +58,6 @@ Follower history contains dashboard observations, not the complete history of In
 node --test server.test.mjs
 ```
 
-The tests start a local fake backend. They verify that the key is sent only upstream, that `.env` and server source cannot be downloaded, caching and request consolidation, query validation, errors and `Retry-After`, budgets, and timeouts. No real API key, Instagram access, or production API request is needed.
+The tests start a local fake backend. They verify that the key is sent only upstream, that `.env` and server source cannot be downloaded, caching and request consolidation, query validation, preservation of coauthor data and its three states in the catalog and standout posts, errors and `Retry-After`, budgets, and timeouts. No real API key, Instagram access, or production API request is needed.
 
 The [complete integration guide](https://sentientdash.app/api-guide.html) covers endpoints, fields, pagination, and troubleshooting.
