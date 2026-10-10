@@ -1,1 +1,0 @@
-import{O as e,b as t,k as n,x as r}from"./prefsContext-DqutVd1v.js";import"./styles-KaxaByUx.js";import"./visual-theme-B9j8_j9a.js";import{t as i}from"./App-D2FbncnI.js";var a=n(e(),1),o=r();t((0,o.jsx)(a.StrictMode,{children:(0,o.jsx)(i,{})}));

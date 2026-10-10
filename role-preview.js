@@ -48,7 +48,8 @@
     if (!isDev && !viewer.can_role_switch) return;
     const allowed = isDev ? ALL_ROLES : (viewer.available_operating_roles || viewer.operating_roles || []);
     const options = [...new Set(allowed.filter((role) => ALL_ROLES.includes(role)))];
-    const selected = window.sessionStorage.getItem(ROLE_KEY) || '';
+    const requestedRole = window.sessionStorage.getItem(ROLE_KEY) || '';
+    const selected = options.includes(requestedRole) ? requestedRole : '';
 
     // Standalone Tracker/Insights pages do not share React's header. Keep the
     // same navigation contract here: Tracker is open to everyone, Insights is
@@ -56,7 +57,8 @@
     // asynchronously after this script has mounted.
     const applyCoordinatorNavigation = () => {
       if (run !== mountRun) return;
-      const activeRole = window.sessionStorage.getItem(ROLE_KEY) || '';
+      const requested = window.sessionStorage.getItem(ROLE_KEY) || '';
+      const activeRole = options.includes(requested) ? requested : '';
       const effectiveCoordinator = activeRole
         ? ['vc', 'admin'].includes(activeRole)
         : Boolean(viewer.is_dev || viewer.is_admin || (viewer.operating_roles || []).includes('vc'));
@@ -106,7 +108,7 @@
     button.innerHTML = `<span>${isDev ? 'DEV' : 'ROLE'}</span>${LABELS[selected] || (isDev ? 'Dev' : 'Role')}`;
     const panel = document.createElement('div');
     panel.className = 'sentient-role-preview-panel';
-    panel.innerHTML = `<strong>${isDev ? 'Role preview' : 'Active role'}</strong><p>${isDev ? 'Only visible to Esteban.' : 'Switch among your assigned roles.'}</p><label>Active role<select><option value="">${isDev ? 'Dev · full access' : 'Use my default role'}</option>${options.map((role) => `<option value="${role}">${LABELS[role]}</option>`).join('')}</select></label>`;
+    panel.innerHTML = `<strong>${isDev ? 'Role preview' : 'Active role'}</strong><p>${isDev ? 'Preview any operating role.' : 'Switch among your assigned roles.'}</p><label>Active role<select><option value="">${isDev ? 'Dev · full access' : 'Use my default role'}</option>${options.map((role) => `<option value="${role}">${LABELS[role]}</option>`).join('')}</select></label>`;
     const select = panel.querySelector('select');
     select.value = options.includes(selected) ? selected : '';
     select.addEventListener('change', () => {
