@@ -40,6 +40,7 @@ function dateValue(value) {
 function queryFor(url, path) {
   if (url.search.length > 512) throw inputError('La consulta es demasiado larga.');
   const allowed = path === '/api/media-kit' ? [] : ['limit', 'offset', 'from', 'to'];
+  if (path === '/api/posts') allowed.push('is_promo');
   for (const key of url.searchParams.keys()) {
     if (!allowed.includes(key) || url.searchParams.getAll(key).length !== 1) {
       throw inputError('Parámetro desconocido o repetido.');
@@ -60,6 +61,11 @@ function queryFor(url, path) {
   }
   if (query.has('from') && query.has('to') && query.get('from') > query.get('to')) {
     throw inputError('from debe ser anterior o igual a to.');
+  }
+  if (url.searchParams.has('is_promo')) {
+    const value = url.searchParams.get('is_promo');
+    if (!['true', 'false'].includes(value)) throw inputError('is_promo debe ser true o false.');
+    query.set('is_promo', value);
   }
   return query;
 }

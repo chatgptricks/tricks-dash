@@ -80,6 +80,65 @@ test('visitor parameters cannot change the upstream, account, dates or bounds', 
   assert.equal(calls.length, 0);
 });
 
+test('Promo filters preserve booleans and filtered pagination with separate canonical caches', async (t) => {
+  const rows = [
+    { shortcode: 'ManualPromo', caption: 'Original manual Promo text', is_promo: true },
+    { shortcode: 'TaggedPromo', caption: '#AIToolSentient original text', is_promo: true },
+    { shortcode: 'RegularPost', caption: 'Original public text', is_promo: false },
+  ];
+  const { url, calls } = await setup(t, (request, response) => {
+    const query = new URL(request.url, 'http://fake-upstream.local').searchParams;
+    const filter = query.get('is_promo');
+    const matching = filter === null ? rows : rows.filter((row) => row.is_promo === (filter === 'true'));
+    const limit = Number(query.get('limit'));
+    const offset = Number(query.get('offset'));
+    const data = matching.slice(offset, offset + limit);
+    const hasMore = offset + limit < matching.length;
+    response.setHeader('Content-Type', 'application/json');
+    response.end(JSON.stringify({
+      schema_version: '1.0',
+      data,
+      pagination: { limit, offset, total: matching.length, has_more: hasMore, next_offset: hasMore ? offset + limit : null },
+    }));
+  });
+
+  for (const [suffix, expected] of [['', rows], ['&is_promo=true', rows.slice(0, 2)], ['&is_promo=false', rows.slice(2)]]) {
+    const response = await fetch(`${url}/api/posts?limit=1${suffix}`);
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get('x-data-cache'), 'MISS');
+    const payload = await response.json();
+    assert.deepEqual(payload.data, expected.slice(0, 1));
+    assert.deepEqual(payload.pagination, { limit: 1, offset: 0, total: expected.length, has_more: expected.length > 1, next_offset: expected.length > 1 ? 1 : null });
+    assert.ok(!JSON.stringify(payload).includes(KEY));
+  }
+  assert.deepEqual(calls.map((call) => call.path), [
+    '/api/v1/accounts/test_account/posts?limit=1&offset=0',
+    '/api/v1/accounts/test_account/posts?limit=1&offset=0&is_promo=true',
+    '/api/v1/accounts/test_account/posts?limit=1&offset=0&is_promo=false',
+  ]);
+  for (const filter of ['true', 'false']) {
+    const cached = await fetch(`${url}/api/posts?is_promo=${filter}&offset=00&limit=01`);
+    assert.equal(cached.headers.get('x-data-cache'), 'HIT');
+  }
+  assert.equal(calls.length, 3);
+  const nextPage = await fetch(`${url}/api/posts?is_promo=true&offset=1&limit=1`);
+  assert.deepEqual((await nextPage.json()).data, [rows[1]]);
+  assert.equal(calls.length, 4);
+});
+
+test('invalid or misplaced Promo filters are rejected before an upstream request', async (t) => {
+  const { url, calls } = await setup(t);
+  for (const path of [
+    '/api/posts?is_promo=', '/api/posts?is_promo=True', '/api/posts?is_promo=1',
+    '/api/posts?is_promo=no', '/api/posts?is_promo=null', '/api/posts?is_promo=false%20',
+    '/api/posts?is_promo=true&is_promo=false', '/api/posts?is_promo=false&is_promo=false',
+    '/api/media-kit?is_promo=true', '/api/followers?is_promo=false',
+  ]) {
+    assert.equal((await fetch(`${url}${path}`)).status, 422, path);
+  }
+  assert.equal(calls.length, 0);
+});
+
 test('upstream key errors keep their status, hide bodies, and are cached briefly', async (t) => {
   let now = 0;
   const { url, calls } = await setup(t, (_request, response) => {

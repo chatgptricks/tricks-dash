@@ -34,6 +34,10 @@ El origen por defecto ya es la API de producción. Solo si el administrador nece
 
 ## Qué hace este ejemplo
 
+El catálogo `/api/posts` acepta `is_promo=true` para consultar solo posts Promo, `is_promo=false` para consultar los demás y la omisión del parámetro para consultar todos. Reenvía el filtro al backend antes de la paginación, conserva `pagination.total` como cantidad de posts que cumplen los filtros y usa una caché separada para cada estado, rango y página. Los valores deben ser exactamente `true` o `false`; no se acepta este filtro en `/api/media-kit` ni `/api/followers`.
+
+Cada post del catálogo y cada post destacado del media kit incluyen el booleano `is_promo`: es `true` si está marcado manualmente como Promo o si su caption coincide con `/#aitoolsentient\b/i`, sin distinguir mayúsculas y minúsculas, igual que en Research. El media kit conserva sus resúmenes agregados. Esta ampliación mantiene `schema_version: "1.0"`.
+
 - Caché de datos por cinco minutos en memoria; consolida consultas simultáneas a la misma URL.
 - Caché de fallos por diez segundos, timeout de diez segundos y límite de 50 consultas al backend por minuto en cada proceso.
 - Solo sirve tres endpoints de una cuenta fija; valida fechas, parámetros y paginación. El proxy admite `limit` de 1 a 100 y `offset` de 0 a 100000, sin aceptar destino ni cuenta arbitrarios.

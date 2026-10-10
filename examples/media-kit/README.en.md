@@ -34,6 +34,10 @@ The default data origin is the production API. Only when an administrator needs 
 
 ## Behavior of this example
 
+The `/api/posts` catalog accepts `is_promo=true` to request only Promo posts, `is_promo=false` to request the other posts, and an omitted parameter to request all posts. It forwards the filter to the backend before pagination, preserves `pagination.total` as the number of posts matching the filters, and uses a separate cache for each status, range and page. Values must be exactly `true` or `false`; this filter is not accepted on `/api/media-kit` or `/api/followers`.
+
+Each catalog post and media kit standout post includes the `is_promo` boolean: it is `true` when manually marked as Promo or when its caption matches `/#aitoolsentient\b/i`, case-insensitively, as in Research. The media kit keeps its aggregate summaries. This addition retains `schema_version: "1.0"`.
+
 - Five-minute in-memory data cache; simultaneous requests to the same URL share one upstream request.
 - Ten-second failure cache, ten-second timeout, and a budget of 50 upstream requests per minute per process.
 - Three endpoints for one fixed account, with date, parameter, and pagination validation. The proxy accepts `limit` from 1 to 100 and `offset` from 0 to 100000; visitors cannot choose another account or data origin.

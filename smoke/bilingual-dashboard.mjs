@@ -60,6 +60,15 @@ try {
   });
   const page=await context.newPage();page.on('pageerror',error=>errors.push(error.message));
   const locale=async()=>page.waitForFunction(({language,theme})=>document.documentElement.lang===language&&document.documentElement.dataset.theme===theme,{language,theme});
+  // Preference saves debounce for 300ms, then send an async POST. Wait for a
+  // new fixture write rather than a fixed delay before checking or reloading.
+  const savedLocale=async(expected,since)=>{
+   const deadline=Date.now()+5000;
+   const hasWrite=()=>writes.slice(since).some(row=>row.preferences?.language===expected);
+   while(!hasWrite()&&Date.now()<deadline)await new Promise(resolve=>setTimeout(resolve,25));
+   assert.ok(hasWrite(),`changed language saved (${expected}): ${JSON.stringify(writes.slice(since))}`);
+   assert.equal(savedLanguage,expected,'fixture server retained the changed language');
+  };
   const geometry=async panel=>{await page.evaluate(()=>document.fonts.ready);await page.waitForTimeout(250);const result=await panel.evaluate(node=>{const box=node.getBoundingClientRect();return{x:box.x,right:box.right,top:box.top,bottom:box.bottom,width:innerWidth,height:innerHeight,overflow:node.scrollWidth-node.clientWidth,document:document.documentElement.scrollWidth};});assert.ok(result.x>=0&&result.right<=result.width+1&&result.top>=0&&result.bottom<=result.height+1,`menu fits ${language}/${theme}/${width}: ${JSON.stringify(result)}`);assert.ok(result.overflow<=1&&result.document<=result.width+1,'controls and page fit horizontally');};
   const checkMenu=async(tool,change=false)=>{
    const trigger=page.locator('.settings-menu-trigger');await trigger.waitFor();await trigger.focus();await page.keyboard.press('Enter');
@@ -71,7 +80,7 @@ try {
    await rows.reduce(async(previous,[href])=>{await previous;const row=panel.locator(`a[href="/${href}"]`);await row.focus();assert.ok(await row.evaluate(node=>node===document.activeElement));},Promise.resolve());
    await page.keyboard.press('Shift+Tab');assert.ok(await panel.locator('a[href="/agents.html"]').evaluate(node=>node===document.activeElement),'rows are reachable in keyboard order');
    await geometry(panel);await page.screenshot({path:path.join(output,`${tool}-menu-${language}-${theme}-${width}.png`)});
-   if(change){const buttons=panel.getByRole('group',{name:t('Language','Idioma'),exact:true}).getByRole('button');await buttons.nth(es?0:1).click();await page.waitForFunction(lang=>document.documentElement.lang!==lang,language);await page.waitForTimeout(350);assert.ok(writes.some(row=>row.preferences?.language===(es?'en':'es')),'changed language saved');await page.reload();await page.locator('.settings-menu-trigger').waitFor();await page.waitForFunction(lang=>document.documentElement.lang===lang,es?'en':'es');await page.locator('.settings-menu-trigger').click();await page.locator('.lang-toggle button').nth(es?1:0).click();await locale();await page.waitForTimeout(350);await page.keyboard.press('Escape');}
+   if(change){const buttons=panel.getByRole('group',{name:t('Language','Idioma'),exact:true}).getByRole('button');let since=writes.length;await buttons.nth(es?0:1).click();await page.waitForFunction(lang=>document.documentElement.lang!==lang,language);await savedLocale(es?'en':'es',since);await page.reload();await page.locator('.settings-menu-trigger').waitFor();await page.waitForFunction(lang=>document.documentElement.lang===lang,es?'en':'es');await page.locator('.settings-menu-trigger').click();since=writes.length;await page.locator('.lang-toggle button').nth(es?1:0).click();await locale();await savedLocale(language,since);await page.keyboard.press('Escape');}
    else {await page.keyboard.press('Escape');await panel.waitFor({state:'hidden'});assert.ok(await trigger.evaluate(node=>node===document.activeElement),'Escape restores trigger focus');}
   };
   await page.goto(`${base}/index.html?desktop=1`);await page.locator('.product-header').waitFor();await locale();await checkMenu('dashboard',true);
@@ -85,7 +94,7 @@ try {
    await page.goto(`${base}/mobile/?mobile=1`);await page.locator('.m-profile').waitFor({timeout:5000}).catch(async error=>{console.log('Mobile debug',await page.locator('body').innerText(),errors);await page.screenshot({path:path.join(output,'mobile-failure.png')});throw error;});await locale();await page.locator('.m-profile').click();
    const sheet=page.getByRole('dialog');await sheet.waitFor();assert.equal(await sheet.getByRole('link',{name:t('API connections','Conexiones API'),exact:true}).getAttribute('href'),'/api.html');
    await sheet.getByText(t('Language','Idioma'),{exact:true}).waitFor();await sheet.getByRole('button',{name:t('Sign out','Cerrar sesión'),exact:true}).waitFor();await geometry(sheet);
-   await sheet.getByRole('button',{name:es?'EN':'ES',exact:true}).click();await page.waitForFunction(lang=>document.documentElement.lang!==lang,language);await page.waitForTimeout(350);await page.reload();await page.locator('.m-profile').waitFor();await page.waitForFunction(lang=>document.documentElement.lang===lang,es?'en':'es');await page.locator('.m-profile').click();await page.getByRole('dialog').getByRole('button',{name:es?'ES':'EN',exact:true}).click();await locale();await page.waitForFunction(code=>document.querySelector('.m-pref-section .m-segment button.is-on')?.textContent===code,language.toUpperCase());await page.screenshot({path:path.join(output,`mobile-menu-${language}-${theme}-${width}.png`)});
+   let since=writes.length;await sheet.getByRole('button',{name:es?'EN':'ES',exact:true}).click();await page.waitForFunction(lang=>document.documentElement.lang!==lang,language);await savedLocale(es?'en':'es',since);await page.reload();await page.locator('.m-profile').waitFor();await page.waitForFunction(lang=>document.documentElement.lang===lang,es?'en':'es');await page.locator('.m-profile').click();since=writes.length;await page.getByRole('dialog').getByRole('button',{name:es?'ES':'EN',exact:true}).click();await locale();await savedLocale(language,since);await page.waitForFunction(code=>document.querySelector('.m-pref-section .m-segment button.is-on')?.textContent===code,language.toUpperCase());await page.screenshot({path:path.join(output,`mobile-menu-${language}-${theme}-${width}.png`)});
   }
   assert.deepEqual(errors,[]);console.log(`PASS bilingual Dashboard/Promos${width===390?'/mobile':''} ${language}/${theme}/${width}: menu icons/copy/links, keyboard, persistence, source content and no clipping`);await context.close();
  }

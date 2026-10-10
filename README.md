@@ -105,8 +105,12 @@ and Dev users can issue keys; every request checks the owner's current access.
 Keys can be revoked and are only shown once. Keep them in server secrets.
 
 The versioned Cortex `/api/v1/accounts` API provides public profiles, media
-kit metrics, paginated posts, and daily follower history. It reads stored
-dashboard data without starting a refresh. Unknown measurements remain null.
+kit metrics, paginated posts, and daily follower history. Public posts and
+media kit standout posts include `is_promo`, recognizing the manual Research
+mark or the `#aitoolsentient` caption hashtag. The posts endpoint accepts the
+optional `is_promo=true|false` filter before pagination; omitting it returns
+both kinds. It reads stored dashboard data without starting a refresh.
+Unknown measurements remain null.
 See the [Spanish integration guide](public/api-guide.md), also available at
 `/api-guide.html`, the [English integration guide](public/api-guide.en.md) at
 `/api-guide.en.html`, and the [runnable website example](examples/media-kit/README.md).
