@@ -10,16 +10,16 @@ const queueDateParts = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
 }).formatToParts(new Date()).filter(({ type }) => type !== 'literal').map(({ type, value }) => [type, value]));
 const day = `${queueDateParts.year}-${queueDateParts.month}-${queueDateParts.day}`;
 const post = (account, shortcode) => ({ account, shortcode, caption: `${account} source post`, type: 'Image', coverUrl: '' });
-const base = { productionPoints: 3, minutesPerPP: 10, durationMinutes: 30, priority: 'medium', tags: [], brief: '', notes: '', references: [], attachments: [], recommendedAccounts: [], coordinatorEmail: 'user05@example.com' };
+const base = { productionPoints: 3, minutesPerPP: 10, durationMinutes: 30, priority: 'medium', tags: [], brief: '', notes: '', references: [], attachments: [], recommendedAccounts: [], coordinatorEmail: 'role-switcher@example.test' };
 const pool = { ...base, id: 1, post: post('chatgptricks', 'POOL1'), status: 'pool', designerEmail: null, scheduledDate: null, scheduledStartMinutes: null };
-// A browser-wide draft from a prior user must never hydrate into User 03's
+// A browser-wide draft from a prior user must never hydrate into Developer's
 // Queue session. The app now only reads owner-verified v3 envelopes.
-window.localStorage.setItem('sentient.queueDrafts.v2', JSON.stringify([{ ...pool, status: 'scheduled', designerEmail: 'other@sentientagency.io', scheduledDate: day, scheduledStartMinutes: 600 }]));
-const active = { ...base, id: 2, notes: 'Automatically added to the Queue because this post exceeded 3× its account HOT threshold.', post: post('chatgptricks', 'ACTIVE1'), status: 'in_progress', designerEmail: 'user03@example.com', scheduledDate: day, scheduledStartMinutes: 540 };
+window.localStorage.setItem('sentient.queueDrafts.v2', JSON.stringify([{ ...pool, status: 'scheduled', designerEmail: 'staff-8@example.test', scheduledDate: day, scheduledStartMinutes: 600 }]));
+const active = { ...base, id: 2, notes: 'Automatically added to the Queue because this post exceeded 3× its account HOT threshold.', post: post('chatgptricks', 'ACTIVE1'), status: 'in_progress', designerEmail: 'developer@example.test', scheduledDate: day, scheduledStartMinutes: 540 };
 const manualNotes = 'Preserve the source visual system.\n[Creative reference](https://example.com/coordinator-brief)';
-const scheduled = { ...base, id: 3, notes: manualNotes, post: post('chatgptricks', 'NEXT1'), recommendedAccounts: ['chatgptricks'], status: 'scheduled', designerEmail: 'user03@example.com', scheduledDate: day, scheduledStartMinutes: 570 };
+const scheduled = { ...base, id: 3, notes: manualNotes, post: post('chatgptricks', 'NEXT1'), recommendedAccounts: ['chatgptricks'], status: 'scheduled', designerEmail: 'developer@example.test', scheduledDate: day, scheduledStartMinutes: 570 };
 const payload = {
-  viewer: { displayName: 'User 03 Current', email: 'user03@example.com', isAdmin: false, isDev: true, operatingRoles: ['pd'] },
+  viewer: { displayName: 'Developer Current', email: 'developer@example.test', isAdmin: false, isDev: true, operatingRoles: ['pd'] },
   date: day,
   requests: [pool, active, scheduled],
   pickRequests: [pool],
@@ -29,25 +29,25 @@ const payload = {
   liveDrafts: [],
   liveRevision: 0,
   presence: {
-    'user03@example.com': { status: 'active', lastSeenAt: new Date().toISOString() },
-    'user05@example.com': { status: 'idle', lastSeenAt: new Date().toISOString() },
-    'user06@example.com': { status: 'offline', lastSeenAt: null },
-    'user12@example.com': { status: 'active', lastSeenAt: new Date().toISOString() },
+    'developer@example.test': { status: 'active', lastSeenAt: new Date().toISOString() },
+    'role-switcher@example.test': { status: 'idle', lastSeenAt: new Date().toISOString() },
+    'staff-6@example.test': { status: 'offline', lastSeenAt: null },
+    'trainee@example.test': { status: 'active', lastSeenAt: new Date().toISOString() },
   },
   timeBlocks: [],
   pendingTicketCount: 1,
-  designers: [{ email: 'user03@example.com', isAdmin: true, accounts: ['chatgptricks'] }],
+  designers: [{ email: 'developer@example.test', isAdmin: true, accounts: ['chatgptricks'] }],
   schedulerUsers: [
-    { email: 'user03@example.com', isAdmin: true, roles: ['vc', 'pd'], isQueueDesigner: true, accounts: ['chatgptricks'], accountAvatars: { chatgptricks: '/api/dashboard/avatar/chatgptricks' } },
-    { email: 'user05@example.com', isAdmin: true, roles: ['vc', 'pd'], isQueueDesigner: true, accounts: [] },
-    { email: 'user06@example.com', isAdmin: false, roles: ['sales', 'pd'], isQueueDesigner: true, accounts: [] },
-    { email: 'user12@example.com', isAdmin: false, roles: ['trainee', 'pd'], minutesPerPP: 16, isQueueDesigner: true, accounts: [] },
+    { email: 'developer@example.test', displayName: 'Developer Current', isAdmin: true, roles: ['vc', 'pd'], isQueueDesigner: true, accounts: ['chatgptricks'], accountAvatars: { chatgptricks: '/api/dashboard/avatar/chatgptricks' } },
+    { email: 'role-switcher@example.test', displayName: 'Role Switcher', isAdmin: true, roles: ['vc', 'pd'], isQueueDesigner: true, accounts: [] },
+    { email: 'staff-6@example.test', displayName: 'Sales User', isAdmin: false, roles: ['sales', 'pd'], isQueueDesigner: true, accounts: [] },
+    { email: 'trainee@example.test', displayName: 'Trainee', isAdmin: false, roles: ['trainee', 'pd'], minutesPerPP: 16, isQueueDesigner: true, accounts: [] },
   ],
   accounts: [{ handle: 'chatgptricks', label: 'ChatGPTricks' }],
   accountOnboarding: { completed: false, selectedAccounts: [] },
   tags: ['copy'], priorities: ['low', 'medium', 'high', 'urgent'], hours: { start: 0, end: 1440 },
 };
-window.sessionStorage.setItem('sentient.queueSnapshot.v1:user03@example.com', JSON.stringify({ version: 1, date: day, archive: false, savedAt: Date.now(), data: payload }));
+window.sessionStorage.setItem('sentient.queueSnapshot.v1:developer@example.test', JSON.stringify({ version: 1, date: day, archive: false, savedAt: Date.now(), data: payload }));
 
 let releasePick, rejectPick = false, pickCalls = 0, failQueueRefresh = false;
 let releaseBatchClose, rejectBatchClose = false, batchCloseCalls = 0, partiallyClose = false;
@@ -65,15 +65,15 @@ let createdTimeBlock = false;
 let releaseDelete;
 let rejectDelete = false;
 let tickets = [
-  { id: 70, type: 'cancellation', status: 'pending', requesterEmail: 'user05@example.com', requestId: 3, reason: 'Client changed direction', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), request: { id: 3, post: { account: 'chatgptricks', shortcode: 'NEXT1' }, designerEmail: 'user05@example.com', status: 'scheduled', productionPoints: 3 } },
-  { id: 69, type: 'pp_revision', status: 'rejected', requesterEmail: 'user03@example.com', requestId: 3, requestedProductionPoints: 5, reason: 'More editing time', reviewerEmail: 'user05@example.com', reviewedAt: new Date().toISOString(), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), request: { id: 3, post: { account: 'chatgptricks', shortcode: 'NEXT1' }, designerEmail: 'user03@example.com', status: 'scheduled', productionPoints: 3 } },
-  { id: 68, type: 'time_block', status: 'approved', requesterEmail: 'user03@example.com', category: 'meeting', title: 'Team sync', scheduledDate: day, scheduledStartMinutes: 720, durationMinutes: 30, reason: '', reviewerEmail: 'user05@example.com', reviewedAt: new Date().toISOString(), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+  { id: 70, type: 'cancellation', status: 'pending', requesterEmail: 'role-switcher@example.test', requestId: 3, reason: 'Client changed direction', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), request: { id: 3, post: { account: 'chatgptricks', shortcode: 'NEXT1' }, designerEmail: 'role-switcher@example.test', status: 'scheduled', productionPoints: 3 } },
+  { id: 69, type: 'pp_revision', status: 'rejected', requesterEmail: 'developer@example.test', requestId: 3, requestedProductionPoints: 5, reason: 'More editing time', reviewerEmail: 'role-switcher@example.test', reviewedAt: new Date().toISOString(), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), request: { id: 3, post: { account: 'chatgptricks', shortcode: 'NEXT1' }, designerEmail: 'developer@example.test', status: 'scheduled', productionPoints: 3 } },
+  { id: 68, type: 'time_block', status: 'approved', requesterEmail: 'developer@example.test', category: 'meeting', title: 'Team sync', scheduledDate: day, scheduledStartMinutes: 720, durationMinutes: 30, reason: '', reviewerEmail: 'role-switcher@example.test', reviewedAt: new Date().toISOString(), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
 ];
 const response = (body) => ({ ok: true, status: 200, json: async () => body, text: async () => JSON.stringify(body) });
 const stubFetch = async (url, options = {}) => {
   const value = String(url);
-  if (value.includes('/api/admin/users')) return response({ users: [{ email: 'user03@example.com', role: 'admin', operating_role: 'vc', is_admin: true }] });
-  if (value.includes('/api/admin/queue/designer-accounts')) return response({ designers: [{ email: 'user03@example.com', accounts: ['chatgptricks'] }] });
+  if (value.includes('/api/admin/users')) return response({ users: [{ email: 'developer@example.test', role: 'admin', operating_role: 'vc', is_admin: true }] });
+  if (value.includes('/api/admin/queue/designer-accounts')) return response({ designers: [{ email: 'developer@example.test', accounts: ['chatgptricks'] }] });
   if (value.includes('/api/admin/accounts')) return response({ accounts: [{ handle: 'chatgptricks', group: 'sentient', is_active: true }] });
   if (value.includes('/api/dashboard/queue/v2/admin-report')) return response({ totals: {}, priorities: {}, designers: [], assignedPosts: [active, scheduled] });
   if (value.includes('/api/dashboard/queue/v2/account-onboarding')) {
@@ -87,7 +87,7 @@ const stubFetch = async (url, options = {}) => {
     return response({ ok: true });
   }
   if (value.includes('/api/dashboard/queue/v2/tickets/time-block')) {
-    const block = { id: 71, type: 'time_block', status: 'pending', requesterEmail: 'user03@example.com', category: options.body.get('category'), title: options.body.get('title') || 'Meeting', scheduledDate: options.body.get('scheduled_date'), scheduledStartMinutes: Number(options.body.get('scheduled_start_minutes')), durationMinutes: Number(options.body.get('duration_minutes')), reason: options.body.get('note') || '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+    const block = { id: 71, type: 'time_block', status: 'pending', requesterEmail: 'developer@example.test', category: options.body.get('category'), title: options.body.get('title') || 'Meeting', scheduledDate: options.body.get('scheduled_date'), scheduledStartMinutes: Number(options.body.get('scheduled_start_minutes')), durationMinutes: Number(options.body.get('duration_minutes')), reason: options.body.get('note') || '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
     createdTimeBlock = true;
     payload.timeBlocks = [block];
     payload.pendingTicketCount += 1;
@@ -96,7 +96,7 @@ const stubFetch = async (url, options = {}) => {
   }
   if (/\/api\/dashboard\/queue\/v2\/tickets\/\d+\/review/.test(value)) {
     const id = Number(value.match(/tickets\/(\d+)\/review/)[1]);
-    tickets = tickets.map((ticket) => ticket.id === id ? { ...ticket, status: options.body.get('action') === 'approve' ? 'approved' : 'rejected', reviewerEmail: 'user03@example.com', reviewedAt: new Date().toISOString() } : ticket);
+    tickets = tickets.map((ticket) => ticket.id === id ? { ...ticket, status: options.body.get('action') === 'approve' ? 'approved' : 'rejected', reviewerEmail: 'developer@example.test', reviewedAt: new Date().toISOString() } : ticket);
     payload.pendingTicketCount = tickets.filter((ticket) => ticket.status === 'pending').length;
     return response({ ok: true, ticket: tickets.find((ticket) => ticket.id === id) });
   }
@@ -105,7 +105,7 @@ const stubFetch = async (url, options = {}) => {
     pickCalls += 1;
     await new Promise(resolve => { releasePick = resolve; });
     if (rejectPick) return { ok: false, status: 409, json: async () => ({ detail: 'This post was picked by another designer.' }) };
-    const picked = { ...pool, status: 'scheduled', designerEmail: 'user03@example.com', scheduledDate: day, scheduledStartMinutes: 600 };
+    const picked = { ...pool, status: 'scheduled', designerEmail: 'developer@example.test', scheduledDate: day, scheduledStartMinutes: 600 };
     payload.requests = [picked, ...payload.requests.filter((task) => task.id !== picked.id)];
     payload.pickRequests = [];
     payload.assignedRequests = [...payload.assignedRequests, picked];
@@ -117,7 +117,7 @@ const stubFetch = async (url, options = {}) => {
     return response({ ok: true });
   }
   if (value.includes('/api/dashboard/queue/v2/drafts') && !value.includes('/clear')) {
-    drafted = JSON.parse(options.body.get('changes')).map((change) => ({ ...pool, ...change, designerEmail: change.designerEmail, scheduledDate: change.scheduledDate, scheduledStartMinutes: change.scheduledStartMinutes, recommendedAccounts: change.recommendedAccounts || [], status: change.status === 'pool' ? 'pool' : 'scheduled', isDraft: true, draftCoordinatorEmail: 'user03@example.com' }));
+    drafted = JSON.parse(options.body.get('changes')).map((change) => ({ ...pool, ...change, designerEmail: change.designerEmail, scheduledDate: change.scheduledDate, scheduledStartMinutes: change.scheduledStartMinutes, recommendedAccounts: change.recommendedAccounts || [], status: change.status === 'pool' ? 'pool' : 'scheduled', isDraft: true, draftCoordinatorEmail: 'developer@example.test' }));
     payload.liveDrafts = drafted;
     payload.liveRevision += 1;
     return response({ ok: true, drafts: drafted, liveRevision: payload.liveRevision });
@@ -168,7 +168,7 @@ const stubFetch = async (url, options = {}) => {
     { ...scheduled.post, account: 'another', shortcode: 'VERSION2', postKey: 'another:VERSION2', likes: 40, postDate: '2026-09-02' },
   ] });
   if (value.includes('/history')) return response({ events: [] });
-  if (value.includes('/api/dashboard/me')) return response({ email: 'user03@example.com', is_dev: true });
+  if (value.includes('/api/dashboard/me')) return response({ email: 'developer@example.test', is_dev: true });
   if (value.includes('/api/dashboard/queue/v2')) {
     if (failQueueRefresh) return { ok: false, status: 400, json: async () => ({ detail: 'Schedule is temporarily unavailable.' }) };
     if (holdInitialQueueFetch) {
@@ -217,7 +217,7 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 250)); });
     checks['Queue renders'] = Boolean(document.querySelector('.scheduler-canvas'));
     checks['Legacy browser-wide Queue drafts are ignored'] = !document.querySelector('.scheduler-drafts');
-    const cachedQueue = JSON.parse(window.sessionStorage.getItem('sentient.queueSnapshot.v1:user03@example.com') || 'null');
+    const cachedQueue = JSON.parse(window.sessionStorage.getItem('sentient.queueSnapshot.v1:developer@example.test') || 'null');
     checks['Queue saves the current view for an instant reload'] = cachedQueue?.version === 1
       && cachedQueue?.date === day
       && Boolean(cachedQueue?.data?.viewer?.email);
@@ -290,15 +290,15 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
       && document.querySelector('.scheduler-user-presence.is-offline');
     checks['All dashboard users render as PD-capable'] = document.querySelectorAll('.scheduler-row').length === 4 && document.querySelectorAll('.scheduler-row.is-non-queue-user').length === 0;
     checks['Roster shows only the highest role'] = [...document.querySelectorAll('.scheduler-user-copy small')].map((node) => node.textContent.trim()).join('|') === 'Admin|Admin|Sales|Trainee';
-    const louisHeader = [...document.querySelectorAll('.scheduler-row > header')].find((node) => /User 06/.test(node.textContent || ''));
-    await act(async () => { louisHeader.dispatchEvent(new window.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 240, clientY: 170 })); });
-    await click([...document.querySelectorAll('.scheduler-context-menu button')].find((node) => /^Hide User 06/.test(node.textContent || '')));
-    checks['Hide user removes that VC row immediately'] = ![...document.querySelectorAll('.scheduler-row')].some((node) => /User 06/.test(node.textContent || ''));
+    const salesHeader = [...document.querySelectorAll('.scheduler-row > header')].find((node) => /Sales User/.test(node.textContent || ''));
+    await act(async () => { salesHeader.dispatchEvent(new window.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 240, clientY: 170 })); });
+    await click([...document.querySelectorAll('.scheduler-context-menu button')].find((node) => /^Hide Sales User/.test(node.textContent || '')));
+    checks['Hide user removes that VC row immediately'] = ![...document.querySelectorAll('.scheduler-row')].some((node) => /Sales User/.test(node.textContent || ''));
     transfer.clearData();
     const traineeHeader = [...document.querySelectorAll('.scheduler-row > header')].find((node) => /Trainee/.test(node.textContent || ''));
-    const ivanRow = [...document.querySelectorAll('.scheduler-row')].find((node) => /User 05/.test(node.textContent || ''));
-    await act(async () => { traineeHeader.dispatchEvent(dragEvent('dragstart')); ivanRow.dispatchEvent(dragEvent('dragover')); ivanRow.dispatchEvent(dragEvent('drop')); });
-    checks['Drag reorder updates VC rows immediately'] = [...document.querySelectorAll('.scheduler-user-copy b')].map((node) => node.textContent.trim()).join('|') === 'User 03 Current|Trainee|User 05';
+    const roleSwitcherRow = [...document.querySelectorAll('.scheduler-row')].find((node) => /Role Switcher/.test(node.textContent || ''));
+    await act(async () => { traineeHeader.dispatchEvent(dragEvent('dragstart')); roleSwitcherRow.dispatchEvent(dragEvent('dragover')); roleSwitcherRow.dispatchEvent(dragEvent('drop')); });
+    checks['Drag reorder updates VC rows immediately'] = [...document.querySelectorAll('.scheduler-user-copy b')].map((node) => node.textContent.trim()).join('|') === 'Developer Current|Trainee|Role Switcher';
     transfer.clearData();
     const createPostButton = document.querySelector('.queue-create-button');
     const addTimeButton = document.querySelector('.scheduler-add-time');
@@ -307,7 +307,7 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
       && document.querySelectorAll('.scheduler-resize-handle').length >= 2;
     checks['Queue has no duplicate Admin tool'] = !document.querySelector('.queue-admin-button');
     const profileTrigger = document.querySelector('.queue-settings-trigger');
-    checks['Signed-in profile opens Queue settings'] = profileTrigger?.querySelector('img')?.getAttribute('src') === 'https://example.test/esteban-avatar.png';
+    checks['Signed-in profile opens Queue settings'] = profileTrigger?.querySelector('img')?.getAttribute('src') === 'https://example.test/developer-avatar.png';
     await click(profileTrigger);
     const settingsLink = document.querySelector('.queue-settings-admin .queue-settings-link');
     checks['Admin profile menu links to standalone Settings'] = settingsLink?.tagName === 'A'
@@ -400,7 +400,7 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     checks['Sideview links back to the exact Research post'] = researchLink?.textContent.includes('View in Research')
       && researchLink.getAttribute('href')?.startsWith('/?r=')
       && researchLink.getAttribute('target') === 'sentient-research';
-    checks['Assignment detail uses the current Settings name'] = document.querySelector('.queue-request-rail').textContent.includes('User 03 Current');
+    checks['Assignment detail uses the current Settings name'] = document.querySelector('.queue-request-rail').textContent.includes('Developer Current');
     const stackButton = document.querySelector('.queue-request-rail [title="Open stack"]');
     stackButton.focus();
     await click(stackButton);
@@ -454,7 +454,7 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     checks['Draft is shared before submit'] = drafted?.length === 1 && Boolean(document.querySelector('.scheduler-block.is-draft'));
     checks['Drafts no longer have a separate bar'] = !document.querySelector('.scheduler-drafts');
     await click(document.querySelector('.scheduler-draft-pages'));
-    checks['Page picker is local to the draft and assigned user'] = document.querySelector('.scheduler-page-picker')?.textContent.includes('User 03 Current') && document.querySelectorAll('.scheduler-page-options input').length === 1;
+    checks['Page picker is local to the draft and assigned user'] = document.querySelector('.scheduler-page-picker')?.textContent.includes('Developer Current') && document.querySelectorAll('.scheduler-page-options input').length === 1;
     await click(document.querySelector('.scheduler-page-options input'));
     checks['Page choice saves to this draft'] = payload.liveDrafts[0].recommendedAccounts.includes('chatgptricks');
     await click(document.querySelector('.scheduler-page-picker header button'));
@@ -492,7 +492,7 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     await click(submit);
     checks['Confirm preserves the other pending post'] = payload.liveDrafts.length === 1 && payload.liveDrafts[0].id === 3;
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 500)); });
-    checks['Submit sends final planned position'] = submitted?.length === 1 && submitted[0].status === 'scheduled' && submitted[0].designerEmail === 'user03@example.com';
+    checks['Submit sends final planned position'] = submitted?.length === 1 && submitted[0].status === 'scheduled' && submitted[0].designerEmail === 'developer@example.test';
     await click(document.querySelector('.queue-create-button'));
     checks['Create Post accepts an intelligent source link'] = Boolean(document.querySelector('.queue-source-link input[type="url"]'))
       && Boolean(document.querySelector('.queue-source-link button'));

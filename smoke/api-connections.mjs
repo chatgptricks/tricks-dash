@@ -12,7 +12,7 @@ await mkdir(directory, { recursive: true });
 // shared fixture's simpler behavior, while API secrets need session checks.
 const authFixture = path.join(directory, 'firebase-auth.js');
 await writeFile(authFixture, `
-const owner = { email: 'owner@sentientagency.io', getIdToken: () => Promise.resolve('tok') };
+const owner = { email: 'staff-9@example.test', getIdToken: () => Promise.resolve('tok') };
 const auth = { currentUser: owner };
 const observers = new Set();
 window.__apiSmokeSetUser = (email, token = 'tok') => {
@@ -29,7 +29,7 @@ export function onAuthStateChanged(_auth, callback) {
   return () => observers.delete(callback);
 }
 export function signInWithPopup() {
-  window.__apiSmokeSetUser('owner@sentientagency.io'); return Promise.resolve();
+  window.__apiSmokeSetUser('staff-9@example.test'); return Promise.resolve();
 }
 export function signInWithRedirect() { return signInWithPopup(); }
 export function signOut() { window.__apiSmokeSetUser(null); return Promise.resolve(); }
@@ -88,7 +88,7 @@ try {
       'Read only · Revoked': 'Solo lectura · Revocada', 'Revoke': 'Revocar', 'Confirm revoke': 'Confirmar revocación',
       'Sign out': 'Cerrar sesión', 'Sign in to manage API connections': 'Inicia sesión para administrar conexiones API',
       'Sign in with Google': 'Iniciar sesión con Google', 'Connect an integration': 'Conectar una integración',
-      'API keys belong to second@sentientagency.io.': 'Las claves API pertenecen a second@sentientagency.io.',
+      'API keys belong to staff-11@example.test.': 'Las claves API pertenecen a staff-11@example.test.',
       'API access': 'Acceso a la API', 'API connections': 'Conexiones API',
       'This action is not allowed for your current account.': 'Tu cuenta no tiene permiso para realizar esta acción.',
     };
@@ -287,8 +287,8 @@ try {
     const holdDeadline = Date.now() + 10000;
     while (!releaseCreate && Date.now() < holdDeadline) await new Promise(resolve => setTimeout(resolve, 10));
     assert.ok(releaseCreate, 'The pending create request reached the server.');
-    await page.evaluate(() => window.__apiSmokeSetUser('second@sentientagency.io', 'tok-two'));
-    await page.getByText(t('API keys belong to second@sentientagency.io.'), { exact: true }).waitFor();
+    await page.evaluate(() => window.__apiSmokeSetUser('staff-11@example.test', 'tok-two'));
+    await page.getByText(t('API keys belong to staff-11@example.test.'), { exact: true }).waitFor();
     await page.getByText(t('No API connections yet.'), { exact: true }).waitFor();
     releaseCreate();
     await page.getByLabel(t('Connection name')).fill('Session changed');
@@ -297,7 +297,7 @@ try {
     assert.equal(await page.getByText(t('0 accounts selected'), { exact: true }).count(), 1);
 
     canCreate = false;
-    await page.evaluate(() => window.__apiSmokeSetUser('owner@sentientagency.io'));
+    await page.evaluate(() => window.__apiSmokeSetUser('staff-9@example.test'));
     await page.getByRole('heading', { name: t('API access'), exact: true }).waitFor();
     assert.equal(await createButton.count(), 0);
     assert.equal(await page.getByLabel(t('Connection name')).count(), 0);

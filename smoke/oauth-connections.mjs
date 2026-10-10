@@ -11,7 +11,7 @@ await mkdir(directory, { recursive: true });
 const authFixture = path.join(directory, 'firebase-auth.js');
 await writeFile(authFixture, `
 const makeUser = email => email ? { email, getIdToken: () => Promise.resolve('fixture-firebase-token') } : null;
-const auth = { currentUser: makeUser(window.__oauthSignedOut && !localStorage.getItem('fixture.signedIn') ? null : 'person@sentientagency.io') };
+const auth = { currentUser: makeUser(window.__oauthSignedOut && !localStorage.getItem('fixture.signedIn') ? null : 'staff-10@example.test') };
 const observers = new Set();
 window.__oauthSetUser = email => { auth.currentUser = makeUser(email); observers.forEach(callback => callback(auth.currentUser)); };
 export function getAuth() { return auth; }
@@ -20,7 +20,7 @@ export const browserPopupRedirectResolver = {};
 export const browserLocalPersistence = {};
 export function setPersistence() { return Promise.resolve(); }
 export function onAuthStateChanged(_auth, callback) { observers.add(callback); callback(auth.currentUser); return () => observers.delete(callback); }
-export function signInWithPopup() { localStorage.setItem('fixture.signedIn', 'yes'); window.__oauthSetUser('person@sentientagency.io'); return Promise.resolve(); }
+export function signInWithPopup() { localStorage.setItem('fixture.signedIn', 'yes'); window.__oauthSetUser('staff-10@example.test'); return Promise.resolve(); }
 export function signInWithRedirect() { return signInWithPopup(); }
 export function getRedirectResult() { window.__oauthRedirectChecked = true; return Promise.resolve(null); }
 export function signOut() { localStorage.removeItem('fixture.signedIn'); window.__oauthSetUser(null); return Promise.resolve(); }
@@ -85,7 +85,7 @@ async function fixture({ language = 'en', width = 390, signedOut = false, scopes
       if (request.method() === 'GET') {
         loads += 1; assert.equal(url.searchParams.get('transaction'), transaction);
         await route.fulfill({ status: authorizationStatus, contentType: 'application/json', body: JSON.stringify(authorizationStatus === 200 ? {
-          client_name: 'ChatGPT', scopes, resource: 'https://api.test/mcp', expires_at: '2099-01-01T00:00:00Z', email: 'person@sentientagency.io',
+          client_name: 'ChatGPT', scopes, resource: 'https://api.test/mcp', expires_at: '2099-01-01T00:00:00Z', email: 'staff-10@example.test',
         } : { detail: 'Authorization expired' }) });
       } else {
         const payload = request.postDataJSON(); decisions.push(payload);

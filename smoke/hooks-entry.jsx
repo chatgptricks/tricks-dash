@@ -47,7 +47,7 @@ window.fetch = async (url, options = {}) => {
   if (options.body) writes.push({ path, method, body: JSON.parse(options.body) });
   let body;
   if (path.endsWith("/me"))
-    body = { is_dev: !["admin", "ivan"].includes(globalThis.__HOOKS_TEST_ROLE), can_access_hooks: globalThis.__HOOKS_TEST_ROLE === "ivan", queue_role_preview_active: globalThis.__HOOKS_TEST_ROLE === "preview" };
+    body = { is_dev: !["admin", "specialist"].includes(globalThis.__HOOKS_TEST_ROLE), can_access_hooks: globalThis.__HOOKS_TEST_ROLE === "specialist", queue_role_preview_active: globalThis.__HOOKS_TEST_ROLE === "preview" };
   else if (path.includes("/hooks/generate")) {
     if (failGenerate) return { ok: false, status: 403, json: async () => ({ detail: 'Generation unavailable' }) };
     if (deferredGeneration) await deferredGeneration;
@@ -114,7 +114,7 @@ try {
     await import("../src/hooks.jsx");
     await tick(60);
   });
-  if (!["dev", "ivan"].includes(globalThis.__HOOKS_TEST_ROLE)) {
+  if (!["dev", "specialist"].includes(globalThis.__HOOKS_TEST_ROLE)) {
     assert.equal(document.querySelectorAll(".hook-card").length, 0);
     assert.match(document.body.textContent, /authorized accounts/);
     assert.ok(!calls.some(call => call.includes('/hooks?') || call.includes('/hooks/drafts')));

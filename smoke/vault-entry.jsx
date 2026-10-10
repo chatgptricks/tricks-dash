@@ -1,8 +1,8 @@
 import { act } from 'react';
 import assert from 'node:assert/strict';
 const fixture = [
-  { id:'a', title:'First idea', url:'https://example.com/a', priority:0, discarded:0, tweet_text:'Readable tweet '+ 'text '.repeat(130), tweet_image:'https://pbs.twimg.com/media/test.jpg', source:'User 05', shared_at:'2026-09-25T10:00:00Z', slack_url:'https://example.com/slack' },
-  { id:'b', title:'Second idea', url:'https://example.com/b', priority:1, discarded:0, source:'User 05', shared_at:'2026-09-24T10:00:00Z', slack_url:'' },
+  { id:'a', title:'First idea', url:'https://example.com/a', priority:0, discarded:0, tweet_text:'Readable tweet '+ 'text '.repeat(130), tweet_image:'https://pbs.twimg.com/media/test.jpg', source:'Role Switcher', shared_at:'2026-09-25T10:00:00Z', slack_url:'https://example.com/slack' },
+  { id:'b', title:'Second idea', url:'https://example.com/b', priority:1, discarded:0, source:'Role Switcher', shared_at:'2026-09-24T10:00:00Z', slack_url:'' },
 ];
 let items = structuredClone(fixture), writes = [], fail = false, failList = false, deferredBody = null;
 window.fetch = async (url, options={}) => {

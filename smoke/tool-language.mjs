@@ -13,7 +13,7 @@ fs.mkdirSync(output, { recursive: true });
 const authStub = path.join(temporary, 'firebase-auth.js');
 fs.writeFileSync(authStub, `
 const observers = new Set();
-const user = { email:'user03@example.com', displayName:'User 03', getIdToken:async()=> 'tok' };
+const user = { email:'developer@example.test', displayName:'Developer', getIdToken:async()=> 'tok' };
 const auth = { currentUser: localStorage.getItem('__toolSignedOut') ? null : user };
 window.__toolSetUser = value => { auth.currentUser = value ? user : null; if(value) localStorage.removeItem('__toolSignedOut'); else localStorage.setItem('__toolSignedOut','1'); for(const callback of observers) callback(auth.currentUser); };
 export const getAuth = () => auth;
@@ -60,7 +60,7 @@ try {
         if(url.pathname.endsWith('/me/preferences')) {
           if(method==='POST') { const payload=request.postDataJSON(); preferences.push(payload); if(payload.preferences?.language) serverLanguage=payload.preferences.language; }
           data={preferences:{language:serverLanguage}};
-        } else if(url.pathname==='/api/dashboard/me') data={email:'user03@example.com',is_dev:true,is_admin:true};
+        } else if(url.pathname==='/api/dashboard/me') data={email:'developer@example.test',is_dev:true,is_admin:true};
         else if(url.pathname==='/api/dashboard/news') data={items:[story],reviews:{},saved};
         else if(url.pathname==='/api/dashboard/news/save') { const payload=request.postDataJSON();mutations.push({path:url.pathname,payload});if(payload.saved) saved[payload.id]={item:story,brief:payload.brief};else delete saved[payload.id]; }
         else if(url.pathname==='/api/dashboard/vault' && method==='GET') data={items:[link]};

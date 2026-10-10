@@ -7,20 +7,20 @@ const queueDateParts = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
 }).formatToParts(new Date()).filter(({ type }) => type !== 'literal').map(({ type, value }) => [type, value]));
 const day = `${queueDateParts.year}-${queueDateParts.month}-${queueDateParts.day}`;
 const task = {
-  id: 1, status: 'scheduled', designerEmail: 'user03@example.com', scheduledDate: day,
+  id: 1, status: 'scheduled', designerEmail: 'developer@example.test', scheduledDate: day,
   scheduledStartMinutes: 600, productionPoints: 3, durationMinutes: 30, priority: 'high', tags: [],
   notes: 'Automatically added to the Queue because this post exceeded 3× its account HOT threshold.\nUse the updated layout from https://example.com/design-guide\n<em>Keep this literal</em>',
   recommendedAccounts: ['chatgptricks'], post: { account: 'chatgptricks', shortcode: 'ONE', caption: 'Useful AI workflow', type: 'Carousel', coverUrl: '' },
 };
 const queue = {
-  viewer: { email: 'user03@example.com', isAdmin: true, isDev: true, operatingRoles: ['vc', 'pd'], minutesPerPP: 10 },
+  viewer: { email: 'developer@example.test', isAdmin: true, isDev: true, operatingRoles: ['vc', 'pd'], minutesPerPP: 10 },
   date: day, requests: [
     { ...task, id: 2, status: 'pool', designerEmail: null, scheduledDate: null, scheduledStartMinutes: null, notes: '  \n  ' },
     { ...task, id: 3, status: 'pool', designerEmail: null, scheduledDate: null, scheduledStartMinutes: null, notes: 'Available as a temporary HOT Pick candidate.' },
   ],
   planningRequests: [task], assignedRequests: [task], pickRequests: [], hotPickRequests: [], liveDrafts: [], liveRevision: 0,
   pendingTicketCount: 1, timeBlocks: [], accounts: [{ handle: 'chatgptricks', label: 'ChatGPTricks' }, { handle: 'unmanaged', label: 'Unmanaged' }, { handle: 'inactive', label: 'Inactive', is_active: false }],
-  schedulerUsers: [{ email: 'user03@example.com', displayName: 'User 03', roles: ['vc', 'pd'], avatarUrl: '', accounts: ['chatgptricks', 'inactive'] }],
+  schedulerUsers: [{ email: 'developer@example.test', displayName: 'Developer', roles: ['vc', 'pd'], avatarUrl: '', accounts: ['chatgptricks', 'inactive'] }],
 };
 const tracker = { tracking_since: day, accounts: [{ handle: 'chatgptricks', label: 'ChatGPTricks', followers: 100000, delta_1d: { delta: 120 }, delta_7d: { delta: 1200 }, avg_likes_30d: 2200 }] };
 const post = { account: 'chatgptricks', shortcode: 'ONE', caption: 'Useful AI workflow', ocrText: 'A better prompt', type: 'Carousel', coverUrl: '', permalink: 'https://instagram.com/p/ONE/', likes: 4200, comments: 32, postDate: `${day}T12:00:00`, group: 'sentient', isHot: true, hotMultiplier: 3.4 };
@@ -28,8 +28,8 @@ const ok = (body, headers = {}) => ({ ok: true, status: 200, headers: { get: (ke
 const mediaRequests = [];
 const suggestions = [];
 const tickets = [
-  { id: 89, type: 'post_suggestion', status: 'pending', requesterEmail: 'someoneelse@sentientagency.io', title: 'Another user suggestion', reason: 'Private to the other user', suggestion: { sourceUrl: 'https://example.com/other', account: 'unmanaged' } },
-  { id: 88, type: 'post_suggestion', status: 'rejected', requesterEmail: queue.viewer.email, title: 'Rejected suggestion', reason: 'Rejected original idea', reviewNote: 'Please use a more recent source.', reviewerEmail: 'vc@sentientagency.io', reviewedAt: `${day}T12:00:00Z`, suggestion: { sourceUrl: 'https://example.com/rejected', account: 'chatgptricks' } },
+  { id: 89, type: 'post_suggestion', status: 'pending', requesterEmail: 'staff-12@example.test', title: 'Another user suggestion', reason: 'Private to the other user', suggestion: { sourceUrl: 'https://example.com/other', account: 'unmanaged' } },
+  { id: 88, type: 'post_suggestion', status: 'rejected', requesterEmail: queue.viewer.email, title: 'Rejected suggestion', reason: 'Rejected original idea', reviewNote: 'Please use a more recent source.', reviewerEmail: 'vc@example.test', reviewedAt: `${day}T12:00:00Z`, suggestion: { sourceUrl: 'https://example.com/rejected', account: 'chatgptricks' } },
   { id: 87, type: 'post_suggestion', status: 'approved', requesterEmail: queue.viewer.email, title: 'Approved suggestion', requestId: 87, suggestion: { sourceUrl: 'https://example.com/approved', account: 'chatgptricks' } },
 ];
 let queueRefreshFailure = false;
@@ -51,7 +51,7 @@ URL.createObjectURL = (blob) => {
 URL.revokeObjectURL = () => {};
 const fetchStub = async (url, options = {}) => {
   const value = String(url);
-  if (value.includes('/api/dashboard/me')) return ok({ email: 'user03@example.com', is_admin: true, is_dev: true, operating_role: 'vc', operating_roles: ['vc', 'pd'] });
+  if (value.includes('/api/dashboard/me')) return ok({ email: 'developer@example.test', is_admin: true, is_dev: true, operating_role: 'vc', operating_roles: ['vc', 'pd'] });
   if (value.includes('/api/dashboard/posts/manifest')) return ok({ revision: 'mobile-smoke', sources: [{ source: 'canonical', upperBound: 1 }, { source: 'dashboard', upperBound: 0 }] }, { etag: '"mobile-smoke"' });
   if (value.includes('/api/dashboard/posts/page')) return ok({ source: 'canonical', afterId: 0, nextCursor: 1, done: true, upperBound: 1, revision: 'mobile-smoke', posts: [post] });
   if (value.includes('/api/dashboard/posts/media')) {
@@ -104,7 +104,7 @@ const fetchStub = async (url, options = {}) => {
     { handle: 'reels.fixture', label: 'Reels fixture', group: 'sentient', is_active: true, total_posts: 1, hot_threshold: 600, scrape_mode: 'reels' },
     { handle: 'both.fixture', label: 'Both fixture', group: 'sentient', is_active: false, total_posts: 1, hot_threshold: 600, scrape_mode: 'both' },
   ] });
-  if (value.includes('/api/admin/users')) return ok({ users: [{ email: 'user03@example.com', display_name: 'User 03', operating_role: 'vc', operating_roles: ['vc', 'pd'], is_admin: true, slack_user_id: 'U0000000012' }] });
+  if (value.includes('/api/admin/users')) return ok({ users: [{ email: 'developer@example.test', display_name: 'Developer', operating_role: 'vc', operating_roles: ['vc', 'pd'], is_admin: true, slack_user_id: 'U0000000012' }] });
   if (value.includes('/api/admin/usage')) return ok({ active_users_7d: 1, active_users_30d: 1, total_events_in_range: 10, users: [] });
   if (value.includes('/api/admin/disk-status')) return ok({ pct_used: 25, free_mb: 750 });
   if (value.includes('/api/admin/slack-status')) return ok({ configured: true, alert_groups: 'queue' });

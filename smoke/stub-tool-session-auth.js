@@ -1,6 +1,6 @@
 export * from './stub-firebase-auth.js';
 
-const auth = { currentUser: { email: 'user03@example.com', getIdToken: async () => 'tok' } };
+const auth = { currentUser: { email: 'developer@example.test', getIdToken: async () => 'tok' } };
 const listeners = new Set();
 export function getAuth() { return auth; }
 export function onAuthStateChanged(_auth, callback) {

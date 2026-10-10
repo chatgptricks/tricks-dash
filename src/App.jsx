@@ -793,11 +793,7 @@ function buildDatePresets(ranges) {
   return presets;
 }
 
-const DEV_EMAIL = 'user03@example.com';
-const ROLE_SWITCHER_DEFAULTS = Object.freeze({
-  [DEV_EMAIL]: ['sales', 'pd', 'vc', 'trainee', 'admin'],
-  'user05@example.com': ['sales', 'pd', 'vc', 'trainee', 'admin'],
-});
+const PREVIEW_ROLES = Object.freeze(['sales', 'pd', 'vc', 'trainee', 'admin']);
 const ACTIVE_ROLE_PREVIEWS = new Set(['sales', 'pd', 'vc', 'trainee', 'admin']);
 const readRolePreview = () => {
   try { return window.sessionStorage.getItem('sentient.queueRolePreview') || ''; }
@@ -809,7 +805,7 @@ export function DevRolePreview({ isDev, canSwitchRoles = false, availableRoles =
   const { t } = usePrefs();
   const [open, setOpen] = useState(false);
   const requestedRole = readRolePreview();
-  const options = [...new Set((isDev ? ROLE_SWITCHER_DEFAULTS[DEV_EMAIL] : availableRoles).filter((role) => ['sales', 'pd', 'vc', 'trainee', 'admin'].includes(role)))];
+  const options = [...new Set((isDev ? PREVIEW_ROLES : availableRoles).filter((role) => ['sales', 'pd', 'vc', 'trainee', 'admin'].includes(role)))];
   const active = options.includes(requestedRole) ? requestedRole : '';
   if (!isDev && !canSwitchRoles) return null;
   const label = { sales: 'Sales', pd: 'Post Designer', vc: 'Viral Coordinator', trainee: 'Trainee', admin: 'Admin' }[active] || (isDev ? 'Dev' : 'Role');
@@ -819,7 +815,7 @@ export function DevRolePreview({ isDev, canSwitchRoles = false, availableRoles =
     else window.sessionStorage.removeItem('sentient.queueRolePreview');
     window.location.reload();
   };
-  return <div className="dev-role-preview"><button type="button" onClick={() => setOpen((value) => !value)} aria-expanded={open}><span>{isDev ? 'DEV' : t("ROLE")}</span>{label}</button>{open ? <div className="dev-role-preview-panel"><strong>{isDev ? t("Role preview") : t("Active role")}</strong><p>{isDev ? t("Only visible to User 03.") : t("Switch among your assigned roles.")}</p><label>{t("Active role")}<select value={active} onChange={choose}><option value="">{isDev ? t("Dev · full access") : t("Use my default role")}</option>{options.map((role) => <option key={role} value={role}>{t(({ sales: 'Sales', pd: 'Post Designer', vc: 'Viral Coordinator', trainee: 'Trainee', admin: 'Admin' })[role])}</option>)}</select></label></div> : null}</div>;
+  return <div className="dev-role-preview"><button type="button" onClick={() => setOpen((value) => !value)} aria-expanded={open}><span>{isDev ? 'DEV' : t("ROLE")}</span>{label}</button>{open ? <div className="dev-role-preview-panel"><strong>{isDev ? t("Role preview") : t("Active role")}</strong><p>{isDev ? t("Preview any operating role.") : t("Switch among your assigned roles.")}</p><label>{t("Active role")}<select value={active} onChange={choose}><option value="">{isDev ? t("Dev · full access") : t("Use my default role")}</option>{options.map((role) => <option key={role} value={role}>{t(({ sales: 'Sales', pd: 'Post Designer', vc: 'Viral Coordinator', trainee: 'Trainee', admin: 'Admin' })[role])}</option>)}</select></label></div> : null}</div>;
 }
 
 function openToolTab(event, url, windowName) {
@@ -830,8 +826,6 @@ function openToolTab(event, url, windowName) {
 
 function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, sessionVersionRef, onSignOut, onUnauthorized }) {
   const homeView = false;
-  const knownRoleSwitcher = Object.prototype.hasOwnProperty.call(ROLE_SWITCHER_DEFAULTS, String(userEmail || '').trim().toLowerCase());
-  const knownDev = String(userEmail || '').trim().toLowerCase() === DEV_EMAIL;
   const [dashboard, setDashboard] = useState({ posts: [], summary: {} });
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -846,11 +840,11 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
   const [isAdmin, setIsAdmin] = useState(Boolean(initialAccess.is_admin));
   const [operatingRole, setOperatingRole] = useState(initialAccess.operating_role || 'sales');
   const [operatingRoles, setOperatingRoles] = useState(initialAccess.operating_roles || [initialAccess.operating_role || 'sales']);
-  const [isDev, setIsDev] = useState(Boolean(initialAccess.is_dev) || knownDev);
+  const [isDev, setIsDev] = useState(Boolean(initialAccess.is_dev));
   const [canAccessNews, setCanAccessNews] = useState(Boolean(initialAccess.can_access_news));
   const [canSelfAssign, setCanSelfAssign] = useState(Boolean(initialAccess.can_self_assign));
-  const [canSwitchRoles, setCanSwitchRoles] = useState(knownRoleSwitcher);
-  const [availableRoles, setAvailableRoles] = useState(() => ROLE_SWITCHER_DEFAULTS[String(userEmail || '').trim().toLowerCase()] || []);
+  const [canSwitchRoles, setCanSwitchRoles] = useState(Boolean(initialAccess.can_role_switch));
+  const [availableRoles, setAvailableRoles] = useState(() => initialAccess.available_operating_roles || initialAccess.operating_roles || []);
   const [queuePendingCount, setQueuePendingCount] = useState(0);
   const [assignmentPost, setAssignmentPost] = useState(null);
   const [captionPost, setCaptionPost] = useState(null);
@@ -887,7 +881,9 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
     };
   }, []);
   const requestedRolePreview = readRolePreview();
-  const activeRolePreview = ACTIVE_ROLE_PREVIEWS.has(requestedRolePreview) ? requestedRolePreview : '';
+  const activeRolePreview = ACTIVE_ROLE_PREVIEWS.has(requestedRolePreview)
+    && (isDev || (canSwitchRoles && availableRoles.includes(requestedRolePreview)))
+    ? requestedRolePreview : '';
   const rolePreviewActive = Boolean(activeRolePreview);
   // Apply the chosen preview synchronously. `/api/dashboard/me` remains the
   // authoritative permission source, but on a 50k-post dashboard its state
@@ -981,12 +977,12 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
     setIsAdmin(Boolean(body.is_admin));
     setOperatingRole(body.operating_role || 'sales');
     setOperatingRoles(body.operating_roles || [body.operating_role || 'sales']);
-    setIsDev(Boolean(body.is_dev) || knownDev);
+    setIsDev(Boolean(body.is_dev));
     setCanAccessNews(Boolean(body.can_access_news));
     setCanSelfAssign(Boolean(body.can_self_assign));
-    setCanSwitchRoles(Boolean(body.can_role_switch) || knownRoleSwitcher);
-    setAvailableRoles(Array.isArray(body.available_operating_roles) ? body.available_operating_roles : (ROLE_SWITCHER_DEFAULTS[String(userEmail || '').trim().toLowerCase()] || body.operating_roles || []));
-  }, [knownDev, knownRoleSwitcher, userEmail]);
+    setCanSwitchRoles(Boolean(body.can_role_switch));
+    setAvailableRoles(Array.isArray(body.available_operating_roles) ? body.available_operating_roles : (body.operating_roles || []));
+  }, []);
   const loadAccess = useCallback(async (signal) => {
     try {
       const response = await apiFetch(`${API_BASE}/api/dashboard/me`, { signal });
@@ -2463,7 +2459,7 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
           {selected ? (
             <PostDetailPanel
               post={selected}
-              captionExtra={<>{selected.account === 'chatgptricks' ? <CanvaLine url={canvaLinkForPost(selected.postDate)} /> : null}<button type="button" className="ghost-button caption-ai-button" onClick={() => setCaptionPost(selected)}><Sparkles size={13} />{t('Generate similar caption')}</button>{knownDev ? <DevJevTools post={selected} onGoldenNugget={(result) => rememberGoldenNugget(selected, result)} /> : null}{poolAccess ? <><button type="button" className="ghost-button" onClick={() => setAssignmentPost(selected)}><ListTodo size={13} />{t("Send to Pool")}</button><QuickAddButton key={selected.postKey} post={selected} onQuickAdd={quickAddToPool} onAdded={closeSidebar} /></> : null}</>}
+              captionExtra={<>{selected.account === 'chatgptricks' ? <CanvaLine url={canvaLinkForPost(selected.postDate)} /> : null}<button type="button" className="ghost-button caption-ai-button" onClick={() => setCaptionPost(selected)}><Sparkles size={13} />{t('Generate similar caption')}</button>{isDev && !rolePreviewActive ? <DevJevTools post={selected} onGoldenNugget={(result) => rememberGoldenNugget(selected, result)} /> : null}{poolAccess ? <><button type="button" className="ghost-button" onClick={() => setAssignmentPost(selected)}><ListTodo size={13} />{t("Send to Pool")}</button><QuickAddButton key={selected.postKey} post={selected} onQuickAdd={quickAddToPool} onAdded={closeSidebar} /></> : null}</>}
             />
           ) : null}
 
@@ -5073,7 +5069,7 @@ export function SettingsPanel({
                       <input
                         value={newUserDisplayName}
                         onChange={(event) => setNewUserDisplayName(event.target.value)}
-                        placeholder={t("e.g. User 03")}
+                        placeholder={t("e.g. Alex")}
                         required
                       />
                     </label>

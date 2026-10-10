@@ -12,12 +12,12 @@ const output=path.resolve('work/bilingual-dashboard');fs.mkdirSync(output,{recur
 const server=await createServer({mode:'test',logLevel:'error',cacheDir:path.join(temporary,'vite-cache'),resolve:{alias:{'firebase/auth':path.resolve('smoke/stub-firebase-auth.js'),'firebase/app':path.resolve('smoke/stub-firebase-app.js')}},server:{host:'localhost',port:0}});
 await server.listen();const base=server.resolvedUrls.local[0].replace(/\/$/,'');
 const chrome='/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-const email='user03@example.com',date='2026-10-08T12:00:00Z';
+const email='developer@example.test',date='2026-10-08T12:00:00Z';
 const viewer={email,is_dev:true,is_admin:true,isDev:true,isAdmin:true,operating_roles:['admin','vc'],operatingRoles:['admin','vc'],queue_role_preview_active:false};
 const accounts=[{handle:'alpha',label:'Alpha Studio',full_name:'Alpha Studio',group:'sentient',followers:1200,active:1,is_active:true}];
 const posts=[{id:1,postKey:'alpha:SMOKE1',shortcode:'SMOKE1',account:'alpha',caption:'Original English caption stays intact.',postType:'Carousel',type:'Carousel',likes:2000,comments:20,postDate:date,coverUrl:'https://fixture.test/cover.svg',permalink:'https://instagram.com/p/SMOKE1/'}];
 const promo={account:'alpha',shortcode:'PROMO1',client:'Original Brand',product:'Original English product',classification:'disclosed',review_status:'new',published_at:date,first_detected_at:date,caption:'Original sponsored caption.',evidence:[{family:'explicit',text:'Original sponsored evidence.'}],cover_source_url:'https://fixture.test/cover.svg'};
-const queue={viewer:{...viewer,displayName:'User 03',accounts:['alpha']},date:date.slice(0,10),requests:[],pickRequests:[],hotPickRequests:[],planningRequests:[],assignedRequests:[],liveDrafts:[],presence:{},timeBlocks:[],designers:[],schedulerUsers:[],accounts,tags:[],priorities:['low','medium','high'],hours:{start:0,end:1440}};
+const queue={viewer:{...viewer,displayName:'Developer',accounts:['alpha']},date:date.slice(0,10),requests:[],pickRequests:[],hotPickRequests:[],planningRequests:[],assignedRequests:[],liveDrafts:[],presence:{},timeBlocks:[],designers:[],schedulerUsers:[],accounts,tags:[],priorities:['low','medium','high'],hours:{start:0,end:1440}};
 let browser;
 try {
  browser=await chromium.launch({headless:true,executablePath:process.env.CHROME_PATH||(fs.existsSync(chrome)?chrome:undefined)});

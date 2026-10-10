@@ -11,7 +11,7 @@ import { createServer } from 'vite';
 const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'sentient-queue-reuse-'));
 const output = path.resolve('work/queue-reuse');
 fs.mkdirSync(output, { recursive: true });
-const viewerEmail = 'coordinator@sentientagency.io';
+const viewerEmail = 'coordinator@example.test';
 const server = await createServer({
   logLevel: 'error', cacheDir: path.join(temporary, 'vite-cache'),
   resolve: { alias: {
@@ -19,7 +19,7 @@ const server = await createServer({
     'firebase/app': path.resolve('smoke/stub-firebase-app.js'),
   } },
   plugins: [{ name: 'reuse-vc-auth', transform(code, id) {
-    return id.endsWith('/smoke/stub-firebase-auth.js') ? code.replaceAll('user03@example.com', viewerEmail) : null;
+    return id.endsWith('/smoke/stub-firebase-auth.js') ? code.replaceAll('developer@example.test', viewerEmail) : null;
   } }],
   server: { host: 'localhost', port: 4203 },
 });
@@ -36,7 +36,7 @@ const researchPost = {
   coverUrl: 'https://reuse-fixtures.test/cover.svg',
 };
 const oldTask = {
-  id: 400, status: 'closed', designerEmail: 'original@sentientagency.io', coordinatorEmail: viewerEmail,
+  id: 400, status: 'closed', designerEmail: 'staff-7@example.test', coordinatorEmail: viewerEmail,
   scheduledDate: '2026-09-21', scheduledStartMinutes: 540, durationMinutes: 30, minutesPerPP: 10,
   productionPoints: 3, priority: 'normal', tags: ['content'], brief: 'Original brief', notes: 'Original notes',
   references: [sourceUrl], attachments: [], recommendedAccounts: ['alpha.studio'], post: researchPost,
@@ -49,8 +49,8 @@ const accounts = [
 const queue = {
   viewer, date: today, requests: [oldTask], pickRequests: [], hotPickRequests: [], planningRequests: [],
   assignedRequests: [], liveDrafts: [], liveRevision: 0, presence: {}, timeBlocks: [], pendingTicketCount: 0,
-  designers: [{ email: 'original@sentientagency.io', displayName: 'Original Designer', roles: ['pd'], isQueueDesigner: true, accounts: ['alpha.studio'] }],
-  schedulerUsers: [{ email: 'original@sentientagency.io', displayName: 'Original Designer', roles: ['pd'], isQueueDesigner: true, accounts: ['alpha.studio'] }],
+  designers: [{ email: 'staff-7@example.test', displayName: 'Original Designer', roles: ['pd'], isQueueDesigner: true, accounts: ['alpha.studio'] }],
+  schedulerUsers: [{ email: 'staff-7@example.test', displayName: 'Original Designer', roles: ['pd'], isQueueDesigner: true, accounts: ['alpha.studio'] }],
   accounts, accountOnboarding: { completed: true, selectedAccounts: [] }, tags: ['content'],
   priorities: ['normal', 'urgent'], hours: { start: 0, end: 1440 },
 };

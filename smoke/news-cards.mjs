@@ -51,7 +51,7 @@ try {
     const request = route.request(), url = new URL(request.url());
     if (url.pathname.startsWith('/api/')) {
       let data = {};
-      if (url.pathname === '/api/dashboard/me') data = { email: 'user03@example.com', is_admin: true, is_dev: true };
+      if (url.pathname === '/api/dashboard/me') data = { email: 'developer@example.test', is_admin: true, is_dev: true };
       else if (url.pathname.endsWith('/me/preferences')) data = { preferences: { theme: 'light', accent: 'lime', effects: 'off' } };
       else if (url.pathname === '/api/dashboard/news') data = { items, reviews, saved };
       else if (url.pathname === '/api/dashboard/news/save') {

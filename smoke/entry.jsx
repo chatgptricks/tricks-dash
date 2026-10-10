@@ -60,7 +60,8 @@ const stubFetch = async (url, options = {}) => {
       return new Promise(resolve => heldListReads.push(() => resolve({ ok: true, status: 200, json: async () => ({ lists: snapshot }) })));
     } else body = { lists: storedLists };
   }
-  else if (u.includes('/api/admin/me')) body = { role: 'admin', email: 'user03@example.com' };
+  else if (u.includes('/api/dashboard/me')) body = { is_dev: true, is_admin: true, can_role_switch: true, operating_roles: ['vc', 'pd'] };
+  else if (u.includes('/api/admin/me')) body = { role: 'admin', email: 'developer@example.test' };
   return { ok: true, status: 200, headers: { get: (key) => String(key).toLowerCase() === 'etag' && u.includes('/manifest') ? '"desktop-smoke"' : null }, json: async () => body, text: async () => JSON.stringify(body) };
 };
 globalThis.fetch = stubFetch;
@@ -172,7 +173,7 @@ const el = document.getElementById('root') || document.body.appendChild(document
 
   await click(q('.settings-menu-trigger'));
   inter['settings menu opens'] = Boolean(q('.settings-menu-panel'));
-  inter['menu shows the email'] = /sentientagency\.io/.test(q('.settings-menu-footer')?.textContent || '');
+  inter['menu shows the email'] = /example\.test/.test(q('.settings-menu-footer')?.textContent || '');
   inter['sign out lives in the menu'] = /Sign out/.test(q('.settings-menu-panel')?.textContent || '');
   // Close it again -- later Escape presses for the filter popovers would
   // otherwise close this too (same keydown listener), and the theme/language

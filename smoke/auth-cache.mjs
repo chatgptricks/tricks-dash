@@ -174,6 +174,30 @@ try {
   await flush();
   assert.ok(card('ERROR_PRIVATE'), 'a transient access failure recovers on retry');
 
+  const capabilityEmail = 'capabilities@example.test';
+  const deniedCapabilities = { is_dev: false, is_admin: false, can_role_switch: false, operating_role: 'sales', operating_roles: ['sales'] };
+  accessRoutes.set(capabilityEmail, () => ok(deniedCapabilities));
+  window.sessionStorage.setItem('sentient.queueRolePreview', 'admin');
+  await switchTo(capabilityEmail);
+  await flush();
+  assert.equal(view.querySelector('.dev-role-preview'), null, 'identity alone must not grant developer or role-switching controls');
+  assert.equal(view.querySelector('.product-nav a[href="/insights.html"]'), null, 'an unassigned stored role must not elevate the workspace UI');
+  window.sessionStorage.removeItem('sentient.queueRolePreview');
+  accessRoutes.set(capabilityEmail, () => ok({ ...deniedCapabilities, is_dev: true }));
+  await switchTo(capabilityEmail);
+  await flush();
+  await click(view.querySelector('.dev-role-preview > button'));
+  assert.deepEqual([...view.querySelectorAll('.dev-role-preview select option')].map((option) => option.value), ['', 'sales', 'pd', 'vc', 'trainee', 'admin'], 'server-granted developer access permits all operating-role previews');
+  accessRoutes.set(capabilityEmail, () => ok({ ...deniedCapabilities, can_role_switch: true, available_operating_roles: ['pd', 'vc'] }));
+  await switchTo(capabilityEmail);
+  await flush();
+  await click(view.querySelector('.dev-role-preview > button'));
+  assert.deepEqual([...view.querySelectorAll('.dev-role-preview select option')].map((option) => option.value), ['', 'pd', 'vc'], 'non-developers can preview only their server-assigned roles');
+  accessRoutes.set(capabilityEmail, () => ok(deniedCapabilities));
+  await switchTo(capabilityEmail);
+  await flush();
+  assert.equal(view.querySelector('.dev-role-preview'), null, 'revoked server capabilities must not persist for the same identity');
+
   let finishLatePage;
   latePageResponse = new Promise((resolve) => { finishLatePage = resolve; });
   await switchTo('late@example.test');
@@ -189,7 +213,7 @@ try {
   });
   assert.equal(await app.readDashboardSnapshot('late@example.test'), null, 'late JSON must not recreate a signed-out cache before React cleanup');
   assert.equal(card('LATE_PRIVATE'), null);
-  console.log('Research authorization, denied cache, account switching, timeout retry, sign-out and late-response checks passed.');
+  console.log('Research authorization, denied cache, account switching, server capabilities, timeout retry, sign-out and late-response checks passed.');
 } finally {
   await app.act(async () => app.unmount());
   dom.window.close();

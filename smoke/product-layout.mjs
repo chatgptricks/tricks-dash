@@ -20,7 +20,7 @@ const tools = ['research', 'queue', 'promos', 'tracker', 'insights', 'hooks', 'v
 const navPaths = ['/index.html', '/queue.html', '/tracker.html', '/promos.html', '/vault.html', '/hooks.html', '/news.html', '/insights.html'];
 const widths = cardsOnly ? [1920, 1440, 1280, 960, 700, 460, 390] : [1920, 1440, 1280, 390];
 const errors = [], violations = [], measurements = [];
-const email = 'user03@example.com';
+const email = 'developer@example.test';
 const viewer = { email, is_dev: true, is_admin: true, isDev: true, isAdmin: true, operating_roles: ['admin', 'vc'], operatingRoles: ['admin', 'vc'], queue_role_preview_active: false };
 const image = '<svg xmlns="http://www.w3.org/2000/svg" width="600" height="800"><rect width="600" height="800" fill="#22443b"/><text x="40" y="420" fill="white" font-size="35">A useful creative idea</text></svg>';
 const imageUrl = 'https://layout-images.test/cover.svg';
@@ -33,7 +33,7 @@ const vaultBase = { id: 'layout-link', title: 'A useful creative idea', url: 'ht
 const vault = Array.from({ length: 6 }, (_, index) => ({ ...vaultBase, id: `link-${index}`, priority: index, title: `Creative idea ${index + 1}`, tweet_image: index === 5 ? '' : index === 4 ? 'https://layout-images.test/broken.svg' : imageUrl }));
 const news = Array.from({ length: 6 }, (_, index) => ({ id: `story-${index}`, title: `Research team shares AI discovery ${index + 1}`, description: 'A closer look at the evidence behind a useful new creative workflow, with practical ideas for the next project.', link: `https://example.test/story-${index}`, image: index === 5 ? '' : index === 4 ? 'https://layout-images.test/broken.svg' : imageUrl, published: new Date().toISOString(), publisher: 'Creative Research', source: 'Research news', sourceType: 'news', feedLabel: 'AI research', feedId: 'ow6LmNtmgkH0e876' }));
 const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Costa_Rica' }).format(new Date());
-const queue = { viewer: { ...viewer, displayName: 'User 03', accounts: ['alpha'] }, date: day, requests: [], pickRequests: [], hotPickRequests: [], planningRequests: [], assignedRequests: [], liveDrafts: [], liveRevision: 0, presence: {}, timeBlocks: [], pendingTicketCount: 0, designers: [{ email, accounts: ['alpha'] }], schedulerUsers: [{ email, displayName: 'User 03', roles: ['vc', 'pd'], isQueueDesigner: true, accounts: ['alpha'] }], accounts, accountOnboarding: { completed: true, selectedAccounts: ['alpha'] }, tags: [], priorities: ['low', 'medium', 'high'], hours: { start: 0, end: 1440 } };
+const queue = { viewer: { ...viewer, displayName: 'Developer', accounts: ['alpha'] }, date: day, requests: [], pickRequests: [], hotPickRequests: [], planningRequests: [], assignedRequests: [], liveDrafts: [], liveRevision: 0, presence: {}, timeBlocks: [], pendingTicketCount: 0, designers: [{ email, accounts: ['alpha'] }], schedulerUsers: [{ email, displayName: 'Developer', roles: ['vc', 'pd'], isQueueDesigner: true, accounts: ['alpha'] }], accounts, accountOnboarding: { completed: true, selectedAccounts: ['alpha'] }, tags: [], priorities: ['low', 'medium', 'high'], hours: { start: 0, end: 1440 } };
 const authSource = fs.readFileSync('smoke/stub-firebase-auth.js', 'utf8').replaceAll('{ email:', "{ uid: 'layout-user', email:");
 const appSource = fs.readFileSync('smoke/stub-firebase-app.js', 'utf8');
 const chartSource = 'class Chart { static defaults={font:{}}; constructor() {} destroy() {} update() {} }';

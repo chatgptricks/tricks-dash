@@ -21,7 +21,7 @@ const server = await createServer({
 await server.listen();
 const base = server.resolvedUrls.local[0].replace(/\/$/, '');
 const chrome = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-const email = 'user03@example.com';
+const email = 'developer@example.test';
 const viewer = { email, is_dev: true, is_admin: true, operating_roles: ['admin', 'vc'] };
 const accounts = [{ handle: 'chatgptricks', label: 'ChatGPTricks', group: 'sentient', active: 1, is_active: true }];
 const sample = {

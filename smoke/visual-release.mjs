@@ -29,7 +29,7 @@ await page.route('https://cortex-api-db2e.onrender.com/**', async route=>{
  else if(url.includes('/lists'))data={lists:[]};
  else if(url.includes('/me/preferences')){if(route.request().method()==='POST'){preferenceWrites.push(route.request().postDataJSON());data={preferences:{}};}else data={preferences:{accent:'blue'}};}
  else if(url.includes('/golden-nuggets'))data={items:[{account:'chatgptricks',shortcode:'VIS4',label:'golden_nugget',targetAccount:'chatgptricks',score:0.8}]};
- else if(url.includes('/admin/me'))data={role:'admin',is_dev:true,email:'user03@example.com'};
+ else if(url.includes('/admin/me')||url.includes('/dashboard/me'))data={role:'admin',is_dev:true,is_admin:true,operating_roles:['vc','pd'],email:'developer@example.test'};
  await route.fulfill({json:data});
 });
 await page.addInitScript(()=>{localStorage.setItem('sentient.lang','en');localStorage.setItem('sentient.theme','dark');});
@@ -115,7 +115,7 @@ payload.accountOnboarding.completed=true; window.__queueFixture=payload;`;
  await page.route('https://covers.test/**',route=>route.request().url().includes('cover_attempt=0')?route.fulfill({status:503,body:''}):route.fulfill({contentType:'image/svg+xml',body:decodeURIComponent(cover.slice(cover.indexOf(',')+1))}));
  await page.route('**/api/dashboard/queue/**',route=>{
   const url=route.request().url();
-  return route.fulfill({json:url.includes('/history')?{events:Array.from({length:15},(_,i)=>({id:i,type:'scheduled',actorEmail:'user03@example.com',createdAt:new Date().toISOString()}))}:/\/requests\/\d+(?:\?|$)/.test(url)?{request:queueData.requests.find(task=>task.id===Number(url.match(/requests\/(\d+)/)[1]))}:queueData});
+  return route.fulfill({json:url.includes('/history')?{events:Array.from({length:15},(_,i)=>({id:i,type:'scheduled',actorEmail:'developer@example.test',createdAt:new Date().toISOString()}))}:/\/requests\/\d+(?:\?|$)/.test(url)?{request:queueData.requests.find(task=>task.id===Number(url.match(/requests\/(\d+)/)[1]))}:queueData});
  });
  await page.goto(`${base}/queue.html?desktop=1`);await page.waitForSelector('.scheduler-block.state-scheduled');
  const queueRow=page.locator('.queue-admin-assignment-row.state-scheduled');

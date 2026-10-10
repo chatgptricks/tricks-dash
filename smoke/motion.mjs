@@ -22,7 +22,7 @@ const bundled = await build({
   }}],
 });
 const assets=new Map(bundled.outputFiles.map(file=>[path.basename(file.path),file.text]));
-const fixtureAuth=`const fixtureUser={uid:'motion-fixture',email:'user03@example.com',getIdToken:async()=> 'fixture-token'};const fixtureAuth={currentUser:fixtureUser};const getAuth=()=>fixtureAuth;class GoogleAuthProvider{setCustomParameters(){}}const getRedirectResult=async()=>null;const onAuthStateChanged=(_auth,callback)=>{queueMicrotask(()=>callback(fixtureUser));return ()=>{}};const signInWithPopup=async()=>null;const signInWithRedirect=async()=>null;const signOut=async()=>null;const setPersistence=async()=>null;const browserLocalPersistence={};`;
+const fixtureAuth=`const fixtureUser={uid:'motion-fixture',email:'developer@example.test',getIdToken:async()=> 'fixture-token'};const fixtureAuth={currentUser:fixtureUser};const getAuth=()=>fixtureAuth;class GoogleAuthProvider{setCustomParameters(){}}const getRedirectResult=async()=>null;const onAuthStateChanged=(_auth,callback)=>{queueMicrotask(()=>callback(fixtureUser));return ()=>{}};const signInWithPopup=async()=>null;const signInWithRedirect=async()=>null;const signOut=async()=>null;const setPersistence=async()=>null;const browserLocalPersistence={};`;
 const chartFixture=`class Chart{static defaults={font:{}};static owners=new Map();constructor(canvas){if(Chart.owners.has(canvas))throw new Error('Canvas already in use');this.canvas=canvas;Chart.owners.set(canvas,this)}destroy(){Chart.owners.delete(this.canvas)}}`;
 const image='<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600"><defs><linearGradient id="a"><stop stop-color="#25483d"/><stop offset="1" stop-color="#39325a"/></linearGradient></defs><rect width="800" height="600" fill="url(#a)"/><circle cx="560" cy="200" r="130" fill="#7da59c" opacity=".25"/><text x="65" y="430" fill="#e8eee9" font-size="44" font-family="sans-serif">A useful creative idea</text></svg>';
 const hooks=[
@@ -68,7 +68,7 @@ async function pageFixture({reduced=false,effects='immersive',touch=false,theme=
       const method=route.request().method();
       assert.ok(method==='GET'||url.pathname.endsWith('/me/preferences'),'Motion QA must not issue content mutations');
       let data={};
-      if(url.pathname==='/api/dashboard/me')data={is_dev:true,is_admin:true,operating_roles:['admin','vc'],queue_role_preview_active:false,email:'user03@example.com'};
+      if(url.pathname==='/api/dashboard/me')data={is_dev:true,is_admin:true,operating_roles:['admin','vc'],queue_role_preview_active:false,email:'developer@example.test'};
       else if(url.pathname.endsWith('/me/preferences'))data={preferences:{effects,theme,language:'en'}};
       else if(url.pathname==='/api/dashboard/vault')data={items:vault};
       else if(url.pathname==='/api/dashboard/hooks')data={results:hooks,status:{total:2,captions:1,ocr:1,categorized:2,pending:0,drafts:0}};

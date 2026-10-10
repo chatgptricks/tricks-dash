@@ -1,7 +1,7 @@
 import { act } from 'react';
 
 const ok = (body) => ({ ok: true, status: 200, json: async () => body, text: async () => JSON.stringify(body) });
-const users = [{ email: 'user03@example.com', display_name: 'User 03', role: 'admin', operating_role: 'vc', operating_roles: '["vc","pd","dev"]', is_admin: 1, slack_user_id: 'U0000000012', avatar_url: '/api/dashboard/user-avatar/U0000000012' }];
+const users = [{ email: 'developer@example.test', display_name: 'Developer', role: 'admin', operating_role: 'vc', operating_roles: '["vc","pd","dev"]', is_admin: 1, slack_user_id: 'U0000000012', avatar_url: '/api/dashboard/user-avatar/U0000000012' }];
 const accounts = [{ handle: 'chatgptricks', label: 'ChatGPTricks', group: 'sentient', group_name: 'sentient', subcategory: 'ai_automation', research_enabled: true, promos_enabled: false, hot_threshold: 600, scrape_mode: 'posts', is_active: true, followers: 1, total_posts: 1, avg_likes: 1 }];
 accounts.push({ ...accounts[0], handle: 'fixture.account', label: 'Fixture account', scrape_mode: 'reels' });
 accounts.push({ ...accounts[0], handle: 'fixture.both', label: 'Both fixture', scrape_mode: 'both' });
@@ -53,7 +53,7 @@ const stubFetch = async (url, options = {}) => {
     }
     return ok({ users });
   }
-  if (value.includes('/api/admin/queue/designer-accounts')) return ok({ designers: [{ email: users[0].email, displayName: 'User 03', accounts: ['chatgptricks'] }] });
+  if (value.includes('/api/admin/queue/designer-accounts')) return ok({ designers: [{ email: users[0].email, displayName: 'Developer', accounts: ['chatgptricks'] }] });
   if (value.includes('/api/admin/disk-status')) return ok({ pct_used: 22, used_mb: 220, total_mb: 1000, free_mb: 780 });
   if (value.includes('/api/admin/slack-status')) return ok({ configured: true, alert_groups: 'queue, system' });
   if (value.includes('/api/admin/ocr/status')) return ok({ running: false, remaining: 0, with_text_total: 100, done: 0 });
@@ -174,17 +174,17 @@ const clickTab = async (label) => {
     await clickTab('Users');
     checks['User admin controls are collapsed by default'] = !document.querySelector('.settings-user-admin-panel');
     await act(async () => {
-      document.querySelector('[aria-label="Open admin options for user03@example.com"]').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+      document.querySelector('[aria-label="Open admin options for developer@example.test"]').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
     });
-    checks['Users centralizes identity and roles'] = Boolean(document.querySelector('[aria-label="Display name for user03@example.com"]'))
+    checks['Users centralizes identity and roles'] = Boolean(document.querySelector('[aria-label="Display name for developer@example.test"]'))
       && Boolean(document.querySelector('.settings-user-admin-toggle'))
       && Boolean(document.querySelector('.settings-user-admin-accounts'));
     checks['Users show Slack avatar slot'] = Boolean(document.querySelector('.settings-user-avatar img'));
 
-    const nameInput = document.querySelector('[aria-label="Display name for user03@example.com"]');
+    const nameInput = document.querySelector('[aria-label="Display name for developer@example.test"]');
     const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
     await act(async () => {
-      setter.call(nameInput, 'User 03 edited');
+      setter.call(nameInput, 'Developer edited');
       nameInput.dispatchEvent(new window.Event('input', { bubbles: true }));
     });
     rejectUserSave = true;
@@ -192,14 +192,14 @@ const clickTab = async (label) => {
       document.querySelector('.settings-user-savebar .primary').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
       await new Promise((resolve) => setTimeout(resolve, 30));
     });
-    checks['Failed save preserves the typed draft'] = nameInput.value === 'User 03 edited' && /Test validation failure/.test(document.querySelector('.settings-user-save-error')?.textContent || '');
+    checks['Failed save preserves the typed draft'] = nameInput.value === 'Developer edited' && /Test validation failure/.test(document.querySelector('.settings-user-save-error')?.textContent || '');
     checks['Failed save offers retry without retyping'] = /Retry save/.test(document.querySelector('.settings-user-savebar .primary')?.textContent || '');
     rejectUserSave = false;
     await act(async () => {
       document.querySelector('.settings-user-savebar .primary').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
       await new Promise((resolve) => setTimeout(resolve, 30));
     });
-    checks['Retry confirms saved data and clears the error'] = users[0].display_name === 'User 03 edited' && !document.querySelector('.settings-user-save-error') && document.querySelector('.settings-user-savebar .primary').disabled;
+    checks['Retry confirms saved data and clears the error'] = users[0].display_name === 'Developer edited' && !document.querySelector('.settings-user-save-error') && document.querySelector('.settings-user-savebar .primary').disabled;
     checks['Saved badge retains the Slack avatar'] = Boolean(document.querySelector('.settings-user-avatar img'));
 
     await clickTab('Usage');

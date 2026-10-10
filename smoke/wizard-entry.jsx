@@ -10,7 +10,7 @@ const stub = async (u) => {
   if (s.includes('/api/dashboard/posts')) return { ok: true, status: 200, json: async () => ({ posts: [], summary: {}, ranges: {} }) };
   if (s.includes('/api/dashboard/accounts')) return { ok: true, status: 200, json: async () => ({ accounts: [] }) };
   if (s.includes('/api/dashboard/lists')) return { ok: true, status: 200, json: async () => ({ lists: [] }) };
-  if (s.includes('/api/dashboard/me')) return { ok: true, status: 200, json: async () => ({ email: 'user03@example.com', is_admin: true, is_dev: true }) };
+  if (s.includes('/api/dashboard/me')) return { ok: true, status: 200, json: async () => ({ email: 'developer@example.test', is_admin: true, is_dev: true }) };
   if (s.includes('/api/admin/accounts')) return { ok: true, status: 200, json: async () => ({ accounts: [] }) };
   if (s.includes('/api/admin/users')) return { ok: true, status: 200, json: async () => ({ users: [] }) };
   if (s.includes('/api/admin/queue/designer-accounts')) return { ok: true, status: 200, json: async () => ({ designers: [] }) };

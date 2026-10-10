@@ -21,7 +21,7 @@ const server = await createServer({
 await server.listen();
 const base = server.resolvedUrls.local[0].replace(/\/$/, '');
 const chrome = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-const email = 'user03@example.com';
+const email = 'developer@example.test';
 const viewer = { email, is_admin: true, is_dev: true };
 const preferences = { theme: 'dark', accent: 'coral', language: 'en', effects: 'off' };
 const accounts = [
@@ -65,7 +65,7 @@ try {
       if (url.pathname.endsWith('/me')) body = viewer;
       else if (url.pathname.endsWith('/accounts/backfill-status')) body = { running: false, queue: [], tasks: [] };
       else if (url.pathname.endsWith('/accounts')) body = { accounts };
-      else if (url.pathname.endsWith('/users')) body = { users: [{ email, display_name: 'User 03', role: 'admin', is_admin: true }] };
+      else if (url.pathname.endsWith('/users')) body = { users: [{ email, display_name: 'Developer', role: 'admin', is_admin: true }] };
       else if (url.pathname.endsWith('/designer-accounts')) body = { designers: [] };
       else if (url.pathname.endsWith('/disk-status')) body = { pct_used: 22, used_mb: 220, total_mb: 1000, free_mb: 780 };
       else if (url.pathname.endsWith('/slack-status')) body = { configured: true };

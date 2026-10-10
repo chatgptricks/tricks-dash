@@ -46,7 +46,7 @@ async function fixturePage(theme,width,{height=width===390?844:1000,longRoster=f
       else if(url.pathname.endsWith('/lists'))data={lists:[]};
       else if(url.pathname.endsWith('/me/preferences'))data={preferences:{theme,language:'en',accent:'lime',effects:'immersive'}};
       else if(url.pathname.endsWith('/golden-nuggets'))data={items:[{account:'creativebrief',shortcode:'RESEARCH9',label:'golden_nugget',targetAccount:'chatgptricks',score:.8}]};
-      else if(url.pathname.endsWith('/admin/me')||url.pathname.endsWith('/dashboard/me'))data={role:'admin',is_admin:true,is_dev:true,operating_roles:['admin','vc'],email:'user03@example.com'};
+      else if(url.pathname.endsWith('/admin/me')||url.pathname.endsWith('/dashboard/me'))data={role:'admin',is_admin:true,is_dev:true,operating_roles:['admin','vc'],email:'developer@example.test'};
       return route.fulfill({json:data});
     }
     if(url.hostname==='research-covers.test')return route.fulfill({contentType:'image/svg+xml',body:decodeURIComponent(cover(Number(url.pathname.match(/\d+/)?.[0])||0).split(',').slice(1).join(','))});

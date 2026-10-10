@@ -10,8 +10,8 @@ import { createServer } from 'vite';
 const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'sentient-queue-suggestions-'));
 const output = path.resolve('work/queue-suggestions');
 fs.mkdirSync(output, { recursive: true });
-const viewerEmail = 'designer@sentientagency.io';
-const coordinatorEmail = 'coordinator@sentientagency.io';
+const viewerEmail = 'designer@example.test';
+const coordinatorEmail = 'coordinator@example.test';
 const server = await createServer({
   logLevel: 'error', cacheDir: path.join(temporary, 'vite-cache'),
   optimizeDeps: { exclude: ['firebase/auth', 'firebase/app'] },
@@ -22,7 +22,7 @@ const server = await createServer({
   plugins: [{
     name: 'suggestion-pd-auth', enforce: 'pre',
     transform(code, id) {
-      if (id.endsWith('/smoke/stub-firebase-auth.js')) return code.replaceAll("'user03@example.com'", "(globalThis.__suggestionUserEmail || 'designer@sentientagency.io')");
+      if (id.endsWith('/smoke/stub-firebase-auth.js')) return code.replaceAll("'developer@example.test'", "(globalThis.__suggestionUserEmail || 'designer@example.test')");
       return null;
     },
   }],
@@ -43,7 +43,7 @@ const accounts = [
   { handle: 'competitor.studio', label: 'Competitor Studio', group: 'competitors', is_active: true },
 ];
 const viewer = {
-  email: viewerEmail, displayName: 'User 03 Current', isAdmin: false, isDev: false,
+  email: viewerEmail, displayName: 'Developer Current', isAdmin: false, isDev: false,
   operatingRoles: ['pd'], canSelfAssign: false,
 };
 const managedAccounts = ['alpha.studio', 'beta.studio', 'inactive.studio'];
@@ -156,7 +156,7 @@ try {
     localStorage.setItem('sentient.theme', 'dark');
     localStorage.setItem('sentient.effects', 'off');
     localStorage.setItem('sentient.queueGuide.v1', 'completed');
-    window.__suggestionUserEmail = localStorage.getItem('fixture.suggestionUser') || 'designer@sentientagency.io';
+    window.__suggestionUserEmail = localStorage.getItem('fixture.suggestionUser') || 'designer@example.test';
   });
   await context.route('**/*', async route => {
     const request = route.request(), url = new URL(request.url());
@@ -399,7 +399,7 @@ try {
   await externalTicket.waitFor();
   assert.equal(await externalTicket.getByRole('link').getAttribute('href'), externalUrl, 'The VC can review the original source before approving.');
   assert.match(await externalTicket.innerText(), /beta\.studio/);
-  assert.match(await externalTicket.innerText(), /User 03 Current/);
+  assert.match(await externalTicket.innerText(), /Developer Current/);
   assert.match(await externalTicket.innerText(), /Image/);
   assert.match(await externalTicket.innerText(), /next available/i);
   assert.match(await externalTicket.innerText(), /Explain the useful technique/);
@@ -439,7 +439,7 @@ try {
   await externalTicket.getByRole('button', { name: 'Open in Queue', exact: true }).click();
   await page.locator('.queue-request-rail').waitFor();
   assert.equal(await page.locator('.scheduler-date-picker input').inputValue(), scheduledDate, 'Opening approved work selects the actual server-confirmed day.');
-  assert.match(await page.locator('.queue-request-rail').innerText(), /User 03 Current/);
+  assert.match(await page.locator('.queue-request-rail').innerText(), /Developer Current/);
   console.log('PASS VC review shows the proposal, requires successful approval, and schedules the original PD/account only after approval.');
 
   await page.goto(`${base}/queue.html?desktop=1`);
@@ -489,7 +489,7 @@ try {
   queue.viewer = viewer;
   queue.assignedRequests = queue.requests.filter(task => task.designerEmail === viewerEmail);
   tickets.find(ticket => ticket.id === 703).suggestion.title = 'A'.repeat(160);
-  tickets.push({ id: 900, type: 'post_suggestion', status: 'pending', requesterEmail: 'another@sentientagency.io', title: 'https://another-user.example/private-suggestion', reason: 'Another person’s suggestion must not appear here.', createdAt: new Date().toISOString(), requestedAccounts: ['beta.studio'], suggestion: { title: 'Other user private suggestion', account: 'beta.studio' } });
+  tickets.push({ id: 900, type: 'post_suggestion', status: 'pending', requesterEmail: 'staff-1@example.test', title: 'https://another-user.example/private-suggestion', reason: 'Another person’s suggestion must not appear here.', createdAt: new Date().toISOString(), requestedAccounts: ['beta.studio'], suggestion: { title: 'Other user private suggestion', account: 'beta.studio' } });
   await page.evaluate(email => localStorage.setItem('fixture.suggestionUser', email), viewerEmail);
   await page.addInitScript(() => Object.defineProperty(navigator, 'userAgent', { get: () => 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1' }));
   await page.setViewportSize({ width: 390, height: 844 });

@@ -65,7 +65,7 @@ try {
     const request = route.request(), url = new URL(request.url());
     if (url.pathname.startsWith('/api/')) {
       let data = {};
-      if (url.pathname === '/api/dashboard/me') data = { is_admin: true, is_dev: true, email: 'user03@example.com' };
+      if (url.pathname === '/api/dashboard/me') data = { is_admin: true, is_dev: true, email: 'developer@example.test' };
       else if (url.pathname.endsWith('/me/preferences')) data = { preferences: {} };
       else if (url.pathname === '/api/admin/promos') {
         let items = [...stored.values()].filter(item => (!url.searchParams.get('review') || item.review_status === url.searchParams.get('review')) && (!url.searchParams.get('classification') || item.classification === url.searchParams.get('classification')));
@@ -278,7 +278,7 @@ try {
   assert.equal(scans.length, 1);
   assert.equal(await page.getByRole('button', { name: 'Scan with rules', exact: true }).isDisabled(), true);
   assert.equal(await page.getByRole('button', { name: 'Find missed promos with JEV', exact: true }).isDisabled(), true);
-  assert.deepEqual(await page.evaluate(() => JSON.parse(sessionStorage.getItem('sentient.promos.job:user03@example.com'))), { id: 'fixture-job', kind: 'rules' });
+  assert.deepEqual(await page.evaluate(() => JSON.parse(sessionStorage.getItem('sentient.promos.job:developer@example.test'))), { id: 'fixture-job', kind: 'rules' });
   failJob = true;
   await page.getByRole('button', { name: 'Reconnect to this scan', exact: true }).waitFor();
   assert.match(await page.locator('.promo-job').textContent(), /scan may still be running/);
@@ -302,7 +302,7 @@ try {
   assert.equal(await page.locator('[data-promo-key="beta:BETA"]').count(), 0, 'Scan completion refreshes the current review filter');
   assert.equal(scans.length, 1);
   assert.equal(await page.getByRole('button', { name: 'Scan with rules', exact: true }).isDisabled(), false);
-  assert.equal(await page.evaluate(() => sessionStorage.getItem('sentient.promos.job:user03@example.com')), null);
+  assert.equal(await page.evaluate(() => sessionStorage.getItem('sentient.promos.job:developer@example.test')), null);
   assert.ok(jobRequests.length >= 4);
   console.log('PASS stale server filter response, failed queue retry, running scan lock, persisted job, reconnect and current-filter refresh');
 

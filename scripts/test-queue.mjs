@@ -55,7 +55,7 @@ assert.equal(nextDayOccupied.target.scheduledStartMinutes, 60, 'cross-day collis
 const traineeAssignment = planQueueDrop({
   tasks: [],
   target: { ...target, productionPoints: 3, durationMinutes: 30 },
-  designerEmail: 'user12@example.com',
+  designerEmail: 'trainee@example.test',
   scheduledDate: '2026-09-01',
   desiredStart: 600,
   minutesPerPP: 16,

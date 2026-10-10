@@ -10,7 +10,7 @@ const directory = path.resolve("work/agent-connections");
 await mkdir(directory, { recursive: true });
 const authFixture = path.join(directory, 'firebase-auth.js');
 await writeFile(authFixture, `
-const auth = { currentUser: { email: 'user03@example.com', getIdToken: () => Promise.resolve('tok') } };
+const auth = { currentUser: { email: 'developer@example.test', getIdToken: () => Promise.resolve('tok') } };
 const observers = new Set();
 const setUser = email => {
   auth.currentUser = email ? { email, getIdToken: () => Promise.resolve('tok') } : null;
@@ -22,7 +22,7 @@ export const browserPopupRedirectResolver = {};
 export const browserLocalPersistence = {};
 export function setPersistence() { return Promise.resolve(); }
 export function onAuthStateChanged(_auth, callback) { observers.add(callback); callback(auth.currentUser); return () => observers.delete(callback); }
-export function signInWithPopup() { setUser('user03@example.com'); return Promise.resolve(); }
+export function signInWithPopup() { setUser('developer@example.test'); return Promise.resolve(); }
 export function signInWithRedirect() { return signInWithPopup(); }
 export function signOut() { setUser(null); return Promise.resolve(); }
 `);
