@@ -222,20 +222,28 @@ try {
     await f.page.getByRole('status').filter({ hasText: f.t('OAuth connection revoked.') }).waitFor();
     assert.equal(await grants.getByRole('button', { name: f.t('Revoke'), exact: true }).count(), 0);
     assert.equal(await f.page.locator('li').filter({ hasText: 'My existing agent' }).getByRole('button', { name: f.t('Revoke'), exact: true }).count(), 1);
+    assert.deepEqual(f.management, [
+      { method: 'GET', path: '/api/dashboard/me/oauth-connections' },
+      { method: 'DELETE', path: '/api/dashboard/me/oauth-connections/oauth-grant' },
+      { method: 'DELETE', path: '/api/dashboard/me/oauth-connections/oauth-grant' },
+    ], 'OAuth revocation uses its own routes while the existing agent code remains active');
     assert.equal(await f.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     await f.page.screenshot({ path: path.join(directory, `grants-${language}-390.png`), fullPage: true });
     assert.deepEqual(f.errors, []);
     await f.page.close();
   }
-  const legacy = JSON.parse(await readFile('plugins/sentient-dash/mcp.json', 'utf8'));
+  // The legacy plugin directory is a local package, not a checkout artifact.
+  // Existing agent compatibility is covered by the routed UI fixture above.
   const oauth = JSON.parse(await readFile('plugins/sentient-dash-chatgpt/mcp.json', 'utf8'));
-  assert.equal(legacy.mcpServers['sentient-dash'].extensions['com.openai'].auth.type, 'api_key');
-  assert.deepEqual(oauth.mcpServers['sentient-dash'].extensions['com.openai'].auth, {
+  const oauthServer = oauth.mcpServers['sentient-dash'];
+  assert.equal(oauthServer.type, 'streamable-http');
+  assert.equal(oauthServer.url, 'https://cortex-api-db2e.onrender.com/mcp');
+  assert.deepEqual(oauthServer.extensions['com.openai'].auth, {
     type: 'oauth', client: { mode: 'dcr' }, resource: 'https://cortex-api-db2e.onrender.com/mcp',
     baseScopes: ['sentient:read'], defaultScopes: ['sentient:read', 'sentient:write'],
   });
   const manifest = JSON.parse(await readFile('plugins/sentient-dash-chatgpt/plugin.json', 'utf8'));
   assert.equal(manifest.name, 'sentient-dash-chatgpt');
   assert.ok(manifest.extensions['com.openai'].interface.shortDescription.length <= 30);
-  console.log('OAuth consent, callbacks, scopes, account sign-in, isolated revocation, ES/EN and plugin compatibility passed.');
+  console.log('OAuth consent, callbacks, scopes, account sign-in, isolated revocation, ES/EN, legacy agent coexistence and tracked OAuth package passed.');
 } finally { await browser.close(); server.close(); }
