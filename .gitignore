@@ -17,6 +17,13 @@ coverage/
 # Firebase service-account keys must never be committed -- backend only,
 # stored as a Render Secret File.
 *firebase-adminsdk*.json
+*service-account*.json
+*service_account*.json
+*.pem
+*.key
+*.db
+*.sqlite
+*.sqlite3
 
 # Local agent-handover notes -- session-to-session scratch, not project docs.
 AGENTS.md
@@ -27,3 +34,6 @@ FOR_CODEX*.md
 # Local prediction cache (backend-owned data, never part of the frontend).
 data/
 src/data/
+
+# Local plugin export; not part of the dashboard release.
+/plugins/sentient-dash/
