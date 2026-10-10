@@ -25,6 +25,7 @@ import { decodeRouteState, encodeRouteState } from '../urlCodec';
 import { applyAccent, readLang, makeT } from '../prefs';
 import { PrefsProvider as SharedPrefsProvider } from '../prefsContext';
 import { LanguageSelector } from '../LanguageSelector';
+import PostCollaboration from '../PostCollaboration.jsx';
 import './mobile.css';
 
 const LEGACY_PASSWORD = 'authenticated';
@@ -494,7 +495,7 @@ function PostSheet({ post, canSuggest, onClose }) {
       }
     }
   };
-  return <Sheet title={`@${post.account}`} onClose={onClose} wide><article className="m-post-detail"><Cover src={post.coverUrl} fallbackSrc={videoPoster} /><div className="m-detail-kicker"><span>{post.type}</span><span>{dateLabel(post.postDate, language)}</span></div><div className="m-detail-metrics"><span><Heart size={16} />{fmt(post.likes)} {t('likes')}</span><span><MessageCircle size={16} />{fmt(post.comments)} {t('comments')}</span></div>{post.title ? <h3>{post.title}</h3> : null}<p>{post.caption}</p>{post.queueState ? <Notice>{t('queue')}: {editorialStates[post.queueState] || post.queueState}</Notice> : null}<Notice>{t('researchMobileSupport')}</Notice><Notice type="error">{notice}</Notice><div className="m-action-grid"><a className="m-secondary" href={post.permalink} target="_blank" rel="noreferrer"><ExternalLink size={16} />{t('viewPost')}</a><button className="m-secondary" onClick={download} disabled={busy}><Download size={16} />{t('downloadMedia')}</button><a className="m-primary" href="/?desktop=1"><ExternalLink size={16} />{t('desktop')}</a>{canSuggest ? <a className="m-primary" href={`/mobile/?r=${encodeRouteState({ tab: 'queue', suggest: post.permalink, sourceAccount: post.account, sourceShortcode: post.shortcode })}`}><Send size={16} />{t('suggestPost')}</a> : null}</div></article></Sheet>;
+  return <Sheet title={`@${post.account}`} onClose={onClose} wide><article className="m-post-detail"><Cover src={post.coverUrl} fallbackSrc={videoPoster} /><div className="m-detail-kicker"><span>{post.type}</span><span>{dateLabel(post.postDate, language)}</span></div><PostCollaboration post={post} t={t} /><div className="m-detail-metrics"><span><Heart size={16} />{fmt(post.likes)} {t('likes')}</span><span><MessageCircle size={16} />{fmt(post.comments)} {t('comments')}</span></div>{post.title ? <h3>{post.title}</h3> : null}<p>{post.caption}</p>{post.queueState ? <Notice>{t('queue')}: {editorialStates[post.queueState] || post.queueState}</Notice> : null}<Notice>{t('researchMobileSupport')}</Notice><Notice type="error">{notice}</Notice><div className="m-action-grid"><a className="m-secondary" href={post.permalink} target="_blank" rel="noreferrer"><ExternalLink size={16} />{t('viewPost')}</a><button className="m-secondary" onClick={download} disabled={busy}><Download size={16} />{t('downloadMedia')}</button><a className="m-primary" href="/?desktop=1"><ExternalLink size={16} />{t('desktop')}</a>{canSuggest ? <a className="m-primary" href={`/mobile/?r=${encodeRouteState({ tab: 'queue', suggest: post.permalink, sourceAccount: post.account, sourceShortcode: post.shortcode })}`}><Send size={16} />{t('suggestPost')}</a> : null}</div></article></Sheet>;
 }
 
 function QueueView({ viewer }) {

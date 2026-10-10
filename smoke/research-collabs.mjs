@@ -29,6 +29,7 @@ const sample = {
   type: 'Image', postType: 'Image', likes: 2000, comments: 20,
   coverUrl: 'https://fixture.test/cover.svg', hidden: false, isHot: false,
 };
+const manyHandles = Array.from({ length: 12 }, (_, index) => `partner_${String(index + 1).padStart(2, '0')}_abcdefghijklmnopqrs`);
 const rows = [
   // The newer stack member is unknown. A filter must use the matching member
   // as its cover instead of leaking the newest unfiltered catalogue member.
@@ -39,8 +40,11 @@ const rows = [
   { shortcode: 'PROMOONLY', isCollab: false, collaborators: [], isPromo: true },
   { shortcode: 'MENTIONUNKNOWN', isCollab: null, collaborators: ['openai'], caption: 'Thanks @openai for the useful tools.', tagged_users: ['openai'], mentions: ['openai'] },
   { shortcode: 'LEGACYUNKNOWN', caption: 'Legacy post without collaboration metadata.' },
-  { shortcode: 'MENTIONFALSE', isCollab: false, collaborators: [], caption: 'A mention of @openai.', tagged_users: ['openai'] },
+  { shortcode: 'MENTIONFALSE', isCollab: false, collaborators: ['openai'], caption: 'A mention of @openai.', tagged_users: ['openai'] },
   { shortcode: 'HIDDENCOLLAB', isCollab: true, collaborators: ['openai'], hidden: true },
+  { shortcode: 'EMPTYCOLLAB', isCollab: true, collaborators: [] },
+  { shortcode: 'SAFECOLLAB', isCollab: true, collaborators: ['@OpenAI', 'openai', 'chatgptricks', '@CHATGPTRICKS', ' trends ', 'https://unsafe.test', 'invalid/name', '<script>', 'a'.repeat(31), 42, null, {}] },
+  { shortcode: 'MANYCOLLAB', isCollab: true, collaborators: manyHandles },
 ];
 const posts = rows.map((row, index) => ({
   ...sample, ...row, id: index + 1, postKey: `chatgptricks:${row.shortcode}`,
@@ -85,6 +89,24 @@ async function geometry(page, panel, label) {
   assert.ok(bounds.overflow <= 1 && bounds.documentWidth <= bounds.width + 1, `${label}: no horizontal overflow`);
 }
 
+async function detailGeometry(page, block, label) {
+  await page.evaluate(() => document.fonts.ready);
+  await block.scrollIntoViewIfNeeded();
+  const bounds = await block.evaluate(node => {
+    const rect = node.getBoundingClientRect();
+    const links = [...node.querySelectorAll('a')].map(link => {
+      const box = link.getBoundingClientRect();
+      return { left: box.left, right: box.right, top: box.top };
+    });
+    return { left: rect.left, right: rect.right, overflow: node.scrollWidth - node.clientWidth,
+      width: innerWidth, documentWidth: document.documentElement.scrollWidth, links };
+  });
+  assert.ok(bounds.left >= -1 && bounds.right <= bounds.width + 1, `${label}: collaboration section fits horizontal viewport ${JSON.stringify(bounds)}`);
+  assert.ok(bounds.overflow <= 1 && bounds.documentWidth <= bounds.width + 1, `${label}: collaboration has no horizontal overflow`);
+  assert.ok(bounds.links.every(link => link.left >= bounds.left - 1 && link.right <= bounds.right + 1), `${label}: every collaborator link fits its section`);
+  return bounds;
+}
+
 let browser;
 try {
   browser = await chromium.launch({ headless: true,
@@ -93,13 +115,14 @@ try {
     const { mobile, width, height, name } = scenario;
     const label = `${language}-${name}`;
     const t = (en, es) => language === 'es' ? es : en;
+    let theme = 'dark';
     const errors = [];
     const context = await browser.newContext({ viewport: { width, height }, reducedMotion: 'reduce', serviceWorkers: 'block',
       ...(mobile ? { userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Version/17.0 Mobile/15E148 Safari/604.1' } : {}) });
     await context.addInitScript(language => {
       localStorage.setItem('sentient.language', language);
       localStorage.setItem('sentient.lang', language);
-      localStorage.setItem('sentient.theme', 'dark');
+      if (!localStorage.getItem('sentient.theme')) localStorage.setItem('sentient.theme', 'dark');
       localStorage.setItem('sentient.accent', 'lime');
       localStorage.setItem('sentient.effects', 'off');
     }, language);
@@ -111,7 +134,7 @@ try {
         assert.equal(request.headers().authorization, 'Bearer tok', 'Fixture API uses the stubbed session only');
         let data = {};
         if (url.pathname.endsWith('/me/preferences')) {
-          data = { preferences: { language, theme: 'dark', accent: 'lime', effects: 'off' } };
+          data = { preferences: { language, theme, accent: 'lime', effects: 'off' } };
         } else {
           assert.equal(request.method(), 'GET', `${label}: content mutations are forbidden`);
           if (url.pathname === '/api/dashboard/me' || url.pathname === '/api/admin/me') data = viewer;
@@ -133,8 +156,8 @@ try {
     page.on('console', message => { if (message.type() === 'error') console.error(`${label}: ${message.text()}`); });
     page.on('requestfailed', request => console.error(`${label}: ${request.url()}: ${request.failure()?.errorText}`));
     const cards = mobile ? '.m-post-grid .m-post-card[data-context-shortcode]' : '.gallery-grid .post-card[data-context-shortcode]';
-    const baseline = ['STACKUNKNOWN', 'COLLABONLY', 'COLLABVIDEO', 'PROMOONLY', 'MENTIONUNKNOWN', 'LEGACYUNKNOWN', 'MENTIONFALSE'];
-    const onlyCollabs = ['STACKCOLLAB', 'COLLABONLY', 'COLLABVIDEO'];
+    const baseline = ['STACKUNKNOWN', 'COLLABONLY', 'COLLABVIDEO', 'PROMOONLY', 'MENTIONUNKNOWN', 'LEGACYUNKNOWN', 'MENTIONFALSE', 'EMPTYCOLLAB', 'SAFECOLLAB', 'MANYCOLLAB'];
+    const onlyCollabs = ['STACKCOLLAB', 'COLLABONLY', 'COLLABVIDEO', 'EMPTYCOLLAB', 'SAFECOLLAB', 'MANYCOLLAB'];
     const promoCollabs = ['STACKCOLLAB', 'COLLABVIDEO'];
     const openType = async () => {
       if (mobile) {
@@ -200,8 +223,74 @@ try {
     await expectCards(page, cards, baseline, `${label}: disabling the toggle restores unknown/false posts`);
     await closeType();
     assert.notEqual(routeState(page.url()).collab, '1', `${label}: disabling the toggle removes collab route state`);
+
+    const details = () => mobile ? page.locator('.m-sheet:has(.m-post-detail)') : page.locator('.right-rail.is-open');
+    const openDetail = async shortcode => {
+      await page.locator(`${cards}[data-context-shortcode="${shortcode}"]`).filter({ visible: true }).click();
+      const detail = details();
+      await detail.waitFor({ state: 'visible' });
+      const original = mobile ? detail.locator('.m-action-grid a').first() : detail.locator('a.obs-open-original');
+      assert.equal(await original.getAttribute('href'), `https://instagram.com/p/${shortcode}/`, `${label}: selected detail belongs to ${shortcode}`);
+      return detail;
+    };
+    const closeDetail = async () => {
+      if (mobile) await details().locator(':scope > header button').click();
+      else await details().locator('.rail-close-button').click();
+      await details().waitFor({ state: 'hidden' });
+    };
+    const expectPartners = async (detail, partners, detailLabel) => {
+      const block = detail.getByRole('region', { name: t('Collaboration', 'Colaboración'), exact: true });
+      await block.waitFor({ state: 'visible' });
+      assert.equal(await block.locator('.post-collaboration-label').innerText(), t('Collaboration with', 'Colaboración con'), `${detailLabel}: translated heading`);
+      assert.deepEqual(await block.getByRole('link').allTextContents(), partners.map(handle => `@${handle}`), `${detailLabel}: confirmed partners only`);
+      for (const handle of partners) {
+        const link = block.getByRole('link', { name: `@${handle}`, exact: true });
+        assert.equal(await link.getAttribute('href'), `https://www.instagram.com/${handle}/`, `${detailLabel}: Instagram profile URL`);
+        assert.equal(await link.getAttribute('target'), '_blank', `${detailLabel}: profile opens independently`);
+        const rel = (await link.getAttribute('rel') || '').split(/\s+/);
+        assert.ok(rel.includes('noopener') && rel.includes('noreferrer'), `${detailLabel}: safe profile link`);
+      }
+      await detailGeometry(page, block, detailLabel);
+      return block;
+    };
+    let detail = await openDetail('COLLABVIDEO');
+    let block = await expectPartners(detail, ['openai', 'trends'], `${label}: confirmed two-partner detail`);
+    await page.screenshot({ path: path.join(output, `${label}-detail.png`) });
+    await closeDetail();
+    for (const shortcode of ['MENTIONFALSE', 'MENTIONUNKNOWN', 'LEGACYUNKNOWN']) {
+      detail = await openDetail(shortcode);
+      assert.equal(await detail.locator('.post-collaboration').count(), 0, `${label}: ${shortcode} has no stale or inferred collaboration`);
+      await closeDetail();
+    }
+    detail = await openDetail('SAFECOLLAB');
+    await expectPartners(detail, ['openai', 'trends'], `${label}: normalized, deduplicated safe partners exclude owner`);
+    await closeDetail();
+    detail = await openDetail('EMPTYCOLLAB');
+    block = detail.getByRole('region', { name: t('Collaboration', 'Colaboración'), exact: true });
+    assert.equal(await block.locator('.post-collaboration-label').innerText(), t('Collaboration', 'Colaboración'), `${label}: empty confirmed collaboration heading`);
+    assert.equal(await block.locator('.post-collaboration-unavailable').innerText(), t('Collaborators unavailable', 'Colaboradores no disponibles'), `${label}: missing partners are explicit`);
+    assert.equal(await block.getByRole('link').count(), 0, `${label}: empty list creates no profile links`);
+    await detailGeometry(page, block, `${label}: empty partner fallback`);
+    await closeDetail();
+    detail = await openDetail('MANYCOLLAB');
+    block = await expectPartners(detail, manyHandles, `${label}: long partner list`);
+    const manyBounds = await detailGeometry(page, block, `${label}: wrapped partner list`);
+    assert.ok(new Set(manyBounds.links.map(link => Math.round(link.top))).size > 1, `${label}: many handles wrap to multiple rows`);
+    const darkTextColor = await block.evaluate(node => getComputedStyle(node).color);
+    await page.screenshot({ path: path.join(output, `${label}-detail-many.png`) });
+    await closeDetail();
+    theme = 'light';
+    await page.evaluate(() => localStorage.setItem('sentient.theme', 'light'));
+    await page.reload();
+    await expectCards(page, cards, baseline, `${label}: light-theme reload preserves catalogue`);
+    await page.waitForFunction(() => document.documentElement.dataset.theme === 'light');
+    detail = await openDetail('MANYCOLLAB');
+    block = await expectPartners(detail, manyHandles, `${label}: light-theme partner list`);
+    assert.notEqual(await block.evaluate(node => getComputedStyle(node).color), darkTextColor, `${label}: collaboration text follows the light theme`);
+    await page.screenshot({ path: path.join(output, `${label}-detail-light.png`) });
+    await closeDetail();
     assert.deepEqual(errors, [], `${label}: no rendering or interaction errors`);
-    console.log(`PASS Research Collabs ${label}: confirmed metadata, matching stack cover, Promo/format AND, URL/reload/reset and responsive filter`);
+    console.log(`PASS Research Collabs ${label}: confirmed filter, stack cover, Promo/format AND, URL/reload/reset; translated details, safe partners, explicit fallback, no stale/false/unknown data, dark/light responsive wrapping`);
     await context.close();
   }
   console.log(`Collabs screenshots: ${output}`);

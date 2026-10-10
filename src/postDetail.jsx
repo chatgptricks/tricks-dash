@@ -10,6 +10,7 @@ import { Check, Copy, Download, ExternalLink, Eye, Flame, Layers, Music2, Video,
 import { usePrefs } from './prefsContext';
 import { API_BASE, IG_HANDLE, apiFetch } from './api';
 import { downloadPostMedia, listPostMedia } from './mediaDownload';
+import PostCollaboration from './PostCollaboration.jsx';
 
 // Small, self-contained duplicates of formatting helpers that also live in
 // App.jsx (used pervasively there for filters/sorting, not just this panel).
@@ -648,6 +649,7 @@ export function PostDetailPanel({ post, captionExtra = null }) {
   };
   return (
     <>
+      <PostCollaboration post={post} t={t} />
       <section className="panel caption-panel">
         <div className="panel-header caption-header">
           <div>
