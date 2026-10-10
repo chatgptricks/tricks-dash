@@ -143,7 +143,10 @@ img { display:block; max-width:100%; }
 .m-sheet>header::before { position:absolute; top:7px; left:50%; width:34px; height:4px; border-radius:99px; background:var(--m-line); content:''; transform:translateX(-50%); }
 .m-sheet>header h2 { margin:0; font-size:16px; letter-spacing:-.025em; }
 .m-sheet>header button { display:grid; place-items:center; width:34px; height:34px; border:1px solid var(--m-line); border-radius:11px; background:var(--m-panel-2); color:var(--m-muted); }
-.m-sheet-body { max-height:calc(94dvh - 62px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); padding:14px; overflow:auto; overscroll-behavior:contain; }
+.m-sheet-body { max-height:calc(94dvh - 62px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); padding:14px; overflow:auto; overscroll-behavior:contain; scrollbar-width:thin; scrollbar-color:color-mix(in srgb,var(--m-muted) 35%,transparent) transparent; }
+.m-sheet-body::-webkit-scrollbar { width:4px; height:4px; }
+.m-sheet-body::-webkit-scrollbar-track { background:transparent; }
+.m-sheet-body::-webkit-scrollbar-thumb { border-radius:99px; background:color-mix(in srgb,var(--m-muted) 35%,transparent); }
 @keyframes m-fade { from { opacity:0; } }
 @keyframes m-up { from { transform:translateY(28px); opacity:.7; } }
 
@@ -154,6 +157,7 @@ img { display:block; max-width:100%; }
 .m-detail-metrics span { display:flex; align-items:center; gap:5px; color:var(--m-soft); font-size:11px; }
 .m-post-detail h3, .m-task-detail h3 { margin:0; font-size:18px; line-height:1.25; letter-spacing:-.03em; }
 .m-post-detail>p, .m-task-detail>p { max-height:240px; margin:0; overflow:auto; color:var(--m-soft); font-size:12px; line-height:1.6; white-space:pre-wrap; }
+.m-task-detail>p { max-height:none; overflow:visible; overflow-wrap:anywhere; }
 .m-action-grid { display:flex; flex-wrap:wrap; gap:8px; }
 .m-action-grid>* { flex:1 1 145px; }
 .m-inline-form { margin-top:4px; padding:13px; border:1px solid var(--m-line); border-radius:16px; background:var(--m-bg); }
@@ -228,7 +232,7 @@ img { display:block; max-width:100%; }
 .m-task-meta { flex-wrap:wrap; }
 .m-task-detail-cover { position:relative; }
 .m-task-detail-cover>img, .m-task-detail-cover>.m-cover-empty { width:100%; max-height:52dvh; aspect-ratio:4/5; border-radius:17px; object-fit:cover; }
-.m-task-detail>.queue-notes-notice, .m-task-detail>.queue-coordinator-notes { margin:0; }
+.m-task-detail>.queue-coordinator-notes { margin:0; }
 .m-task-detail .queue-coordinator-notes h3 { font-size:13px; line-height:1.4; letter-spacing:normal; }
 .m-team-groups { display:grid; gap:11px; }
 .m-team-groups>article { display:grid; gap:8px; padding:11px; border:1px solid var(--m-line); border-radius:16px; background:var(--m-panel); }

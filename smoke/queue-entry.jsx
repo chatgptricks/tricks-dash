@@ -365,37 +365,33 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     checks['Confirmed delete removes the block'] = !document.querySelector('.scheduler-time-block');
 
     await click(document.querySelector('.scheduler-block.state-in_progress'));
-    checks['Automatic HOT metadata does not create a coordinator note alert'] = !document.querySelector('.queue-notes-notice') && !document.querySelector('.queue-coordinator-notes');
+    checks['Automatic HOT metadata does not create coordinator note controls'] = !document.querySelector('.queue-coordinator-notes') && !document.querySelector('.queue-inspector-notes-button');
     await click(document.querySelector('.queue-request-rail .rail-close-button'));
     const nextBlock = document.querySelector('.scheduler-block.state-scheduled');
     await click(nextBlock);
     checks['Sideview opens'] = Boolean(document.querySelector('.queue-request-rail'));
     // Let the inspector's opening frame establish focus before simulating
-    // a person following the notes notice or its floating comment icon.
+    // a person following the floating comment icon.
     await act(async () => { await new Promise((resolve) => requestAnimationFrame(resolve)); });
     const noteSection = document.querySelector('.queue-coordinator-notes');
-    const noteNotice = document.querySelector('.queue-notes-notice > button');
     const sourceCaption = document.querySelector('.queue-detail-copy > p');
-    checks['Opening a post announces its manual notes above the source caption'] = Boolean(noteNotice && noteSection && sourceCaption)
+    checks['Opening a post highlights manual notes as its first information block'] = Boolean(noteSection && sourceCaption)
+      && document.querySelector('.obs-inspector-info')?.firstElementChild === noteSection
       && Boolean(noteSection?.compareDocumentPosition(sourceCaption) & Node.DOCUMENT_POSITION_FOLLOWING)
       && noteSection?.textContent.includes('Preserve the source visual system.')
       && Boolean(noteSection?.querySelector('.queue-copy-button'));
+    checks['Manual observations do not add a superior notes notice'] = !document.querySelector('.queue-notes-notice');
     const noteLink = noteSection?.querySelector('.queue-linked-notes a');
     checks['Manual notes preserve clickable references without duplicate note paragraphs'] = noteLink?.getAttribute('href') === 'https://example.com/coordinator-brief'
       && noteLink?.textContent === 'Creative reference'
       && noteLink?.target === '_blank'
       && noteLink?.rel.includes('noopener')
       && document.querySelectorAll('.queue-request-rail .queue-linked-notes').length === 1;
-    let notesScrolled = false;
-    noteSection.scrollIntoView = () => { notesScrolled = true; };
-    await click(noteNotice);
-    checks['The notes notice brings keyboard focus to the manual observations'] = notesScrolled
-      && document.activeElement === noteSection
-      && noteNotice?.getAttribute('aria-controls') === noteSection?.id;
+    const noteScroller = noteSection.parentElement;
+    noteScroller.scrollTop = 400;
     const noteIcon = document.querySelector('.queue-inspector-notes-button');
-    notesScrolled = false;
     await click(noteIcon);
-    checks['The floating comment icon also opens the manual observations'] = notesScrolled
+    checks['The floating comment icon brings keyboard focus to the manual observations'] = noteScroller.scrollTop === 0
       && document.activeElement === noteSection
       && noteIcon?.getAttribute('aria-controls') === noteSection?.id
       && Boolean(noteIcon?.getAttribute('aria-label'));
@@ -509,11 +505,14 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     checks['Starting keeps sidebar open while request is pending'] = Boolean(document.querySelector('.queue-request-rail')) && Boolean(document.querySelector('.scheduler-block.is-pending-action .queue-item-loading'));
     await act(async () => { releaseStart(); await new Promise(resolve => setTimeout(resolve, 50)); });
     checks['Start updates state without reload'] = document.querySelectorAll('.scheduler-block.state-in_progress').length === 2 && !document.querySelector('.scheduler-block.is-pending-action');
-    checks['Starting work retains the notes notice and manual observations'] = Boolean(document.querySelector('.queue-notes-notice'))
+    checks['Starting work retains the floating icon and manual observations'] = Boolean(document.querySelector('.queue-inspector-notes-button'))
+      && !document.querySelector('.queue-notes-notice')
       && document.querySelector('.queue-coordinator-notes')?.textContent.includes('Preserve the source visual system.');
     await click([...document.querySelectorAll('.queue-detail-actions button')].find(node => /Mark complete|Marcar como completado/.test(node.textContent)));
     checks['Completing keeps sidebar open and updates state'] = Boolean(document.querySelector('.queue-request-rail')) && Boolean(document.querySelector('.scheduler-block.state-completed'));
-    checks['Completed work retains its notes in the close-request detail'] = Boolean(document.querySelector('.queue-notes-notice'))
+    checks['Completed work retains its notes in the close-request detail'] = Boolean(document.querySelector('.queue-inspector-notes-button'))
+      && !document.querySelector('.queue-notes-notice')
+      && document.querySelector('.obs-inspector-info')?.firstElementChild === document.querySelector('.queue-coordinator-notes')
       && document.querySelector('.queue-coordinator-notes')?.textContent.includes('Preserve the source visual system.')
       && document.querySelectorAll('.queue-request-rail .queue-linked-notes').length === 1;
     await click(document.querySelector('.queue-request-rail .rail-close-button'));

@@ -107,17 +107,23 @@ try {
  const queueFixture=queueSource.slice(queueSource.indexOf("window.localStorage"),queueSource.indexOf('let releaseInitialQueueFetch'))+`
 payload.accountOnboarding.completed=true; window.__queueFixture=payload;`;
  await page.evaluate(queueFixture);const queueData=await page.evaluate(()=>window.__queueFixture);
- queueData.requests.forEach(task=>{task.post.caption='Long caption for layout validation. '.repeat(30);task.post.coverUrl='https://covers.test/queue-cover.svg';task.notes='Manual note left when the post was created from scratch.';});
+ const longQueueNotes='Manual note left when the post was created from scratch.\n\n'+Array.from({length:24},(_,i)=>`Observation ${i+1}: preserve the complete cover, review the source details, and use the coordinator reference https://example.com/creative/${i+1}.`).join('\n');
+ queueData.requests.forEach(task=>{task.post.caption='Long caption for layout validation. '.repeat(30);task.post.coverUrl='https://covers.test/queue-cover.svg';task.notes=longQueueNotes;});
  await page.addInitScript(queueFixture);
  // The first cover attempt fails, as a cold cover endpoint can; React retries,
  // and the landed Selected post card must follow it instead of staying grey.
  await page.route('https://covers.test/**',route=>route.request().url().includes('cover_attempt=0')?route.fulfill({status:503,body:''}):route.fulfill({contentType:'image/svg+xml',body:decodeURIComponent(cover.slice(cover.indexOf(',')+1))}));
  await page.route('**/api/dashboard/queue/**',route=>{
   const url=route.request().url();
-  return route.fulfill({json:url.includes('/history')?{events:Array.from({length:15},(_,i)=>({id:i,type:'scheduled',actorEmail:'user03@example.com',createdAt:new Date().toISOString()}))}:queueData});
+  return route.fulfill({json:url.includes('/history')?{events:Array.from({length:15},(_,i)=>({id:i,type:'scheduled',actorEmail:'user03@example.com',createdAt:new Date().toISOString()}))}:/\/requests\/\d+(?:\?|$)/.test(url)?{request:queueData.requests.find(task=>task.id===Number(url.match(/requests\/(\d+)/)[1]))}:queueData});
  });
  await page.goto(`${base}/queue.html?desktop=1`);await page.waitForSelector('.scheduler-block.state-scheduled');
- await page.locator('.scheduler-block.state-scheduled').click();await page.waitForTimeout(1200);
+ const queueRow=page.locator('.queue-admin-assignment-row.state-scheduled');
+ await queueRow.click();
+ await page.waitForSelector('.queue-admin-assignment-row.state-scheduled img.obs-in-transit');
+ assert.equal(await queueRow.evaluate(row=>getComputedStyle(row).opacity),'1','Opening a row hides only its cover while its text remains visible.');
+ assert.equal(await queueRow.evaluate(row=>row.classList.contains('obs-in-transit')),false,'The assignment row never becomes the hidden flight source.');
+ await page.waitForTimeout(1200);
  await page.waitForSelector('.queue-history li');
  await page.waitForFunction(()=>{const image=document.querySelector('.queue-request-rail .obs-persistent-card img.cover-image');return image?.classList.contains('is-loaded')&&image.naturalWidth>0;},null,{timeout:8000});
  // The Queue page behind an open request must not scroll, even when it is long.
@@ -145,15 +151,69 @@ payload.accountOnboarding.completed=true; window.__queueFixture=payload;`;
  assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),await copyText.locator('> p').first().textContent());
  await copyText.getByRole('button',{name:'Copied',exact:true}).waitFor();
  await page.locator('.queue-coordinator-notes').getByRole('button',{name:'Copy notes',exact:true}).click();
- assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),'Manual note left when the post was created from scratch.');
- for(const width of [1440,390]){
-  await page.setViewportSize({width,height:1000});await page.waitForTimeout(100);
-  const geometry=await page.locator('.obs-inspector-info').evaluate(info=>{const children=[...info.children].filter(e=>e.getBoundingClientRect().height>0);return {overflow:info.scrollWidth-info.clientWidth,overlap:children.slice(1).some((e,i)=>e.getBoundingClientRect().top<children[i].getBoundingClientRect().bottom-1)}});
-  assert.equal(geometry.overlap,false);assert.ok(geometry.overflow<=1);
+ assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),longQueueNotes);
+ for(const viewport of [{width:1440,height:900},{width:1280,height:720},{width:390,height:844}]){
+  await page.setViewportSize(viewport);await page.waitForTimeout(180);
+  const rail=page.locator('.queue-request-rail');
+  const info=rail.locator('.obs-inspector-info');
+  await info.evaluate(e=>{e.scrollTop=0;});
+  const geometry=await rail.evaluate(modal=>{
+   const info=modal.querySelector('.obs-inspector-info');
+   const card=modal.querySelector('.obs-persistent-card')||modal.querySelector('.obs-card-fallback .post-card');
+   const front=modal.querySelector('.obs-card-front');
+   const children=[...info.children].filter(e=>e.getBoundingClientRect().height>0);
+   const scrollers=[modal,...modal.querySelectorAll('*')].filter(e=>{const style=getComputedStyle(e);return e.getClientRects().length&&['auto','scroll'].includes(style.overflowY)&&e.scrollHeight>e.clientHeight+1;});
+   return {outer:{box:modal.getBoundingClientRect().toJSON(),x:modal.scrollWidth-modal.clientWidth,y:modal.scrollHeight-modal.clientHeight,overflow:getComputedStyle(modal).overflowY},info:{box:info.getBoundingClientRect().toJSON(),x:info.scrollWidth-info.clientWidth,y:info.scrollHeight-info.clientHeight,scrollbar:getComputedStyle(info).scrollbarWidth},card:card?.getBoundingClientRect().toJSON(),front:front?{box:front.getBoundingClientRect().toJSON(),clip:getComputedStyle(front).clipPath}:null,frame:modal.querySelector('.queue-inspector-notes-icon').getBoundingClientRect().toJSON(),slot:modal.querySelector('.obs-card-slot').getBoundingClientRect().toJSON(),gridRows:getComputedStyle(modal).gridTemplateRows,onlyInfoScrolls:scrollers.length===1&&scrollers[0]===info,overlap:children.slice(1).some((e,i)=>e.getBoundingClientRect().top<children[i].getBoundingClientRect().bottom-1),page:{x:document.documentElement.scrollWidth-innerWidth,y:document.scrollingElement.scrollTop,locked:document.body.style.overflow==='hidden'}};
+  });
+  const label=`Queue inspector at ${viewport.width}×${viewport.height}`;
+  fs.mkdirSync('work/qa',{recursive:true});
+  await page.screenshot({path:`work/qa/queue-single-scroll-${viewport.width}x${viewport.height}.png`});
+  // A clipped card snapshot retains the caption's natural layout extents.
+  // Test its visible bounds and inability to scroll rather than scrollHeight.
+  assert.ok(geometry.outer.x<=1,`${label} has no horizontal exterior overflow: ${JSON.stringify(geometry)}`);
+  assert.ok(['hidden','clip'].includes(geometry.outer.overflow),`${label} never exposes an exterior scrollbar.`);
+  assert.ok(geometry.onlyInfoScrolls&&geometry.info.y>0,`${label} confines long notes and history to the information scroller.`);
+  assert.ok(geometry.info.box.left>=geometry.outer.box.left-1&&geometry.info.box.right<=geometry.outer.box.right+1&&geometry.info.box.top>=geometry.outer.box.top-1&&geometry.info.box.bottom<=geometry.outer.box.bottom+1,`${label} keeps the entire information scroller inside the modal.`);
+  assert.equal(geometry.info.scrollbar,'thin',`${label} uses a fine internal scrollbar.`);
+  assert.equal(geometry.overlap,false,`${label} keeps information blocks separate.`);
+  assert.ok(geometry.info.x<=1&&geometry.page.x<=1,`${label} never overflows horizontally.`);
+  assert.ok(geometry.page.locked&&geometry.page.y===0,`${label} keeps the underlying page stationary.`);
+  assert.ok(geometry.card&&geometry.card.width>0&&geometry.card.height>0,`${label} has a visible complete card.`);
+  assert.ok(geometry.card.left>=geometry.outer.box.left-1&&geometry.card.right<=geometry.outer.box.right+1&&geometry.card.top>=geometry.outer.box.top-1&&geometry.card.bottom<=geometry.outer.box.bottom+1,`${label} fits the full card inside the modal: ${JSON.stringify(geometry.card)}`);
+  assert.ok(geometry.outer.box.left>=-1&&geometry.outer.box.right<=viewport.width+1&&geometry.outer.box.top>=-1&&geometry.outer.box.bottom<=viewport.height+1,`${label} fits the viewport.`);
+  await rail.evaluate(e=>{e.scrollTop=10000;});
+  assert.equal(await rail.evaluate(e=>e.scrollTop),0,`${label} cannot scroll its exterior.`);
+  await page.mouse.move(geometry.info.box.x+geometry.info.box.width/2,geometry.info.box.y+Math.min(geometry.info.box.height/2,100));
+  await page.mouse.wheel(0,500);await page.waitForTimeout(100);
+  assert.ok(await info.evaluate(e=>e.scrollTop>0),`${label} lets the information panel scroll through long notes.`);
+  await page.mouse.move(geometry.card.left+geometry.card.width/2,geometry.card.top+geometry.card.height/2);
+  await page.mouse.wheel(0,500);await page.waitForTimeout(100);
+  assert.equal(await rail.evaluate(e=>e.scrollTop),0,`${label} keeps the card and modal fixed during a wheel gesture.`);
+  assert.equal(await page.evaluate(()=>document.scrollingElement.scrollTop),0,`${label} never passes wheel scrolling to the page.`);
+  await rail.locator('.queue-inspector-notes-button').click();
+  assert.ok(await info.evaluate(e=>e.scrollTop<=1),`${label} returns to the first notes block from the floating icon.`);
+  fs.mkdirSync('work/qa',{recursive:true});
+  await page.screenshot({path:`work/qa/queue-single-scroll-${viewport.width}x${viewport.height}.png`});
  }
  await page.keyboard.press('Escape');await page.waitForTimeout(1200);assert.equal(await page.locator('.queue-request-rail,.obs-in-transit,.obs-persistent-card').count(),0);
  assert.equal(await page.evaluate(()=>document.body.style.overflow),'');await page.evaluate(()=>document.getElementById('scroll-probe')?.remove());
- console.log('PASS browser Queue: real scheduler/detail, long caption and 15 history entries, desktop/mobile layout, clean return');
+ // A direct request link opens without an origin card to animate. Its live
+ // fallback must fit the same available height and width as the landed clone.
+ for(const viewport of [{width:1280,height:720},{width:390,height:844}]){
+  await page.setViewportSize(viewport);
+  await page.goto(`${base}/queue.html?desktop=1&task=3`);
+  await page.waitForSelector('.queue-request-rail .obs-card-fallback .post-card');
+  await page.waitForTimeout(250);
+  const fallback=await page.locator('.queue-request-rail').evaluate(modal=>({modal:modal.getBoundingClientRect().toJSON(),card:modal.querySelector('.obs-card-fallback .post-card').getBoundingClientRect().toJSON(),x:modal.scrollWidth-modal.clientWidth,y:modal.scrollHeight-modal.clientHeight}));
+  assert.equal(await page.locator('.queue-request-rail .obs-persistent-card').count(),0,'Direct request links use the live card fallback.');
+  assert.ok(fallback.x<=1,'The direct-link inspector has no horizontal exterior overflow.');
+  await page.locator('.queue-request-rail').evaluate(e=>{e.scrollTop=10000;});
+  assert.equal(await page.locator('.queue-request-rail').evaluate(e=>e.scrollTop),0,'The direct-link inspector cannot scroll its exterior.');
+  assert.ok(fallback.card.width>0&&fallback.card.height>0&&fallback.card.left>=fallback.modal.left-1&&fallback.card.right<=fallback.modal.right+1&&fallback.card.top>=fallback.modal.top-1&&fallback.card.bottom<=fallback.modal.bottom+1,`The direct-link card fits at ${viewport.width}×${viewport.height}: ${JSON.stringify(fallback)}`);
+  await page.keyboard.press('Escape');await page.waitForTimeout(550);
+  assert.equal(await page.locator('.queue-request-rail,.obs-in-transit,.obs-persistent-card').count(),0,'Direct-link details close without leftover cards.');
+ }
+ console.log('PASS browser Queue: complete responsive card, one thin internal scroller, long notes/caption/history, locked page and clean return');
  assert.deepEqual(errors,[]);
  console.log('PASS browser Research: live components, menus, nested dialogs, themes, responsive detail, full covers and opaque closing shuffle');
  // Exercise the shared mount with an actual render failure, then fix the

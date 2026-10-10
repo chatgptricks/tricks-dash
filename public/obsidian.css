@@ -426,7 +426,29 @@ body::before { content:''; position:fixed; inset:0; pointer-events:none; z-index
 .obs-queue-inspector .obs-inspector-info .caption-header h2 { font-size:16px; }
 
 /* Queue deep dive: one reading surface and a consistent action system. */
+.right-rail.obs-inspector.obs-queue-inspector,
+.right-rail.obs-inspector.obs-queue-inspector.is-open {
+  overflow:clip; grid-template-columns:minmax(0,var(--obs-inspector-card-width,320px)) minmax(0,1fr);
+  grid-template-rows:auto minmax(0,1fr);
+}
 .obs-queue-inspector .obs-inspector-info { gap:18px; padding:22px; }
+.obs-queue-inspector .obs-inspector-info {
+  box-sizing:border-box; height:100%; min-height:0; max-height:none; overflow-x:hidden; overflow-y:auto;
+  scrollbar-width:thin; scrollbar-color:rgba(var(--ink),.2) transparent;
+  scrollbar-gutter:stable; scroll-padding-block:22px;
+}
+.obs-queue-inspector .obs-inspector-info::-webkit-scrollbar { width:5px; }
+.obs-queue-inspector .obs-inspector-info::-webkit-scrollbar-track { background:transparent; margin-block:18px; }
+.obs-queue-inspector .obs-inspector-info::-webkit-scrollbar-thumb { background:rgba(var(--ink),.2); border-radius:999px; }
+.obs-queue-inspector .obs-inspector-info:hover { scrollbar-color:rgba(var(--ink),.32) transparent; }
+.obs-queue-inspector .obs-inspector-info::-webkit-scrollbar-thumb:hover { background:rgba(var(--ink),.4); }
+@media(max-width:760px) {
+  .right-rail.obs-inspector.obs-queue-inspector,
+  .right-rail.obs-inspector.obs-queue-inspector.is-open {
+    grid-template-columns:minmax(0,1fr); grid-template-rows:auto clamp(120px,27dvh,240px) minmax(0,1fr);
+    gap:16px;
+  }
+}
 .obs-queue-inspector .obs-inspector-info > .panel { background:transparent; border:0; border-radius:0; box-shadow:none; backdrop-filter:none; padding:0; margin:0; animation:none; }
 .obs-queue-inspector .obs-inspector-info .caption-header { display:flex; flex-wrap:wrap; align-items:flex-start; justify-content:space-between; gap:12px; margin:0; }
 .obs-queue-inspector .obs-inspector-info .caption-header h2 { margin:5px 0 0; font-size:18px; line-height:1.35; font-weight:550; }

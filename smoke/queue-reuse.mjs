@@ -224,12 +224,14 @@ try {
   assert.match(await linked.innerText(), /javascript:alert\(1\) <script>/);
   assert.equal(await linked.locator('a').first().evaluate(link => getComputedStyle(link).display), 'inline');
   const notesPanel = page.locator('.queue-coordinator-notes');
-  const notesNotice = page.locator('.queue-notes-notice button');
+  const notesIcon = page.locator('.queue-inspector-notes-button');
   assert.equal(await notesPanel.count(), 1, 'Manual notes have one dedicated block.');
-  assert.equal(await page.locator('.queue-inspector-notes-button').count(), 1, 'Manual notes get a floating comment icon.');
+  assert.equal(await page.locator('.queue-notes-notice').count(), 0, 'Manual notes do not add a superior notes notice.');
+  assert.equal(await notesPanel.evaluate(element => element.parentElement.firstElementChild === element), true, 'Highlighted notes are the first information block.');
+  assert.equal(await notesIcon.count(), 1, 'Manual notes get a floating comment icon.');
   assert.equal(await page.locator('.queue-pool-card').filter({ hasText: 'Reuse this idea for a new audience' }).locator('.queue-notes-badge.is-floating').count(), 1);
-  await notesNotice.click();
-  assert.equal(await notesPanel.evaluate(element => element === document.activeElement), true, 'The opening notice takes keyboard focus to the notes.');
+  await notesIcon.click();
+  assert.equal(await notesPanel.evaluate(element => element === document.activeElement), true, 'The floating comment icon takes keyboard focus to the notes.');
   const assertAccent = async () => {
     const colors = await page.evaluate(() => {
       const expected = document.createElement('span');

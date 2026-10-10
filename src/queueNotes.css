@@ -14,23 +14,9 @@
   background: var(--accent, var(--m-accent)); color: var(--accent-ink, var(--m-accent-ink));
   box-shadow: 0 2px 8px rgba(0, 0, 0, .28);
 }
-.queue-notes-notice { margin: 0 0 12px; }
-.queue-notes-notice > button {
-  display: flex; align-items: center; gap: 10px; width: 100%; padding: 11px 12px;
-  border: 1px solid rgba(var(--accent-rgb), .4); border-radius: 8px;
-  background: rgba(var(--accent-rgb), .08); color: var(--accent-text, var(--m-accent));
-  text-align: left; font: inherit; cursor: pointer;
-}
-.queue-notes-notice > button > svg { flex-shrink: 0; }
-.queue-notes-notice > button > svg:last-child { margin-left: auto; }
-.queue-notes-notice > button > span { display: grid; gap: 3px; min-width: 0; }
-.queue-notes-notice strong { font-size: 12px; font-weight: 750; }
-.queue-notes-notice small { color: var(--muted-strong, var(--m-muted)); font-size: 10px; line-height: 1.4; }
-.queue-notes-notice > button:hover { background: rgba(var(--accent-rgb), .14); border-color: var(--accent-text); }
 .queue-coordinator-notes {
-  margin: 0 0 16px; padding: 16px; border: 1px solid rgba(var(--accent-rgb), .35);
-  border-left: 3px solid var(--accent-text, var(--m-accent)); border-radius: 8px;
-  background: rgba(var(--accent-rgb), .055); color: var(--text, var(--m-text));
+  margin: 0 0 16px; padding: 16px; border: 0; border-radius: 8px;
+  background: rgba(var(--accent-rgb), .08); color: var(--text, var(--m-text));
   scroll-margin-block: 16px;
 }
 .queue-coordinator-notes > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 13px; }
@@ -40,11 +26,11 @@
 .queue-coordinator-notes h3 svg { flex-shrink: 0; }
 .queue-coordinator-notes .queue-linked-notes { margin: 0; color: inherit; font-size: 13px; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }
 .queue-coordinator-notes .queue-linked-notes a { display: inline; color: var(--accent-text, var(--m-accent)); font-size: inherit; text-decoration: underline; text-underline-offset: 3px; }
-.queue-notes-notice > button:focus-visible, .queue-coordinator-notes:focus { outline: 2px solid var(--accent-text, var(--m-accent)); outline-offset: 3px; }
-.queue-inspector-heading { grid-area: heading; display: flex; align-items: center; gap: 24px; padding-right: 38px; width: 100%; }
-.queue-inspector-heading > .obs-inspector-heading { flex: 1 1 auto; }
-.queue-inspector-heading .queue-notes-notice { flex: 0 1 390px; margin: 0; }
-.queue-inspector-notes-icon { grid-area: card; position: relative; width: var(--obs-inspector-card-width, 320px); max-width: 100%; }
+.queue-coordinator-notes:focus { outline: none; }
+.queue-coordinator-notes:focus-visible { outline: 2px solid var(--accent-text, var(--m-accent)); outline-offset: 3px; }
+.queue-inspector-notes-icon { grid-area: card; min-width: 0; min-height: 0; width: 100%; height: 100%; display: flex; justify-content: center; align-items: flex-start; }
+.queue-inspector-card { position: relative; width: max-content; max-width: 100%; }
+.queue-inspector-card .obs-card-fallback { transform-origin: top left; }
 .queue-inspector-notes-button { position: absolute; z-index: 5; top: 60px; right: 12px; padding: 0; border: 0; border-radius: 8px; background: none; cursor: pointer; }
 .queue-inspector-notes-button .queue-notes-badge { width: 32px; height: 32px; padding: 0; border-radius: 8px; background: var(--accent); color: var(--accent-ink); box-shadow: 0 2px 8px rgba(0, 0, 0, .28); }
 .queue-inspector-notes-button:focus-visible { outline: 2px solid var(--accent-text); outline-offset: 3px; }
@@ -55,8 +41,3 @@
 .obs-inspector-info .queue-coordinator-notes .queue-linked-notes { color: var(--text); }
 .obs-queue-inspector .obs-inspector-info .queue-coordinator-notes h3 { color: var(--accent-text); font-size: 13px; line-height: 1.4; }
 .queue-pool-card .queue-notes-badge { display: inline-flex; }
-@media (max-width: 760px) {
-  .queue-inspector-heading { flex-direction: column; align-items: stretch; gap: 12px; padding-right: 0; }
-  .queue-inspector-heading > .obs-inspector-heading { padding-right: 36px; }
-  .queue-inspector-heading .queue-notes-notice { flex-basis: auto; }
-}

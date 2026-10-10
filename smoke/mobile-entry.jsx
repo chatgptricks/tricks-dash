@@ -114,8 +114,6 @@ const fetchStub = async (url, options = {}) => {
 globalThis.fetch = fetchStub;
 window.fetch = fetchStub;
 window.scrollTo = () => {};
-const notesScrolls = [];
-window.HTMLElement.prototype.scrollIntoView = function (options) { notesScrolls.push({ id: this.id, options }); };
 localStorage.setItem('sentient.tracker.favs', JSON.stringify(['chatgptricks']));
 
 const click = async (node) => act(async () => { node.dispatchEvent(new window.MouseEvent('click', { bubbles: true })); await new Promise((resolve) => setTimeout(resolve, 80)); });
@@ -181,21 +179,17 @@ const fill = async (node, value) => act(async () => {
       && /Has notes/.test(document.querySelector('.m-task')?.textContent || '');
     await click(document.querySelector('.m-task'));
     const noteCard = document.querySelector('.m-task-detail .queue-coordinator-notes');
-    const noteNotice = document.querySelector('.m-task-detail .queue-notes-notice');
     const caption = document.querySelector('.m-task-detail > p');
-    checks['Opening a mobile task announces coordinator notes and highlights them before the caption'] = Boolean(noteCard)
-      && document.querySelector('.m-task-detail')?.firstElementChild === noteNotice
+    checks['Opening a mobile task puts highlighted coordinator notes first'] = Boolean(noteCard)
+      && document.querySelector('.m-task-detail')?.firstElementChild === noteCard
+      && noteCard?.nextElementSibling?.classList.contains('m-task-detail-cover')
       && Boolean(noteCard?.compareDocumentPosition(caption) & window.Node.DOCUMENT_POSITION_FOLLOWING);
+    checks['Mobile task notes have no redundant notice or review button'] = !document.querySelector('.m-task-detail .queue-notes-notice')
+      && ![...document.querySelectorAll('.m-task-detail button')].some((node) => /Review.*notes|manual observations/.test(node.textContent));
     checks['Mobile coordinator notes preserve safe links and literal text while excluding HOT boilerplate'] = noteCard?.querySelector('a')?.href === 'https://example.com/design-guide'
       && noteCard?.querySelector('a')?.rel === 'noopener noreferrer'
       && /<em>Keep this literal<\/em>/.test(noteCard?.textContent || '') && !noteCard?.querySelector('em')
       && !/Automatically added/.test(noteCard?.textContent || '');
-    const originalMatchMedia = window.matchMedia;
-    window.matchMedia = () => ({ matches: true });
-    await click(noteNotice.querySelector('button'));
-    checks['Mobile review action focuses notes and respects reduced motion'] = document.activeElement === noteCard
-      && notesScrolls.at(-1)?.id === noteCard.id && notesScrolls.at(-1)?.options.behavior === 'auto';
-    window.matchMedia = originalMatchMedia;
     await click(document.querySelector('.m-sheet > header button'));
     const queueModes = [...document.querySelectorAll('.m-content .m-tab-scroll button')];
     await click(queueModes.find((node) => node.textContent === 'Pool'));

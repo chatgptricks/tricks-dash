@@ -101,8 +101,12 @@ export function sendCardToSide(source, postKey, options = {}) {
     inspector.dataset.obsPhase = 'travel';
     slot.dataset.obsPersistent = 'true';
     slot.style.width = `${width}px`; slot.style.height = `${height}px`;
-    const to = slot.getBoundingClientRect();
-    const destinationScale = Math.min(1, to.width / width);
+    const sizeSlot = () => {
+      if (!options.fitContainer) return;
+      const scale=Math.min(1,options.fitContainer.clientWidth/width,options.fitContainer.clientHeight/compactHeight);
+      slot.style.width=`${width*scale}px`;
+      slot.style.height=`${compactHeight*scale}px`;
+    };
     source.classList.add('obs-in-transit');
     // Hide the deck slot in the same frame the clone appears, never before.
     if (deckSlot) deckSlot.style.visibility='hidden';
@@ -117,6 +121,9 @@ export function sendCardToSide(source, postKey, options = {}) {
       compactHeight=imageEnd+14;
       footerCut=Math.max(0,frontRect.height-imageEnd);
     }
+    sizeSlot();
+    const to = slot.getBoundingClientRect();
+    const destinationScale = Math.min(1, to.width / width);
     let disposed = false;
     let resizeObserver;
     let stopMotion;
@@ -160,6 +167,7 @@ export function sendCardToSide(source, postKey, options = {}) {
       bottomFrame.style.opacity='1';
       const fit = () => {
         if (disposed || returning) return;
+        sizeSlot();
         const scale = Math.min(1, slot.getBoundingClientRect().width / width);
         card.style.transform = `scale(${scale})`;
         slot.style.height = `${compactHeight * scale}px`;
@@ -176,6 +184,7 @@ export function sendCardToSide(source, postKey, options = {}) {
       resizeObserver?.disconnect();
       resizeObserver = new ResizeObserver(fit);
       resizeObserver.observe(slot);
+      if (options.fitContainer) resizeObserver.observe(options.fitContainer);
       inspector.dataset.obsPhase = 'ready';
     };
     if (!enabled()) { land(); return; }
