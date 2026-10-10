@@ -131,6 +131,10 @@ export function applyLang(lang) {
 // ---------------------------------------------------------------------------
 
 const ES = {
+  'Coordinator notes': 'Notas del coordinador',
+  'Has notes': 'Con notas',
+  'Manual observations': 'Observaciones manuales',
+  'Review the manual observations for this post': 'Revisa las observaciones manuales de este post',
   // header
   'Captions, songs, or text inside a cover': 'Textos, canciones o texto en la portada',
   'Search posts': 'Buscar posts',

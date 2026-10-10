@@ -223,7 +223,32 @@ try {
   assert.equal(await linked.locator('script').count(), 0);
   assert.match(await linked.innerText(), /javascript:alert\(1\) <script>/);
   assert.equal(await linked.locator('a').first().evaluate(link => getComputedStyle(link).display), 'inline');
+  const notesPanel = page.locator('.queue-coordinator-notes');
+  const notesNotice = page.locator('.queue-notes-notice button');
+  assert.equal(await notesPanel.count(), 1, 'Manual notes have one dedicated block.');
+  assert.equal(await page.locator('.queue-inspector-notes-button').count(), 1, 'Manual notes get a floating comment icon.');
+  assert.equal(await page.locator('.queue-pool-card').filter({ hasText: 'Reuse this idea for a new audience' }).locator('.queue-notes-badge.is-floating').count(), 1);
+  await notesNotice.click();
+  assert.equal(await notesPanel.evaluate(element => element === document.activeElement), true, 'The opening notice takes keyboard focus to the notes.');
+  const assertAccent = async () => {
+    const colors = await page.evaluate(() => {
+      const expected = document.createElement('span');
+      expected.style.color = 'var(--accent-text)';
+      document.body.append(expected);
+      const accent = getComputedStyle(expected).color;
+      expected.remove();
+      return { accent, heading: getComputedStyle(document.querySelector('.queue-coordinator-notes h3')).color };
+    });
+    assert.equal(colors.heading, colors.accent, 'Notes use the accessible current accent.');
+  };
+  await assertAccent();
   await page.screenshot({ path: path.join(output, 'linked-notes-desktop.png') });
+  await page.evaluate(async () => { const { applyAccent, applyTheme } = await import('/src/prefs.js'); applyTheme('light'); applyAccent('blue'); });
+  await assertAccent();
+  await page.screenshot({ path: path.join(output, 'coordinator-notes-light-blue.png') });
+  await page.evaluate(async () => { const { applyAccent, applyTheme } = await import('/src/prefs.js'); applyTheme('dark'); applyAccent('coral'); });
+  await assertAccent();
+  await page.screenshot({ path: path.join(output, 'coordinator-notes-dark-coral.png') });
   const [noteLinkTab] = await Promise.all([page.waitForEvent('popup'), linked.locator('a').first().click()]);
   await noteLinkTab.waitForLoadState();
   assert.equal(noteLinkTab.url(), 'https://x.com/example/status/123?s=20');

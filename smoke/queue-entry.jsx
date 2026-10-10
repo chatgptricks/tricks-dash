@@ -15,8 +15,9 @@ const pool = { ...base, id: 1, post: post('chatgptricks', 'POOL1'), status: 'poo
 // A browser-wide draft from a prior user must never hydrate into User 03's
 // Queue session. The app now only reads owner-verified v3 envelopes.
 window.localStorage.setItem('sentient.queueDrafts.v2', JSON.stringify([{ ...pool, status: 'scheduled', designerEmail: 'other@sentientagency.io', scheduledDate: day, scheduledStartMinutes: 600 }]));
-const active = { ...base, id: 2, post: post('chatgptricks', 'ACTIVE1'), status: 'in_progress', designerEmail: 'user03@example.com', scheduledDate: day, scheduledStartMinutes: 540 };
-const scheduled = { ...base, id: 3, post: post('chatgptricks', 'NEXT1'), recommendedAccounts: ['chatgptricks'], status: 'scheduled', designerEmail: 'user03@example.com', scheduledDate: day, scheduledStartMinutes: 570 };
+const active = { ...base, id: 2, notes: 'Automatically added to the Queue because this post exceeded 3× its account HOT threshold.', post: post('chatgptricks', 'ACTIVE1'), status: 'in_progress', designerEmail: 'user03@example.com', scheduledDate: day, scheduledStartMinutes: 540 };
+const manualNotes = 'Preserve the source visual system.\n[Creative reference](https://example.com/coordinator-brief)';
+const scheduled = { ...base, id: 3, notes: manualNotes, post: post('chatgptricks', 'NEXT1'), recommendedAccounts: ['chatgptricks'], status: 'scheduled', designerEmail: 'user03@example.com', scheduledDate: day, scheduledStartMinutes: 570 };
 const payload = {
   viewer: { displayName: 'User 03 Current', email: 'user03@example.com', isAdmin: false, isDev: true, operatingRoles: ['pd'] },
   date: day,
@@ -247,6 +248,7 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     await click(showAllControl);
     checks['Show all fits the effective schedule with compact block information'] = Boolean(document.querySelector('.scheduler.is-effective-view'))
       && Boolean(document.querySelector('.scheduler-block .scheduler-effective-meta'));
+    checks['Manual notes retain their floating indicator in the effective schedule'] = Boolean(document.querySelector('.scheduler.is-effective-view .scheduler-block.state-scheduled .queue-notes-badge.is-floating'));
     checks['Now remains visible in the effective schedule'] = document.querySelectorAll('.scheduler.is-effective-view .scheduler-now-global > b').length === 1;
     await click(document.querySelector('.scheduler-show-all'));
     await click(document.querySelector('.dev-role-preview > button'));
@@ -262,6 +264,11 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
       && nowLineAfter?.style.left === nowLineBefore?.style.left;
     checks['Colombia reads a Costa Rica 09:00 assignment as 10:00'] = [...document.querySelectorAll('.scheduler-block-copy small')].some((node) => /10:00/.test(node.textContent || ''));
     checks['Pool and scheduled blocks render'] = document.querySelectorAll('.queue-pool-card').length === 1 && document.querySelectorAll('.scheduler-block').length === 2;
+    checks['Only manual notes light up scheduler and assignment indicators'] = Boolean(document.querySelector('.scheduler-block.state-scheduled .queue-notes-badge'))
+      && Boolean(document.querySelector('.queue-admin-assignment-row.state-scheduled .queue-notes-badge'))
+      && !document.querySelector('.scheduler-block.state-in_progress .queue-notes-badge')
+      && !document.querySelector('.queue-admin-assignment-row.state-in_progress .queue-notes-badge')
+      && !document.querySelector('.queue-pool-card .queue-notes-badge');
     const upcomingSearch = document.querySelector('.queue-admin-search input');
     checks['Upcoming production search renders'] = Boolean(upcomingSearch) && upcomingSearch.type === 'search' && document.querySelectorAll('.queue-admin-assignment-row').length === 2;
     const setSearchValue = (value) => {
@@ -357,9 +364,41 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     await act(async () => { releaseDelete(); await new Promise(resolve => setTimeout(resolve, 50)); });
     checks['Confirmed delete removes the block'] = !document.querySelector('.scheduler-time-block');
 
+    await click(document.querySelector('.scheduler-block.state-in_progress'));
+    checks['Automatic HOT metadata does not create a coordinator note alert'] = !document.querySelector('.queue-notes-notice') && !document.querySelector('.queue-coordinator-notes');
+    await click(document.querySelector('.queue-request-rail .rail-close-button'));
     const nextBlock = document.querySelector('.scheduler-block.state-scheduled');
     await click(nextBlock);
     checks['Sideview opens'] = Boolean(document.querySelector('.queue-request-rail'));
+    // Let the inspector's opening frame establish focus before simulating
+    // a person following the notes notice or its floating comment icon.
+    await act(async () => { await new Promise((resolve) => requestAnimationFrame(resolve)); });
+    const noteSection = document.querySelector('.queue-coordinator-notes');
+    const noteNotice = document.querySelector('.queue-notes-notice > button');
+    const sourceCaption = document.querySelector('.queue-detail-copy > p');
+    checks['Opening a post announces its manual notes above the source caption'] = Boolean(noteNotice && noteSection && sourceCaption)
+      && Boolean(noteSection?.compareDocumentPosition(sourceCaption) & Node.DOCUMENT_POSITION_FOLLOWING)
+      && noteSection?.textContent.includes('Preserve the source visual system.')
+      && Boolean(noteSection?.querySelector('.queue-copy-button'));
+    const noteLink = noteSection?.querySelector('.queue-linked-notes a');
+    checks['Manual notes preserve clickable references without duplicate note paragraphs'] = noteLink?.getAttribute('href') === 'https://example.com/coordinator-brief'
+      && noteLink?.textContent === 'Creative reference'
+      && noteLink?.target === '_blank'
+      && noteLink?.rel.includes('noopener')
+      && document.querySelectorAll('.queue-request-rail .queue-linked-notes').length === 1;
+    let notesScrolled = false;
+    noteSection.scrollIntoView = () => { notesScrolled = true; };
+    await click(noteNotice);
+    checks['The notes notice brings keyboard focus to the manual observations'] = notesScrolled
+      && document.activeElement === noteSection
+      && noteNotice?.getAttribute('aria-controls') === noteSection?.id;
+    const noteIcon = document.querySelector('.queue-inspector-notes-button');
+    notesScrolled = false;
+    await click(noteIcon);
+    checks['The floating comment icon also opens the manual observations'] = notesScrolled
+      && document.activeElement === noteSection
+      && noteIcon?.getAttribute('aria-controls') === noteSection?.id
+      && Boolean(noteIcon?.getAttribute('aria-label'));
     const researchLink = document.querySelector('.queue-request-rail .queue-view-research');
     checks['Sideview offers media download'] = /Download media|Descargar media/.test(document.querySelector('.queue-request-rail .slide-download')?.textContent || '');
     checks['Sideview links back to the exact Research post'] = researchLink?.textContent.includes('View in Research')
@@ -390,6 +429,7 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     checks['Start action asks where to place the work'] = Boolean(document.querySelector('#queue-start-choice-title'));
     await click(document.querySelector('.queue-create-modal .scheduler-primary'));
     checks['Rejected start keeps the detail open and preserves scheduled state'] = Boolean(document.querySelector('.queue-request-rail')) && Boolean(document.querySelector('.scheduler-block.state-scheduled'));
+    checks['Rejected start retains the visible manual observations'] = document.querySelector('.queue-coordinator-notes')?.textContent.includes('Preserve the source visual system.');
     checks['Rejected start shows the server reason'] = document.querySelector('.queue-toast')?.textContent.includes('Only the assigned designer');
     await click(document.querySelector('.scheduler-block.state-scheduled'));
     await click([...document.querySelectorAll('.queue-detail-actions button')].find(node => /Start work|Empezar trabajo/.test(node.textContent)));
@@ -398,6 +438,7 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     checks['Deferred start keeps the detail open and stays scheduled'] = started
       && Boolean(document.querySelector('.queue-request-rail'))
       && Boolean(document.querySelector('.scheduler-block.state-scheduled'));
+    checks['Deferred start retains the visible manual observations'] = document.querySelector('.queue-coordinator-notes')?.textContent.includes('Preserve the source visual system.');
     checks['Deferred warning is shown'] = /already in progress|Ya hay otro post/.test(document.querySelector('.queue-toast')?.textContent || '');
 
     await click(document.querySelector('.queue-request-rail .rail-close-button'));
@@ -468,8 +509,13 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     checks['Starting keeps sidebar open while request is pending'] = Boolean(document.querySelector('.queue-request-rail')) && Boolean(document.querySelector('.scheduler-block.is-pending-action .queue-item-loading'));
     await act(async () => { releaseStart(); await new Promise(resolve => setTimeout(resolve, 50)); });
     checks['Start updates state without reload'] = document.querySelectorAll('.scheduler-block.state-in_progress').length === 2 && !document.querySelector('.scheduler-block.is-pending-action');
+    checks['Starting work retains the notes notice and manual observations'] = Boolean(document.querySelector('.queue-notes-notice'))
+      && document.querySelector('.queue-coordinator-notes')?.textContent.includes('Preserve the source visual system.');
     await click([...document.querySelectorAll('.queue-detail-actions button')].find(node => /Mark complete|Marcar como completado/.test(node.textContent)));
     checks['Completing keeps sidebar open and updates state'] = Boolean(document.querySelector('.queue-request-rail')) && Boolean(document.querySelector('.scheduler-block.state-completed'));
+    checks['Completed work retains its notes in the close-request detail'] = Boolean(document.querySelector('.queue-notes-notice'))
+      && document.querySelector('.queue-coordinator-notes')?.textContent.includes('Preserve the source visual system.')
+      && document.querySelectorAll('.queue-request-rail .queue-linked-notes').length === 1;
     await click(document.querySelector('.queue-request-rail .rail-close-button'));
     payload.viewer.isAdmin = true;
     for (const key of ['requests', 'planningRequests', 'assignedRequests']) payload[key] = payload[key].map(task => [2, 3].includes(task.id) ? { ...task, status: 'completed' } : task);

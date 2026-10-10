@@ -144,7 +144,7 @@ payload.accountOnboarding.completed=true; window.__queueFixture=payload;`;
  await copyText.getByRole('button',{name:'Copy caption',exact:true}).click();
  assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),await copyText.locator('> p').first().textContent());
  await copyText.getByRole('button',{name:'Copied',exact:true}).waitFor();
- await copyText.getByRole('button',{name:'Copy notes',exact:true}).click();
+ await page.locator('.queue-coordinator-notes').getByRole('button',{name:'Copy notes',exact:true}).click();
  assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),'Manual note left when the post was created from scratch.');
  for(const width of [1440,390]){
   await page.setViewportSize({width,height:1000});await page.waitForTimeout(100);

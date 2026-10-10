@@ -9,11 +9,15 @@ const day = `${queueDateParts.year}-${queueDateParts.month}-${queueDateParts.day
 const task = {
   id: 1, status: 'scheduled', designerEmail: 'user03@example.com', scheduledDate: day,
   scheduledStartMinutes: 600, productionPoints: 3, durationMinutes: 30, priority: 'high', tags: [],
+  notes: 'Automatically added to the Queue because this post exceeded 3× its account HOT threshold.\nUse the updated layout from https://example.com/design-guide\n<em>Keep this literal</em>',
   recommendedAccounts: ['chatgptricks'], post: { account: 'chatgptricks', shortcode: 'ONE', caption: 'Useful AI workflow', type: 'Carousel', coverUrl: '' },
 };
 const queue = {
   viewer: { email: 'user03@example.com', isAdmin: true, isDev: true, operatingRoles: ['vc', 'pd'], minutesPerPP: 10 },
-  date: day, requests: [{ ...task, id: 2, status: 'pool', designerEmail: null, scheduledDate: null, scheduledStartMinutes: null }],
+  date: day, requests: [
+    { ...task, id: 2, status: 'pool', designerEmail: null, scheduledDate: null, scheduledStartMinutes: null, notes: '  \n  ' },
+    { ...task, id: 3, status: 'pool', designerEmail: null, scheduledDate: null, scheduledStartMinutes: null, notes: 'Available as a temporary HOT Pick candidate.' },
+  ],
   planningRequests: [task], assignedRequests: [task], pickRequests: [], hotPickRequests: [], liveDrafts: [], liveRevision: 0,
   pendingTicketCount: 1, timeBlocks: [], accounts: [{ handle: 'chatgptricks', label: 'ChatGPTricks' }, { handle: 'unmanaged', label: 'Unmanaged' }, { handle: 'inactive', label: 'Inactive', is_active: false }],
   schedulerUsers: [{ email: 'user03@example.com', displayName: 'User 03', roles: ['vc', 'pd'], avatarUrl: '', accounts: ['chatgptricks', 'inactive'] }],
@@ -110,6 +114,8 @@ const fetchStub = async (url, options = {}) => {
 globalThis.fetch = fetchStub;
 window.fetch = fetchStub;
 window.scrollTo = () => {};
+const notesScrolls = [];
+window.HTMLElement.prototype.scrollIntoView = function (options) { notesScrolls.push({ id: this.id, options }); };
 localStorage.setItem('sentient.tracker.favs', JSON.stringify(['chatgptricks']));
 
 const click = async (node) => act(async () => { node.dispatchEvent(new window.MouseEvent('click', { bubbles: true })); await new Promise((resolve) => setTimeout(resolve, 80)); });
@@ -171,6 +177,35 @@ const fill = async (node, value) => act(async () => {
     checks['Queue day map renders'] = Boolean(document.querySelector('.m-day-map')) && Boolean(document.querySelector('.m-day-bar'));
     checks['Mobile Queue is a desktop-directed support view'] = /Open Queue on desktop/.test(document.body.textContent)
       && !document.querySelector('.m-queue-quick');
+    checks['Mobile task with manual notes has a floating icon and readable label'] = Boolean(document.querySelector('.m-task-cover > .queue-notes-badge.is-floating'))
+      && /Has notes/.test(document.querySelector('.m-task')?.textContent || '');
+    await click(document.querySelector('.m-task'));
+    const noteCard = document.querySelector('.m-task-detail .queue-coordinator-notes');
+    const noteNotice = document.querySelector('.m-task-detail .queue-notes-notice');
+    const caption = document.querySelector('.m-task-detail > p');
+    checks['Opening a mobile task announces coordinator notes and highlights them before the caption'] = Boolean(noteCard)
+      && document.querySelector('.m-task-detail')?.firstElementChild === noteNotice
+      && Boolean(noteCard?.compareDocumentPosition(caption) & window.Node.DOCUMENT_POSITION_FOLLOWING);
+    checks['Mobile coordinator notes preserve safe links and literal text while excluding HOT boilerplate'] = noteCard?.querySelector('a')?.href === 'https://example.com/design-guide'
+      && noteCard?.querySelector('a')?.rel === 'noopener noreferrer'
+      && /<em>Keep this literal<\/em>/.test(noteCard?.textContent || '') && !noteCard?.querySelector('em')
+      && !/Automatically added/.test(noteCard?.textContent || '');
+    const originalMatchMedia = window.matchMedia;
+    window.matchMedia = () => ({ matches: true });
+    await click(noteNotice.querySelector('button'));
+    checks['Mobile review action focuses notes and respects reduced motion'] = document.activeElement === noteCard
+      && notesScrolls.at(-1)?.id === noteCard.id && notesScrolls.at(-1)?.options.behavior === 'auto';
+    window.matchMedia = originalMatchMedia;
+    await click(document.querySelector('.m-sheet > header button'));
+    const queueModes = [...document.querySelectorAll('.m-content .m-tab-scroll button')];
+    await click(queueModes.find((node) => node.textContent === 'Pool'));
+    checks['Mobile empty and automatic notes have no indicators'] = document.querySelectorAll('.m-task').length === 2
+      && !document.querySelector('.m-task .queue-notes-badge');
+    await click(document.querySelectorAll('.m-task')[1]);
+    checks['Mobile automatic notes produce no manual-note notice or panel'] = !document.querySelector('.m-task-detail .queue-notes-notice')
+      && !document.querySelector('.m-task-detail .queue-coordinator-notes') && !document.querySelector('.m-task-detail .queue-notes-badge');
+    await click(document.querySelector('.m-sheet > header button'));
+    await click(queueModes.find((node) => node.textContent === 'Agenda'));
     const suggestButton = [...document.querySelectorAll('.m-content button')].find((node) => /Suggest a post/.test(node.textContent));
     checks['Mobile Queue offers post suggestions requiring VC approval'] = Boolean(suggestButton) && /Suggestions need VC approval/.test(document.body.textContent);
     await click(suggestButton);
