@@ -19,7 +19,7 @@ The API provides **read access to stored public data for selected accounts**: pr
 | --- | --- |
 | Media kit or creator page | `/media-kit` for profile, followers, performance and standout posts |
 | Brand website or account directory | `/accounts` to discover the scope, and `/accounts/{handle}` for each account profile |
-| Post gallery or catalog | `/posts`, paginated and filtered by date |
+| Post gallery or catalog | `/posts`, paginated and filtered by dates or Promo status |
 | Audience growth chart | `/followers/history`, with stored daily samples |
 | Recurring report or analytics tool | Requests from a script or service; save the capture date and the range used |
 | Static website | A server function as a proxy, or a task that generates static content from the API |
@@ -98,7 +98,7 @@ All the following endpoints use `GET`. Append each path to the `/api/v1` base. U
 | `/accounts` | List of active authorized accounts | None |
 | `/accounts/{handle}` | Public profile of one account | None |
 | `/accounts/{handle}/media-kit` | Profile, performance summary, standout posts and available growth | None |
-| `/accounts/{handle}/posts` | Paginated list of stored public posts | `limit`, `offset`, `from`, `to` |
+| `/accounts/{handle}/posts` | Paginated list of stored public posts | `limit`, `offset`, `from`, `to`, `is_promo` |
 | `/accounts/{handle}/followers/history` | Paginated list of daily follower samples | `limit`, `offset`, `from`, `to` |
 
 Collection responses use an array for `data`; profile and media kit responses use an object. Endpoints do not all have the same metadata: `/accounts` includes `schema_version` and `data`; profile and media kit also include `generated_at` and `data_updated_at`; posts and history include `generated_at`, `pagination` and dates for each row. History also includes `timezone`.
@@ -212,7 +212,7 @@ Counters are cumulative measurements for each post. `last_30_days` selects posts
 
 Do not add the averages for likes and comments to reconstruct `engagements.average`: they may cover different measured populations. Do not multiply `engagement_rate_pct` or `follower_growth.30d.pct` by 100: they are already percentages. Views and plays do not represent unique people or unique reach.
 
-Each standout post includes `shortcode`, `permalink`, `public_caption`, `format`, `published_at`, `metrics: { likes, comments, video_views, video_plays }`, `engagements` and `engagement_rate_pct`. Use `public_caption` as text and `permalink` as a link. The JSON API does not return image files, videos or internal storage paths.
+Each standout post includes `shortcode`, `permalink`, `public_caption`, `format`, `published_at`, `is_promo`, `metrics: { likes, comments, video_views, video_plays }`, `engagements` and `engagement_rate_pct`. Use `public_caption` as text and `permalink` as a link. `is_promo` is the Promo boolean described in the next section. `/media-kit` keeps its aggregate summaries and does not accept the `is_promo` filter or split summaries by Promo status. The JSON API does not return image files, videos or internal storage paths.
 
 If `last_30_days` or `follower_growth` is absent, hide that block or explain that there is insufficient data. For a private account, the public catalog and standout posts are empty. Hidden or deleted posts, posts without a usable date and posts dated in the future are excluded from the public export.
 
@@ -231,6 +231,24 @@ Dates are interpreted as calendar days in `America/Costa_Rica`. You can use eith
 
 ### Posts
 
+In addition to the shared parameters, only `/posts` accepts this optional filter:
+
+| Parameter | Value |
+| --- | --- |
+| `is_promo` | `true` returns Promo posts; `false` returns the other posts; omitting it returns all posts |
+
+Each post returns `is_promo` as a JSON boolean. It is `true` when the manual Promo flag is set or its caption matches `/#aitoolsentient\b/i`, case-insensitively. This is the same rule used by Research. The filter applies before pagination: `pagination.total` counts posts that match both the requested Promo status and date filters. Do not send `is_promo` to follower history.
+
+For example, to request only Promo posts:
+
+```bash
+curl --fail-with-body \
+  -H "Authorization: Bearer $SENTIENT_DASH_API_KEY" \
+  "https://cortex-api-db2e.onrender.com/api/v1/accounts/$SENTIENT_DASH_ACCOUNT/posts?is_promo=true&limit=20&offset=0"
+```
+
+Use `is_promo=false` to request posts that are not Promo. The following query omits the filter and includes all statuses:
+
 ```bash
 curl --fail-with-body \
   -H "Authorization: Bearer $SENTIENT_DASH_API_KEY" \
@@ -248,6 +266,7 @@ curl --fail-with-body \
       "published_at": "2026-10-08T16:00:00+00:00",
       "permalink": "https://www.instagram.com/p/ExamplePost01/",
       "format": "Image",
+      "is_promo": false,
       "likes": 500,
       "comments": 50,
       "video_views": null,
@@ -303,7 +322,7 @@ History returns the last stored capture for each Costa Rica day, ordered from th
 This server helper gathers a range, with its own limit of ten pages to prevent an accidentally large download:
 
 ```js
-async function readPages(resource, from, to) {
+async function readPages(resource, from, to, isPromo) {
   const base = 'https://cortex-api-db2e.onrender.com/api/v1';
   const handle = process.env.SENTIENT_DASH_ACCOUNT;
   const key = process.env.SENTIENT_DASH_API_KEY;
@@ -311,12 +330,16 @@ async function readPages(resource, from, to) {
   if (!['posts', 'followers/history'].includes(resource)) {
     throw new Error('Resource not allowed');
   }
+  if (isPromo !== undefined && (resource !== 'posts' || typeof isPromo !== 'boolean')) {
+    throw new Error('isPromo must be a boolean and is only supported for posts');
+  }
   const rows = [];
   let offset = 0;
   for (let page = 0; page < 10; page += 1) {
     const query = new URLSearchParams({ limit: '100', offset: String(offset) });
     if (from) query.set('from', from);
     if (to) query.set('to', to);
+    if (isPromo !== undefined) query.set('is_promo', String(isPromo));
     const response = await fetch(
       `${base}/accounts/${encodeURIComponent(handle)}/${resource}?${query}`,
       {
@@ -336,6 +359,8 @@ async function readPages(resource, from, to) {
   throw new Error('The range exceeds ten pages; use a shorter period');
 }
 ```
+
+The helper's fourth argument is optional: use `true` or `false` to filter posts by Promo status and omit it to get all posts. For example, `readPages('posts', '2026-10-01', '2026-10-09', false)` gathers posts that are not Promo within that range.
 
 Query a stable range for a report and avoid traversing the entire catalog on each visit. Pagination uses offsets and does not freeze a snapshot: when new posts arrive between pages, the order may shift. If you store post results, deduplicate by `shortcode`; for history, by `date`.
 
@@ -417,6 +442,8 @@ Open [http://localhost:3000](http://localhost:3000). The command uses the [offic
 
 The example exposes `/api/media-kit`, `/api/posts` and `/api/followers` on your website server. The account is fixed in its private configuration. It keeps a five-minute cache, ten-second timeout, brief failure cache and a budget of 50 dashboard requests per minute per process. It validates parameters and applies its own maximum of `offset=100000`. These are example implementation decisions, not changes to the API contract.
 
+The proxy accepts `/api/posts?is_promo=true` and `/api/posts?is_promo=false`; omitting the parameter requests all statuses. It forwards the filter to the backend before pagination and preserves `is_promo` and `pagination.total` in the response. Cache entries are separate for each resource and query parameters, including the Promo filter. The filter is not accepted on `/api/media-kit` or `/api/followers`.
+
 To deploy it, configure private variables in your hosting provider and use `node server.mjs` as the start command. Hosting supplies `PORT`. Serve the domain over HTTPS. For deployments with multiple instances, use a shared cache and hosting limits: the example cache lives in one process's memory. The `node --test server.test.mjs` tests use a fake backend and do not need a real key.
 
 ## 8 Updates, caching and data quality
@@ -431,7 +458,7 @@ To deploy it, configure private variables in your hosting provider and use `node
 
 Timestamps use ISO 8601. The `from`/`to` range and history days use Costa Rica as their reference. An update date may be `null` if no evidence was stored. In a profile, different fields may come from the latest available observations for each measurement.
 
-Keep a valid response in your server cache for about five minutes, per account and resource, so several visits can reuse it. Dashboard responses are sent as `private, no-store`; avoid a public cache of authenticated requests and store only the data your integration needs. If you share a cache between connections, separate their scopes so one key cannot receive another key's data.
+Keep a valid response in your server cache for about five minutes, per account, resource and query parameters, so several visits can reuse it. Keep separate entries for `is_promo=true`, `is_promo=false` and the omitted filter, as well as dates and pagination. Dashboard responses are sent as `private, no-store`; avoid a public cache of authenticated requests and store only the data your integration needs. If you share a cache between connections, separate their scopes so one key cannot receive another key's data.
 
 For reports or static generation, run requests at the frequency your product needs and that makes sense for dashboard updates. Reading every second does not produce newer data. Across multiple instances, share the cache or coordinate the request budget because all consume the same key's rate limit.
 
@@ -458,6 +485,8 @@ The downloadable project's proxy preserves useful API statuses and the `Retry-Af
 ## 10 Versioning and integration checks
 
 The current public route is `/api/v1`, and responses declare `schema_version: "1.0"`. Read the fields your application needs, tolerate additional fields and check optional objects before using them. Do not call internal dashboard or MCP routes with an integration key.
+
+The `is_promo` field and its optional filter are compatible additions that retain `schema_version: "1.0"`. The field appears in the `/posts` catalog and `/media-kit` standout posts; the filter belongs only to `/posts`.
 
 Before publishing, verify these points:
 
