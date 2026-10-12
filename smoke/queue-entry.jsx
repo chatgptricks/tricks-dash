@@ -54,6 +54,8 @@ let releaseBatchClose, rejectBatchClose = false, batchCloseCalls = 0, partiallyC
 let releaseInitialQueueFetch;
 let holdInitialQueueFetch = true;
 const initialQueueFetch = new Promise((resolve) => { releaseInitialQueueFetch = resolve; });
+const schedulerPreferenceWrites = [];
+let holdSchedulerPreferenceSaves = false;
 
 let submitted = null;
 let drafted = null;
@@ -79,6 +81,17 @@ const stubFetch = async (url, options = {}) => {
   if (value.includes('/api/dashboard/queue/v2/account-onboarding')) {
     payload.accountOnboarding = { completed: true, selectedAccounts: JSON.parse(options.body.get('accounts') || '[]') };
     return response({ ok: true, accountOnboarding: payload.accountOnboarding });
+  }
+  if (value.includes('/api/dashboard/queue/v2/scheduler-preferences')) {
+    const preferences = {
+      hiddenUsers: JSON.parse(options.body.get('hidden_users') || '[]'),
+      rowOrder: JSON.parse(options.body.get('row_order') || '[]'),
+    };
+    const write = { preferences, release: null };
+    schedulerPreferenceWrites.push(write);
+    if (holdSchedulerPreferenceSaves) await new Promise(resolve => { write.release = resolve; });
+    payload.schedulerPreferences = preferences;
+    return response({ ok: true, schedulerPreferences: preferences });
   }
   if (value.includes('/api/dashboard/queue/v2/tickets/time-block/') && options.body?.get('delete')) {
     await new Promise(resolve => { releaseDelete = resolve; });
@@ -290,6 +303,26 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
       && document.querySelector('.scheduler-user-presence.is-offline');
     checks['All dashboard users render as PD-capable'] = document.querySelectorAll('.scheduler-row').length === 4 && document.querySelectorAll('.scheduler-row.is-non-queue-user').length === 0;
     checks['Roster shows only the highest role'] = [...document.querySelectorAll('.scheduler-user-copy small')].map((node) => node.textContent.trim()).join('|') === 'Admin|Admin|Sales|Trainee';
+    const rosterNames = () => [...document.querySelectorAll('.scheduler-user-name')].map(node => node.textContent.trim()).join('|');
+    const hiddenToggle = () => document.querySelector('.scheduler-hidden-toggle');
+    const hiddenList = () => document.querySelector('.scheduler-hidden-list');
+    const hideRosterUser = async (name) => {
+      const header = [...document.querySelectorAll('.scheduler-row > header')].find(node => node.querySelector('.scheduler-user-name')?.textContent.trim() === name);
+      await act(async () => { header.dispatchEvent(new window.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 240, clientY: 170 })); });
+      await click(document.querySelector('.scheduler-context-menu button'));
+    };
+    const selectRosterScope = async (email) => {
+      const select = document.querySelector('.scheduler-designer-filter select');
+      await act(async () => { select.value = email; select.dispatchEvent(new window.Event('change', { bubbles: true })); });
+    };
+    const restoreRosterUser = async (name) => {
+      await click([...hiddenList().querySelectorAll('li')].find(node => node.querySelector('b')?.textContent === name)?.querySelector('button'));
+    };
+    checks['Hidden users disclosure ends the roster and starts collapsed'] = hiddenToggle()?.getAttribute('aria-expanded') === 'false'
+      && hiddenToggle()?.getAttribute('aria-controls') === hiddenList()?.id
+      && hiddenList()?.hidden
+      && document.querySelector('.scheduler-canvas')?.lastElementChild?.classList.contains('scheduler-hidden-users');
+    holdSchedulerPreferenceSaves = true;
     const salesHeader = [...document.querySelectorAll('.scheduler-row > header')].find((node) => /Sales User/.test(node.textContent || ''));
     await act(async () => { salesHeader.dispatchEvent(new window.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 240, clientY: 170 })); });
     await click([...document.querySelectorAll('.scheduler-context-menu button')].find((node) => /^Hide Sales User/.test(node.textContent || '')));
@@ -300,6 +333,53 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     await act(async () => { traineeHeader.dispatchEvent(dragEvent('dragstart')); roleSwitcherRow.dispatchEvent(dragEvent('dragover')); roleSwitcherRow.dispatchEvent(dragEvent('drop')); });
     checks['Drag reorder updates VC rows immediately'] = [...document.querySelectorAll('.scheduler-user-copy b')].map((node) => node.textContent.trim()).join('|') === 'Developer Current|Trainee|Role Switcher';
     transfer.clearData();
+    checks['Hidden users count updates while the preference save is pending'] = hiddenToggle()?.querySelector('b')?.textContent === '1'
+      && schedulerPreferenceWrites.length === 1;
+    await click(hiddenToggle());
+    checks['Hidden users disclosure lists restorable names and accessible actions'] = hiddenToggle()?.getAttribute('aria-expanded') === 'true'
+      && !hiddenList()?.hidden
+      && hiddenList()?.querySelector('li b')?.textContent === 'Sales User'
+      && hiddenList()?.querySelector('li button')?.getAttribute('aria-label') === 'Restore Sales User';
+    await selectRosterScope('staff-6@example.test');
+    checks['A selected hidden user leaves restoration reachable in an empty roster'] = document.querySelectorAll('.scheduler-row').length === 0
+      && hiddenList()?.querySelector('li b')?.textContent === 'Sales User';
+    await restoreRosterUser('Sales User');
+    checks['Restore brings the selected user back immediately without changing the scope'] = rosterNames() === 'Sales User'
+      && document.querySelector('.scheduler-designer-filter select')?.value === 'staff-6@example.test'
+      && hiddenToggle()?.querySelector('b')?.textContent === '0'
+      && hiddenList()?.querySelector('p')?.textContent === 'No hidden users';
+    await selectRosterScope('');
+    const reorderedRoster = 'Developer Current|Trainee|Role Switcher|Sales User';
+    checks['Restoration preserves the saved roster order'] = rosterNames() === reorderedRoster;
+    await hideRosterUser('Sales User');
+    await hideRosterUser('Trainee');
+    await selectRosterScope('role-switcher@example.test');
+    checks['Hidden list includes all hidden users outside the selected scope'] = rosterNames() === 'Role Switcher'
+      && [...hiddenList().querySelectorAll('li b')].map(node => node.textContent).join('|') === 'Trainee|Sales User';
+    await restoreRosterUser('Sales User');
+    checks['Restoring one user retains the remaining hidden user and current scope'] = hiddenToggle()?.querySelector('b')?.textContent === '1'
+      && hiddenList()?.querySelector('li b')?.textContent === 'Trainee'
+      && rosterNames() === 'Role Switcher';
+    await restoreRosterUser('Trainee');
+    await selectRosterScope('');
+    checks['Rapid restores stay optimistic while earlier saves remain in flight'] = rosterNames() === reorderedRoster
+      && hiddenToggle()?.querySelector('b')?.textContent === '0'
+      && schedulerPreferenceWrites.length === 1;
+    await act(async () => { schedulerPreferenceWrites[0].release(); await new Promise(resolve => setTimeout(resolve, 0)); });
+    checks['An older preference response cannot rehide a restored user'] = rosterNames() === reorderedRoster
+      && hiddenToggle()?.querySelector('b')?.textContent === '0'
+      && schedulerPreferenceWrites.length === 2
+      && payload.schedulerPreferences.hiddenUsers.includes('staff-6@example.test');
+    holdSchedulerPreferenceSaves = false;
+    await act(async () => { schedulerPreferenceWrites[1].release(); await new Promise(resolve => setTimeout(resolve, 0)); });
+    const finalPreferences = schedulerPreferenceWrites.at(-1)?.preferences;
+    checks['Serialized preference saves persist every restore and retain row order'] = schedulerPreferenceWrites.length === 7
+      && finalPreferences?.hiddenUsers.length === 0
+      && finalPreferences?.rowOrder.join('|') === 'developer@example.test|trainee@example.test|role-switcher@example.test|staff-6@example.test'
+      && payload.schedulerPreferences.hiddenUsers.length === 0
+      && rosterNames() === reorderedRoster;
+    await click(hiddenToggle());
+    checks['Hidden users disclosure can collapse after restoration'] = hiddenToggle()?.getAttribute('aria-expanded') === 'false' && hiddenList()?.hidden;
     const createPostButton = document.querySelector('.queue-create-button');
     const addTimeButton = document.querySelector('.scheduler-add-time');
     checks['Add Time is grouped with Create Post'] = Boolean(addTimeButton) && createPostButton?.parentElement === addTimeButton.parentElement;
@@ -309,6 +389,29 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     const profileTrigger = document.querySelector('.queue-settings-trigger');
     checks['Signed-in profile opens Queue settings'] = profileTrigger?.querySelector('img')?.getAttribute('src') === 'https://example.test/developer-avatar.png';
     await click(profileTrigger);
+    const chooseQueueLanguage = async (language) => {
+      await click([...document.querySelectorAll('.queue-language button')].find(node => node.textContent === (language === 'es' ? 'ES' : 'ENG')));
+    };
+    await chooseQueueLanguage('es');
+    await click(hiddenToggle());
+    checks['Hidden users disclosure and empty state follow Spanish preferences'] = hiddenToggle()?.querySelector('span')?.textContent === 'Usuarios ocultos'
+      && hiddenList()?.querySelector('p')?.textContent === 'No hay usuarios ocultos';
+    await hideRosterUser('Sales User');
+    checks['Restore actions follow Spanish preferences'] = hiddenList()?.querySelector('li button')?.textContent === 'Restaurar'
+      && hiddenList()?.querySelector('li button')?.getAttribute('aria-label') === 'Restaurar Sales User';
+    await restoreRosterUser('Sales User');
+    // Role preview normally reloads. Re-evaluate the same preview capability
+    // through a language-state render because jsdom cannot navigate/reload.
+    window.sessionStorage.setItem('sentient.queueRolePreview', 'pd');
+    await chooseQueueLanguage('en');
+    checks['Personal production view does not expose coordinator layout controls'] = !hiddenToggle()
+      && !document.querySelector('.scheduler-designer-filter');
+    window.sessionStorage.removeItem('sentient.queueRolePreview');
+    await chooseQueueLanguage('es');
+    checks['Coordinator view regains hidden-user controls after role preview'] = Boolean(hiddenToggle())
+      && Boolean(document.querySelector('.scheduler-designer-filter'));
+    await chooseQueueLanguage('en');
+    if (hiddenToggle()?.getAttribute('aria-expanded') === 'true') await click(hiddenToggle());
     const settingsLink = document.querySelector('.queue-settings-admin .queue-settings-link');
     checks['Admin profile menu links to standalone Settings'] = settingsLink?.tagName === 'A'
       && /\/settings\.html$/.test(settingsLink.getAttribute('href') || '');

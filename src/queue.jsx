@@ -8,7 +8,7 @@ import { suggestedSlotLabel, suggestionAccounts, suggestionSourceUrl, submitQueu
 import React, { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { mountApp } from './mountApp';
 import { createPortal } from 'react-dom';
-import { AlertTriangle, Archive, ArrowLeft, Ban, BarChart3, BellRing, CalendarDays, CalendarPlus, Check, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Clock3, Copy, Coffee, Download, ExternalLink, History, Image as ImageIcon, Layers, Lightbulb, Link2, LoaderCircle, LocateFixed, LogOut, Maximize2, Moon, Paperclip, Pencil, Play, Plus, Radio, Search, Send, Settings, Sun, TimerReset, WifiOff, X } from 'lucide-react';
+import { AlertTriangle, Archive, ArrowLeft, Ban, BarChart3, BellRing, CalendarDays, CalendarPlus, Check, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Clock3, Copy, Coffee, Download, ExternalLink, Eye, EyeOff, History, Image as ImageIcon, Layers, Lightbulb, Link2, LoaderCircle, LocateFixed, LogOut, Maximize2, Moon, Paperclip, Pencil, Play, Plus, Radio, Search, Send, Settings, Sun, TimerReset, WifiOff, X } from 'lucide-react';
 import { browserPopupRedirectResolver, getRedirectResult, onAuthStateChanged, signOut } from 'firebase/auth';
 import { describeSignInError, firebaseAuth as auth, startGoogleSignIn } from './firebase';
 import { clearSsoCookie, startSsoRefresh, trySsoSignIn } from './sso';
@@ -181,6 +181,10 @@ Object.assign(COPY.en, {
   returnToNotStarted: 'Return to Not Started',
   showAll: 'Show all',
   showFullDay: 'Show full day',
+  hiddenUsers: 'Hidden users',
+  noHiddenUsers: 'No hidden users',
+  restoreUser: 'Restore',
+  hideUser: 'Hide',
 });
 Object.assign(COPY.es, {
   startChoice: 'Iniciar este trabajo',
@@ -190,6 +194,10 @@ Object.assign(COPY.es, {
   returnToNotStarted: 'Devolver a No iniciado',
   showAll: 'Mostrar todo',
   showFullDay: 'Mostrar día completo',
+  hiddenUsers: 'Usuarios ocultos',
+  noHiddenUsers: 'No hay usuarios ocultos',
+  restoreUser: 'Restaurar',
+  hideUser: 'Ocultar',
 });
 COPY.en.previousDay = 'Previous day';
 COPY.en.nextDay = 'Next day';
@@ -1262,6 +1270,8 @@ function Scheduler({ data, draft, setDraft, onDraftChange, onConfirmDraft, onCan
   const [contextMenu, setContextMenu] = useState(null);
   const [isPanning, setIsPanning] = useState(false);
   const [showAll, setShowAll] = useState(false);
+  const [showHiddenUsers, setShowHiddenUsers] = useState(false);
+  const hiddenUsersPanelId = useId();
   const scrollRef = useRef(null);
   const resizeRef = useRef(null);
   const timeBlockInteractionRef = useRef(null);
@@ -1303,6 +1313,7 @@ function Scheduler({ data, draft, setDraft, onDraftChange, onConfirmDraft, onCan
   // filter and made Hide appear to do nothing.
   const visibleDesigners = (designerScope ? orderedUsers.filter((designer) => designer.email === designerScope) : orderedUsers)
     .filter((designer) => !hiddenUsers.has(designer.email));
+  const restorableUsers = orderedUsers.filter((designer) => hiddenUsers.has(designer.email));
   const effectiveTimeline = useMemo(() => {
     const visibleEmails = new Set(visibleDesigners.map((designer) => designer.email));
     const intervals = [
@@ -1627,10 +1638,21 @@ function Scheduler({ data, draft, setDraft, onDraftChange, onConfirmDraft, onCan
             </div>
           </div>;
         })}
+        {coordinator ? <div className="scheduler-hidden-users">
+          <button type="button" className="scheduler-hidden-toggle" aria-expanded={showHiddenUsers} aria-controls={hiddenUsersPanelId} onClick={() => setShowHiddenUsers((value) => !value)}>
+            <EyeOff size={14} /><span>{t('hiddenUsers')}</span><b>{restorableUsers.length}</b><ChevronRight size={12} className={showHiddenUsers ? 'is-expanded' : ''} />
+          </button>
+          <div id={hiddenUsersPanelId} className="scheduler-hidden-list" hidden={!showHiddenUsers}>
+            {restorableUsers.length ? <ul>{restorableUsers.map((designer) => <li key={designer.email}>
+              <span><b>{displayName(designer.email, designer.displayName)}</b><small>{schedulerUserRole(designer, t)}</small></span>
+              <button type="button" aria-label={`${t('restoreUser')} ${displayName(designer.email, designer.displayName)}`} onClick={() => onSavePreferences?.({ hiddenUsers: [...hiddenUsers].filter((email) => email !== designer.email), rowOrder: preferences.rowOrder || [] })}><Eye size={13} />{t('restoreUser')}</button>
+            </li>)}</ul> : <p>{t('noHiddenUsers')}</p>}
+          </div>
+        </div> : null}
       </div>
     </section>
     <div className="scheduler-view-controls"><button type="button" className={`scheduler-show-all${showAll && effectiveTimeline.hasWork ? ' is-active' : ''}`} onClick={() => setShowAll((value) => !value)} title={showAll ? t('showFullDay') : t('showAll')} aria-label={showAll ? t('showFullDay') : t('showAll')} aria-pressed={showAll && effectiveTimeline.hasWork}><Maximize2 size={14} /><span>{showAll && effectiveTimeline.hasWork ? t('showFullDay') : t('showAll')}</span></button><button type="button" className="scheduler-center-now" onClick={centerNow} title={t('centerNow')} aria-label={t('centerNow')}><LocateFixed size={15} /><span>{t('centerNow')}</span></button></div>
-    {contextMenu ? <><button type="button" className="scheduler-context-backdrop" onClick={() => setContextMenu(null)} aria-label={t('close')} /><div className="scheduler-context-menu" style={{ left: Math.min(window.innerWidth - 210, contextMenu.x), top: Math.min(window.innerHeight - 180, contextMenu.y) }}>{contextMenu.type === 'user' ? <button type="button" onClick={() => { onSavePreferences?.({ hiddenUsers: [...hiddenUsers, contextMenu.designer.email], rowOrder: preferences.rowOrder || [] }); setContextMenu(null); }}>Hide {displayName(contextMenu.designer.email, contextMenu.designer.displayName)}</button> : null}{contextMenu.type === 'task' ? <><button type="button" onClick={() => { onOpen(contextMenu.task); setContextMenu(null); }}>Open post</button><button type="button" onClick={() => { onDuplicateTask?.(contextMenu.task); setContextMenu(null); }}>{t('duplicateRequest')}</button><button type="button" onClick={() => { onReturnToPool?.(contextMenu.task); setContextMenu(null); }}>Return to Pool</button><button type="button" className="is-danger" onClick={() => { onCancelTask?.(contextMenu.task); setContextMenu(null); }}>Cancel post</button></> : null}{contextMenu.type === 'time' ? <><button type="button" onClick={(event) => { setContextMenu(null); openTimeBlockForm(event, contextMenu.designer, contextMenu.block); }}>Edit personal time</button><button type="button" className="is-danger" onClick={() => { onDeleteTimeBlock?.(contextMenu.block); setContextMenu(null); }}>Delete personal time</button></> : null}</div></> : null}
+    {contextMenu ? <><button type="button" className="scheduler-context-backdrop" onClick={() => setContextMenu(null)} aria-label={t('close')} /><div className="scheduler-context-menu" style={{ left: Math.min(window.innerWidth - 210, contextMenu.x), top: Math.min(window.innerHeight - 180, contextMenu.y) }}>{contextMenu.type === 'user' ? <button type="button" onClick={() => { onSavePreferences?.({ hiddenUsers: [...hiddenUsers, contextMenu.designer.email], rowOrder: preferences.rowOrder || [] }); setContextMenu(null); }}>{t('hideUser')} {displayName(contextMenu.designer.email, contextMenu.designer.displayName)}</button> : null}{contextMenu.type === 'task' ? <><button type="button" onClick={() => { onOpen(contextMenu.task); setContextMenu(null); }}>Open post</button><button type="button" onClick={() => { onDuplicateTask?.(contextMenu.task); setContextMenu(null); }}>{t('duplicateRequest')}</button><button type="button" onClick={() => { onReturnToPool?.(contextMenu.task); setContextMenu(null); }}>Return to Pool</button><button type="button" className="is-danger" onClick={() => { onCancelTask?.(contextMenu.task); setContextMenu(null); }}>Cancel post</button></> : null}{contextMenu.type === 'time' ? <><button type="button" onClick={(event) => { setContextMenu(null); openTimeBlockForm(event, contextMenu.designer, contextMenu.block); }}>Edit personal time</button><button type="button" className="is-danger" onClick={() => { onDeleteTimeBlock?.(contextMenu.block); setContextMenu(null); }}>Delete personal time</button></> : null}</div></> : null}
     <TimeBlockForm form={timeBlockForm} setForm={setTimeBlockForm} busy={timeBlockBusy} onClose={() => setTimeBlockForm(null)} onSubmit={submitTimeBlock} users={schedulerUsers} canChooseUser={coordinator} timeZone={timeZone} />
   </div>;
 }
@@ -1781,6 +1803,7 @@ function QueueApp({ user }) {
   const deferredLiveRefreshRef = useRef(false);
   const quietMutationUntilRef = useRef(0);
   const schedulerPreferencesRef = useRef(null);
+  const schedulerPreferencesSaveRef = useRef(Promise.resolve());
   const ticketsOpenRef = useRef(ticketsOpen);
   const loadedOnceRef = useRef(Boolean(initialSnapshotRef.current?.data));
   const accountSetupDismissedRef = useRef(false);
@@ -2537,9 +2560,11 @@ function QueueApp({ user }) {
     // this local overlay once it is authoritative.
     schedulerPreferencesRef.current = optimistic;
     setData((current) => current ? { ...current, schedulerPreferences: optimistic } : current);
-    json('/api/dashboard/queue/v2/scheduler-preferences', {
+    // Serialize layout saves so rapid restores cannot finish out of order.
+    schedulerPreferencesSaveRef.current = schedulerPreferencesSaveRef.current.then(() => json('/api/dashboard/queue/v2/scheduler-preferences', {
       method: 'POST', body: new URLSearchParams({ hidden_users: JSON.stringify(optimistic.hiddenUsers), row_order: JSON.stringify(optimistic.rowOrder) }),
-    }).then((result) => {
+    })).then((result) => {
+      if (schedulerPreferencesRef.current !== optimistic) return;
       const saved = result.schedulerPreferences || optimistic;
       schedulerPreferencesRef.current = saved;
       setData((current) => current ? { ...current, schedulerPreferences: saved } : current);
