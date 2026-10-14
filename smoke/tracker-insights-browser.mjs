@@ -20,6 +20,8 @@ const overflowElements=()=>[...document.querySelectorAll('body *')].filter(el=>{
 const fixtureAuth = `const fixtureUser={uid:'fixture',email:'fixture@example.test',getIdToken:async()=> 'fixture-token'}; const fixtureAuth={currentUser:fixtureUser}; const getAuth=()=>fixtureAuth; class GoogleAuthProvider{setCustomParameters(){}} const getRedirectResult=async()=>null; const onAuthStateChanged=(_auth,callback)=>{queueMicrotask(()=>callback(fixtureUser));return ()=>{}}; const signInWithPopup=async()=>null; const signInWithRedirect=async()=>null; const signOut=async()=>null; const setPersistence=async()=>null; const browserLocalPersistence={};`;
 const chartFixture = `class Chart{static defaults={font:{}};static owners=new Map();constructor(canvas){if(Chart.owners.has(canvas))throw new Error('Canvas already in use');this.canvas=canvas;Chart.owners.set(canvas,this)}destroy(){Chart.owners.delete(this.canvas)}}`;
 const accounts=[{handle:'alpha',group:'sentient',followers:1000,full_name:'Alpha Studio'},{handle:'beta',group:'competitors',followers:2000,full_name:'Beta Studio'}];
+const trackerAccounts=[...accounts,{handle:'gamma',group:'sentient',followers:1970,full_name:'Gamma Studio'}];
+const trackerDetailRequests=[];
 const posts=Array.from({length:8},(_,index)=>({a:index%2?'beta':'alpha',d:`2026-10-0${index%3+1}T12:00:00Z`,l:100+index*100,c:4+index,v:1000+index*300,t:'Video',pt:'clips',ocr:'Practical AI video tutorial',h:'tutorial,creativity',u:`https://instagram.com/p/fixture${index}/`}));
 const page=await browser.newPage({viewport:{width:1440,height:1000}});
 await page.clock.setFixedTime(new Date('2026-10-14T18:00:00Z'));
@@ -40,8 +42,11 @@ await page.route('**/*',async route=>{
   if(url.hostname==='cortex-api-db2e.onrender.com'){
     assert.ok(route.request().method()==='GET'||url.pathname.endsWith('/me/preferences'),'Only mock preference writes are allowed');
     let data={};
-    if(url.pathname==='/api/tracker/summary')data={tracking_since:'2026-09-01',accounts};
-    else if(url.pathname.startsWith('/api/tracker/accounts/'))data={followers_history:[{date:'2026-09-29',followers:880},{date:'2026-09-30',followers:900},{date:'2026-10-01',followers:970},{date:'2026-10-02',followers:950},{date:'2026-10-14',followers:1000}],engagement_weekly:[]};
+    if(url.pathname==='/api/tracker/summary')data={tracking_since:'2026-09-01',accounts:trackerAccounts};
+    else if(url.pathname.startsWith('/api/tracker/accounts/')){
+      const handle=url.pathname.split('/').at(-1); trackerDetailRequests.push(handle);
+      data={followers_history:handle==='gamma'?[{date:'2026-09-29',followers:2000},{date:'2026-09-30',followers:2000},{date:'2026-10-01',followers:2000},{date:'2026-10-02',followers:1980},{date:'2026-10-14',followers:1970}]:[{date:'2026-09-29',followers:880},{date:'2026-09-30',followers:900},{date:'2026-10-01',followers:970},{date:'2026-10-02',followers:950},{date:'2026-10-14',followers:1000}],engagement_weekly:[]};
+    }
     else if(url.pathname==='/api/insights/posts')data={posts,accounts};
     else if(url.pathname==='/api/insights/follower-growth')data={accounts:[],peaks:[]};
     else if(url.pathname==='/api/dashboard/me')data={is_admin:false,is_dev:false,operating_roles:['vc'],email:'fixture@example.test'};
@@ -56,18 +61,48 @@ try{
   await page.goto(`${base}/tracker.html`);
   await page.locator('#trackerSearch').waitFor();
   await page.locator('#authGate.hidden').waitFor({state:'attached'});
-  await page.waitForFunction(()=>document.querySelector('[data-monthly="net"]')?.textContent==='+100');
+  assert.equal(await page.locator('#sentientMonthly').count(),0);
+  assert.equal(await page.locator('#trackerOverviewTab').getAttribute('aria-selected'),'true');
+  assert.deepEqual(trackerDetailRequests,[],'The default overview does not fetch Sentient histories');
+  await page.locator('#trackerOverviewTab').focus();
+  await page.keyboard.press('ArrowRight');
+  await page.waitForFunction(()=>document.querySelector('[data-monthly="net"]')?.textContent==='+70');
+  assert.deepEqual(trackerDetailRequests.toSorted(),['alpha','gamma'],'Only Sentient account histories contribute to the monthly report');
+  assert.equal(await page.locator('#trackerSentientTab').getAttribute('aria-selected'),'true');
+  assert.equal(await page.locator('#tLeaderboard').count(),0);
   assert.equal(await page.locator('[data-monthly="gained"]').innerText(),'+120');
-  assert.equal(await page.locator('[data-monthly="lost"]').innerText(),'−20');
+  assert.equal(await page.locator('[data-monthly="lost"]').innerText(),'−50');
   assert.equal(await page.locator('#sentientMonth').getAttribute('aria-label'),'Sentient summary month');
+  assert.equal(await page.locator('#sentientMonthly .monthly-note').count(),0);
   await page.locator('#sentientMonth').selectOption('2026-09');
   assert.equal(await page.locator('[data-monthly="net"]').innerText(),'+20');
+  await page.reload();
+  await page.waitForFunction(()=>document.querySelector('[data-monthly="net"]')?.textContent==='+20');
+  assert.equal(await page.locator('#trackerSentientTab').getAttribute('aria-selected'),'true');
+  assert.equal(await page.locator('#sentientMonth').inputValue(),'2026-09','Shared/reloaded URLs preserve the Sentient tab and selected calendar month');
   await page.locator('#sentientMonth').selectOption('2026-10');
+  await page.goBack();
+  await page.waitForFunction(()=>document.querySelector('[data-monthly="net"]')?.textContent==='+20');
+  assert.equal(await page.locator('#sentientMonth').inputValue(),'2026-09');
+  await page.goForward();
+  await page.waitForFunction(()=>document.querySelector('[data-monthly="net"]')?.textContent==='+70');
+  await page.locator('[data-monthly-chart="daily"]').click();
+  assert.equal(await page.locator('[data-monthly-chart="daily"]').getAttribute('aria-pressed'),'true');
+  await page.locator('[data-monthly-chart="cumulative"]').click();
+  assert.match(await page.locator('#sentientBestAccount').innerText(),/@alpha/);
+  assert.match(await page.locator('#sentientWorstAccount').innerText(),/@gamma/);
+  assert.equal(await page.locator('#sentientAccountRanking [data-monthly-account]').count(),2);
   await page.locator('#sentientMonthly').screenshot({path:path.join(screenshotDir,'desktop-en.png')});
+  await page.locator('#sentientAccountRanking [data-monthly-account="alpha"]').focus();
+  await page.keyboard.press('Enter');
+  await page.locator('#backBtn').waitFor();
+  await page.locator('#backBtn').click();
+  await page.locator('#sentientMonthly').waitFor();
+  await page.locator('#trackerOverviewTab').click();
   assert.equal(await page.locator('.product-nav a[href="/hooks.html"]').isVisible(),false);
   await page.locator('#trackerSearch').fill('@alpha');
   assert.equal(await page.locator('tr[data-handle]').count(),1);
-  assert.equal(await page.locator('[data-monthly="net"]').innerText(),'+100');
+  assert.equal(await page.locator('#sentientMonthly').count(),0);
   await page.locator('tr[data-handle="alpha"]').click();
   await page.locator('#historyWindow').waitFor();
   await page.locator('#historyWindow').selectOption('7');
@@ -82,7 +117,9 @@ try{
   await page.locator('#backBtn').click();
   await page.locator('#trackerSearch').waitFor();
   assert.equal(await page.locator('#trackerSearch').inputValue(),'@alpha');
-  assert.equal(await page.locator('[data-monthly="net"]').innerText(),'+100');
+  await page.locator('#trackerSentientTab').click();
+  await page.locator('#sentientMonthly').waitFor();
+  assert.equal(await page.locator('[data-monthly="net"]').innerText(),'+70');
   await page.locator('#settingsTrigger').click();
   await page.locator('#settingsPanel [data-lang="es"]').click();
   await page.waitForFunction(()=>document.querySelector('#sentientMonthly h2')?.textContent==='Sentient · Resumen mensual');
@@ -90,6 +127,7 @@ try{
   assert.match(await page.locator('#sentientMonthly').innerText(),/Seguidores ganados/i);
   assert.match(await page.locator('#sentientMonthly').innerText(),/Seguidores perdidos/i);
   assert.match(await page.locator('#sentientMonthly').innerText(),/Total neto/i);
+  assert.equal(await page.locator('#sentientMonthly .monthly-note').count(),0);
   await page.keyboard.press('Escape');
   await page.setViewportSize({width:390,height:844});
   mobileOverflow.tracker=await page.evaluate(()=>Math.max(0,document.documentElement.scrollWidth-innerWidth));
@@ -133,7 +171,7 @@ try{
   if(mobileOverflow.insights) console.log('Insights overflow elements:',await page.evaluate(overflowElements));
   assert.ok(mobileOverflow.insights<=1,'Insights page fits mobile viewport; wide tables and the heatmap scroll inside their containers');
   assert.deepEqual(errors,[]);
-  console.log('PASS Tracker/Insights browser fixtures: populated pages, search/detail/back/range, chart-safe sorting, keyboard filters, empty selection reload and role navigation; Firebase/API/Chart.js are mocked');
+  console.log('PASS Tracker/Insights browser fixtures: Sentient tabs, monthly totals/chart/ranking, URL reload/back, keyboard navigation, EN/ES, search/detail/range, chart-safe sorting, empty selection reload and role navigation; Firebase/API/Chart.js are mocked');
   console.log('Mobile page overflow in pixels:',mobileOverflow);
   console.log('Sentient monthly screenshots:',screenshotDir);
 }finally{await browser.close();}

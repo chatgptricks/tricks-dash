@@ -68,6 +68,16 @@ assert.equal(run('/queue.html', { agent: 'android', blockedStorage: true }).path
 checks += 7;
 
 const suggestion = { suggest: 'https://www.instagram.com/p/RESEARCH1/', sourceAccount: 'researchsource', sourceShortcode: 'RESEARCH1' };
+const sentientMonth = { view: 'sentient', month: '2026-10' };
+for (const agent of ['iphone', 'android']) {
+  const mobileMonth = run(`/tracker.html?r=${encode(sentientMonth)}`, { agent });
+  assert.equal(mobileMonth.pathname, '/mobile/');
+  assert.deepEqual(route(mobileMonth), { ...sentientMonth, tab: 'tracker' });
+  const desktopMonth = run(`/mobile/?desktop=1&r=${encode({ ...sentientMonth, tab: 'tracker' })}`, { agent });
+  assert.equal(desktopMonth.pathname, '/tracker.html');
+  assert.deepEqual(route(desktopMonth), sentientMonth);
+  checks += 4;
+}
 for (const agent of ['iphone', 'android']) {
   const mobileSuggestion = run(`/queue.html?r=${encode(suggestion)}`, { agent });
   assert.equal(mobileSuggestion.pathname, '/mobile/');

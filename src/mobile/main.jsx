@@ -74,8 +74,9 @@ const I18N = {
     followers: 'Followers', totalFollowers: 'Total followers', todayGrowth: 'Today growth', todayFollowers: 'Today', favorites: 'Favorites', growth7d: '7-day growth', avgLikes: 'Average likes', trackedAccounts: 'Tracked accounts',
     trackingSince: 'Tracking since', refresh: 'Refresh', history: 'History', posts: 'Posts', engagement: 'Engagement', followersGained: 'Gained', total: 'Total',
     sentientMonthly: 'Sentient monthly overview', monthlyGrowth: 'Monthly follower growth', month: 'Month', followersLost: 'Lost', netFollowers: 'Net total',
-    monthlyAllAccounts: 'All tracked Sentient accounts', monthlyCoverage: 'accounts with monthly data', monthlyThrough: 'Recorded through', monthlyPartial: 'Partial history. Totals include observed changes only.',
-    monthlyMethod: 'Sum of observed daily changes; follows and unfollows within a day are not available.', monthlyLoadError: 'Some account histories could not be loaded.',
+    monthlyAllAccounts: 'All tracked Sentient accounts',
+    monthlyBest: 'Best account', monthlyWorst: 'Biggest loser', monthlyChart: 'Follower change', monthlyCumulative: 'Cumulative', monthlyDaily: 'Daily', monthlyRanking: 'Account ranking', monthlyRate: 'Growth rate',
+    monthlyAdjusted: 'Adjusted', monthlyRename: 'Account names swapped · @em3rging ↔ @trends', monthlyRenameDetail: 'The accounts swapped names on October 9, 2026. Only the identity change is removed: @trends +{added} and @em3rging −{removed}. Real follower gains and losses remain included.',
     performance: 'Performance overview', topAccounts: 'Top accounts', topTopics: 'Top topics', formats: 'Formats',
     last30: 'Last 30 days', last90: 'Last 90 days', allTime: 'All time', noData: 'No data available.',
     overview: 'Overview', accounts: 'Accounts', users: 'Users', usage: 'Usage', notifications: 'Notifications', system: 'System', reports: 'Reports',
@@ -122,8 +123,9 @@ const I18N = {
     followers: 'Seguidores', totalFollowers: 'Seguidores totales', todayGrowth: 'Crecimiento de hoy', todayFollowers: 'Hoy', favorites: 'Favoritos', growth7d: 'Crecimiento 7 días', avgLikes: 'Promedio de likes', trackedAccounts: 'Cuentas monitoreadas',
     trackingSince: 'Monitoreando desde', refresh: 'Actualizar', history: 'Historial', posts: 'Posts', engagement: 'Engagement', followersGained: 'Ganados', total: 'Total',
     sentientMonthly: 'Resumen mensual de Sentient', monthlyGrowth: 'Crecimiento mensual de seguidores', month: 'Mes', followersLost: 'Perdidos', netFollowers: 'Total neto',
-    monthlyAllAccounts: 'Todas las cuentas Sentient monitoreadas', monthlyCoverage: 'cuentas con datos del mes', monthlyThrough: 'Datos hasta', monthlyPartial: 'Historial parcial. Los totales incluyen solo los cambios observados.',
-    monthlyMethod: 'Suma de los cambios diarios observados; no se dispone de las altas y bajas dentro de un mismo día.', monthlyLoadError: 'No se pudieron cargar los historiales de algunas cuentas.',
+    monthlyAllAccounts: 'Todas las cuentas Sentient monitoreadas',
+    monthlyBest: 'Mejor cuenta', monthlyWorst: 'Mayor pérdida', monthlyChart: 'Cambio de seguidores', monthlyCumulative: 'Acumulado', monthlyDaily: 'Diario', monthlyRanking: 'Ranking de cuentas', monthlyRate: 'Crecimiento',
+    monthlyAdjusted: 'Ajustado', monthlyRename: 'Intercambio de nombres · @em3rging ↔ @trends', monthlyRenameDetail: 'Las cuentas intercambiaron nombres el 9 de octubre de 2026. Solo se descuenta el cambio de identidad: @trends +{added} y @em3rging −{removed}. Las ganancias y pérdidas reales de seguidores se mantienen.',
     performance: 'Resumen de rendimiento', topAccounts: 'Mejores cuentas', topTopics: 'Temas principales', formats: 'Formatos',
     last30: 'Últimos 30 días', last90: 'Últimos 90 días', allTime: 'Todo el tiempo', noData: 'No hay datos disponibles.',
     overview: 'Resumen', accounts: 'Cuentas', users: 'Usuarios', usage: 'Uso', notifications: 'Notificaciones', system: 'Sistema', reports: 'Reportes',
@@ -151,6 +153,15 @@ const TRACKER_FAVORITES_KEY = 'sentient.tracker.favs';
 const readTrackerFavorites = () => { try { const value = JSON.parse(localStorage.getItem(TRACKER_FAVORITES_KEY) || '[]'); return Array.isArray(value) ? value : []; } catch { return []; } };
 // Favorites are stored per user on the server; the read above is the first-paint copy.
 const writeTrackerFavorites = (handles) => savePreference('trackerFavorites', handles);
+const readTrackerRoute = () => decodeRouteState(new URLSearchParams(location.search).get('r')) || {};
+const writeTrackerRoute = (changes) => {
+  const url = new URL(location.href);
+  const route = { ...readTrackerRoute(), ...changes, tab: 'tracker' };
+  if (route.view === 'overview') delete route.view;
+  url.searchParams.set('r', encodeRouteState(route));
+  url.searchParams.delete('tab');
+  history.replaceState(null, '', url);
+};
 const hexRgb = (value) => {
   const hex = String(value || '').replace('#', '');
   const full = hex.length === 3 ? hex.split('').map((digit) => `${digit}${digit}`).join('') : hex;
@@ -710,14 +721,34 @@ function TimeBlockForm({ data, onSent }) {
   return <form className="m-form m-inline-form" onSubmit={submit}><label>{t('blockTime')}<select value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value })}>{['meeting', 'break', 'promo', 'focus'].map((value) => <option key={value} value={value}>{t(value)}</option>)}</select></label><label>{t('title')}<input required value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} /></label><div className="m-form-pair"><label>{t('date')}<input type="date" value={form.date} onChange={(event) => setForm({ ...form, date: event.target.value })} /></label><label>{t('time')}<input type="time" step="600" value={timeLabel(form.time)} onChange={(event) => { const [h, m] = event.target.value.split(':').map(Number); setForm({ ...form, time: h * 60 + m }); }} /></label></div><label>{t('duration')}<input type="number" min="10" step="10" value={form.duration} onChange={(event) => setForm({ ...form, duration: event.target.value })} /></label><label>{t('notes')}<textarea rows="2" value={form.note} onChange={(event) => setForm({ ...form, note: event.target.value })} /></label><Notice type="error">{notice}</Notice><button className="m-primary">{t('submitRequest')}</button></form>;
 }
 
-function SentientMonthlyOverview({ accounts }) {
+function SentientMonthlyChart({ series, pending, month }) {
+  const { t, language } = usePrefs();
+  const [mode, setMode] = useState('cumulative');
+  const points = pending ? [] : series;
+  const values = points.map((point) => Number(point[mode === 'daily' ? 'net' : 'cumulative']) || 0);
+  const min = Math.min(0, ...values);
+  const max = Math.max(0, ...values);
+  const range = Math.max(1, max - min);
+  const x = (index) => 48 + (points.length < 2 ? .5 : index / (points.length - 1)) * 270;
+  const y = (value) => 162 - ((value - min) / range) * 130;
+  const line = values.map((value, index) => `${index ? 'L' : 'M'} ${x(index)} ${y(value)}`).join(' ');
+  const axisLabel = (value) => new Intl.NumberFormat(language === 'es' ? 'es-CR' : 'en-US', { notation: Math.abs(value) > 9999 ? 'compact' : 'standard', maximumFractionDigits: 1 }).format(value);
+  const labelDate = (value) => new Intl.DateTimeFormat(language === 'es' ? 'es-CR' : 'en-US', { month: 'short', day: 'numeric', timeZone: QUEUE_TIME_ZONE }).format(new Date(`${value}T12:00:00Z`));
+  return <section className="m-monthly-chart" aria-labelledby="m-monthly-chart-title"><header><h3 id="m-monthly-chart-title">{t('monthlyChart')}</h3><div className="m-tab-scroll" aria-label={t('monthlyChart')}>{['cumulative', 'daily'].map((value) => <button key={value} className={mode === value ? 'is-on' : ''} aria-pressed={mode === value} onClick={() => setMode(value)}>{t(value === 'daily' ? 'monthlyDaily' : 'monthlyCumulative')}</button>)}</div></header><svg viewBox="0 0 336 198" role="img" aria-label={`${t('monthlyChart')} · ${month} · ${t(mode === 'daily' ? 'monthlyDaily' : 'monthlyCumulative')}`} data-chart-mode={mode}>
+    {[min, min + range / 2, min + range].map((value, index) => <g key={index}><line x1="48" x2="318" y1={y(value)} y2={y(value)} className="m-monthly-gridline" /><text x="40" y={y(value) + 4} textAnchor="end">{axisLabel(value)}</text></g>)}
+    <line x1="48" x2="318" y1={y(0)} y2={y(0)} className="m-monthly-zero" />
+    {mode === 'daily' ? values.map((value, index) => <rect key={points[index].date} className={value < 0 ? 'is-negative' : 'is-positive'} x={x(index) - Math.min(5, 100 / Math.max(1, points.length))} width={Math.min(10, 200 / Math.max(1, points.length))} y={Math.min(y(value), y(0))} height={Math.max(1, Math.abs(y(value) - y(0)))} rx="2"><title>{labelDate(points[index].date)}: {signedExact(value)}</title></rect>) : <><path d={line} className="m-monthly-line" />{values.map((value, index) => <circle key={points[index].date} cx={x(index)} cy={y(value)} r={points.length === 1 ? 4 : 2.5} className="m-monthly-dot"><title>{labelDate(points[index].date)}: {signedExact(value)}</title></circle>)}</>}
+    {points.length ? <><text x="48" y="188">{labelDate(points[0].date)}</text><text x="318" y="188" textAnchor="end">{labelDate(points.at(-1).date)}</text></> : null}
+  </svg></section>;
+}
+
+function SentientMonthlyOverview({ accounts, onOpenAccount }) {
   const { t, language } = usePrefs();
   const monthly = window.SentientTrackerMonthly;
-  const [month, setMonth] = useState(() => monthly.currentMonth());
+  const [month, setMonth] = useState(() => /^\d{4}-(0[1-9]|1[0-2])$/.test(readTrackerRoute().month || '') ? readTrackerRoute().month : monthly.currentMonth());
   const [histories, setHistories] = useState({});
   const [loadedAccounts, setLoadedAccounts] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState(false);
   const [retry, setRetry] = useState(0);
   useEffect(() => {
     let active = true;
@@ -727,8 +758,7 @@ function SentientMonthlyOverview({ accounts }) {
     const sentient = accounts.filter((account) => account.group === 'sentient');
     const nextHistories = {};
     let cursor = 0;
-    let failed = false;
-    setHistories({}); setLoading(true); setLoadError(false);
+    setHistories({}); setLoading(true);
     const worker = async () => {
       while (current() && cursor < sentient.length) {
         const account = sentient[cursor++];
@@ -736,35 +766,37 @@ function SentientMonthlyOverview({ accounts }) {
           const detail = await apiJson(`/api/tracker/accounts/${encodeURIComponent(account.handle)}`, { signal: controller.signal });
           if (!Array.isArray(detail.followers_history)) throw new Error('Invalid account history.');
           if (current()) nextHistories[account.handle] = detail.followers_history;
-        } catch (error) {
-          if (current() && error.name !== 'AbortError') failed = true;
-        }
+        } catch { /* Sum the histories available from the remaining accounts. */ }
       }
     };
     Promise.all(Array.from({ length: Math.min(3, sentient.length) }, worker)).then(() => {
       if (!current()) return;
-      setHistories(failed ? {} : nextHistories); setLoadedAccounts(accounts); setLoadError(failed); setLoading(false);
+      setHistories(nextHistories); setLoadedAccounts(accounts); setLoading(false);
     });
     return () => { active = false; controller.abort(); };
   }, [accounts, retry]);
   const pending = loading || loadedAccounts !== accounts;
   const currentHistories = loadedAccounts === accounts ? histories : {};
-  const summary = monthly.summarize(accounts, currentHistories, month);
+  const summary = monthly.report(accounts, currentHistories, month);
+  const ranked = [...summary.accountStats].sort((a, b) => b.net - a.net || a.handle.localeCompare(b.handle));
   const months = [...new Set([month, ...monthly.months(currentHistories)])].sort().reverse();
   const monthLabel = (value) => new Intl.DateTimeFormat(language === 'es' ? 'es-CR' : 'en-US', { month: 'long', year: 'numeric', timeZone: QUEUE_TIME_ZONE }).format(new Date(`${value}-15T12:00:00Z`));
-  const signedMetric = (value, sign) => pending || loadError || value == null ? '—' : `${sign}${fmtExact(value)}`;
+  const signedMetric = (value, sign) => pending ? '—' : `${value ? sign : ''}${fmtExact(value ?? 0)}`;
+  const renameDetail = t('monthlyRenameDetail').replace('{added}', fmtExact(205765)).replace('{removed}', fmtExact(205765));
+  const leader = (account, title, negative = false) => <button className={`m-monthly-leader${negative || account?.net < 0 ? ' is-negative' : ''}`} onClick={() => account && onOpenAccount(account.handle)} disabled={pending || !account}><span>{title}</span><b>{pending || !account ? '—' : `@${account.handle}`}</b><strong>{pending ? '—' : signedExact(account?.net ?? 0)}</strong></button>;
   return <section className="m-sentient-monthly" aria-labelledby="m-sentient-monthly-title" aria-busy={pending}>
-    <header className="m-monthly-head"><div><span>{t('monthlyGrowth')}</span><h2 id="m-sentient-monthly-title">{t('sentientMonthly')}</h2></div><label><span>{t('month')}</span><select value={month} onChange={(event) => setMonth(event.target.value)}>{months.map((value) => <option key={value} value={value}>{monthLabel(value)}</option>)}</select></label></header>
+    <header className="m-monthly-head"><div><span>{t('monthlyGrowth')}</span><h2 id="m-sentient-monthly-title">{t('sentientMonthly')}</h2></div><label><span>{t('month')}</span><select value={month} onChange={(event) => { setMonth(event.target.value); writeTrackerRoute({ view: 'sentient', month: event.target.value }); }}>{months.map((value) => <option key={value} value={value}>{monthLabel(value)}</option>)}</select></label><button className="m-secondary m-monthly-refresh" onClick={() => setRetry((value) => value + 1)} disabled={pending} aria-label={t('refresh')}><RefreshCw size={16} className={pending ? 'spin' : ''} /></button></header>
     <p className="m-monthly-scope">{t('monthlyAllAccounts')}</p>
-    <div className="m-monthly-metrics" aria-live="polite"><div className="is-positive"><span>{t('followersGained')}</span><strong data-monthly-metric="gained">{signedMetric(summary.gained, '+')}</strong></div><div className="is-negative"><span>{t('followersLost')}</span><strong data-monthly-metric="lost">{signedMetric(summary.lost, summary.lost ? '−' : '')}</strong></div><div className={summary.net < 0 ? 'is-negative' : 'is-positive'}><span>{t('netFollowers')}</span><strong data-monthly-metric="net">{pending || loadError ? '—' : signedExact(summary.net)}</strong></div></div>
-    {pending ? <div className="m-monthly-loading" role="status"><LoaderCircle className="spin" size={14} />{t('loading')}</div> : !loadError ? <p className="m-monthly-coverage">{summary.coveredAccounts} / {summary.totalAccounts} {t('monthlyCoverage')}{summary.to ? <span>{t('monthlyThrough')} {new Intl.DateTimeFormat(language === 'es' ? 'es-CR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric', timeZone: QUEUE_TIME_ZONE }).format(new Date(`${summary.to}T12:00:00Z`))}</span> : null}{summary.partial ? <span className="is-partial">{t('monthlyPartial')}</span> : null}</p> : null}
-    {loadError ? <div className="m-monthly-error" role="alert"><p>{t('monthlyLoadError')}</p><button className="m-secondary" onClick={() => setRetry((value) => value + 1)}>{t('retry')}</button></div> : null}
-    {!pending && !loadError && summary.gained == null ? <p className="m-monthly-empty">{t('noData')}</p> : null}
-    <p className="m-monthly-method">{t('monthlyMethod')}</p>
+    <div className="m-monthly-metrics" aria-live="polite"><div className="is-positive"><span>{t('followersGained')}</span><strong data-monthly-metric="gained">{signedMetric(summary.gained, '+')}</strong></div><div className="is-negative"><span>{t('followersLost')}</span><strong data-monthly-metric="lost">{signedMetric(summary.lost, '−')}</strong></div><div className={summary.net < 0 ? 'is-negative' : 'is-positive'}><span>{t('netFollowers')}</span><strong data-monthly-metric="net">{pending ? '—' : signedExact(summary.net ?? 0)}</strong></div><div><span>{t('totalFollowers')}</span><strong data-monthly-total-followers>{pending ? '—' : fmtExact(summary.totalFollowers)}</strong></div></div>
+    <div className="m-monthly-leaders">{leader(summary.bestAccount, t('monthlyBest'))}{leader(summary.worstAccount, t('monthlyWorst'), true)}</div>
+    {!pending && summary.excludedChanges > 0 ? <details className="m-monthly-adjustment"><summary>{t('monthlyRename')}</summary><p>{renameDetail}</p></details> : null}
+    <SentientMonthlyChart series={summary.series} pending={pending} month={month} />
+    <section className="m-monthly-ranking" aria-labelledby="m-monthly-ranking-title"><h3 id="m-monthly-ranking-title">{t('monthlyRanking')}</h3>{pending ? null : ranked.map((account, index) => <button key={account.handle} className="m-monthly-rank-card" onClick={() => onOpenAccount(account.handle)} data-monthly-account={account.handle}><div className="m-monthly-rank-head"><span>{index + 1}</span><b>@{account.handle}</b><strong className={account.net < 0 ? 'is-negative' : 'is-positive'}>{signedExact(account.net)}</strong></div>{account.excludedDelta ? <span className="m-monthly-adjusted" title={renameDetail}>{t('monthlyAdjusted')}</span> : null}<div className="m-monthly-rank-meta"><span>{t('followers')}<b>{fmtExact(account.followers)}</b></span><span>{t('monthlyRate')}<b>{new Intl.NumberFormat(language === 'es' ? 'es-CR' : 'en-US', { maximumFractionDigits: 2, signDisplay: 'exceptZero' }).format(account.growthPct ?? 0)}%</b></span><span>{t('followersGained')}<b className="is-positive">{account.gained ? '+' : ''}{fmtExact(account.gained)}</b></span><span>{t('followersLost')}<b className="is-negative">{account.lost ? '−' : ''}{fmtExact(account.lost)}</b></span></div></button>)}</section>
   </section>;
 }
 
 function TrackerView() {
+  const [tab, setTab] = useState(() => readTrackerRoute().view === 'sentient' ? 'sentient' : 'overview');
   const { t } = usePrefs(); const [data, setData] = useState(null); const [detail, setDetail] = useState(null); const [error, setError] = useState(''); const [busy, setBusy] = useState(''); const [favorites, setFavorites] = useState(readTrackerFavorites); useEffect(() => onServerPreferences((preferences) => { if (Array.isArray(preferences.trackerFavorites)) setFavorites(preferences.trackerFavorites); }), []);
   const load = useCallback(() => { setError(''); apiJson('/api/tracker/summary').then(setData).catch((err) => setError(err.message)); }, []); useEffect(() => { load(); }, [load]);
   const open = async (handle) => { setBusy(handle); try { setDetail(await apiJson(`/api/tracker/accounts/${encodeURIComponent(handle)}`)); } catch (err) { setError(err.message); } finally { setBusy(''); } };
@@ -776,7 +808,7 @@ function TrackerView() {
   const ordered = [...accounts].sort((a, b) => { const aFav = favoriteOrder.has(a.handle); const bFav = favoriteOrder.has(b.handle); if (aFav !== bFav) return aFav ? -1 : 1; if (aFav) return favoriteOrder.get(a.handle) - favoriteOrder.get(b.handle); return Number(b.followers || 0) - Number(a.followers || 0); });
   const totalFollowers = accounts.reduce((sum, account) => sum + Number(account.followers || 0), 0);
   const todayGrowth = accounts.reduce((sum, account) => sum + Number(account.delta_1d?.delta || 0), 0);
-  return <div className="m-stack"><div className="m-metric-grid"><Metric label={t('trackedAccounts')} value={accounts.length} hint={`${favorites.length} ${t('favorites').toLowerCase()}`} /><Metric label={t('totalFollowers')} value={fmtExact(totalFollowers)} /><Metric label={t('todayGrowth')} value={signedExact(todayGrowth)} /></div>{data ? <SentientMonthlyOverview accounts={accounts} /> : null}<Notice type="error">{error}</Notice><section className="m-account-list">{ordered.map((account) => <article className="m-tracker-row" key={account.handle} data-context-type="account" data-context-title={`@${account.handle}`} data-context-account={account.handle}><button className={`m-favorite${favorites.includes(account.handle) ? ' is-on' : ''}`} onClick={() => toggleFavorite(account.handle)} aria-label={`${t('favorites')} @${account.handle}`}><Star size={16} fill={favorites.includes(account.handle) ? 'currentColor' : 'none'} /></button><button className="m-tracker-open" onClick={() => open(account.handle)}><Cover src={`/api/dashboard/avatar/${account.handle}`} /><div><b>@{account.handle}</b><span>{account.label}</span></div><strong>{fmtExact(account.followers)}<small className={(account.delta_1d?.delta || 0) < 0 ? 'is-negative' : ''}>{account.delta_1d ? `${signedExact(account.delta_1d.delta)} ${t('todayFollowers')}` : `— ${t('todayFollowers')}`}</small></strong>{busy === account.handle ? <LoaderCircle className="spin" size={16} /> : <ChevronRight size={18} />}</button></article>)}</section>{detail ? <TrackerDetail data={detail} busy={busy === detail.handle} onRefresh={() => refresh(detail.handle)} onClose={() => setDetail(null)} /> : null}</div>;
+  return <div className="m-stack"><div className="m-tab-scroll m-tracker-tabs" role="tablist" aria-label={t('tracker')}>{['overview', 'sentient'].map((value) => <button key={value} role="tab" aria-selected={tab === value} className={tab === value ? 'is-on' : ''} onClick={() => { setTab(value); writeTrackerRoute({ view: value, month: readTrackerRoute().month || window.SentientTrackerMonthly.currentMonth() }); }}>{t(value)}</button>)}</div><Notice type="error">{error}</Notice>{tab === 'sentient' && data ? <SentientMonthlyOverview accounts={accounts} onOpenAccount={open} /> : <><div className="m-metric-grid"><Metric label={t('trackedAccounts')} value={accounts.length} hint={`${favorites.length} ${t('favorites').toLowerCase()}`} /><Metric label={t('totalFollowers')} value={fmtExact(totalFollowers)} /><Metric label={t('todayGrowth')} value={signedExact(todayGrowth)} /></div><section className="m-account-list">{ordered.map((account) => <article className="m-tracker-row" key={account.handle} data-context-type="account" data-context-title={`@${account.handle}`} data-context-account={account.handle}><button className={`m-favorite${favorites.includes(account.handle) ? ' is-on' : ''}`} onClick={() => toggleFavorite(account.handle)} aria-label={`${t('favorites')} @${account.handle}`}><Star size={16} fill={favorites.includes(account.handle) ? 'currentColor' : 'none'} /></button><button className="m-tracker-open" onClick={() => open(account.handle)}><Cover src={`/api/dashboard/avatar/${account.handle}`} /><div><b>@{account.handle}</b><span>{account.label}</span></div><strong>{fmtExact(account.followers)}<small className={(account.delta_1d?.delta || 0) < 0 ? 'is-negative' : ''}>{account.delta_1d ? `${signedExact(account.delta_1d.delta)} ${t('todayFollowers')}` : `— ${t('todayFollowers')}`}</small></strong>{busy === account.handle ? <LoaderCircle className="spin" size={16} /> : <ChevronRight size={18} />}</button></article>)}</section></>}{detail ? <TrackerDetail data={detail} busy={busy === detail.handle} onRefresh={() => refresh(detail.handle)} onClose={() => setDetail(null)} /> : null}</div>;
 }
 
 function TrackerDetail({ data, busy, onRefresh, onClose }) {

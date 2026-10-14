@@ -1,5 +1,6 @@
 import { act } from 'react';
 import '../public/tracker-monthly.js';
+import { decodeRouteState } from '../src/urlCodec';
 
 // The browser's classic helper and this Node/jsdom smoke share the same API.
 window.SentientTrackerMonthly = globalThis.SentientTrackerMonthly;
@@ -43,12 +44,13 @@ const monthlyHistories = {
     { date: lastMonthEnd.toISOString().slice(0, 10), followers: 1100 }, { date: `${day.slice(0, 7)}-01`, followers: 1120 }, { date: day, followers: 1140 },
   ],
   'sentient.second': [
-    { date: baselineDate, followers: 2000 }, { date: `${previousMonth}-01`, followers: 1950 }, { date: `${previousMonth}-02`, followers: 1980 },
+    { date: baselineDate, followers: 2000 }, { date: `${previousMonth}-01`, followers: 1950 }, { date: `${previousMonth}-02`, followers: 1950 }, { date: `${previousMonth}-03`, followers: 1980 },
     { date: lastMonthEnd.toISOString().slice(0, 10), followers: 1980 }, { date: `${day.slice(0, 7)}-01`, followers: 1970 }, { date: day, followers: 1970 },
   ],
 };
 const monthlyHistoryRequests = [];
 let monthlyHistoryFailure = true;
+let monthlyAllHistoriesFail = false;
 let monthlyHistoryPending = false;
 const post = { account: 'chatgptricks', shortcode: 'ONE', caption: 'Useful AI workflow', ocrText: 'A better prompt', type: 'Carousel', coverUrl: '', permalink: 'https://instagram.com/p/ONE/', likes: 4200, comments: 32, postDate: `${day}T12:00:00`, group: 'sentient', isHot: true, hotMultiplier: 3.4 };
 const ok = (body, headers = {}) => ({ ok: true, status: 200, headers: { get: (key) => headers[String(key).toLowerCase()] || null }, json: async () => body, text: async () => JSON.stringify(body), blob: async () => new Blob(['x']) });
@@ -133,7 +135,7 @@ const fetchStub = async (url, options = {}) => {
       if (options.signal?.aborted) abort();
       else options.signal?.addEventListener('abort', abort, { once: true });
     });
-    if (monthlyHistoryFailure && handle === 'sentient.second') return { ...ok({ detail: 'History temporarily unavailable.' }), ok: false, status: 400 };
+    if (monthlyAllHistoriesFail || monthlyHistoryFailure && handle === 'sentient.second') return { ...ok({ detail: 'History temporarily unavailable.' }), ok: false, status: 400 };
     return ok({ handle, followers_history: monthlyHistories[handle] || [] });
   }
   if (value.includes('/api/insights/posts')) return ok({ accounts: [{ handle: 'chatgptricks', group: 'sentient', label: 'ChatGPTricks' }], posts: [{ a: 'chatgptricks', d: `${day}T12:00:00`, l: 4200, c: 32, t: 'Carousel', hot: 1, ocr: 'better prompt workflow artificial intelligence' }] });
@@ -265,36 +267,82 @@ const fill = async (node, value) => act(async () => {
     checks['Independent Tracker renders'] = document.querySelectorAll('.m-tracker-row').length === 3 && /100,000/.test(document.body.textContent) && /\+120/.test(document.body.textContent);
     checks['Tracker favorite is first'] = Boolean(document.querySelector('.m-tracker-row:first-child .m-favorite.is-on'));
     const monthlyValues = () => [...document.querySelectorAll('[data-monthly-metric]')].map((node) => node.textContent).join('|');
-    checks['Mobile monthly overview defaults to the Costa Rica calendar month'] = document.querySelector('.m-monthly-head select')?.value === day.slice(0, 7);
-    checks['Monthly history errors withhold totals and keep Tracker accounts usable'] = monthlyValues() === '—|—|—'
-      && Boolean(document.querySelector('.m-monthly-error button')) && document.querySelectorAll('.m-tracker-open').length === 3;
-    monthlyHistoryFailure = false;
-    await click(document.querySelector('.m-monthly-error button'));
-    checks['Mobile monthly retry loads every Sentient account regardless of favorites'] = !document.querySelector('.m-monthly-error')
-      && /2 \/ 2 accounts with monthly data/.test(document.querySelector('.m-monthly-coverage')?.textContent || '')
-      && monthlyHistoryRequests.map((request) => request.handle).join('|') === 'chatgptricks|sentient.second|chatgptricks|sentient.second';
+    const trackerTab = (value) => document.querySelector(`.m-tracker-tabs button[aria-selected="${value}"]`);
+    const sentientTab = () => [...document.querySelectorAll('.m-tracker-tabs button')].find((node) => node.textContent === 'Sentient');
+    const overviewTab = () => [...document.querySelectorAll('.m-tracker-tabs button')].find((node) => node.textContent === 'Overview');
     const selectMonth = async (month) => act(async () => {
       const select = document.querySelector('.m-monthly-head select');
       select.value = month; select.dispatchEvent(new window.Event('change', { bubbles: true }));
     });
+    const noMonthlyWarnings = () => !document.querySelector('.m-monthly-error,.m-monthly-empty,.m-monthly-coverage,.m-monthly-method,.m-monthly-loading')
+      && !/missing|unavailable|partial history|no data|recorded through|within a day/i.test(document.querySelector('.m-sentient-monthly')?.textContent || '');
+    checks['Mobile Tracker defaults to Overview without requesting monthly histories'] = trackerTab('true')?.textContent === 'Overview'
+      && !document.querySelector('.m-sentient-monthly') && monthlyHistoryRequests.length === 0;
+    await click(sentientTab());
+    checks['Sentient has a separate monthly analytics tab'] = trackerTab('true')?.textContent === 'Sentient'
+      && Boolean(document.querySelector('.m-sentient-monthly')) && !document.querySelector('.m-tracker-row');
+    checks['Mobile Sentient defaults to the Costa Rica calendar month'] = document.querySelector('.m-monthly-head select')?.value === day.slice(0, 7);
+    checks['Monthly totals sum available successful histories without warning messages'] = monthlyValues() === '+40|0|+40' && noMonthlyWarnings();
     await selectMonth(previousMonth);
-    checks['Mobile month selector sums gained, lost and net across Sentient only'] = monthlyValues() === '+150|−70|+80';
-    checks['Mobile monthly overview discloses partial observations and data date'] = /Partial history/.test(document.querySelector('.m-monthly-coverage')?.textContent || '')
-      && /Recorded through/.test(document.querySelector('.m-monthly-coverage')?.textContent || '')
-      && /follows and unfollows within a day are not available/.test(document.querySelector('.m-monthly-method')?.textContent || '');
+    const sharedMonthlyRoute = decodeRouteState(new URLSearchParams(location.search).get('r'));
+    checks['Mobile monthly links encode Tracker view and selected calendar month'] = sharedMonthlyRoute?.tab === 'tracker' && sharedMonthlyRoute?.view === 'sentient' && sharedMonthlyRoute?.month === previousMonth;
+    checks['A failed account does not discard available monthly gains and losses'] = monthlyValues() === '+120|−20|+100';
+    monthlyHistoryFailure = false;
+    await click(document.querySelector('.m-monthly-refresh'));
+    checks['Mobile monthly refresh loads every Sentient account regardless of favorites'] = monthlyValues() === '+150|−70|+80'
+      && monthlyHistoryRequests.map((request) => request.handle).join('|') === 'chatgptricks|sentient.second|chatgptricks|sentient.second';
+    checks['Mobile Sentient reports the selected month network follower total'] = document.querySelector('[data-monthly-total-followers]')?.textContent === '3,080';
+    checks['Mobile Sentient identifies best account and biggest loser'] = /@chatgptricks/.test(document.querySelector('.m-monthly-leader:not(.is-negative)')?.textContent || '')
+      && /@sentient.second/.test(document.querySelector('.m-monthly-leader.is-negative')?.textContent || '');
+    checks['Mobile account ranking sorts by monthly net and excludes competitors'] = [...document.querySelectorAll('[data-monthly-account]')].map((node) => node.dataset.monthlyAccount).join('|') === 'chatgptricks|sentient.second'
+      && /1,100/.test(document.querySelector('[data-monthly-account="chatgptricks"]')?.textContent || '')
+      && /−50/.test(document.querySelector('[data-monthly-account="sentient.second"]')?.textContent || '');
+    checks['Mobile chart initially shows cumulative monthly growth'] = document.querySelector('.m-monthly-chart svg')?.dataset.chartMode === 'cumulative' && Boolean(document.querySelector('.m-monthly-line'));
+    await click([...document.querySelectorAll('.m-monthly-chart button')].find((node) => node.textContent === 'Daily'));
+    checks['Mobile chart switches to daily signed bars'] = document.querySelector('.m-monthly-chart svg')?.dataset.chartMode === 'daily'
+      && Boolean(document.querySelector('.m-monthly-chart rect.is-negative')) && !document.querySelector('.m-monthly-line');
+    await click([...document.querySelectorAll('.m-monthly-chart button')].find((node) => node.textContent === 'Cumulative'));
+    await click(document.querySelector('[data-monthly-account="chatgptricks"]'));
+    checks['Tapping a monthly ranked account opens its existing Tracker detail'] = /@chatgptricks/.test(document.querySelector('.m-sheet header')?.textContent || '');
+    await click(document.querySelector('.m-sheet > header button'));
+    await click(overviewTab());
     await click(document.querySelector('.m-tracker-row:first-child .m-favorite'));
-    checks['Mobile favorites never filter Sentient monthly totals or refetch history'] = monthlyValues() === '+150|−70|+80' && monthlyHistoryRequests.length === 4;
+    await click(sentientTab());
+    checks['Mobile Sentient month survives switching to Overview and back'] = document.querySelector('.m-monthly-head select')?.value === previousMonth;
+    await selectMonth(previousMonth);
+    checks['Mobile favorites never filter Sentient monthly totals'] = monthlyValues() === '+150|−70|+80';
     await selectMonth(baselineDate.slice(0, 7));
-    checks['Mobile month without comparable observations shows no data instead of zero'] = monthlyValues() === '—|—|—' && /No data available/.test(document.querySelector('.m-monthly-empty')?.textContent || '');
+    checks['An empty monthly sum displays zero without missing-data notices'] = monthlyValues() === '0|0|0' && noMonthlyWarnings();
+    monthlyAllHistoriesFail = true;
+    await click(document.querySelector('.m-monthly-refresh'));
+    checks['Unavailable monthly histories leave an empty sum without warnings'] = monthlyValues() === '0|0|0' && noMonthlyWarnings();
+    monthlyAllHistoriesFail = false;
     await click(nav[3]);
     monthlyHistoryPending = true;
     await click(nav[2]);
+    await click(sentientTab());
     const pendingHistories = monthlyHistoryRequests.slice(-2);
-    checks['Pending monthly histories withhold values while accounts stay usable'] = monthlyValues() === '—|—|—'
-      && document.querySelector('.m-sentient-monthly')?.getAttribute('aria-busy') === 'true' && document.querySelectorAll('.m-tracker-row').length === 3;
+    checks['Pending monthly histories show placeholders without loading notices'] = monthlyValues() === '—|—|—'
+      && document.querySelector('.m-sentient-monthly')?.getAttribute('aria-busy') === 'true' && noMonthlyWarnings();
     await click(nav[3]);
     monthlyHistoryPending = false;
     checks['Leaving mobile Tracker aborts every pending monthly history'] = pendingHistories.length === 2 && pendingHistories.every((request) => request.signal?.aborted) && !document.querySelector('.m-sentient-monthly');
+    tracker.accounts.push(
+      { handle: 'em3rging', label: 'Emerging', group: 'sentient', followers: 28693 },
+      { handle: 'trends', label: 'Trends', group: 'sentient', followers: 235379 },
+    );
+    monthlyHistories.em3rging = [{ date: '2026-10-08', followers: 234465 }, { date: '2026-10-09', followers: 28693 }];
+    monthlyHistories.trends = [{ date: '2026-10-08', followers: 28700 }, { date: '2026-10-09', followers: 235379 }];
+    await click(nav[2]);
+    await click(sentientTab());
+    await selectMonth('2026-10');
+    checks['Mobile rename correction preserves real gains without counting swapped followers'] = document.querySelector('[data-monthly-account="em3rging"] .m-monthly-rank-head strong')?.textContent === '-7'
+      && document.querySelector('[data-monthly-account="trends"] .m-monthly-rank-head strong')?.textContent === '+914';
+    checks['Mobile Sentient marks the reciprocal account-name swap and both excluded offsets'] = /@em3rging ↔ @trends/.test(document.querySelector('.m-monthly-adjustment summary')?.textContent || '')
+      && /@trends \+205,765/.test(document.querySelector('.m-monthly-adjustment p')?.textContent || '')
+      && /@em3rging −205,765/.test(document.querySelector('.m-monthly-adjustment p')?.textContent || '')
+      && document.querySelectorAll('.m-monthly-adjusted').length === 2 && noMonthlyWarnings();
+    await click(nav[3]);
     checks['Independent Insights renders'] = Boolean(document.querySelector('.m-insight-card'));
 
     await click(document.querySelector('.m-profile'));

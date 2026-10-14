@@ -43,7 +43,7 @@ function fixture(tool) {
     assert.equal(w.document.querySelector('#trackerSearch').placeholder, 'Buscar cuentas…');
     assert.equal(w.document.querySelector('#trackerGroup').getAttribute('aria-label'), 'Grupo de cuentas');
     assert.equal(w.document.querySelector('[data-i18n-skip]').textContent, 'Date');
-    assert.match(w.document.querySelector('.note').textContent, /día.*historial/);
+    assert.equal(w.document.querySelector('#app .note'), null, 'Overview does not show history-availability notices');
     w.__test.detail({ followers_history: [{ date: '2026-10-08T14:00:00Z', followers: 1200 }, { date: '2026-10-09T14:00:00Z', followers: 1234 }], engagement_weekly: [{ week_start: '2026-10-01', avg_likes: 25, post_count: 3 }] });
     w.writeAcc('fixture'); w.render(); w.__applyI18n(); w.__charts = w.__test.charts();
     assert.match(w.document.querySelector('#app').textContent, /Estadísticas históricas/);
