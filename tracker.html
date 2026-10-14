@@ -6,8 +6,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <script src="/mobile-redirect.js?v=20260908-device"></script>
 <script src="/user-preferences.js?v=20261009-i18n1"></script>
-<script src="/tool-translations.js?v=20261014-monthly"></script>
-<script src="/tracker-monthly.js?v=20261014"></script>
+<script src="/tool-translations.js?v=20261014-analytics"></script>
+<script src="/tracker-monthly.js?v=20261014-analytics"></script>
 <script src="/role-preview.js?v=20260928-tracker" defer></script>
 <script src="/context-menu.js?v=20260901-context1" defer></script>
 <title>Tracker · sentientdash.app</title>
@@ -117,8 +117,32 @@ a{color:inherit}
 .sentient-monthly .kpi{min-width:0;background:var(--panel-2)}
 .sentient-monthly .kpi strong{font-size:clamp(17px,2.4vw,28px);overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
 .monthly-positive{color:var(--pos)}.monthly-negative{color:var(--neg)}
-.monthly-note{margin:7px 0 0;color:var(--muted);font-size:11px;line-height:1.5}
-.monthly-partial{color:var(--warn)}
+.tracker-view-tabs{display:flex;gap:5px;width:fit-content;margin:0 0 20px;padding:4px;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
+.tracker-view-tabs button,.monthly-chart-toggle button{border:0;border-radius:8px;background:transparent;color:var(--muted);padding:9px 17px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer}
+.tracker-view-tabs button[aria-selected="true"]{background:rgba(var(--accent-rgb),.13);color:var(--accent-text)}
+.tracker-view-tabs button:focus-visible,.monthly-chart-toggle button:focus-visible,.monthly-rank-row:focus-visible{outline:2px solid var(--accent-text);outline-offset:3px}
+.tracker-shell.is-sentient{grid-template-columns:minmax(0,1fr)}.tracker-shell.is-sentient .tracker-sidebar{display:none}
+#sentientMonthly{display:grid;grid-template-columns:minmax(0,1fr);min-width:0;gap:16px;background:transparent;border:0;padding:0;margin:0}
+#app,.monthly-chart-panel,.monthly-ranking-panel{min-width:0}
+#sentientMonthly>*{min-width:0}
+.monthly-avatar{width:42px;height:42px;flex:none;border-radius:50%;display:grid;place-items:center;background:rgba(var(--edge),.07);color:var(--muted-2);font-size:16px;font-weight:700;object-fit:cover}.monthly-rank-row .monthly-avatar{width:30px;height:30px;font-size:12px}
+.sentient-hero{display:flex;justify-content:space-between;align-items:end;gap:20px;flex-wrap:wrap;padding:8px 0 5px}
+.sentient-hero h2{font-size:30px;letter-spacing:-.055em;margin:0 0 6px}.sentient-hero p{margin:0;color:var(--muted);font-size:12px}
+.sentient-hero .monthly-select select{min-width:180px;height:40px;font-size:12px}
+.sentient-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.sentient-metrics .kpi{padding:20px;background:var(--panel);border-radius:15px}.sentient-metrics .kpi strong{font-size:clamp(22px,2.6vw,34px);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.sentient-metrics .net-metric{border-color:rgba(var(--accent-rgb),.3);background:linear-gradient(135deg,rgba(var(--accent-rgb),.09),var(--panel))}
+.sentient-spotlights{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.sentient-spotlight{padding:18px 20px;background:var(--panel);border:1px solid var(--line);border-radius:14px}
+.sentient-spotlight>span{color:var(--muted);font-size:10px;font-weight:750;letter-spacing:.08em;text-transform:uppercase}
+.spotlight-content{display:flex;align-items:center;gap:12px;margin-top:14px;min-width:0}.spotlight-content img{width:42px;height:42px;border-radius:50%;object-fit:cover}.spotlight-content>div{display:grid;gap:4px;min-width:0;flex:1}.spotlight-content b{font-size:15px;overflow:hidden;text-overflow:ellipsis}.spotlight-content small{color:var(--muted);font-size:11px}.spotlight-content strong{font-size:25px;letter-spacing:-.04em;font-variant-numeric:tabular-nums}
+.monthly-chart-panel,.monthly-ranking-panel{margin:0;padding:22px;border-radius:15px}.monthly-chart-panel .section-head{margin-bottom:18px}.monthly-chart-panel h3,.monthly-ranking-panel h3{margin:0;font-size:15px;letter-spacing:-.02em}
+.monthly-chart-toggle{display:flex;padding:3px;border:1px solid var(--line);border-radius:10px}.monthly-chart-toggle button{padding:7px 12px;font-size:11px}.monthly-chart-toggle button[aria-pressed="true"]{background:rgba(var(--edge),.09);color:var(--text)}
+.monthly-chart-panel .chartbox{height:310px}.monthly-chart-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;padding-top:18px;margin-top:16px;border-top:1px solid var(--line)}.monthly-chart-stats span{display:block;color:var(--muted);font-size:10px;margin-bottom:6px}.monthly-chart-stats strong{font-size:16px}.monthly-chart-stats small{color:var(--muted);font-size:11px;margin-left:6px}
+.monthly-network-pulse{display:flex;align-items:center;gap:18px;flex-wrap:wrap;color:var(--muted);font-size:11px}.monthly-network-pulse b{color:var(--text);margin-right:4px}.monthly-network-pulse i{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--pos);margin-right:6px}.monthly-network-pulse .down i{background:var(--neg)}.monthly-network-pulse .flat i{background:var(--muted)}
+.monthly-adjustment{border:1px solid rgba(var(--accent-rgb),.2);border-radius:10px;padding:10px 13px;background:rgba(var(--accent-rgb),.035);color:var(--muted-2);font-size:11px;line-height:1.6}.monthly-adjustment summary{cursor:pointer;list-style:none;display:flex;gap:9px;flex-wrap:wrap;align-items:center}.monthly-adjustment summary span:first-child{color:var(--accent-text);font-weight:750}.monthly-adjustment p{margin:8px 0 0}.monthly-adjusted-badge{display:inline-block;padding:2px 5px;border-radius:5px;color:var(--accent-text);background:rgba(var(--accent-rgb),.1);font-size:8px;font-weight:700;width:fit-content}
+.monthly-ranking-panel .section-head{margin-bottom:16px;flex-wrap:wrap}.monthly-ranking-scroll{overflow:auto}.monthly-ranking-panel table{min-width:660px}.monthly-ranking-panel th{cursor:default}.monthly-ranking-panel th:nth-child(2){text-align:left}.monthly-ranking-panel td{padding:14px 8px}.monthly-rank-row .acct-cell{gap:10px}.monthly-rank-row .acct-cell img{width:30px;height:30px}.monthly-rank-row strong{font-size:12px}.monthly-net-cell{display:inline-grid;gap:5px;min-width:70px;text-align:right}.monthly-net-cell i{height:3px;border-radius:5px;background:var(--pos);justify-self:end}.monthly-net-cell.down i{background:var(--neg)}
+@media(max-width:720px){.sentient-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.sentient-spotlights{grid-template-columns:minmax(0,1fr)}.monthly-chart-panel,.monthly-ranking-panel{padding:17px}.monthly-chart-panel .section-head{flex-wrap:wrap;gap:14px}.spotlight-content strong{font-size:23px}.monthly-chart-stats{gap:8px}.monthly-chart-stats strong{font-size:14px}.sentient-metrics .kpi{padding:16px}}
 @media(max-width:520px){.sentient-monthly .kpi{padding:11px 9px}.sentient-monthly .kpi b{font-size:8px;letter-spacing:.04em}.sentient-monthly .kpis{gap:6px}}
 
 /* sections */
@@ -378,6 +402,10 @@ table.hist-table td{text-align:left;padding:11px 8px;white-space:nowrap}
     <button class="linkbtn" id="shareBtn" title="Copy a link to this exact view">Copy link</button>
   </div>
 
+  <div class="tracker-view-tabs" role="tablist" aria-label="Tracker views">
+    <button type="button" role="tab" id="trackerOverviewTab" data-view="overview" aria-controls="app" aria-selected="true">Overview</button>
+    <button type="button" role="tab" id="trackerSentientTab" data-view="sentient" aria-controls="app" aria-selected="false" tabindex="-1">Sentient</button>
+  </div>
   <div class="tracker-shell">
     <aside id="sidebar" class="tracker-sidebar"></aside>
     <div id="app" aria-busy="true">
@@ -493,9 +521,18 @@ function decodeRoute(token){
     return value&&typeof value==='object'&&!Array.isArray(value)?value:null;
   }catch(e){ return null; }
 }
-function readAcc(){ const p=new URLSearchParams(location.search); return decodeRoute(p.get('r'))?.acc || p.get('acc') || ''; }
+function readTrackerRoute(){ const p=new URLSearchParams(location.search); return decodeRoute(p.get('r')) || {acc:p.get('acc')||'',view:p.get('view')||'',month:p.get('month')||''}; }
+function readAcc(){ return readTrackerRoute().acc || ''; }
+function readTrackerView(){ return readTrackerRoute().view === 'sentient' ? 'sentient' : 'overview'; }
+function writeTrackerView(view, month){
+  const state = view === 'sentient' ? {view:'sentient',month:month || MONTHLY_SELECTED || window.SentientTrackerMonthly?.currentMonth()} : {};
+  const qs = Object.keys(state).length ? '?r='+encodeURIComponent(encodeRoute(state)) : '';
+  history.pushState(null, '', location.pathname + qs);
+}
 function writeAcc(handle){
-  const qs = handle ? '?r='+encodeURIComponent(encodeRoute({acc:handle})) : '';
+  const state = readTrackerView() === 'sentient' ? {view:'sentient',month:MONTHLY_SELECTED || readTrackerRoute().month} : {};
+  if(handle) state.acc = handle;
+  const qs = Object.keys(state).length ? '?r='+encodeURIComponent(encodeRoute(state)) : '';
   history.pushState(null, '', location.pathname + qs);
 }
 
@@ -516,7 +553,6 @@ async function boot(){
     await loadSummary();
     if(session !== TRACKER_SESSION) return;
     render();
-    void loadSentientMonthly();
   }catch(e){
     if(session !== TRACKER_SESSION) return;
     $('#app').innerHTML = '<div class="empty" role="alert">Could not load the tracker.<br><small>'+escapeHtml(e.message || 'Connection failed.')+'</small><br><button class="linkbtn" id="retryTracker">Retry</button></div>';
@@ -808,7 +844,7 @@ function renderSidebar(){
   `;
   wireAvatarFallbacks($('#sidebar'));
 
-  $('#sideAll').onclick = () => { writeAcc(''); render(); };
+  $('#sideAll').onclick = () => { writeTrackerView('overview'); render(); };
   $('#sidebar').querySelectorAll('[data-fav]').forEach(b => b.onclick = e => {
     e.stopPropagation();
     toggleFav(b.dataset.fav);
@@ -865,7 +901,10 @@ function render(){
   DETAIL_REQUEST += 1;
   const acc = readAcc();
   renderSidebar();
+  renderTrackerTabs();
+  document.querySelector('.tracker-shell')?.classList.toggle('is-sentient', !acc && readTrackerView() === 'sentient');
   if(acc) renderDetail(acc);
+  else if(readTrackerView() === 'sentient') { renderSentientOverview(); void loadSentientMonthly(); }
   else renderLeaderboard();
 }
 
@@ -873,11 +912,35 @@ function render(){
 let sortKey='followers', sortDir=-1;
 let leaderboardSearch = '', leaderboardGroup = 'all';
 let MONTHLY_HISTORIES = {}, MONTHLY_ERRORS = {}, MONTHLY_LOADING = false, MONTHLY_REQUEST = 0, MONTHLY_SELECTED = '';
+let MONTHLY_CHART_MODE = 'cumulative';
+
+function renderTrackerTabs(){
+  const tabs = document.querySelectorAll('.tracker-view-tabs [data-view]');
+  if(!tabs.length) return;
+  tabs.forEach((button,index) => {
+    const selected = button.dataset.view === readTrackerView();
+    button.setAttribute('aria-selected', String(selected)); button.tabIndex = selected ? 0 : -1;
+    button.onclick = () => { writeTrackerView(button.dataset.view); render(); button.focus(); };
+    button.onkeydown = event => {
+      if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) return;
+      event.preventDefault();
+      const next = event.key==='Home'?0:event.key==='End'?tabs.length-1:(index+(event.key==='ArrowRight'?1:-1)+tabs.length)%tabs.length;
+      tabs[next].click();
+    };
+  });
+}
+function renderSentientOverview(){
+  destroyCharts();
+  const month = readTrackerRoute().month;
+  if(/^\d{4}-(0[1-9]|1[0-2])$/.test(month || '')) MONTHLY_SELECTED = month;
+  $('#app').innerHTML = '<div id="sentientMonthly" aria-label="Sentient monthly overview"></div>';
+  paintSentientMonthly();
+}
 
 function resetSentientMonthly(resetMonth = true){
   MONTHLY_REQUEST += 1;
   MONTHLY_HISTORIES = {}; MONTHLY_ERRORS = {}; MONTHLY_LOADING = false;
-  if(resetMonth) MONTHLY_SELECTED = '';
+  if(resetMonth) { MONTHLY_SELECTED = ''; MONTHLY_CHART_MODE = 'cumulative'; }
 }
 function invalidateSentientMonthly(handle){
   MONTHLY_REQUEST += 1;
@@ -916,28 +979,53 @@ function sentientMonthlyContent(){
   const helper = window.SentientTrackerMonthly;
   if(!helper) return '';
   const month = MONTHLY_SELECTED || helper.currentMonth();
-  const summary = helper.summarize(SUMMARY.accounts, MONTHLY_HISTORIES, month);
-  const unavailable = MONTHLY_LOADING || Object.keys(MONTHLY_ERRORS).length > 0;
+  const summary = helper.report(SUMMARY.accounts, MONTHLY_HISTORIES, month);
+  const unavailable = MONTHLY_LOADING;
   const options = [...new Set([month, ...helper.months(MONTHLY_HISTORIES)])].sort().reverse();
   const monthLabel = value => new Date(value+'-15T12:00:00Z').toLocaleDateString(toolLocale(),{month:'long',year:'numeric',timeZone:'America/Costa_Rica'});
-  return `<div class="section-head"><div><h2>Sentient · Monthly overview</h2><p class="sub">All tracked Sentient accounts combined</p></div>
-    <label class="monthly-select"><span>Month</span><select id="sentientMonth" aria-label="Sentient summary month">${options.map(value=>`<option value="${value}" ${value===month?'selected':''} data-i18n-skip>${monthLabel(value)}</option>`).join('')}</select></label></div>
-    <div class="kpis" aria-live="polite" aria-busy="${MONTHLY_LOADING}">
-      <div class="kpi"><b>Followers gained</b><strong class="monthly-positive" data-monthly="gained">${unavailable?'—':summary.gained===null?'—':'+'+fmt(summary.gained)}</strong></div>
-      <div class="kpi"><b>Followers lost</b><strong class="monthly-negative" data-monthly="lost">${unavailable?'—':summary.lost===null?'—':(summary.lost? '−':'')+fmt(summary.lost)}</strong></div>
-      <div class="kpi"><b>Net total</b><strong class="${summary.net>0?'monthly-positive':summary.net<0?'monthly-negative':''}" data-monthly="net">${unavailable?'—':signed(summary.net)}</strong></div>
+  const avatar = handle => `<img class="monthly-avatar" src="${API}/api/dashboard/avatar/${encodeURIComponent(handle)}" referrerpolicy="no-referrer" data-avatar-handle="${escapeAttribute(handle)}" alt="">`;
+  const spotlight = (account,label,id,negative) => `<article class="sentient-spotlight" id="${id}"><span>${label}</span><div class="spotlight-content">${account?avatar(account.handle):''}<div><b data-i18n-skip>${account?'@'+escapeHtml(account.handle):'—'}</b><small>Net monthly change</small></div><strong class="${negative || account?.net<0?'monthly-negative':'monthly-positive'}">${unavailable?'—':signed(account?.net??0)}</strong></div></article>`;
+  const maxNet = Math.max(1,...summary.accountStats.map(account=>Math.abs(account.net)));
+  const bestDay = summary.series.reduce((best,day)=>!best || day.net>best.net?day:best,null);
+  const dayLabel = day => new Date(day+'T12:00:00Z').toLocaleDateString(toolLocale(),{month:'short',day:'numeric',timeZone:'America/Costa_Rica'});
+  return `<header class="sentient-hero"><div><h2>Sentient · Monthly overview</h2><p>All tracked Sentient accounts combined</p></div>
+    <label class="monthly-select"><span>Month</span><select id="sentientMonth" aria-label="Sentient summary month">${options.map(value=>`<option value="${value}" ${value===month?'selected':''} data-i18n-skip>${monthLabel(value)}</option>`).join('')}</select></label></header>
+    <div class="sentient-metrics" aria-live="polite" aria-busy="${MONTHLY_LOADING}">
+      <div class="kpi"><b>Followers gained</b><strong class="monthly-positive" data-monthly="gained">${unavailable?'—':'+'+fmt(summary.gained??0)}</strong></div>
+      <div class="kpi"><b>Followers lost</b><strong class="monthly-negative" data-monthly="lost">${unavailable?'—':(summary.lost? '−':'')+fmt(summary.lost??0)}</strong></div>
+      <div class="kpi net-metric"><b>Net total</b><strong class="${summary.net>0?'monthly-positive':summary.net<0?'monthly-negative':''}" data-monthly="net">${unavailable?'—':signed(summary.net??0)}</strong></div>
+      <div class="kpi"><b>Total followers</b><strong>${unavailable?'—':fmt(summary.totalFollowers)}</strong></div>
     </div>
-    ${MONTHLY_LOADING?'<p class="monthly-note" role="status">Loading Sentient history…</p>':Object.keys(MONTHLY_ERRORS).length?'<p class="monthly-note" role="alert">Could not load all Sentient histories.</p><button type="button" class="linkbtn" id="retrySentientMonthly">Retry</button>':!summary.totalAccounts?'<p class="monthly-note">No Sentient accounts tracked.</p>':`<p class="monthly-note"><span>Accounts with monthly data</span>: <span data-i18n-skip>${summary.coveredAccounts} / ${summary.totalAccounts}</span>${summary.to?` · <span>Recorded through</span> <span data-i18n-skip>${new Date(summary.to+'T12:00:00Z').toLocaleDateString(toolLocale(),{timeZone:'America/Costa_Rica'})}</span>`:''}</p>${summary.partial?'<p class="monthly-note monthly-partial">Partial history: some accounts or days are missing.</p>':''}`}
-    <p class="monthly-note">Sum of observed daily changes; follows and unfollows within a day are not available.</p>`;
+    ${summary.excludedChanges?'<details class="monthly-adjustment" id="sentientRenameAdjustment"><summary><span>↔ Account names swapped</span><span data-i18n-skip>@em3rging ↔ @trends</span><span>Adjusted</span></summary><p>The October 9 name swap is excluded from these totals: +205,765 for @trends and −205,765 for @em3rging. Real follower changes remain included.</p></details>':''}
+    <div class="sentient-spotlights">${spotlight(summary.bestAccount,'Monthly leader','sentientBestAccount',false)}${spotlight(summary.worstAccount,'Largest decline','sentientWorstAccount',true)}</div>
+    <section class="monthly-chart-panel"><div class="section-head"><h3>Follower momentum</h3><div class="monthly-chart-toggle" role="group" aria-label="Growth chart mode">${[['cumulative','Cumulative'],['daily','Daily']].map(([mode,label])=>`<button type="button" data-monthly-chart="${mode}" aria-pressed="${MONTHLY_CHART_MODE===mode}">${label}</button>`).join('')}</div></div><div class="chartbox"><canvas id="sentientGrowthChart" role="img" aria-label="Sentient monthly follower growth"></canvas></div>
+      <div class="monthly-chart-stats"><div><span>Best day</span><strong class="${bestDay?.net<0?'monthly-negative':'monthly-positive'}">${unavailable?'—':signed(bestDay?.net??0)}</strong><small data-i18n-skip>${bestDay?dayLabel(bestDay.date):''}</small></div><div><span>Daily average</span><strong>${unavailable?'—':signed(Math.round((summary.net??0)/Math.max(1,summary.series.length)))}</strong></div><div><span>Accounts growing</span><strong>${unavailable?'—':summary.growingAccounts}<small data-i18n-skip> / ${summary.totalAccounts}</small></strong></div></div>
+    </section>
+    <section class="monthly-ranking-panel"><div class="section-head"><h3>Monthly account ranking</h3><div class="monthly-network-pulse"><span><i></i><b>${summary.growingAccounts}</b><span>growing</span></span><span class="down"><i></i><b>${summary.decliningAccounts}</b><span>declining</span></span><span class="flat"><i></i><b>${summary.flatAccounts}</b><span>unchanged</span></span></div></div><div class="monthly-ranking-scroll"><table id="sentientAccountRanking"><thead><tr><th>#</th><th>Account</th><th>Followers gained</th><th>Followers lost</th><th>Net total</th><th>Growth</th><th>Followers</th></tr></thead><tbody>${summary.accountStats.map((account,index)=>`<tr class="monthly-rank-row" data-monthly-account="${escapeAttribute(account.handle)}" tabindex="0"><td class="rank-num">${index+1}</td><td><div class="acct-cell">${avatar(account.handle)}<div class="acct-name"><strong data-i18n-skip>@${escapeHtml(account.handle)}</strong>${account.excludedDelta?'<span class="monthly-adjusted-badge" title="Follower jump excluded after the account-name swap">↔ Adjusted</span>':''}</div></div></td><td class="monthly-positive">+${fmt(account.gained)}</td><td class="monthly-negative">${account.lost?'−':''}${fmt(account.lost)}</td><td><span class="monthly-net-cell ${account.net<0?'down monthly-negative':'monthly-positive'}"><b>${signed(account.net)}</b><i style="width:${Math.round(Math.abs(account.net)/maxNet*100)}%"></i></span></td><td>${account.growthPct===null?'—':pct(account.growthPct)}</td><td>${fmt(account.followers??0)}</td></tr>`).join('')}</tbody></table></div></section>
+    ${!MONTHLY_LOADING && Object.keys(MONTHLY_ERRORS).length?'<button type="button" class="linkbtn" id="retrySentientMonthly">Retry</button>':''}`;
 }
 function paintSentientMonthly(){
   const panel = $('#sentientMonthly');
   if(!panel || !SUMMARY) return;
+  destroyCharts();
   panel.innerHTML = sentientMonthlyContent();
+  wireAvatarFallbacks(panel);
   const select = $('#sentientMonth');
-  if(select) select.onchange = event => { MONTHLY_SELECTED = event.currentTarget.value; paintSentientMonthly(); $('#sentientMonth')?.focus(); };
+  if(select) select.onchange = event => { MONTHLY_SELECTED = event.currentTarget.value; writeTrackerView('sentient', MONTHLY_SELECTED); paintSentientMonthly(); $('#sentientMonth')?.focus(); };
   const retry = $('#retrySentientMonthly');
   if(retry) retry.onclick = () => loadSentientMonthly();
+  panel.querySelectorAll('[data-monthly-chart]').forEach(button=>button.onclick=()=>{MONTHLY_CHART_MODE=button.dataset.monthlyChart;paintSentientMonthly();panel.querySelector(`[data-monthly-chart="${MONTHLY_CHART_MODE}"]`)?.focus();});
+  panel.querySelectorAll('[data-monthly-account]').forEach(row=>{
+    const open=()=>{writeAcc(row.dataset.monthlyAccount);render();}; row.onclick=open;
+    row.onkeydown=event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();open();}};
+  });
+  const helper = window.SentientTrackerMonthly;
+  if(!helper || !$('#sentientGrowthChart')) return;
+  const report = helper.report(SUMMARY.accounts, MONTHLY_HISTORIES, MONTHLY_SELECTED || helper.currentMonth());
+  const color = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  const daily = MONTHLY_CHART_MODE === 'daily';
+  const positive=color('--pos')||'#48d18b', negative=color('--neg')||'#ff6b6b';
+  CHARTS.push(new Chart($('#sentientGrowthChart'),{type:daily?'bar':'line',data:{labels:report.series.map(point=>new Date(point.date+'T12:00:00Z').toLocaleDateString(toolLocale(),{month:'short',day:'numeric',timeZone:'America/Costa_Rica'})),datasets:[{label:toolText(daily?'Daily change':'Cumulative change'),data:report.series.map(point=>daily?point.net:point.cumulative),borderColor:positive,backgroundColor:daily?report.series.map(point=>point.net<0?negative:positive):positive+'18',fill:!daily,tension:.25,borderWidth:daily?0:2,pointRadius:report.series.length>18?0:3,pointHoverRadius:5,borderRadius:4}]},options:{maintainAspectRatio:false,interaction:{intersect:false,mode:'index'},plugins:{legend:{display:false},tooltip:{callbacks:{label:context=>signed(context.parsed.y)+' '+toolText('followers')}}},scales:{x:{grid:{display:false},ticks:{maxTicksLimit:9}},y:{beginAtZero:true,ticks:{callback:value=>fmtAxis(value)},grid:{color:color('--line')}}}}}));
 }
 
 function escapeAttribute(value){
@@ -945,14 +1033,9 @@ function escapeAttribute(value){
 }
 function escapeHtml(value){ return escapeAttribute(value).replace(/'/g, '&#39;'); }
 
-function trackingSinceNote(){
-  if(!SUMMARY.tracking_since) return `<div class="note">No follower history recorded yet -- the first daily snapshot runs at 7am CST, or use <b>Settings → System</b> to capture one right now. Growth columns fill in day by day from there; there's no way to recover Instagram's past follower counts for an account that just started being tracked.</div>`;
-  const days = Math.max(1, Math.round((Date.now()-new Date(SUMMARY.tracking_since).getTime())/864e5));
-  return `<div class="note">Tracking since <b>${new Date(SUMMARY.tracking_since).toLocaleDateString(toolLocale())}</b> (${days} day${days===1?'':'s'} of history so far). Follower deltas need that many days of snapshots to fill in -- a fresh account naturally shows "—" for windows it hasn't lived through yet.</div>`;
-}
-
 function renderLeaderboard(){
   destroyCharts();
+  renderTrackerTabs();
   const query = leaderboardSearch.trim().toLowerCase().replace(/^@/, '');
   const favorites = new Set(readFavs());
   const rows = SUMMARY.accounts.filter(row =>
@@ -1003,15 +1086,12 @@ function renderLeaderboard(){
       <div class="kpi"><b>Top 7d grower</b><strong>${(()=>{const g=[...rows].filter(r=>r.delta_7d).sort((a,b)=>b.delta_7d.delta-a.delta_7d.delta)[0]; return g?'@'+g.handle:'—';})()}</strong><em>${(()=>{const g=[...rows].filter(r=>r.delta_7d).sort((a,b)=>b.delta_7d.delta-a.delta_7d.delta)[0]; return g?signed(g.delta_7d.delta)+' in 7d':'not enough history yet';})()}</em></div>
     </div>
 
-    <section id="sentientMonthly" class="sentient-monthly" aria-label="Sentient monthly overview"></section>
-
     <section>
       <div class="section-head">
         <h2>Leaderboard</h2>
         <button type="button" class="linkbtn refresh-btn" id="refreshAllBtn" title="Re-scrape every account's real follower count from Instagram right now (~$0.002 each)">&#8635; Refresh all</button>
       </div>
       <p class="sub">Compare account growth. Select a column to sort or an account to explore its history.</p>
-      ${trackingSinceNote()}
       <div class="tracker-toolbar">
         <input id="trackerSearch" type="search" value="${escapeAttribute(leaderboardSearch)}" placeholder="Search accounts…" aria-label="Search accounts by name or handle">
         <select id="trackerGroup" aria-label="Account group">${[['all','All accounts'],['sentient','Ours'],['competitors','Competitors'],['favorites','Favorites']].map(([value,label])=>`<option value="${value}" ${leaderboardGroup===value?'selected':''}>${label}</option>`).join('')}</select>
@@ -1045,7 +1125,6 @@ function renderLeaderboard(){
     </section>
   `;
   wireAvatarFallbacks($('#app'));
-  paintSentientMonthly();
 
   $('#tLeaderboard').querySelectorAll('[data-k]').forEach(th=>th.onclick=()=>{
     const k=th.dataset.k; if(k==='rank') return;
@@ -1228,7 +1307,7 @@ async function renderDetail(handle){
   const visibleDayHist = historyWindowRows(hist, selectedWindow);
 
   $('#app').innerHTML = `
-    <button class="linkbtn" id="backBtn" style="margin-bottom:14px">← All accounts</button>
+    <button class="linkbtn" id="backBtn" style="margin-bottom:14px">${readTrackerView()==='sentient'?'← Sentient':'← All accounts'}</button>
     <div class="detail-head">
       <div class="detail-head-id">
         <img src="${API}/api/dashboard/avatar/${encodeURIComponent(handle)}" referrerpolicy="no-referrer" data-avatar-handle="${escapeAttribute(handle)}">
