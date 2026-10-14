@@ -6,7 +6,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <script src="/mobile-redirect.js?v=20260908-device"></script>
 <script src="/user-preferences.js?v=20261009-i18n1"></script>
-<script src="/tool-translations.js?v=20261009-i18n1"></script>
+<script src="/tool-translations.js?v=20261014-monthly"></script>
+<script src="/tracker-monthly.js?v=20261014"></script>
 <script src="/role-preview.js?v=20260928-tracker" defer></script>
 <script src="/context-menu.js?v=20260901-context1" defer></script>
 <title>Tracker · sentientdash.app</title>
@@ -106,6 +107,19 @@ a{color:inherit}
   text-transform:uppercase;margin-bottom:6px}
 .kpi strong{font-size:22px;font-weight:800;letter-spacing:-.02em}
 .kpi em{display:block;font-style:normal;color:var(--muted);font-size:10px;margin-top:3px}
+.sentient-monthly .section-head{align-items:flex-start;flex-wrap:wrap;margin-bottom:14px}
+.sentient-monthly h2{font-size:15px}
+.sentient-monthly .sub{margin:5px 0 0;color:var(--muted);font-size:11px;line-height:1.5}
+.monthly-select{display:grid;gap:5px;color:var(--muted);font-size:10px;font-weight:700}
+.monthly-select select{max-width:100%;height:34px;padding:0 9px;border:1px solid var(--line);border-radius:8px;background:var(--panel-2);color:var(--text);font:inherit}
+.monthly-select select:focus-visible{outline:2px solid var(--accent-text);outline-offset:3px}
+.sentient-monthly .kpis{grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:12px}
+.sentient-monthly .kpi{min-width:0;background:var(--panel-2)}
+.sentient-monthly .kpi strong{font-size:clamp(17px,2.4vw,28px);overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.monthly-positive{color:var(--pos)}.monthly-negative{color:var(--neg)}
+.monthly-note{margin:7px 0 0;color:var(--muted);font-size:11px;line-height:1.5}
+.monthly-partial{color:var(--warn)}
+@media(max-width:520px){.sentient-monthly .kpi{padding:11px 9px}.sentient-monthly .kpi b{font-size:8px;letter-spacing:.04em}.sentient-monthly .kpis{gap:6px}}
 
 /* sections */
 section{border:1px solid var(--line);border-radius:12px;background:var(--panel);
@@ -440,6 +454,7 @@ window.__resetToolSession = () => {
   DETAIL_REQUEST += 1;
   SUMMARY = null;
   DETAIL_CACHE = {};
+  resetSentientMonthly();
   REFRESH_READY_AT = 0;
   REFRESH_UNLIMITED = false;
   REFRESH_WINDOW_MS = 0;
@@ -501,6 +516,7 @@ async function boot(){
     await loadSummary();
     if(session !== TRACKER_SESSION) return;
     render();
+    void loadSentientMonthly();
   }catch(e){
     if(session !== TRACKER_SESSION) return;
     $('#app').innerHTML = '<div class="empty" role="alert">Could not load the tracker.<br><small>'+escapeHtml(e.message || 'Connection failed.')+'</small><br><button class="linkbtn" id="retryTracker">Retry</button></div>';
@@ -669,7 +685,9 @@ async function refreshAccountNow(handle, btn){
     // lands, so drop the cache rather than patch it -- it's a cheap re-fetch
     // (no Apify call) the next time this account's page is opened.
     delete DETAIL_CACHE[handle];
+    invalidateSentientMonthly(handle);
     render();
+    void loadSentientMonthly();
   }catch(e){
     if(session === TRACKER_SESSION) alert(toolText(refreshErrorMessage(e, 'Could not refresh @'+handle+': ')));
   }finally{
@@ -689,8 +707,10 @@ async function refreshAllAccountsNow(btn){
     await waitForTrackerRefresh(job, session);
     if(session !== TRACKER_SESSION) return;
     DETAIL_CACHE = {};
+    resetSentientMonthly(false);
     await loadSummary();
     render();
+    void loadSentientMonthly();
   }catch(e){
     if(session === TRACKER_SESSION) alert(toolText(refreshErrorMessage(e, 'Could not refresh accounts: ')));
   }finally{
@@ -852,6 +872,73 @@ function render(){
 /* ---------------- Leaderboard ---------------- */
 let sortKey='followers', sortDir=-1;
 let leaderboardSearch = '', leaderboardGroup = 'all';
+let MONTHLY_HISTORIES = {}, MONTHLY_ERRORS = {}, MONTHLY_LOADING = false, MONTHLY_REQUEST = 0, MONTHLY_SELECTED = '';
+
+function resetSentientMonthly(resetMonth = true){
+  MONTHLY_REQUEST += 1;
+  MONTHLY_HISTORIES = {}; MONTHLY_ERRORS = {}; MONTHLY_LOADING = false;
+  if(resetMonth) MONTHLY_SELECTED = '';
+}
+function invalidateSentientMonthly(handle){
+  MONTHLY_REQUEST += 1;
+  MONTHLY_LOADING = false;
+  delete MONTHLY_HISTORIES[handle]; delete MONTHLY_ERRORS[handle];
+}
+async function loadSentientMonthly(){
+  if(!SUMMARY || !window.SentientTrackerMonthly || MONTHLY_LOADING) return;
+  const accounts = SUMMARY.accounts.filter(account => account.group === 'sentient');
+  const pending = accounts.filter(account => !Object.hasOwn(MONTHLY_HISTORIES, account.handle));
+  if(!pending.length){ paintSentientMonthly(); return; }
+  const session = TRACKER_SESSION, request = ++MONTHLY_REQUEST;
+  const current = () => session === TRACKER_SESSION && request === MONTHLY_REQUEST;
+  MONTHLY_LOADING = true; MONTHLY_ERRORS = {};
+  paintSentientMonthly();
+  let cursor = 0;
+  await Promise.all(Array.from({length:Math.min(3,pending.length)}, async () => {
+    while(current() && cursor < pending.length){
+      const {handle} = pending[cursor++];
+      try{
+        const detail = DETAIL_CACHE[handle] || await authedFetch('/api/tracker/accounts/'+encodeURIComponent(handle));
+        if(!current()) return;
+        if(!Array.isArray(detail?.followers_history)) throw new Error('Incomplete follower history.');
+        DETAIL_CACHE[handle] = detail;
+        MONTHLY_HISTORIES[handle] = detail.followers_history;
+      }catch(error){
+        if(current()) MONTHLY_ERRORS[handle] = error.message || 'Connection failed.';
+      }
+    }
+  }));
+  if(!current()) return;
+  MONTHLY_LOADING = false;
+  paintSentientMonthly();
+}
+function sentientMonthlyContent(){
+  const helper = window.SentientTrackerMonthly;
+  if(!helper) return '';
+  const month = MONTHLY_SELECTED || helper.currentMonth();
+  const summary = helper.summarize(SUMMARY.accounts, MONTHLY_HISTORIES, month);
+  const unavailable = MONTHLY_LOADING || Object.keys(MONTHLY_ERRORS).length > 0;
+  const options = [...new Set([month, ...helper.months(MONTHLY_HISTORIES)])].sort().reverse();
+  const monthLabel = value => new Date(value+'-15T12:00:00Z').toLocaleDateString(toolLocale(),{month:'long',year:'numeric',timeZone:'America/Costa_Rica'});
+  return `<div class="section-head"><div><h2>Sentient · Monthly overview</h2><p class="sub">All tracked Sentient accounts combined</p></div>
+    <label class="monthly-select"><span>Month</span><select id="sentientMonth" aria-label="Sentient summary month">${options.map(value=>`<option value="${value}" ${value===month?'selected':''} data-i18n-skip>${monthLabel(value)}</option>`).join('')}</select></label></div>
+    <div class="kpis" aria-live="polite" aria-busy="${MONTHLY_LOADING}">
+      <div class="kpi"><b>Followers gained</b><strong class="monthly-positive" data-monthly="gained">${unavailable?'—':summary.gained===null?'—':'+'+fmt(summary.gained)}</strong></div>
+      <div class="kpi"><b>Followers lost</b><strong class="monthly-negative" data-monthly="lost">${unavailable?'—':summary.lost===null?'—':(summary.lost? '−':'')+fmt(summary.lost)}</strong></div>
+      <div class="kpi"><b>Net total</b><strong class="${summary.net>0?'monthly-positive':summary.net<0?'monthly-negative':''}" data-monthly="net">${unavailable?'—':signed(summary.net)}</strong></div>
+    </div>
+    ${MONTHLY_LOADING?'<p class="monthly-note" role="status">Loading Sentient history…</p>':Object.keys(MONTHLY_ERRORS).length?'<p class="monthly-note" role="alert">Could not load all Sentient histories.</p><button type="button" class="linkbtn" id="retrySentientMonthly">Retry</button>':!summary.totalAccounts?'<p class="monthly-note">No Sentient accounts tracked.</p>':`<p class="monthly-note"><span>Accounts with monthly data</span>: <span data-i18n-skip>${summary.coveredAccounts} / ${summary.totalAccounts}</span>${summary.to?` · <span>Recorded through</span> <span data-i18n-skip>${new Date(summary.to+'T12:00:00Z').toLocaleDateString(toolLocale(),{timeZone:'America/Costa_Rica'})}</span>`:''}</p>${summary.partial?'<p class="monthly-note monthly-partial">Partial history: some accounts or days are missing.</p>':''}`}
+    <p class="monthly-note">Sum of observed daily changes; follows and unfollows within a day are not available.</p>`;
+}
+function paintSentientMonthly(){
+  const panel = $('#sentientMonthly');
+  if(!panel || !SUMMARY) return;
+  panel.innerHTML = sentientMonthlyContent();
+  const select = $('#sentientMonth');
+  if(select) select.onchange = event => { MONTHLY_SELECTED = event.currentTarget.value; paintSentientMonthly(); $('#sentientMonth')?.focus(); };
+  const retry = $('#retrySentientMonthly');
+  if(retry) retry.onclick = () => loadSentientMonthly();
+}
 
 function escapeAttribute(value){
   return String(value || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -916,6 +1003,8 @@ function renderLeaderboard(){
       <div class="kpi"><b>Top 7d grower</b><strong>${(()=>{const g=[...rows].filter(r=>r.delta_7d).sort((a,b)=>b.delta_7d.delta-a.delta_7d.delta)[0]; return g?'@'+g.handle:'—';})()}</strong><em>${(()=>{const g=[...rows].filter(r=>r.delta_7d).sort((a,b)=>b.delta_7d.delta-a.delta_7d.delta)[0]; return g?signed(g.delta_7d.delta)+' in 7d':'not enough history yet';})()}</em></div>
     </div>
 
+    <section id="sentientMonthly" class="sentient-monthly" aria-label="Sentient monthly overview"></section>
+
     <section>
       <div class="section-head">
         <h2>Leaderboard</h2>
@@ -956,6 +1045,7 @@ function renderLeaderboard(){
     </section>
   `;
   wireAvatarFallbacks($('#app'));
+  paintSentientMonthly();
 
   $('#tLeaderboard').querySelectorAll('[data-k]').forEach(th=>th.onclick=()=>{
     const k=th.dataset.k; if(k==='rank') return;

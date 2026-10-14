@@ -1,4 +1,8 @@
 import { act } from 'react';
+import '../public/tracker-monthly.js';
+
+// The browser's classic helper and this Node/jsdom smoke share the same API.
+window.SentientTrackerMonthly = globalThis.SentientTrackerMonthly;
 
 // Fixtures use Queue's calendar day, regardless of the CI host's time zone.
 // UTC midnight is still the previous production day in Costa Rica.
@@ -22,7 +26,30 @@ const queue = {
   pendingTicketCount: 1, timeBlocks: [], accounts: [{ handle: 'chatgptricks', label: 'ChatGPTricks' }, { handle: 'unmanaged', label: 'Unmanaged' }, { handle: 'inactive', label: 'Inactive', is_active: false }],
   schedulerUsers: [{ email: 'developer@example.test', displayName: 'Developer', roles: ['vc', 'pd'], avatarUrl: '', accounts: ['chatgptricks', 'inactive'] }],
 };
-const tracker = { tracking_since: day, accounts: [{ handle: 'chatgptricks', label: 'ChatGPTricks', followers: 100000, delta_1d: { delta: 120 }, delta_7d: { delta: 1200 }, avg_likes_30d: 2200 }] };
+const tracker = { tracking_since: day, accounts: [
+  { handle: 'chatgptricks', label: 'ChatGPTricks', group: 'sentient', followers: 100000, delta_1d: { delta: 120 }, delta_7d: { delta: 1200 }, avg_likes_30d: 2200 },
+  { handle: 'sentient.second', label: 'Sentient second', group: 'sentient', followers: 200000, delta_1d: { delta: -10 } },
+  { handle: 'competitor', label: 'Competitor', group: 'competitor', followers: 900000, delta_1d: { delta: 9999 } },
+] };
+const lastMonthEnd = new Date(`${day.slice(0, 7)}-01T12:00:00Z`);
+lastMonthEnd.setUTCDate(0);
+const previousMonth = lastMonthEnd.toISOString().slice(0, 7);
+const baseline = new Date(`${previousMonth}-01T12:00:00Z`);
+baseline.setUTCDate(0);
+const baselineDate = baseline.toISOString().slice(0, 10);
+const monthlyHistories = {
+  chatgptricks: [
+    { date: baselineDate, followers: 1000 }, { date: `${previousMonth}-01`, followers: 1100 }, { date: `${previousMonth}-02`, followers: 1080 },
+    { date: lastMonthEnd.toISOString().slice(0, 10), followers: 1100 }, { date: `${day.slice(0, 7)}-01`, followers: 1120 }, { date: day, followers: 1140 },
+  ],
+  'sentient.second': [
+    { date: baselineDate, followers: 2000 }, { date: `${previousMonth}-01`, followers: 1950 }, { date: `${previousMonth}-02`, followers: 1980 },
+    { date: lastMonthEnd.toISOString().slice(0, 10), followers: 1980 }, { date: `${day.slice(0, 7)}-01`, followers: 1970 }, { date: day, followers: 1970 },
+  ],
+};
+const monthlyHistoryRequests = [];
+let monthlyHistoryFailure = true;
+let monthlyHistoryPending = false;
 const post = { account: 'chatgptricks', shortcode: 'ONE', caption: 'Useful AI workflow', ocrText: 'A better prompt', type: 'Carousel', coverUrl: '', permalink: 'https://instagram.com/p/ONE/', likes: 4200, comments: 32, postDate: `${day}T12:00:00`, group: 'sentient', isHot: true, hotMultiplier: 3.4 };
 const ok = (body, headers = {}) => ({ ok: true, status: 200, headers: { get: (key) => headers[String(key).toLowerCase()] || null }, json: async () => body, text: async () => JSON.stringify(body), blob: async () => new Blob(['x']) });
 const mediaRequests = [];
@@ -98,6 +125,17 @@ const fetchStub = async (url, options = {}) => {
     return ok({ ...queue });
   }
   if (value.includes('/api/tracker/summary')) return ok(tracker);
+  if (value.includes('/api/tracker/accounts/')) {
+    const handle = decodeURIComponent(new URL(value).pathname.split('/').at(-1));
+    monthlyHistoryRequests.push({ handle, signal: options.signal });
+    if (monthlyHistoryPending) return new Promise((resolve, reject) => {
+      const abort = () => reject(new DOMException('History cancelled.', 'AbortError'));
+      if (options.signal?.aborted) abort();
+      else options.signal?.addEventListener('abort', abort, { once: true });
+    });
+    if (monthlyHistoryFailure && handle === 'sentient.second') return { ...ok({ detail: 'History temporarily unavailable.' }), ok: false, status: 400 };
+    return ok({ handle, followers_history: monthlyHistories[handle] || [] });
+  }
   if (value.includes('/api/insights/posts')) return ok({ accounts: [{ handle: 'chatgptricks', group: 'sentient', label: 'ChatGPTricks' }], posts: [{ a: 'chatgptricks', d: `${day}T12:00:00`, l: 4200, c: 32, t: 'Carousel', hot: 1, ocr: 'better prompt workflow artificial intelligence' }] });
   if (value.includes('/api/admin/accounts')) return ok({ accounts: [
     { handle: 'chatgptricks', label: 'ChatGPTricks', group: 'sentient', is_active: true, total_posts: 1, hot_threshold: 600, scrape_mode: 'posts' },
@@ -224,9 +262,39 @@ const fill = async (node, value) => act(async () => {
     await click(document.querySelector('.m-sheet > header button'));
     checks['Closing pending tracking leaves mobile agenda unchanged'] = document.querySelectorAll('.m-task').length === 1 && queue.pendingTicketCount === 2;
     await click(nav[2]);
-    checks['Independent Tracker renders'] = document.querySelectorAll('.m-tracker-row').length === 1 && /100,000/.test(document.body.textContent) && /\+120/.test(document.body.textContent);
+    checks['Independent Tracker renders'] = document.querySelectorAll('.m-tracker-row').length === 3 && /100,000/.test(document.body.textContent) && /\+120/.test(document.body.textContent);
     checks['Tracker favorite is first'] = Boolean(document.querySelector('.m-tracker-row:first-child .m-favorite.is-on'));
+    const monthlyValues = () => [...document.querySelectorAll('[data-monthly-metric]')].map((node) => node.textContent).join('|');
+    checks['Mobile monthly overview defaults to the Costa Rica calendar month'] = document.querySelector('.m-monthly-head select')?.value === day.slice(0, 7);
+    checks['Monthly history errors withhold totals and keep Tracker accounts usable'] = monthlyValues() === '—|—|—'
+      && Boolean(document.querySelector('.m-monthly-error button')) && document.querySelectorAll('.m-tracker-open').length === 3;
+    monthlyHistoryFailure = false;
+    await click(document.querySelector('.m-monthly-error button'));
+    checks['Mobile monthly retry loads every Sentient account regardless of favorites'] = !document.querySelector('.m-monthly-error')
+      && /2 \/ 2 accounts with monthly data/.test(document.querySelector('.m-monthly-coverage')?.textContent || '')
+      && monthlyHistoryRequests.map((request) => request.handle).join('|') === 'chatgptricks|sentient.second|chatgptricks|sentient.second';
+    const selectMonth = async (month) => act(async () => {
+      const select = document.querySelector('.m-monthly-head select');
+      select.value = month; select.dispatchEvent(new window.Event('change', { bubbles: true }));
+    });
+    await selectMonth(previousMonth);
+    checks['Mobile month selector sums gained, lost and net across Sentient only'] = monthlyValues() === '+150|−70|+80';
+    checks['Mobile monthly overview discloses partial observations and data date'] = /Partial history/.test(document.querySelector('.m-monthly-coverage')?.textContent || '')
+      && /Recorded through/.test(document.querySelector('.m-monthly-coverage')?.textContent || '')
+      && /follows and unfollows within a day are not available/.test(document.querySelector('.m-monthly-method')?.textContent || '');
+    await click(document.querySelector('.m-tracker-row:first-child .m-favorite'));
+    checks['Mobile favorites never filter Sentient monthly totals or refetch history'] = monthlyValues() === '+150|−70|+80' && monthlyHistoryRequests.length === 4;
+    await selectMonth(baselineDate.slice(0, 7));
+    checks['Mobile month without comparable observations shows no data instead of zero'] = monthlyValues() === '—|—|—' && /No data available/.test(document.querySelector('.m-monthly-empty')?.textContent || '');
     await click(nav[3]);
+    monthlyHistoryPending = true;
+    await click(nav[2]);
+    const pendingHistories = monthlyHistoryRequests.slice(-2);
+    checks['Pending monthly histories withhold values while accounts stay usable'] = monthlyValues() === '—|—|—'
+      && document.querySelector('.m-sentient-monthly')?.getAttribute('aria-busy') === 'true' && document.querySelectorAll('.m-tracker-row').length === 3;
+    await click(nav[3]);
+    monthlyHistoryPending = false;
+    checks['Leaving mobile Tracker aborts every pending monthly history'] = pendingHistories.length === 2 && pendingHistories.every((request) => request.signal?.aborted) && !document.querySelector('.m-sentient-monthly');
     checks['Independent Insights renders'] = Boolean(document.querySelector('.m-insight-card'));
 
     await click(document.querySelector('.m-profile'));

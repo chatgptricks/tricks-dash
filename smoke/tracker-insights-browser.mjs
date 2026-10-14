@@ -10,6 +10,8 @@ const browser = await chromium.launch({ headless:true, executablePath:process.en
 const base='http://localhost:4199';
 const errors=[];
 const mobileOverflow={};
+const screenshotDir=path.join(process.env.TMPDIR || '/tmp','tracker-sentient-overview');
+fs.mkdirSync(screenshotDir,{recursive:true});
 const overflowElements=()=>[...document.querySelectorAll('body *')].filter(el=>{
   if(el.getBoundingClientRect().right<=innerWidth+1)return false;
   for(let parent=el.parentElement;parent&&parent!==document.body;parent=parent.parentElement){if(['auto','scroll','hidden','clip'].includes(getComputedStyle(parent).overflowX)&&parent.getBoundingClientRect().right<=innerWidth+1)return false;}
@@ -20,6 +22,7 @@ const chartFixture = `class Chart{static defaults={font:{}};static owners=new Ma
 const accounts=[{handle:'alpha',group:'sentient',followers:1000,full_name:'Alpha Studio'},{handle:'beta',group:'competitors',followers:2000,full_name:'Beta Studio'}];
 const posts=Array.from({length:8},(_,index)=>({a:index%2?'beta':'alpha',d:`2026-10-0${index%3+1}T12:00:00Z`,l:100+index*100,c:4+index,v:1000+index*300,t:'Video',pt:'clips',ocr:'Practical AI video tutorial',h:'tutorial,creativity',u:`https://instagram.com/p/fixture${index}/`}));
 const page=await browser.newPage({viewport:{width:1440,height:1000}});
+await page.clock.setFixedTime(new Date('2026-10-14T18:00:00Z'));
 page.on('pageerror',error=>errors.push(error.message));
 await page.route('**/*',async route=>{
   const url=new URL(route.request().url());
@@ -38,7 +41,7 @@ await page.route('**/*',async route=>{
     assert.ok(route.request().method()==='GET'||url.pathname.endsWith('/me/preferences'),'Only mock preference writes are allowed');
     let data={};
     if(url.pathname==='/api/tracker/summary')data={tracking_since:'2026-09-01',accounts};
-    else if(url.pathname.startsWith('/api/tracker/accounts/'))data={followers_history:[{date:'2026-10-01',followers:900},{date:'2026-10-03',followers:1000}],engagement_weekly:[]};
+    else if(url.pathname.startsWith('/api/tracker/accounts/'))data={followers_history:[{date:'2026-09-29',followers:880},{date:'2026-09-30',followers:900},{date:'2026-10-01',followers:970},{date:'2026-10-02',followers:950},{date:'2026-10-14',followers:1000}],engagement_weekly:[]};
     else if(url.pathname==='/api/insights/posts')data={posts,accounts};
     else if(url.pathname==='/api/insights/follower-growth')data={accounts:[],peaks:[]};
     else if(url.pathname==='/api/dashboard/me')data={is_admin:false,is_dev:false,operating_roles:['vc'],email:'fixture@example.test'};
@@ -53,9 +56,18 @@ try{
   await page.goto(`${base}/tracker.html`);
   await page.locator('#trackerSearch').waitFor();
   await page.locator('#authGate.hidden').waitFor({state:'attached'});
+  await page.waitForFunction(()=>document.querySelector('[data-monthly="net"]')?.textContent==='+100');
+  assert.equal(await page.locator('[data-monthly="gained"]').innerText(),'+120');
+  assert.equal(await page.locator('[data-monthly="lost"]').innerText(),'−20');
+  assert.equal(await page.locator('#sentientMonth').getAttribute('aria-label'),'Sentient summary month');
+  await page.locator('#sentientMonth').selectOption('2026-09');
+  assert.equal(await page.locator('[data-monthly="net"]').innerText(),'+20');
+  await page.locator('#sentientMonth').selectOption('2026-10');
+  await page.locator('#sentientMonthly').screenshot({path:path.join(screenshotDir,'desktop-en.png')});
   assert.equal(await page.locator('.product-nav a[href="/hooks.html"]').isVisible(),false);
   await page.locator('#trackerSearch').fill('@alpha');
   assert.equal(await page.locator('tr[data-handle]').count(),1);
+  assert.equal(await page.locator('[data-monthly="net"]').innerText(),'+100');
   await page.locator('tr[data-handle="alpha"]').click();
   await page.locator('#historyWindow').waitFor();
   await page.locator('#historyWindow').selectOption('7');
@@ -70,10 +82,24 @@ try{
   await page.locator('#backBtn').click();
   await page.locator('#trackerSearch').waitFor();
   assert.equal(await page.locator('#trackerSearch').inputValue(),'@alpha');
+  assert.equal(await page.locator('[data-monthly="net"]').innerText(),'+100');
+  await page.locator('#settingsTrigger').click();
+  await page.locator('#settingsPanel [data-lang="es"]').click();
+  await page.waitForFunction(()=>document.querySelector('#sentientMonthly h2')?.textContent==='Sentient · Resumen mensual');
+  assert.equal(await page.locator('#sentientMonth').getAttribute('aria-label'),'Mes del resumen de Sentient');
+  assert.match(await page.locator('#sentientMonthly').innerText(),/Seguidores ganados/i);
+  assert.match(await page.locator('#sentientMonthly').innerText(),/Seguidores perdidos/i);
+  assert.match(await page.locator('#sentientMonthly').innerText(),/Total neto/i);
+  await page.keyboard.press('Escape');
   await page.setViewportSize({width:390,height:844});
   mobileOverflow.tracker=await page.evaluate(()=>Math.max(0,document.documentElement.scrollWidth-innerWidth));
   if(mobileOverflow.tracker) console.log('Tracker overflow elements:',await page.evaluate(overflowElements));
   assert.ok(mobileOverflow.tracker<=1,'Tracker page fits mobile viewport; wide tables scroll inside their container');
+  await page.locator('#sentientMonthly').screenshot({path:path.join(screenshotDir,'narrow-es.png')});
+  await page.locator('#settingsTrigger').click();
+  await page.locator('#settingsPanel [data-lang="en"]').click();
+  await page.waitForFunction(()=>document.querySelector('#sentientMonthly h2')?.textContent==='Sentient · Monthly overview');
+  await page.keyboard.press('Escape');
 
   await page.setViewportSize({width:1440,height:1000});
   await page.goto(`${base}/insights.html`);
@@ -109,4 +135,5 @@ try{
   assert.deepEqual(errors,[]);
   console.log('PASS Tracker/Insights browser fixtures: populated pages, search/detail/back/range, chart-safe sorting, keyboard filters, empty selection reload and role navigation; Firebase/API/Chart.js are mocked');
   console.log('Mobile page overflow in pixels:',mobileOverflow);
+  console.log('Sentient monthly screenshots:',screenshotDir);
 }finally{await browser.close();}
