@@ -11,3 +11,4 @@ html{scroll-padding-top:var(--guide-header-offset,140px)}
 .contents{top:var(--guide-header-offset,140px);max-height:calc(100vh - var(--guide-header-offset,140px) - 20px)}
 @media(max-width:500px){.top-inner{gap:12px}.header-title{gap:14px}.language-option{font-size:12px;padding:6px 9px}}
 @media(max-width:600px){table.columns-2{min-width:0;table-layout:fixed}table.columns-2 th,table.columns-2 td{overflow-wrap:anywhere;padding:12px}table.columns-2 th:first-child{width:45%}}
+table.columns-4{min-width:760px;table-layout:fixed}table.columns-4 th:first-child,table.columns-4 td:first-child{width:33%}table.columns-4 th:nth-child(2){width:12%}table.columns-4 th:nth-child(3){width:28%}table.columns-4 th:nth-child(4){width:27%}table.columns-4 th,table.columns-4 td{overflow-wrap:anywhere;padding:12px}
