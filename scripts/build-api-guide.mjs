@@ -8,14 +8,14 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const LANGUAGES = {
   es: {
     source: 'api-guide.md', page: 'api-guide.html', title: 'Guía de la API de Sentient Dash',
-    description: 'Documentación general de la API de Sentient Dash: autenticación, perfiles, métricas, posts, historial, ejemplos y conexión con websites, apps y reportes',
+    description: 'Documentación general de la API de Sentient Dash: autenticación, scopes, inventario completo de rutas, HOT, Research, Queue, análisis y ejemplos para websites, apps y agentes',
     skip: 'Ir a la guía', download: 'Descargar guía', example: 'Descargar ejemplo', api: 'Conexiones API',
     language: 'Idioma de la guía', nav: 'Contenido de la guía', contents: 'En esta guía', tag: 'Documentación de la API',
     markdown: 'Descargar versión Markdown', project: 'Descargar proyecto de referencia',
   },
   en: {
     source: 'api-guide.en.md', page: 'api-guide.en.html', title: 'Sentient Dash API guide',
-    description: 'General Sentient Dash API documentation: authentication, profiles, metrics, posts, history, examples and integration with websites, apps and reports',
+    description: 'General Sentient Dash API documentation: authentication, scopes, complete endpoint inventory, HOT, Research, Queue, analytics and examples for websites, apps and agents',
     skip: 'Skip to the guide', download: 'Download guide', example: 'Download example', api: 'API connections',
     language: 'Guide language', nav: 'Guide contents', contents: 'In this guide', tag: 'API documentation',
     markdown: 'Download Markdown version', project: 'Download reference project',
@@ -104,7 +104,7 @@ while (i < lines.length) {
   output.push(`<p>${inline(paragraph.join(' '))}</p>`);
 }
 const html = `<!doctype html>
-<html lang="${language}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="${escape(labels.description)}"><meta name="color-scheme" content="dark"><title>${escape(labels.title)}</title><link rel="alternate" hreflang="es" href="/api-guide.html?lang=es"><link rel="alternate" hreflang="en" href="/api-guide.en.html?lang=en"><link rel="icon" href="/favicon.svg"><script src="/api-guide-language.js?v=20261009-i18n1"></script><link rel="stylesheet" href="/api-guide.css?v=20261009-i18n1"></head>
+<html lang="${language}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="${escape(labels.description)}"><meta name="color-scheme" content="dark"><title>${escape(labels.title)}</title><link rel="alternate" hreflang="es" href="/api-guide.html?lang=es"><link rel="alternate" hreflang="en" href="/api-guide.en.html?lang=en"><link rel="icon" href="/favicon.svg"><script src="/api-guide-language.js?v=20261009-i18n1"></script><link rel="stylesheet" href="/api-guide.css?v=20261015-readapi1"></head>
 <body><a class="skip" href="#guide-start">${escape(labels.skip)}</a><header class="top"><div class="top-inner"><div class="header-title"><a class="brand" href="/">Sentient Dash</a><nav class="language-selector" aria-label="${escape(labels.language)}"><a class="button language-option" data-guide-language="es" href="/api-guide.html?lang=es" lang="es" hreflang="es"${language === 'es' ? ' aria-current="page"' : ''}>Español</a><a class="button language-option" data-guide-language="en" href="/api-guide.en.html?lang=en" lang="en" hreflang="en"${language === 'en' ? ' aria-current="page"' : ''}>English</a></nav></div><div class="actions"><a class="button" href="/${labels.source}" download>${escape(labels.download)}</a><a class="button" href="/media-kit-example.zip" download>${escape(labels.example)}</a><a class="button primary" href="/api.html">${escape(labels.api)}</a></div></div></header><div class="layout"><nav class="contents" aria-label="${escape(labels.nav)}"><p>${escape(labels.contents)}</p>${sections.map(section => `<a href="#${section.id}">${escape(section.title)}</a>`).join('')}</nav><main><p class="tag">${escape(labels.tag)}</p>${output.join('\n')}<footer><a href="/${labels.source}" download>${escape(labels.markdown)}</a> · <a href="/media-kit-example.zip" download>${escape(labels.project)}</a></footer></main></div></body></html>
 `;
 if (hasControls(html)) throw new Error(`Control characters in ${labels.page}`);

@@ -124,10 +124,16 @@ try {
     await page.getByRole('button',{name:label('+ Add link','+ Agregar enlace'),exact:true}).click();
     await page.getByRole('textbox',{name:label('Title','Título'),exact:true}).waitFor();
     await page.getByRole('button',{name:label('Cancel','Cancelar'),exact:true}).click();
-    await page.getByRole('button',{name:label('Discard','Descartar'),exact:true}).click();
+    await Promise.all([
+      page.waitForResponse(response => new URL(response.url()).pathname === '/api/dashboard/vault/link-1' && response.request().method() === 'PATCH'),
+      page.getByRole('button',{name:label('Discard','Descartar'),exact:true}).click(),
+    ]);
     assert.deepEqual(mutations.at(-1).payload,{discarded:true});
     await page.locator('.vault-tabs').getByRole('button',{name:es?/^Descartados/:/^Discarded/}).click();
-    await page.getByRole('button',{name:label('Restore','Restaurar'),exact:true}).click();
+    await Promise.all([
+      page.waitForResponse(response => new URL(response.url()).pathname === '/api/dashboard/vault/link-1' && response.request().method() === 'PATCH'),
+      page.getByRole('button',{name:label('Restore','Restaurar'),exact:true}).click(),
+    ]);
     assert.deepEqual(mutations.at(-1).payload,{discarded:false});
     await page.locator('.vault-tabs').getByRole('button',{name:es?/^Colección/:/^Collection/}).click();
     await page.locator('.vault-card').waitFor();

@@ -2,13 +2,13 @@
 
 Connect dashboard data to websites, media kits, applications, reports and automated processes. This guide supports any authorized integration and explains which data you can read, how to authenticate and how to interpret each response, regardless of your programming language or hosting provider.
 
-The API provides **read access to stored public data for selected accounts**: profile, followers, post performance, post catalog and follower history. Each connection has its own key, expiration and scope. Your application calls the API from its server; if it has a public interface, that server sends visitors the data you choose to display.
+The API provides **read access to stored product data**, from public account profiles and HOT posts to Research, Tracker, Insights, Queue, Promos, News, Hooks, Vault and readable Settings. Each area requires an explicit scope and the owner’s current product permissions. Each connection has its own key, expiration and scope. Your application calls the API from its server; if it has a public interface, that server sends visitors the data you choose to display.
 
 | Reference | Value |
 | --- | --- |
 | Production base | `https://cortex-api-db2e.onrender.com/api/v1` |
 | Authentication | Header `Authorization: Bearer YOUR_KEY` |
-| Method | `GET` for all five endpoints in this guide |
+| Method | `GET` for every data endpoint; no writes |
 | Format | JSON, `schema_version: "1.0"` |
 | Rate limit | 60 requests per minute per key |
 | Connection settings | [API connections](https://sentientdash.app/api.html) |
@@ -19,13 +19,13 @@ The API provides **read access to stored public data for selected accounts**: pr
 | --- | --- |
 | Media kit or creator page | `/media-kit` for profile, followers, performance and standout posts |
 | Brand website or account directory | `/accounts` to discover the scope, and `/accounts/{handle}` for each account profile |
-| Post gallery or catalog | `/posts`, paginated and filtered by dates or Promo status |
+| Post gallery or catalog | `/accounts/{handle}/posts` for public account posts (`accounts`); `/posts` for the fuller cross-account Research catalog (`research`) |
 | Audience growth chart | `/followers/history`, with stored daily samples |
 | Recurring report or analytics tool | Requests from a script or service; save the capture date and the range used |
 | Static website | A server function as a proxy, or a task that generates static content from the API |
 | Application with several accounts | A key authorizing those accounts, a separate cache per account and requests within the key's shared rate limit |
 
-The exposed profiles currently belong to Instagram. The API reads the dashboard database: a request does not start scraping, request new captures or speed up metric updates. Data changes when the dashboard saves new observations. It does not let you edit data, manage users or Queue, or access contacts, internal analyses or credentials for other services. Webhooks are not included: to keep your integration current, query periodically or when its cache expires.
+The exposed profiles currently belong to Instagram. The API reads the dashboard database: a request does not start scraping, request new captures or speed up metric updates. Data changes when the dashboard saves new observations. With explicit scopes it also exposes stored internal product data. It does not edit records, change settings, run paid analysis or reveal credentials for other services. Webhooks are not included: to keep your integration current, query periodically or when its cache expires.
 
 ## 2 Create and manage a connection
 
@@ -34,13 +34,37 @@ The exposed profiles currently belong to Instagram. The API reads the dashboard 
 3. Under **Connect an integration**, enter a recognizable name in **Connection name**, such as `Brand website`, `Monthly report` or `Analytics app`.
 4. Select the expiration in **Expires in**: 30, 90 or 365 days.
 5. Under **Allowed accounts**, select the accounts your integration can query. Use **Search accounts** to find them. The key keeps this selection; it does not automatically receive new accounts you add to the dashboard.
-6. Click **Generate API key**. Under **Your API key**, use **Copy API key** and save it as a private server secret. Then click **I saved the key**. The key starts with `sad_api_` and is shown only once.
+6. In **Available data (read only)**, keep **Public account data only** for a media kit, or select the areas your integration needs. Choose **All available data (read-only)** only when that integration should read every available area.
+7. Click **Generate API key**. Under **Your API key**, use **Copy API key** and save it as a private server secret. Then click **I saved the key**. The key starts with `sad_api_` and is shown only once.
 
-Create one key per integration or environment so you can identify and revoke each separately. You can authorize up to 100 active accounts per key and keep up to 20 active keys per owner. The limit of 60 requests per minute is shared across all endpoints and accounts queried with the same key.
+Create one key per integration or environment so you can identify and revoke each separately. You can authorize up to 1,000 active accounts per key and keep up to 20 active keys per owner. The limit of 60 requests per minute is shared across all endpoints and accounts queried with the same key.
 
-Under **Your API keys**, you can see scope, expiration and last use. To block a connection, click **Revoke**, then **Confirm revoke**. If you lose a key or need to change its authorized accounts, create a new one and revoke the old one. To rotate a key without interrupting your application, configure the new key on your server first, verify a request and then revoke the previous key.
+Under **Your API keys** (or **Workspace API keys** for a Dev), you can see scope, expiration and last use. To block a connection, click **Revoke**, then **Confirm revoke**. If you lose a key or need to change its authorized accounts, create a new one and revoke the old one. To rotate a key without interrupting your application, configure the new key on your server first, verify a request and then revoke the previous key.
 
 Only Admin or Dev can create keys. If the owner loses that permission or their dashboard access is removed, their keys stop reading data. Revocation and expiration block future reads; data your integration already received may remain in its cache or storage. To remove published data immediately, also remove it from your application.
+
+Devs can also see **Workspace API keys**: all their own keys and every other owner’s active connection, with the owner identified on each row. A Dev can revoke any of those connections using **Revoke → Confirm revoke**. Admins see and revoke their own keys. Revoking a foreign connection does not transfer ownership: only its owner can edit its data scopes, and the full secret remains unavailable after issuance. Expired or revoked foreign keys are excluded from the shared active list.
+
+### Data areas and existing keys
+
+A key has two separate boundaries: `account_handles` selects accounts and `data_scopes` selects product areas. Select **All accounts**, **Sentient** or **Others** to add accounts in bulk; search results can be added without losing earlier selections. **All available data (read-only)** selects every area currently offered to your user. Review the selected areas before generating the key.
+
+| Scope | Data authorized |
+| --- | --- |
+| `accounts` | Public profiles, media kits, public posts, follower history and HOT |
+| `research` | Stored Research catalog, source metadata, post details and topic stacks |
+| `tracker` | Stored follower tracking and account history |
+| `insights` | Stored post analytics and summaries |
+| `queue` | Production requests, history, drafts, tickets and schedules within the owner's visibility |
+| `promos` | Stored promotions, related posts and reviews |
+| `news` | Workspace news, sources, briefs and stored reviews |
+| `hooks` | Stored hook library, saved hooks and the owner's drafts, respecting source permissions |
+| `vault` | Saved workspace resources |
+| `settings` | Readable product configuration and safe account/user information |
+
+Existing keys remain `accounts` only. They do not automatically receive Research, Queue or other internal areas. In **Your API keys** or **Workspace API keys**, choose **Edit data access** for a key you own, select the areas, and **Save data access**. The same key works immediately with its new scopes; its accounts and expiration stay the same. Scope changes do not reveal or rotate the secret. Create a new key if its allowed accounts must change.
+
+Workspace areas can contain shared internal data that does not belong to one Instagram account, especially News, Vault and Settings. Their explicit scope is required, and the API still enforces the owner's current product permissions. Selected accounts constrain account-linked records. A scope grants no access beyond that owner; losing access can make previously readable routes unavailable. Keep internal data behind your application's own authentication.
 
 ## 3 Authentication and server configuration
 
@@ -83,23 +107,163 @@ A key covering several accounts gives your server access to all of them. If you 
 
 ## 4 First request and endpoint reference
 
-With `SENTIENT_DASH_API_KEY` loaded in a server terminal, discover the authorized accounts:
+With `SENTIENT_DASH_API_KEY` loaded in a server terminal, discover the enabled routes and authorized accounts:
 
 ```bash
 curl --fail-with-body \
   -H "Authorization: Bearer $SENTIENT_DASH_API_KEY" \
-  "https://cortex-api-db2e.onrender.com/api/v1/accounts"
+  "https://cortex-api-db2e.onrender.com/api/v1/capabilities"
 ```
 
-All the following endpoints use `GET`. Append each path to the `/api/v1` base. Use the handle returned by `/accounts`, without `@`.
+All the following endpoints use `GET`. Append each path to the `/api/v1` base. Use handles from `account_handles`, without `@`; with the `accounts` scope, `/accounts` also returns their public profiles. Choose operations marked `available` for this key.
 
-| Endpoint | Contents of `data` | Query parameters |
-| --- | --- | --- |
-| `/accounts` | List of active authorized accounts | None |
-| `/accounts/{handle}` | Public profile of one account | None |
-| `/accounts/{handle}/media-kit` | Profile, performance summary, standout posts and available growth | None |
-| `/accounts/{handle}/posts` | Paginated list of stored public posts | `limit`, `offset`, `from`, `to`, `is_promo` |
-| `/accounts/{handle}/followers/history` | Paginated list of daily follower samples | `limit`, `offset`, `from`, `to` |
+### Complete versioned endpoint inventory
+
+Every row below is `GET`. A missing scope returns `403`; account-linked data remains within the key’s selected accounts, and inaccessible objects return `404`. An agent should first read `/capabilities`, then `/openapi.json`: these runtime documents are authoritative for the deployed paths, parameter types/defaults, documented response envelopes and current availability. A route’s presence in OpenAPI does not grant its permission. Never infer new routes from internal dashboard URLs.
+
+| Endpoint | Required scope | Stored response | Query parameters |
+| --- | --- | --- | --- |
+| `/capabilities` | Any valid key | Routes, scopes, current account bounds and availability for this key | — |
+| `/openapi.json` | Any valid key | Machine-readable versioned GET contract and parameter schemas | — |
+| `/accounts` | `accounts` | Active selected public accounts | — |
+| `/accounts/{handle}` | `accounts` | Public account profile | — |
+| `/accounts/{handle}/media-kit` | `accounts` | Profile, performance, growth and standout posts | — |
+| `/accounts/{handle}/posts` | `accounts` | Public post catalog | `limit, offset, from, to, is_promo` |
+| `/accounts/{handle}/posts/{shortcode}` | `accounts` | One public post and authenticated cover URL | — |
+| `/posts/{shortcode}` | `accounts` | One public post found across selected accounts | — |
+| `/accounts/{handle}/posts/{shortcode}/cover` | `accounts` | 307 redirect to an already stored cover; 404 if absent | — |
+| `/accounts/{handle}/followers/history` | `accounts` | Daily stored follower samples | `limit, offset, from, to` |
+| `/hot` | `accounts` or `research` | The stored HOT selection and detection criteria | `account, from, to, history, limit, offset` |
+| `/posts` | `research` | Cross-account stored Research catalog | `account, from, to, q, is_promo, is_collab, is_hot, include_hidden, include_deleted, sort, limit, offset` |
+| `/research/posts/{account}/{shortcode}` | `research` | Stored Research post details and source metadata | — |
+| `/research/posts/{account}/{shortcode}/media` | `research` | List available stored images/video and authenticated download URLs | — |
+| `/research/posts/{account}/{shortcode}/media/{index}` | `research` | Stream one stored asset, not JSON | — |
+| `/research/stacks` | `research` | Stored topic stacks within selected accounts | `account, from, to, limit, offset` |
+| `/research/stacks/{stack_id}/posts` | `research` | Stored posts in one topic stack | `account, from, to, limit, offset` |
+| `/research/lists` | `research` | The owner’s and shared account lists, with granted members only | `account, q, limit, offset` |
+| `/research/golden-nuggets` | `research` | Persisted confirmed Golden Nugget classifications and reviews | `account, min_score, target_account, limit, offset` |
+| `/tracker/accounts` | `tracker` | Follower tracking for selected accounts | `account, limit, offset` |
+| `/tracker/overview` | `tracker` | Alias of the account tracking overview | `account, limit, offset` |
+| `/tracker/accounts/{handle}/monthly` | `tracker` | Stored monthly follower summary | `from, to, limit, offset` |
+| `/tracker/accounts/{handle}/history` | `tracker` | Account follower history | `from, to, limit, offset` |
+| `/insights/posts` | `insights` | Stored analytics posts across selected accounts | `account, from, to, q, is_promo, is_collab, is_hot, include_hidden, include_deleted, sort, limit, offset` |
+| `/insights/top-posts` | `insights` | Ranked stored posts; default sort likes | `account, from, to, sort, limit, offset` |
+| `/tracker/accounts/{handle}/engagement` | `tracker` | Daily or monthly post engagement observations | `granularity, from, to, limit, offset` |
+| `/insights/follower-growth` | `insights` | Evidence-bound follower-growth events and candidate posts | `account, lookback_days` |
+| `/insights/summary` | `insights` | Stored analytics summary for the selected range | `account, from, to` |
+| `/queue/requests` | `queue` | Visible production requests | `account, status, date, limit, offset` |
+| `/queue/requests/{request_id}` | `queue` | One visible request | — |
+| `/queue/requests/{request_id}/history` | `queue` | Stored request events | `limit, offset` |
+| `/queue/drafts` | `queue` | Visible production drafts | `account, limit, offset` |
+| `/queue/tickets` | `queue` | Visible production tickets | `status, limit, offset` |
+| `/queue/tickets/{ticket_id}` | `queue` | One visible ticket | — |
+| `/queue/schedule` | `queue` | Visible production schedule | `account, status, date, limit, offset` |
+| `/queue/summary` | `queue` | Stored request totals by status and production points | `account` |
+| `/queue/report` | `queue` | Production totals, priorities, designer productivity and assigned posts | `account, limit, offset, assigned_limit, assigned_offset` |
+| `/queue/team` | `queue` | Visible team roster with permitted managed accounts | `limit, offset` |
+| `/queue/assignments` | `queue` | Visible production assignments | `account, assignee, status, limit, offset` |
+| `/queue/assignments/{assignment_id}` | `queue` | One visible assignment | — |
+| `/queue/assignments/{assignment_id}/history` | `queue` | Stored assignment events | `limit, offset` |
+| `/queue/drafts/{request_id}` | `queue` | One visible production draft | — |
+| `/queue/requests/{request_id}/attachments` | `queue` | Stored attachment metadata | — |
+| `/queue/requests/{request_id}/attachments/{attachment_id}/content` | `queue` | Stream an authorized stored attachment, not JSON | — |
+| `/queue/time-blocks` | `queue` | Shared team availability blocks visible to the owner | `date, requester, status, limit, offset` |
+| `/queue/preferences` | `queue` | The owner’s saved Queue display preferences | — |
+| `/promos` | `promos` | Stored promotion classification and related posts | `account, classification, review_status, q, limit, offset` |
+| `/promos/{account}/{shortcode}` | `promos` | Stored promotion details | — |
+| `/promos/{account}/{shortcode}/review` | `promos` | Existing stored review; never starts AI analysis | — |
+| `/news` | `news` | Stored workspace news | `saved, q, source_type, limit, offset` |
+| `/news/briefs` | `news` | Stored news briefs | `saved, q, source_type, limit, offset` |
+| `/news/story` | `news` | Stored story details by URL-encoded id | `id` |
+| `/hooks` | `hooks` | Stored hook library within source permissions | `account, q, topic, limit, offset` |
+| `/hooks/saved` | `hooks` | The owner’s saved hooks | `account, q, topic, limit, offset` |
+| `/hooks/drafts` | `hooks` | The owner’s stored hook drafts | `limit, offset` |
+| `/hooks/drafts/{draft_id}` | `hooks` | One stored draft owned by the key owner | — |
+| `/hooks/{hook_id}` | `hooks` | One stored hook and available analysis | — |
+| `/vault` | `vault` | Saved workspace content | `discarded, done, q, limit, offset` |
+| `/vault/{link_id}` | `vault` | One saved workspace resource | — |
+| `/settings/preferences` | `settings` | The owner’s saved product preferences | — |
+| `/settings/accounts` | `settings` | Readable account registry settings | `account, limit, offset` |
+| `/settings/usage` | `settings` | Safe usage summary by user and period | `days, limit, offset` |
+| `/settings/users` | `settings` | Safe user directory visible to the owner | `q, limit, offset` |
+| `/settings/users/{email}` | `settings` | Safe readable user information | — |
+
+### Discover access before choosing a tool
+
+```bash
+curl --fail-with-body -H "Authorization: Bearer $SENTIENT_DASH_API_KEY" \
+  "https://cortex-api-db2e.onrender.com/api/v1/capabilities"
+curl --fail-with-body -H "Authorization: Bearer $SENTIENT_DASH_API_KEY" \
+  "https://cortex-api-db2e.onrender.com/api/v1/openapi.json"
+```
+
+`/capabilities` returns `schema_version`, `base_url`, `read_only: true`, `methods: ["GET"]`, `account_handles`, `data_scopes`, `available_scopes`, `rate_limit_per_minute` and `operations`. Each operation declares `method`, `path`, `required_scopes`, `available` and `summary`. OpenAPI includes only versioned read routes, with `WebsiteAPIKey` Bearer authentication and `x-required-scopes` / `x-available` per operation. Agents can turn the available operations into read tools; keep the key in the agent runner’s private secrets.
+
+### HOT and stored Research
+
+```bash
+curl --fail-with-body -H "Authorization: Bearer $SENTIENT_DASH_API_KEY" \
+  "https://cortex-api-db2e.onrender.com/api/v1/hot?account=example_account&limit=20"
+curl --fail-with-body -H "Authorization: Bearer $SENTIENT_DASH_API_KEY" \
+  "https://cortex-api-db2e.onrender.com/api/v1/posts?account=example_account,other_account&is_collab=true&limit=100"
+```
+
+`/hot` reads persisted HOT classifications rather than guessing from current likes. Its default `history=false` follows the tab’s recent 30-hour window; `history=true` reads stored history. Posts include the account, shortcode, permalink, caption, date, likes, comments, views and a `hot` object: `is_hot`, `score`, `multiplier`, `criterion: "persisted_first_hour_pace"`, `observed_at`, `account_threshold`, `likes_at_first_check` and `score_unit: "multiple_of_account_hourly_like_threshold"`. The envelope’s `criteria` explains the persisted flag, 30-hour publication window and score source. Missing evidence remains `null`. The stored score describes detection relative to an account’s hourly likes threshold; it is not a universal ranking across accounts. The account’s current threshold may have changed after detection.
+
+Research and Insights queries accept `account` as one handle or a comma-separated subset of the authorized handles. Dates `from` and `to` are inclusive Costa Rica calendar dates. Their post filters include `q`, `is_promo`, `is_collab`, `is_hot`, `include_hidden=false` and `include_deleted=false`. Public account endpoints retain their public exclusions; the Research scope is required to read internal source metadata. `sort` accepts `date`, `likes`, `comments`, `views` or `hot`. A true collab requires stored confirmation; mentions or tagged users alone do not qualify.
+
+### Account lists, Golden Nuggets and performance fields
+
+`/research/lists` returns your own and shared stored lists, with `id`, `name`, `handles`, `owner_email`, `is_shared`, `created_at` and `updated_at`. It filters membership to the key’s granted accounts before pagination. `account` narrows to one permitted member and `q` searches the list name. Private lists owned by another user are unavailable.
+
+`/research/golden-nuggets` reads existing confirmed classifications, never generating or re-scoring a candidate. Its optional `min_score` is from 0 to 1; `account` and `target_account` narrow stored results. Rows include `account`, `shortcode`, `label`, `target_account` or `null`, `score`, `reviewed_by`, `reviewed_at` and a safe stored `review`. Account-linked results and referenced targets respect the key’s boundaries.
+
+Research and Insights post objects include a `metrics` map for available stored performance facts, such as shares, saves, reach, impressions, measured checkpoints and model scores. The exact keys depend on source coverage. Preserve a missing/`null` measurement as unknown and keep model scores distinct from observed audience counts. `hashtags` and `mentions` are normalized arrays; audio and paid-partnership flags may be `null`. `transcript_available` and `alt_text_available` describe stored availability; the detail endpoint returns the text when it exists. Public account and HOT-only projections do not expose internal model or private performance measurements.
+
+### Tracker and Insights coverage
+
+Tracker overview rows include `following_count`, account label/group, `rank_by_followers`, `rank_by_growth_7d`, `avg_likes_30d`, `posts_30d`, `engagement_trend_pct` and `delta_1d` / `delta_7d` / `delta_30d`, alongside the existing `deltas` map. Each delta is an object with `delta`, `percent` and `baseline_captured_at`, or `null` without a usable baseline. Rankings are computed before pagination across the accounts available to this key, not the entire workspace; preserve `rankings_scope`. Thirty-day averages use stored posts in the rolling period, and the trend compares `avg_likes_30d` with `avg_likes_previous_30d` from the preceding 30 days. `likes_known_30d` and `likes_known_previous_30d` report usable like-count coverage; `posts_30d` counts posts whether or not likes are known. Preserve the returned `engagement_methodology` and do not treat unknown/negative source counts as zero.
+
+Tracker history exposes stored follower observations and available `following_count`; monthly rows include opening/closing follower counts, observation counts, capture dates, `net_followers`, `growth_pct` and `within_month_change`. Monthly net growth compares observed month-end counts, while within-month change compares the first and last usable observations of that month. Missing observations are not invented. `/engagement` accepts `granularity=day` or `month` (default `month`) and returns period, post count, known likes count and available metric averages.
+
+`/insights/follower-growth` requires one `account` and accepts `lookback_days` from 35 to 365 (default 120). It returns stored growth events and time-aligned candidate posts, with coverage limits and truncation flags. Candidates indicate a temporal relationship; they do not establish that a post caused a follower increase. The read uses at most 1,000 snapshots and 5,000 stored posts, and limits candidate lists to 100 per event. Preserve the methodology and coverage alongside the result.
+
+Research media lists return up to 100 available assets and references, plus coverage. Items with `stored: true` include `index`, `kind`, `role`, `content_type`, `expires_possible: false` and a relative authenticated `download_url`; follow that content URL from your server to read stored bytes. Saved public HTTPS references have `stored: false`, `source_url`, an optional `poster_url`/`observed_at` and `expires_possible: true`. They may expire and have no authenticated download URL. Never send the API key to a `source_url` or poster origin. A saved cover does not guarantee full carousel slides or the original video; preserve `coverage.includes_all_carousel_slides: false`. No read fetches missing media from Instagram or starts Apify work. Missing stored assets return `404`; unavailable media storage can return `503`.
+
+### Workspace data and stored-only reads
+
+`/queue/summary` returns `total_requests` and `statuses: [{status, count, production_points}]`. `/queue/report` returns an object with `totals` by status, `priorities` for normal/urgent work, `designers` and `assignedPosts`. Each total/priority includes `count` and `points`. Designer rows include `email`, `activeRequests`, `productionPoints`, `closedRequests`, `urgentRequests` and `averageActualMinutes`; the latter averages recorded start-to-completion minutes for closed requests and is `null` without usable timestamps. Assigned posts include stored draft overrides and `is_draft`. Report `activeRequests`, `productionPoints` and `urgentRequests` use scheduled, in-progress and completed work; `closedRequests` uses closed work. Zero-work current designers remain visible. Totals/priorities use committed records within granted accounts before pagination; `assignedPosts` can include closed/cancelled assigned work and effective draft scheduling overrides. Designer paging uses `limit`/`offset`, and assigned-post paging uses `assigned_limit`/`assigned_offset` (defaults 50/0, maximum limit 100); follow `pagination.designers` and `pagination.assigned_posts` independently. The team roster exposes safe identity, operating roles, time zone, minutes per production point and the managed accounts within the key’s scope. Request attachments return stored `id`, `name`, `size`, `content_type` and `uploaded_at` and a relative `download_url`. The metadata route does not download a file; follow its authenticated content URL from your server to receive `200` bytes, the stored MIME type and an attachment filename. This read streams only the already stored object; missing attachments or storage objects return `404`, and it never downloads an arbitrary external URL. Queue object details, drafts and history obey the same visibility as their parent request or assignment.
+
+Promo reviews, News briefs and story details, Hooks analyses and Vault records are existing saved content. No read creates a review, invokes an AI model, refreshes a source or marks something read. Hooks respects OCR-only and source restrictions; saved hooks and drafts belong to the key owner. Settings user projections exclude provider secrets and private connection credentials. `/settings/usage` accepts `days` from 1 to 90 (default 30) and returns safe `email`, `request_count` and `last_seen_at` rows plus `period: {days, since}`; it excludes raw operational request paths. URL-encode path values such as handles, shortcodes and emails, and encode the News `id` query value with a URL builder.
+
+### Shared availability and your saved preferences
+
+`/queue/time-blocks` exposes shared team availability independently of Instagram account selection, so enable `queue` only for integrations allowed to read that operational context. Optional filters are `date` in `YYYY-MM-DD`, `requester` email and `status` (`pending`, `approved` or `rejected`). Omitting status reads pending and approved blocks. It excludes post-linked tickets and account-change, move, post-suggestion and new-account requests. Rows include block identity/type, requester, status/category/title, schedule/duration, reason, reviewer note and creation/review/update dates.
+
+`/queue/preferences` returns only the key owner’s `hidden_users`, `row_order` and `updated_at`; it does not read another user’s personal layout. `/settings/preferences` returns that owner’s saved `preferences` and `updated_at`: readable fields include language, theme, accent, custom accent, effects, Queue guide/designer scope and Tracker favorites. `trackerFavorites` is restricted to granted accounts. Preferences are read-only snapshots: neither route saves or changes them, and both detail responses omit pagination.
+
+### Main object fields for agent integrations
+
+These are useful field groups, not a replacement for the route-specific response envelope. Objects can add fields and optional source values can be `null` or absent.
+
+| Object | Fields and interpretation |
+| --- | --- |
+| Research / Insights post | `account`, `shortcode`, `permalink`, `caption`, `published_at`, `format`, `likes`, `comments`, `views`, `video_views`, `video_plays`, `metrics_updated_at`, `is_promo`, `is_hot`, `is_collab`, `collaborators`, `hot`; internal post projections add `title`, `ocr_text`, `hidden`, `is_deleted`, duration/slides, hashtags, mentions, audio, paid partnership, dimensions and stored metric `checkpoints`; `transcript_available` / `alt_text_available` indicate stored text coverage. The `metrics` map carries additional stored measurements and model scores |
+| Research post detail | Post fields plus available stored `transcript`, `alt_text`, `analysis_summary`, `llm_report`, `tags`, `coauthors` and `tagged_users`; a detail read does not create missing analysis |
+| Queue request | Identity/source post, title/caption, `post_type`, production points, priority, tags, brief, notes, reference links, `status`, designer/coordinator, recommended accounts, schedule, completion dates, final permalinks, cancellation reason, attachment metadata and capture/update dates |
+| Promo | `account`, `shortcode`, effective `classification`, `client`, `product`, `is_promo`, `review_status`, detection/analysis dates, detector classification/version, signals, evidence, client candidates, links, CTA/promo code and stored `review`; a review override can replace the effective classification |
+| News story | `id`, title/description, published/source/publisher/author, feed metadata, `link`, image, saved state, brief, coverage feeds, related stories, capture/review dates and stored `review`; review includes available scores, evidence, strengths/weaknesses, dimensions, novelty, `classification_gates` and account-scoped `existing_candidates` |
+| Hook / hook draft | Hooks include `id`, source kind, account/shortcode/permalink, publication/likes, `hook_text`, `context_text`, topic, categories/scores and dates; drafts include `id`, topic, text, source hook IDs and creation/update dates |
+| Vault item | `id`, `url`, `title`, source/share date, priority, `discarded`, `done`, original source text, author, image/avatar, media type, text status and safe `slack_url` |
+| Settings | Accounts include registry categories/groups, thresholds, scrape mode, feature flags and dates; users include safe identity, roles, admin flag, time zone, minutes per production point and dates |
+
+### Pagination and response differences
+
+Post, stack, Tracker and Insights page requests use `limit` from 1 to 100, default 20, and `offset` from 0. Workspace collections use default 50 and maximum 100; their offsets are capped at 100,000. Detail routes return an object; collections return an array in `data`, with `schema_version`, `generated_at` and `pagination` where supported. Scope-specific projections differ: use the documented fields and each operation’s response envelope, and tolerate additional fields. Some domain objects in OpenAPI remain flexible objects rather than exhaustive schemas for every nested field.
+
+Always follow `pagination.has_more` and `pagination.next_offset`. Do not compute the next page from the number of returned rows. Filtered Research scans can return fewer than `limit` matches and `pagination.total: null`; `offset`/`next_offset` then refer to evaluated candidates. Such responses identify `offset_type: "candidate"`, `scanned_count`, `candidate_total` and `scan_limit: 500`. An empty filtered page is not the end when `has_more` remains true. Deduplicate account-linked posts by `account` plus `shortcode`.
+
+Stored attachments, stored Research media and covers are exceptions to JSON: attachments and stored media stream authenticated bytes; the authenticated cover route returns `307` to an already stored image or `404` when none exists. Request it from your server, validate the `Location` as HTTPS, and fetch the target without forwarding the API’s Authorization header. Public visitors must not receive the private key.
 
 Collection responses use an array for `data`; profile and media kit responses use an object. Endpoints do not all have the same metadata: `/accounts` includes `schema_version` and `data`; profile and media kit also include `generated_at` and `data_updated_at`; posts and history include `generated_at`, `pagination` and dates for each row. History also includes `timezone`.
 
@@ -212,13 +376,13 @@ Counters are cumulative measurements for each post. `last_30_days` selects posts
 
 Do not add the averages for likes and comments to reconstruct `engagements.average`: they may cover different measured populations. Do not multiply `engagement_rate_pct` or `follower_growth.30d.pct` by 100: they are already percentages. Views and plays do not represent unique people or unique reach.
 
-Each standout post includes `shortcode`, `permalink`, `public_caption`, `format`, `published_at`, `is_promo`, `is_collab`, `collaborators`, `metrics: { likes, comments, video_views, video_plays }`, `engagements` and `engagement_rate_pct`. Use `public_caption` as text and `permalink` as a link. `is_promo`, `is_collab` and `collaborators` are described in the next section. `/media-kit` keeps its aggregate summaries and does not accept the `is_promo` filter or split summaries by Promo status. The JSON API does not return image files, videos or internal storage paths.
+Each standout post includes `shortcode`, `permalink`, `public_caption`, `format`, `published_at`, `is_promo`, `is_collab`, `collaborators`, `metrics: { likes, comments, video_views, video_plays }`, `engagements` and `engagement_rate_pct`. Use `public_caption` as text and `permalink` as a link. `is_promo`, `is_collab` and `collaborators` are described in the next section. `/media-kit` keeps its aggregate summaries and does not accept the `is_promo` filter or split summaries by Promo status. Media kit JSON does not embed image files, videos or internal storage paths. Use authenticated stored-asset routes where an endpoint supplies them.
 
 If `last_30_days` or `follower_growth` is absent, hide that block or explain that there is insufficient data. For a private account, the public catalog and standout posts are empty. Hidden or deleted posts, posts without a usable date and posts dated in the future are excluded from the public export.
 
 ## 6 Post catalog and follower history
 
-Both endpoints accept the following parameters:
+This section covers the public `/accounts/{handle}/posts` and `/accounts/{handle}/followers/history` endpoints. The separate cross-account Research `/posts` endpoint is described in section 4. Both public endpoints accept these parameters:
 
 | Parameter | Value |
 | --- | --- |
@@ -231,7 +395,7 @@ Dates are interpreted as calendar days in `America/Costa_Rica`. You can use eith
 
 ### Posts
 
-In addition to the shared parameters, only `/posts` accepts this optional filter:
+In addition to the shared parameters, `/accounts/{handle}/posts` accepts this optional filter:
 
 | Parameter | Value |
 | --- | --- |
@@ -313,7 +477,7 @@ These examples show only the collaboration fields of three fictional posts:
 
 Preserve `null` as “Unknown”; do not convert it to `false`. An empty `collaborators` list does not independently confirm that a post is not a collaboration. Use `is_collab === true`, `is_collab === false` and `is_collab === null` to distinguish the states.
 
-Coauthor information comes from explicit stored metadata. Caption mentions, tagged users and the Promo flag do not confirm a collaboration; these fields are independent of `is_promo`. There is no `is_collab` query parameter. Media kit summaries and the `/posts` Promo filter keep their existing behavior.
+Coauthor information comes from explicit stored metadata. Caption mentions, tagged users and the Promo flag do not confirm a collaboration; these fields are independent of `is_promo`. The public `/accounts/{handle}/posts` path has no `is_collab` query parameter; the separate Research `/posts` path supports it. Media kit summaries and the `/posts` Promo filter keep their existing behavior.
 
 ### Follower history
 
@@ -491,6 +655,8 @@ Keep a valid response in your server cache for about five minutes, per account, 
 
 For reports or static generation, run requests at the frequency your product needs and that makes sense for dashboard updates. Reading every second does not produce newer data. Across multiple instances, share the cache or coordinate the request budget because all consume the same key's rate limit.
 
+Recent posts can have `likes: null` because the stored source has not supplied that measurement or the post has no usable metric observation yet. Reading again does not refresh Instagram; do not substitute views, zero or another account’s likes.
+
 Show `—` or “Not available” for `null`, and `0` only when the value is actually zero. Do not plot a missing history day as zero or invent a recent summary when it is absent. If you keep an earlier response during an incident, display its capture date and indicate that stored data is being used. Treat names and captions as text; do not execute HTML received in those fields.
 
 ## 9 Errors, limits and retries
@@ -507,6 +673,10 @@ Check the HTTP status before processing `data`. API JSON errors use a `detail` f
 | `429` | Limit of 60 requests per minute per key; wait the seconds indicated in `Retry-After` |
 | `5xx` or timeout | Temporary incident; retry with increasing delay and a bounded number of attempts |
 
+For transient `502`, `503`, `504`, network failures or timeouts, retry at most three times with increasing delays and random jitter (for example around 1, 2 and 4 seconds). Respect `Retry-After` on `429` or `503`, with a bounded overall deadline; if it exceeds your job budget, reschedule the job rather than looping. Limit concurrent requests, preferably one or two, and keep successful account results if another account fails. The key shares one 60-request-per-minute limit across every account and route.
+
+Admitted reads include `X-RateLimit-Limit`, `X-RateLimit-Remaining` and `X-RateLimit-Reset` (the next reset as Unix seconds). Use the remaining budget across all accounts and routes. A temporary storage-busy response can return `503` with `Retry-After: 2`; infrastructure gateways may still return `502` or other transient failures, so keep the bounded retry strategy.
+
 Do not automatically retry `401`, `403`, `404` or `422` errors without correcting their cause. For `429`, respect `Retry-After`; for temporary failures, avoid all instances retrying at once. Consolidate simultaneous requests for the same resource and reduce requests when data is already cached.
 
 The downloadable project's proxy preserves useful API statuses and the `Retry-After` header. It uses `502` for connection failures or invalid responses and `504` for timeouts, without returning backend error bodies to the browser.
@@ -515,15 +685,27 @@ The downloadable project's proxy preserves useful API statuses and the `Retry-Af
 
 The current public route is `/api/v1`, and responses declare `schema_version: "1.0"`. Read the fields your application needs, tolerate additional fields and check optional objects before using them. Do not call internal dashboard or MCP routes with an integration key.
 
-The `is_promo`, `is_collab` and `collaborators` fields, along with the optional Promo filter, are compatible additions that retain `schema_version: "1.0"`. The fields appear in the `/posts` catalog and `/media-kit` standout posts; the `is_promo` filter belongs only to `/posts` and there is no `is_collab` filter.
+The `is_promo`, `is_collab` and `collaborators` fields, along with the optional Promo filter, are compatible additions that retain `schema_version: "1.0"`. The fields appear in the public `/accounts/{handle}/posts` catalog and `/accounts/{handle}/media-kit` standout posts; the `is_promo` filter belongs only to `/posts` the Research `/posts` catalog additionally accepts `is_collab`, `is_hot` and account filters. These are distinct paths.
+
+### What an agent can and cannot do
+
+| Allowed with the required scope and owner permissions | Not available through an integration key |
+| --- | --- |
+| Discover the versioned read contract, account bounds and enabled areas | Call internal `/api/dashboard`, `/api/admin` or MCP routes |
+| Read existing stored records and analyses in the endpoint inventory | Create, edit, delete, assign, schedule, approve or refresh anything |
+| Query selected account data and explicitly authorized shared workspace areas | Read accounts outside the key or bypass current product permissions |
+| Read already stored reviews, OCR or generated content where available | Start scraping, paid AI analysis, generation or new OCR work |
+| Read safe product configuration and user directory fields | Retrieve provider tokens, connection secrets, service keys or unrestricted raw database tables |
+
+Every data operation is `GET`; integration-key attempts to write are denied. This interface does not require an MCP key. Readable product data is exposed through the versioned routes above; operational actions remain outside this read-only API. Missing stored content can produce an empty result or `404` rather than triggering work.
 
 Before publishing, verify these points:
 
 - The key exists only on the server or in the process's private environment.
 - `/accounts` contains exactly the accounts your integration needs.
-- All five endpoints are interpreted with their respective structures and dates.
+- Every operation your integration uses is available in `/capabilities` and interpreted using `/openapi.json`.
 - Empty lists, optional fields and `null` are displayed correctly.
-- Pagination uses `next_offset`, reports preserve the range and posts are deduplicated by `shortcode`.
+- Pagination uses `next_offset`, reports preserve the range and posts are deduplicated by account plus `shortcode`.
 - There is caching, a timeout and `429` handling with `Retry-After`.
 - The application protects its own users' access where needed.
 - The displayed date represents data capture rather than just response time.

@@ -70,8 +70,8 @@ const chrome = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const browser = await chromium.launch({ headless: true, executablePath: process.env.CHROME_PATH || (existsSync(chrome) ? chrome : undefined) });
 
 try {
-  for (const [width, language] of [[1280, 'en'], [390, 'en'], [1280, 'es'], [390, 'es']]) {
-    const page = await browser.newPage({ viewport: { width, height: 900 }, timezoneId: 'America/Costa_Rica' });
+  for (const [width, height, language] of [[1280, 900, 'en'], [390, 844, 'en'], [844, 390, 'en'], [1280, 900, 'es'], [390, 844, 'es'], [844, 390, 'es']]) {
+    const page = await browser.newPage({ viewport: { width, height }, timezoneId: 'America/Costa_Rica' });
     page.setDefaultTimeout(10000);
     const errors = [], consoleMessages = [], requests = [], secrets = [], connections = [], preferenceWrites = [];
     let storedLanguage = language, managementPosts = 0;
@@ -90,17 +90,28 @@ try {
       'Sign in with Google': 'Iniciar sesión con Google', 'Connect an integration': 'Conectar una integración',
       'API keys belong to staff-11@example.test.': 'Las claves API pertenecen a staff-11@example.test.',
       'API access': 'Acceso a la API', 'API connections': 'Conexiones API',
+      'Your API keys': 'Tus claves API', 'Workspace API keys': 'Claves API del espacio de trabajo',
+      'Owner: another-owner@example.test': 'Propietario: another-owner@example.test',
+      'All available data (read-only)': 'Todos los datos disponibles (solo lectura)',
+      'Public account data only': 'Solo datos públicos de cuentas',
+      'Edit data access': 'Editar acceso a datos', 'Save data access': 'Guardar acceso a datos',
+      'Available data (read only)': 'Datos disponibles (solo lectura)',
+      'Profiles, posts and HOT': 'Perfiles, posts y HOT', 'Clear selection': 'Limpiar selección',
+      'All accounts (4)': 'Todas las cuentas (4)', 'Others (3)': 'Otras (3)',
+      'Add search results (1)': 'Agregar resultados de búsqueda (1)',
       'This action is not allowed for your current account.': 'Tu cuenta no tiene permiso para realizar esta acción.',
     };
     const t = text => language === 'es' ? ES[text] ?? text : text;
     const accounts = [
-      { handle: 'creator', public_name: 'Creator — public profile' },
-      { handle: 'creator_studio', public_name: 'Creator Studio' },
-      { handle: 'unselected_brand', public_name: 'Unselected account' },
+      { handle: 'creator', public_name: 'Creator — public profile', group: 'sentient', group_name: 'sentient' },
+      { handle: 'creator_studio', public_name: 'Creator Studio', group: 'others', group_name: 'competitors' },
+      { handle: 'unselected_brand', public_name: 'Unselected account', group: 'others', group_name: 'competitors' },
       { handle: 'long_account_handle_for_layout_validation', public_name: 'A long account name that must wrap safely on a narrow phone display' },
     ];
-    let failCreate = true, failRevoke = false, canCreate = true, creationCount = 0;
-    let holdNextCreate = false, releaseCreate, heldCreate;
+    let failCreate = true, failRevoke = false, failScopeUpdate = false, canCreate = true, canManageAll = false, creationCount = 0, scopeUpdates = 0;
+    const foreignConnection = { id: 'foreign-active', name: 'Other owner integration', owner_email: 'another-owner@example.test', can_edit: false, can_revoke: true, key_prefix: 'sad_api_foreign', account_handles: ['creator'], data_scopes: ['accounts'], expires_at: '2099-01-01T00:00:00Z', revoked_at: null, last_used_at: null };
+    const availableScopes = ['accounts', 'research', 'tracker', 'insights', 'queue', 'promos', 'news', 'hooks', 'vault', 'settings'].map(id => ({ id, global: ['queue', 'news', 'hooks', 'vault', 'settings'].includes(id) }));
+    let holdNextCreate = false, releaseCreate, heldCreate, expectedCreateScopes = ['accounts'];
     page.on('pageerror', error => errors.push(error.message));
     page.on('console', message => consoleMessages.push(message.text()));
     page.on('request', request => requests.push(JSON.stringify({ url: request.url(), headers: request.headers(), body: request.postData() })));
@@ -121,12 +132,12 @@ try {
         return;
       }
       if (request.method() === 'GET') {
-        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ keys: token === 'Bearer tok' ? connections : [], available_accounts: accounts, can_create: canCreate }) });
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ keys: token === 'Bearer tok' ? [...connections, ...(canManageAll && !foreignConnection.revoked_at ? [foreignConnection] : [])] : [], available_accounts: accounts, available_scopes: availableScopes, can_create: canCreate, can_manage_all: canManageAll }) });
       } else if (request.method() === 'POST') {
         managementPosts += 1;
         assert.equal(token, 'Bearer tok');
         assert.equal(request.headers()['content-type'], 'application/json');
-        assert.deepEqual(request.postDataJSON(), { name: 'Website integration', account_handles: ['creator', 'creator_studio'], expires_in_days: 30 });
+        assert.deepEqual(request.postDataJSON(), { name: 'Website integration', account_handles: ['creator', 'creator_studio'], expires_in_days: 30, data_scopes: expectedCreateScopes });
         if (failCreate) {
           await route.fulfill({ status: 403, contentType: 'application/json', body: '{"detail":"Creation denied"}' });
           return;
@@ -138,6 +149,7 @@ try {
           id: `test-${creationCount}`, name: 'Website integration', key_prefix: key.slice(0, 16),
           account_handles: ['creator', 'creator_studio'], expires_at: '2099-01-01T00:00:00Z',
           created_at: '2026-10-09T12:00:00Z', revoked_at: null, last_used_at: null,
+          data_scopes: [...expectedCreateScopes],
         };
         connections.unshift(connection);
         if (holdNextCreate) {
@@ -149,11 +161,25 @@ try {
         await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ key, connection }) }).catch(error => {
           if (!error.message.includes('intercepted') && !error.message.includes('closed')) throw error;
         });
+      } else if (request.method() === 'PATCH') {
+        const id = decodeURIComponent(new URL(request.url()).pathname.split('/').at(-1));
+        const connection = connections.find(item => item.id === id);
+        assert.ok(connection);
+        const payload = request.postDataJSON();
+        assert.deepEqual(Object.keys(payload), ['data_scopes']);
+        assert.deepEqual([...payload.data_scopes].sort(), availableScopes.map(scope => scope.id).sort());
+        scopeUpdates += 1;
+        if (failScopeUpdate) {
+          await route.fulfill({ status: 403, contentType: 'application/json', body: '{"detail":"Scope update denied"}' });
+        } else {
+          connection.data_scopes = payload.data_scopes;
+          await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ connection }) });
+        }
       } else if (request.method() === 'DELETE') {
         assert.equal(token, 'Bearer tok');
         assert.equal(request.postData(), null);
         const id = decodeURIComponent(new URL(request.url()).pathname.split('/').at(-1));
-        const connection = connections.find(item => item.id === id);
+        const connection = connections.find(item => item.id === id) || (canManageAll && foreignConnection.id === id ? foreignConnection : null);
         assert.ok(connection);
         if (failRevoke) {
           await route.fulfill({ status: 403, contentType: 'application/json', body: '{"detail":"Revoke denied"}' });
@@ -214,7 +240,7 @@ try {
     await page.getByRole('checkbox', { name: '@creator Creator — public profile', exact: true }).check();
     assert.equal(await createButton.isEnabled(), true);
     await page.getByLabel(t('Search accounts')).fill('studio');
-    assert.equal(await page.getByRole('checkbox').count(), 1);
+    assert.equal(await page.locator('.api-account-options').getByRole('checkbox').count(), 1);
     await page.getByRole('checkbox', { name: '@creator_studio Creator Studio', exact: true }).check();
     await page.getByText(t('2 accounts selected'), { exact: true }).waitFor();
     await page.getByLabel(t('Search accounts')).fill('no-match');
@@ -224,6 +250,27 @@ try {
     assert.equal(await page.getByRole('checkbox', { name: '@creator Creator — public profile', exact: true }).isChecked(), true);
     assert.equal(await page.getByRole('checkbox', { name: '@creator_studio Creator Studio', exact: true }).isChecked(), true);
     assert.equal(await page.getByRole('checkbox', { name: '@unselected_brand Unselected account', exact: true }).isChecked(), false);
+    await page.getByRole('button', { name: t('All accounts (4)'), exact: true }).click();
+    assert.equal(await page.locator('.api-account-options input:checked').count(), 4);
+    await page.getByRole('button', { name: t('Clear selection'), exact: true }).click();
+    assert.equal(await page.locator('.api-account-options input:checked').count(), 0);
+    await page.getByRole('button', { name: 'Sentient (1)', exact: true }).click();
+    assert.equal(await page.getByRole('checkbox', { name: '@creator Creator — public profile', exact: true }).isChecked(), true);
+    await page.getByLabel(t('Search accounts')).fill('studio');
+    await page.getByRole('button', { name: t('Add search results (1)'), exact: true }).click();
+    await page.getByLabel(t('Search accounts')).fill('');
+    assert.equal(await page.locator('.api-account-options input:checked').count(), 2);
+    await page.getByRole('button', { name: t('Others (3)'), exact: true }).click();
+    assert.equal(await page.locator('.api-account-options input:checked').count(), 4);
+    await page.getByRole('button', { name: t('Clear selection'), exact: true }).click();
+    await prepareCreation();
+    const createScope = page.locator('form .api-scope-fieldset');
+    assert.equal(await createScope.getByRole('checkbox', { name: t('Profiles, posts and HOT'), exact: true }).isChecked(), true);
+    assert.equal(await createScope.locator('input:checked').count(), 1);
+    await createScope.getByRole('button', { name: t('All available data (read-only)'), exact: true }).click();
+    assert.equal(await createScope.locator('input:checked').count(), availableScopes.length);
+    await createScope.getByRole('button', { name: t('Public account data only'), exact: true }).click();
+    assert.equal(await createScope.locator('input:checked').count(), 1);
     await page.getByLabel(t('Expires in')).selectOption('30');
     await assertFits();
     await page.screenshot({ path: path.join(directory, `api-selection-${language}-${width}.png`), fullPage: true });
@@ -252,10 +299,36 @@ try {
     assert.equal(await page.getByLabel(t('API key'), { exact: true }).count(), 0);
     assert.equal((await page.locator('body').innerText()).includes(secrets[0]), false);
 
+    // A legacy key without data_scopes stays account-only until explicitly edited.
+    delete connections[0].data_scopes;
+    await page.reload();
+    const legacy = page.locator('li').filter({ hasText: connections[0].key_prefix });
+    await legacy.getByRole('button', { name: t('Edit data access'), exact: true }).click();
+    assert.equal(await legacy.locator('.api-scope-fieldset input:checked').count(), 1);
+    await legacy.getByRole('button', { name: t('All available data (read-only)'), exact: true }).click();
+    failScopeUpdate = true;
+    await legacy.getByRole('button', { name: t('Save data access'), exact: true }).click();
+    await page.getByRole('alert').filter({ hasText: t('This action is not allowed for your current account.') }).waitFor();
+    assert.equal(await legacy.locator('.api-scope-fieldset input:checked').count(), availableScopes.length);
+    assert.equal(connections[0].data_scopes, undefined);
+    failScopeUpdate = false;
+    await legacy.getByRole('button', { name: t('Save data access'), exact: true }).click();
+    await legacy.getByRole('button', { name: t('Edit data access'), exact: true }).waitFor();
+    assert.equal(scopeUpdates, 2);
+    assert.deepEqual([...connections[0].data_scopes].sort(), availableScopes.map(scope => scope.id).sort());
+    assert.equal(await page.getByLabel(t('API key'), { exact: true }).count(), 0);
+    assert.equal(creationCount, 1, 'Changing data access does not rotate or issue a key.');
+    await page.reload();
+    await page.locator('li').filter({ hasText: connections[0].key_prefix }).getByText('News', { exact: false }).waitFor();
     await prepareCreation();
+    expectedCreateScopes = availableScopes.map(scope => scope.id);
+    await page.locator('form .api-scope-fieldset').getByRole('button', { name: t('All available data (read-only)'), exact: true }).click();
     await createButton.click();
     await page.getByRole('heading', { name: t('Your API key'), exact: true }).waitFor();
     assert.equal(await page.getByLabel(t('API key'), { exact: true }).inputValue(), secrets[1]);
+    assert.deepEqual(connections[0].data_scopes, expectedCreateScopes);
+    expectedCreateScopes = ['accounts'];
+    assert.equal(await page.locator('form .api-scope-fieldset input:checked').count(), 1, 'After issuance, another integration defaults to public account data.');
     const newest = page.locator('li').filter({ hasText: connections[0].key_prefix });
     await newest.getByRole('button', { name: t('Revoke'), exact: true }).click();
     failRevoke = true;
@@ -283,7 +356,7 @@ try {
     await prepareCreation();
     holdNextCreate = true;
     await createButton.click();
-    await page.waitForFunction(() => document.querySelector('form button')?.disabled);
+    await page.waitForFunction(() => document.querySelector('form button.agent-primary')?.disabled);
     const holdDeadline = Date.now() + 10000;
     while (!releaseCreate && Date.now() < holdDeadline) await new Promise(resolve => setTimeout(resolve, 10));
     assert.ok(releaseCreate, 'The pending create request reached the server.');
@@ -296,6 +369,28 @@ try {
     assert.equal((await page.locator('body').innerText()).includes(secrets[3]), false);
     assert.equal(await page.getByText(t('0 accounts selected'), { exact: true }).count(), 1);
 
+    // A Dev can inspect and revoke another owner's active key, with no scope editor or secret.
+    canManageAll = true;
+    await page.evaluate(() => window.__apiSmokeSetUser('staff-9@example.test'));
+    await page.getByRole('heading', { name: t('Workspace API keys'), exact: true }).waitFor();
+    const foreign = page.locator('li').filter({ hasText: foreignConnection.key_prefix });
+    await foreign.getByText(t('Owner: another-owner@example.test'), { exact: true }).waitFor();
+    assert.equal(await foreign.getByRole('button', { name: t('Edit data access'), exact: true }).count(), 0);
+    assert.equal(await foreign.getByRole('button', { name: t('Revoke'), exact: true }).isEnabled(), true);
+    assert.equal(await page.getByLabel(t('API key'), { exact: true }).count(), 0);
+    await foreign.getByRole('button', { name: t('Revoke'), exact: true }).click();
+    await foreign.getByRole('button', { name: t('Confirm revoke'), exact: true }).click();
+    await foreign.getByText(t('Read only · Revoked'), { exact: true }).waitFor();
+    assert.ok(foreignConnection.revoked_at);
+    await page.reload();
+    await page.getByRole('heading', { name: t('Workspace API keys'), exact: true }).waitFor();
+    assert.equal(await page.locator('li').filter({ hasText: foreignConnection.key_prefix }).count(), 0);
+    // Returning to an ordinary Admin list does not inherit the Dev workspace view.
+    canManageAll = false;
+    await page.reload();
+    await page.getByRole('heading', { name: t('Your API keys'), exact: true }).waitFor();
+    assert.equal(await page.getByRole('heading', { name: t('Workspace API keys'), exact: true }).count(), 0);
+    assert.equal(await page.getByText(t('Owner: another-owner@example.test'), { exact: true }).count(), 0);
     canCreate = false;
     await page.evaluate(() => window.__apiSmokeSetUser('staff-9@example.test'));
     await page.getByRole('heading', { name: t('API access'), exact: true }).waitFor();
@@ -310,7 +405,7 @@ try {
     await assertFits();
     assert.deepEqual(errors, []);
     await page.close();
-    console.log(`API connections ${language} ${width}px: selection, payload, one-time key, failure recovery, revoke and session checks passed.`);
+    console.log(`API connections ${language} ${width}px: group selection, scope presets/edits, Dev foreign revocation/Admin isolation, payload, one-time key, failure recovery, revoke and session checks passed.`);
   }
 } finally {
   await browser.close();
