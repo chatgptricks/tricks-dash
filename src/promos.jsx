@@ -10,6 +10,7 @@ import { ArrowUpRight, ScanEye } from 'lucide-react';
 import { coordinatorFor, devAccessFor } from '../public/product-navigation';
 import TopicStack from './TopicStack';
 import PromoReviewDialog from './PromoReviewDialog';
+import PromoEngagementTab from './PromoEngagementTab';
 import { SettingsMenu } from './App';
 import { PrefsProvider, usePrefs } from './prefsContext';
 import { makeT, readLang } from './prefs';
@@ -128,6 +129,7 @@ function DetectionTools({ job, onStart, onReconnect }) {
 
 function PromosApp() {
   const { t } = usePrefs();
+  const [activeTab, setActiveTab] = useState('promotions');
   const [user, setUser] = useState(undefined);
   const [viewer, setViewer] = useState(null);
   const [accessError, setAccessError] = useState('');
@@ -286,9 +288,18 @@ function PromosApp() {
   const coordinator = coordinatorFor(viewer);
   const isDev = devAccessFor(viewer);
   const setFilter = (name, value) => setFilters(current => ({ ...current, [name]: value }));
-  return <main className="promo-shell product-page"><ProductHeader current="promos" coordinator={coordinator} isDev={isDev} canAccessNews={Boolean(viewer?.can_access_news || viewer?.canAccessNews)} account={<SettingsMenu email={user.email} avatarUrl={user.photoURL || viewer?.avatar_url || viewer?.avatarUrl} isAdmin={Boolean(viewer?.is_admin || viewer?.isAdmin)} isDev={isDev} onSignOut={() => { clearSsoCookie(); signOut(firebaseAuth); }} />}><h1>{t("Promos")}</h1><button className="promo-scan" onClick={() => openDetail(items[0])} disabled={!items.length || opening}>{opening ? t("Opening…") : t("Review next")}</button></ProductHeader>
+  return <main className="promo-shell product-page"><ProductHeader current="promos" coordinator={coordinator} isDev={isDev} canAccessNews={Boolean(viewer?.can_access_news || viewer?.canAccessNews)} account={<SettingsMenu email={user.email} avatarUrl={user.photoURL || viewer?.avatar_url || viewer?.avatarUrl} isAdmin={Boolean(viewer?.is_admin || viewer?.isAdmin)} isDev={isDev} onSignOut={() => { clearSsoCookie(); signOut(firebaseAuth); }} />}><h1>{t("Promos")}</h1>{activeTab === 'promotions' && <button className="promo-scan" onClick={() => openDetail(items[0])} disabled={!items.length || opening}>{opening ? t("Opening…") : t("Review next")}</button>}</ProductHeader>
     <section className="product-page-heading"><p>{t("Paid partnership and promotion signals")}</p></section>
     {accessError ? <div className="promo-alert" role="alert">{accessError}<button onClick={() => setAccessAttempt(value => value + 1)}>{t("Retry access check")}</button></div> : !viewer ? <div className="promo-empty">{t("Checking account access…")}</div> : <>
+      <nav className="promo-tabs" role="tablist" aria-label={t('Promos')} onKeyDown={event => {
+        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+        event.preventDefault();
+        const tabs = [...event.currentTarget.querySelectorAll('[role="tab"]')];
+        const index = tabs.indexOf(document.activeElement);
+        const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (index + (event.key === 'ArrowLeft' ? -1 : 1) + tabs.length) % tabs.length;
+        tabs[next]?.click(); tabs[next]?.focus();
+      }}>{[['promotions', 'Promotions'], ['engagement', 'Engagement']].map(([key, label]) => <button key={key} id={`promo-tab-${key}`} role="tab" aria-controls={`promo-panel-${key}`} aria-selected={activeTab === key} tabIndex={activeTab === key ? 0 : -1} onClick={() => setActiveTab(key)}>{t(label)}</button>)}</nav>
+      {activeTab === 'engagement' ? <div id="promo-panel-engagement" role="tabpanel" aria-labelledby="promo-tab-engagement"><PromoEngagementTab key={user.uid || user.email} request={request} /></div> : <div id="promo-panel-promotions" role="tabpanel" aria-labelledby="promo-tab-promotions">
       <DetectionTools job={job} onStart={startJob} onReconnect={() => { setJob(current => ({ ...current, status: 'running', error: '' })); setPollAttempt(value => value + 1); }} />
       <section className="promo-toolbar product-page-controls" aria-label={t("Filter promotion reviews")}>
         <label className="promo-search"><span>{t("Search loaded posts")}</span><input aria-label={t("Search loaded posts")} type="search" placeholder={t("Brand, account, keyword or evidence…")} value={filters.search} onChange={e => setFilter('search', e.target.value)} /></label>
@@ -302,6 +313,7 @@ function PromosApp() {
       {notice && <p className="promo-notice" role="status">{t(notice)}</p>}{opening && <p className="promo-notice" role="status">{t("Loading full post evidence…")}</p>}{error && <div className="promo-alert" role="alert">{t(error)}<button onClick={() => load()}>{t("Reload queue")}</button></div>}
       {loading && !data.items.length ? <div className="promo-empty" role="status">{t("Loading promotion signals…")}</div> : items.length ? <PromoResults items={items} onSelect={openDetail} /> : <div className="promo-empty"><strong>{data.items.length ? t("No loaded posts match these filters.") : t("No posts in this review queue.")}</strong><span>{data.items.length ? t("Try another focus or search, or load more posts.") : t("Change the review status or scan stored posts to look for promotion signals.")}</span><button onClick={() => setFilters(INITIAL_FILTERS)}>{t("Reset filters")}</button></div>}
       {data.next_cursor && <button className="promo-load-more" disabled={loadingMore || loading} onClick={() => load({ append: true })}>{loadingMore ? t("Loading more…") : `${t('Load more posts')} · ${data.items.length} ${t('loaded')}`}</button>}
+      </div>}
     </>}
     <PromoReviewDialog item={selected} relatedItems={data.items} onClose={closeDetail} onSave={(payload, options) => mutateSelected(detailPath(selected), jsonOptions('PATCH', payload), options)} onJevReview={() => mutateSelected(`${detailPath(selected)}/jev-review`, { method: 'POST', timeout: 90000 })} onSelect={item => openDetail(item, { throwOnError: true })} position={{ index: position, total: items.length }} onPrevious={!opening && position > 0 ? () => openDetail(items[position - 1], { throwOnError: true }) : undefined} onNext={!opening && position >= 0 && position < items.length - 1 ? () => openDetail(items[position + 1], { throwOnError: true }) : undefined} />
   </main>;

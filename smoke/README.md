@@ -32,6 +32,8 @@ with Playwright Chromium and then audits production dependencies.
 | `node smoke/queue-suggestions.mjs` | External/Research suggestions, managed accounts, safe links, pending receipts and retries, VC approval/rejection, confirmed Queue placements, and legacy suggestion review |
 | `npm run smoke:queue-reuse` | Create fresh Pool work from known sources, preserve prior assignments, retry safely, ignore stale source previews, and retain normal Research Send to Pool behavior |
 | `npm run smoke:settings` | Settings rendering and account-management interactions |
+| `npm run test:promos` | Promo evidence/grouping and engagement samples, missing values, ordering, and price math |
+| `npm run smoke:promos` | Promo reviews plus EN/ES account engagement, period/format filters, temporary CPE/CPM simulations, retries, keyboard behavior, and narrow/light/dark layouts |
 | `npm run smoke:mobile` | Mobile routing, touch workflows, and role-aware controls |
 | `npm run test:tracker` | Tracker filters, Sentient analytics tab, monthly totals, rankings, daily/cumulative charts, account-name swap adjustments, navigation, retries and session isolation |
 | `npm run smoke:roles` | Shared navigation, role previews, and access controls |

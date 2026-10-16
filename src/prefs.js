@@ -1,5 +1,6 @@
 import { PRODUCT_ES } from './productCopy';
 import { PROMO_BRIEF_ES } from './promoBriefCopy';
+import { PROMO_ENGAGEMENT_ES } from './promoEngagementCopy';
 // Language and theme, shared by the React dashboard.
 //
 // They belong to the person, not the URL, so a shared ?tab=hot link doesn't
@@ -444,7 +445,7 @@ const ES = {
 
 export function makeT(lang) {
   return function t(text, values = {}) {
-    const translated = lang === 'es' ? ES[text] ?? PRODUCT_ES[text] ?? PROMO_BRIEF_ES[text] ?? text : text;
+    const translated = lang === 'es' ? ES[text] ?? PRODUCT_ES[text] ?? PROMO_BRIEF_ES[text] ?? PROMO_ENGAGEMENT_ES[text] ?? text : text;
     return typeof translated === 'string' ? translated.replace(/\{(\w+)\}/g, (match, key) => values[key] ?? match) : translated;
   };
 }

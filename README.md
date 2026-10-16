@@ -38,6 +38,7 @@ and backend responses.
 | `/queue.html` | Production planning and assignments |
 | `/settings.html` | Admin/Dev account and user management |
 | `/tracker.html`, `/insights.html` | Follower and post analytics |
+| `/promos.html` | Promotion reviews, account engagement, and per-post price simulations |
 | `/mobile/` | Mobile app and installable PWA |
 | `/news.html`, `/hooks.html`, `/vault.html` | Restricted tools; existing access rules apply |
 
@@ -84,6 +85,22 @@ most two decimals, and the PDF follows the user's current theme and accent.
 Downloads read the latest available data without starting a refresh or scrape.
 Performance figures describe analyzed public posts; unavailable measurements
 are never replaced with zero.
+
+Promos > Engagement compares all active Promos-enabled accounts, including Leads,
+using stored posts from the last 30 days, 90 days, or the full history. Format
+filters select reels, carousels, or images. The comparable engagement rate is
+average (likes + comments) on measured posts divided by the latest stored follower
+count. Each counter shows its own sample coverage; shares, saves, impressions,
+and video views remain unavailable when they were not recorded.
+
+Click an account to try a price for one post. Prices reset on close and are never
+saved as account rates. The calculator shows cost per public interaction, full
+engagement when all four counters exist, and separate costs for each counter.
+CPM uses stored average impressions or an optional expected-impressions estimate;
+cost per thousand video views remains separate. Currency selects the price unit
+without exchange-rate conversion. These are historical benchmarks, not promised
+results. The tab requires the Cortex `/api/admin/promos/engagement` endpoint and
+uses the same member access as Promos, without starting a scrape.
 
 Production publishing is a separate two-branch workflow: source on `main`,
 static output on `gh-pages`. The ignored local `FOR_CODEX.md` contains the
