@@ -10,8 +10,6 @@ const METRICS = [
   ['shares', 'Shares / post'], ['saves', 'Saves / post'],
   ['video_views', 'Video views / post'], ['impressions', 'Impressions / post'],
 ];
-const PERIODS = { 30: 'Last 30 days', 90: 'Last 90 days', 0: 'All stored history' };
-const FORMATS = { all: 'All formats', reel: 'Reels', carousel: 'Carousels', image: 'Images' };
 const GROUPS = { sentient: 'Ours', competitors: 'Competitors', leads: 'Leads' };
 const localeFor = lang => lang === 'es' ? 'es-CR' : 'en-US';
 const numberLabel = (value, lang, decimals = 1) => value == null ? '—' : new Intl.NumberFormat(localeFor(lang), { maximumFractionDigits: decimals }).format(value);
@@ -26,7 +24,7 @@ function MetricValue({ metric, total }) {
   </span>;
 }
 
-function PriceCalculator({ account, days, format, onClose }) {
+function PriceCalculator({ account, onClose }) {
   const { t, lang } = usePrefs();
   const [price, setPrice] = useState('');
   const [currency, setCurrency] = useState('USD');
@@ -80,7 +78,7 @@ function PriceCalculator({ account, days, format, onClose }) {
   ];
   return createPortal(<div ref={backdropRef} className="promo-modal promo-price-modal" onClick={event => { if (event.target === event.currentTarget) onClose(); }}>
     <section ref={dialogRef} className="promo-dialog promo-price-dialog" role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}>
-      <header className="promo-review-header"><div><span className="promo-review-position">{t('Simulate price')}</span><h2 id={titleId}>{t('Post price · @{account}', { account: account.handle })}</h2><span className="promo-by">{t(PERIODS[days])} · {t(FORMATS[format])}</span></div><button type="button" aria-label={t('Close price calculator')} onClick={onClose}><X size={20} /></button></header>
+      <header className="promo-review-header"><div><span className="promo-review-position">{t('Simulate price')}</span><h2 id={titleId}>{t('Post price · @{account}', { account: account.handle })}</h2><span className="promo-by">{t('All stored history')} · {t('All formats')}</span></div><button type="button" aria-label={t('Close price calculator')} onClick={onClose}><X size={20} /></button></header>
       <div className="promo-price-body">
         <p className="promo-price-help promo-price-calculation">
           <span>{t('Calculated')}: <time data-calculated-at dateTime={account.calculated_at || undefined}>{dateLabel(account.calculated_at, lang)}</time></span><br />
@@ -117,7 +115,6 @@ function PriceCalculator({ account, days, format, onClose }) {
 
 export default function PromoEngagementTab({ request }) {
   const { t, lang } = usePrefs();
-  const [days, setDays] = useState('30'), [format, setFormat] = useState('all');
   const [group, setGroup] = useState(''), [handles, setHandles] = useState([]), [sort, setSort] = useState('engagement_rate');
   const [roster, setRoster] = useState(null), [rosterLoading, setRosterLoading] = useState(true), [rosterError, setRosterError] = useState('');
   const [applied, setApplied] = useState(null), [data, setData] = useState(null), [loading, setLoading] = useState(false), [error, setError] = useState('');
@@ -125,7 +122,7 @@ export default function PromoEngagementTab({ request }) {
   const requestRef = useRef(null), rosterRequestRef = useRef(null), pickerRef = useRef(null);
   const pickerId = useId();
   const sortedHandles = useMemo(() => [...handles].sort(), [handles]);
-  const draftKey = JSON.stringify([days, format, sortedHandles]);
+  const draftKey = JSON.stringify(sortedHandles);
   const loadRoster = useCallback(async () => {
     rosterRequestRef.current?.abort();
     const controller = new AbortController(); rosterRequestRef.current = controller;
@@ -158,7 +155,7 @@ export default function PromoEngagementTab({ request }) {
     const controller = new AbortController(); requestRef.current = controller;
     setLoading(true); setError(''); setData(null); setSelected(null);
     try {
-      const params = new URLSearchParams({ days: snapshot.days, format: snapshot.format });
+      const params = new URLSearchParams({ days: '0', format: 'all' });
       snapshot.handles.forEach(handle => params.append('accounts', handle));
       const body = await request(`/api/admin/promos/engagement?${params}`, { signal: controller.signal });
       if (controller.signal.aborted) return;
@@ -169,7 +166,7 @@ export default function PromoEngagementTab({ request }) {
   }, [request]);
   const apply = () => {
     if (!sortedHandles.length) return;
-    const snapshot = { days, format, handles: sortedHandles, key: draftKey };
+    const snapshot = { handles: sortedHandles, key: draftKey };
     setApplied(snapshot); pickerRef.current.open = false; load(snapshot);
   };
   const currentData = data?.key === draftKey && applied?.key === draftKey ? data : null;
@@ -180,7 +177,7 @@ export default function PromoEngagementTab({ request }) {
   const selectedSet = new Set(handles);
   const measured = accounts.reduce((sum, account) => sum + account.engagement_post_count, 0);
   return <section className="promo-engagement" aria-label={t('Account engagement')}>
-    <header className="promo-engagement-heading"><div><h2>{t('Account engagement and post pricing')}</h2><p>{t('Choose from all dashboard accounts by group or from the dropdown, then view their engagement.')}</p></div></header>
+    <header className="promo-engagement-heading"><div><h2>{t('Account engagement and post pricing')}</h2><p>{t('Choose from all dashboard accounts by group or from the dropdown, then view their engagement.')}</p><p>{t('Calculations use all available stored posts, across every date and format.')}</p></div></header>
     {rosterLoading && <div className="promo-empty" role="status">{t('Loading available accounts…')}</div>}
     {rosterError && <div className="promo-alert" role="alert"><div>{t('Account list could not be loaded. Please retry.')}<small>{t(rosterError)}</small></div><button onClick={loadRoster}>{t('Retry accounts')}</button></div>}
     {roster && <div className="promo-toolbar promo-engagement-toolbar product-page-controls">
@@ -195,8 +192,6 @@ export default function PromoEngagementTab({ request }) {
           </div>
         </div>
       </details></div>
-      <label><span>{t('Period')}</span><select value={days} onChange={event => setDays(event.target.value)}>{['30', '90', '0'].map(key => <option key={key} value={key}>{t(PERIODS[key])}</option>)}</select></label>
-      <label><span>{t('Post format')}</span><select value={format} onChange={event => setFormat(event.target.value)}>{Object.entries(FORMATS).map(([key, label]) => <option key={key} value={key}>{t(label)}</option>)}</select></label>
       <button className="promo-engagement-apply" disabled={!handles.length || (loading && applied?.key === draftKey)} onClick={apply}>{t(loading && applied?.key === draftKey ? 'Loading account engagement…' : 'View engagement')}</button>
     </div>}
     {!applied && roster && <div className="promo-empty">{t('Select accounts and choose View engagement to load their calculations.')}</div>}
@@ -207,7 +202,7 @@ export default function PromoEngagementTab({ request }) {
       <div className="promo-engagement-summary"><div><span>{t('Accounts in view')}</span><strong>{numberLabel(accounts.length, lang, 0)}</strong></div><div><span>{t('Stored posts')}</span><strong>{numberLabel(accounts.reduce((sum, account) => sum + account.post_count, 0), lang, 0)}</strong></div><div><span>{t('Posts with likes + comments')}</span><strong>{numberLabel(measured, lang, 0)}</strong></div><div><span>{t('Accounts with engagement')}</span><strong>{numberLabel(accounts.filter(account => account.engagement_rate_pct != null).length, lang, 0)}</strong></div></div>
       <label className="promo-engagement-sort"><span>{t('Sort accounts')}</span><select value={sort} onChange={event => setSort(event.target.value)}><option value="engagement_rate">{t('Engagement rate')}</option><option value="engagements">{t('Public interactions / post')}</option><option value="followers">{t('Followers')}</option><option value="posts">{t('Stored posts')}</option></select></label>
       {accounts.length ? <div className="promo-engagement-table-wrap" tabIndex={0} role="region" aria-label={t('Account engagement')}><table className="promo-engagement-table">
-        <caption>{t('Average / post')} · {t(PERIODS[applied.days])} · {t(FORMATS[applied.format])}</caption>
+        <caption>{t('Average / post')} · {t('All stored history')} · {t('All formats')}</caption>
         <thead><tr>{['Account', 'Followers', 'Stored posts', 'Engagement rate', 'Public interactions / post', 'Likes', 'Comments', 'Shares', 'Saves', 'Video views'].map(label => <th key={label} scope="col">{t(label)}</th>)}</tr></thead>
         <tbody>{accounts.map(account => <tr key={account.handle} data-engagement-account={account.handle}>
           <th scope="row"><button onClick={() => setSelected(account)} aria-label={t('Calculate post price for @{account}', { account: account.handle })}><strong>@{account.handle}</strong><span>{account.label || t(GROUPS[account.group] || account.group)}</span><small><Calculator size={12} />{t('Simulate price')}</small></button><small>{t('Calculated')}: <time data-calculated-at dateTime={account.calculated_at || undefined}>{dateLabel(account.calculated_at, lang)}</time></small></th>
@@ -220,7 +215,7 @@ export default function PromoEngagementTab({ request }) {
       </table></div> : <div className="promo-empty"><strong>{t('No accounts available for this selection.')}</strong><span>{t('Choose another account group or selection.')}</span></div>}
       <p className="promo-engagement-footnote">{t('Saved calculations are reused for up to 7 days, then recalculated on the next load.')}<br />{t('Stored data only; changing filters does not refresh Instagram.')} · {t('Report generated')}: {dateLabel(currentData.generated_at, lang)}</p>
     </>}
-    <details className="promo-engagement-method"><summary>{t('How engagement is calculated')}</summary><p>{t('Calculations are saved per account, period and format for up to 7 days. Refresh reuses valid calculations and recalculates them after they expire.')}</p><p>{t('Each 30- or 90-day period ends on that account’s calculation date, which can differ from today.')}</p><p>{t('Includes posts published in the selected period, using the cumulative metrics stored when the calculation was made.')}</p><p>{t('Engagement rate = average (likes + comments) per measured post ÷ latest stored followers × 100.')}</p><p>{t('Likes + comments provide a common basis across accounts. Shares and saves are shown separately; full engagement is available when all four metrics are recorded on the same posts.')}</p><p>{t('Missing metrics stay unavailable. Hidden or underreported likes (0–3) are excluded from engagement, following the existing account metric rules.')}</p><p>{t('CPM uses impressions. Video views have their own cost per thousand and are not treated as impressions.')}</p></details>
-    {selected && currentData && <PriceCalculator key={selected.handle} account={selected} days={applied.days} format={applied.format} onClose={() => setSelected(null)} />}
+    <details className="promo-engagement-method"><summary>{t('How engagement is calculated')}</summary><p>{t('Full-history calculations are saved per account for up to 7 days. Refresh reuses valid calculations and recalculates them after they expire.')}</p><p>{t('Includes all available stored posts, including posts without a stored date, using the cumulative metrics saved when the calculation was made.')}</p><p>{t('Engagement rate = average (likes + comments) per measured post ÷ latest stored followers × 100.')}</p><p>{t('Likes + comments provide a common basis across accounts. Shares and saves are shown separately; full engagement is available when all four metrics are recorded on the same posts.')}</p><p>{t('Missing metrics stay unavailable. Hidden or underreported likes (0–3) are excluded from engagement, following the existing account metric rules.')}</p><p>{t('CPM uses impressions. Video views have their own cost per thousand and are not treated as impressions.')}</p></details>
+    {selected && currentData && <PriceCalculator key={selected.handle} account={selected} onClose={() => setSelected(null)} />}
   </section>;
 }

@@ -31,7 +31,7 @@ const accounts = [
     average_engagements: 2500, engagement_rate_pct: 2.5,
     complete_engagement_post_count: 8, average_complete_engagements: 2800,
     metrics: { likes: metric(2400), comments: metric(100), shares: metric(200, 8), saves: metric(100, 8), impressions: unknown(), video_views: metric(50000, 6), video_plays: metric(60000, 6) },
-    first_post_at: '2026-10-01T12:00:00Z', last_post_at: '2026-10-15T12:00:00Z', metrics_updated_at: captured,
+    first_post_at: '2025-01-01T12:00:00Z', last_post_at: '2026-10-15T12:00:00Z', metrics_updated_at: captured,
   },
   {
     // Registered dashboard account outside the Promotions feed and disabled in Promos.
@@ -142,6 +142,8 @@ try {
     assert.deepEqual(rosterRequests, ['GET', 'GET'], 'The account roster retries independently');
     assert.equal(await apply.isDisabled(), true, 'Nothing is selected by default');
     assert.equal(await panel.getByRole('searchbox').count(), 0, 'Accounts are selected by group/dropdown rather than manual search');
+    assert.equal(await panel.getByRole('combobox', { name: label('Period', 'Período'), exact: true }).count(), 0, 'Engagement always uses the full stored history');
+    assert.equal(await panel.getByRole('combobox', { name: label('Post format', 'Formato de post'), exact: true }).count(), 0, 'The account benchmark includes every post format');
     await panel.getByRole('combobox', { name: label('Account group', 'Grupo de cuentas'), exact: true }).selectOption('competitors');
     await pickerToggle.click();
     assert.equal(await picker.getByRole('checkbox').count(), 2);
@@ -159,7 +161,7 @@ try {
     await apply.click();
     await row('alpha').waitFor();
     assert.equal(await engagementTab.getAttribute('aria-selected'), 'true');
-    assert.deepEqual(engagementRequests, [{ days: '30', format: 'all', accounts: ['alpha', 'beta', 'gamma'], method: 'GET' }]);
+    assert.deepEqual(engagementRequests, [{ days: '0', format: 'all', accounts: ['alpha', 'beta', 'gamma'], method: 'GET' }]);
     assert.equal(await page.locator('.promo-engagement [data-engagement-account]').count(), 3);
     assert.match(await row('alpha').textContent(), /2[.,]5\s*%/);
     assert.match(await row('beta').textContent(), /[—–]|(?:Unknown|Desconocido|Sin datos)/);
@@ -176,7 +178,6 @@ try {
     assert.ok((await page.locator('.promo-engagement-footnote').textContent()).includes(label('Saved calculations are reused for up to 7 days, then recalculated on the next load.', 'Los cálculos guardados se reutilizan hasta por 7 días; después se recalculan al volver a cargar.')));
     const methodology = page.locator('.promo-engagement-method');
     await methodology.locator('summary').click();
-    assert.ok((await methodology.textContent()).includes(label('Each 30- or 90-day period ends on that account’s calculation date, which can differ from today.', 'Cada período de 30 o 90 días termina en la fecha del cálculo de esa cuenta, que puede ser distinta de hoy.')));
     assert.ok((await methodology.textContent()).includes(label('Refresh reuses valid calculations and recalculates them after they expire.', 'Actualizar reutiliza los cálculos vigentes y los recalcula cuando vencen.')));
     await methodology.locator('summary').click();
     console.log(`PASS Promos ${language}: lightweight roster retry, group/dropdown selection, explicit apply and cached calculation dates`);
@@ -188,7 +189,8 @@ try {
     assert.equal(await dialog.locator('time[data-calculated-at]').getAttribute('datetime'), accounts[0].calculated_at);
     assert.equal(await dialog.locator('time[data-cache-expires-at]').getAttribute('datetime'), accounts[0].cache_expires_at);
     assert.equal(await dialog.locator('time[data-cache-expires-at]').textContent(), dateText(accounts[0].cache_expires_at));
-    assert.deepEqual(await dialog.locator('.promo-price-calculation time:not([data-calculated-at]):not([data-cache-expires-at])').evaluateAll(nodes => nodes.map(node => node.dateTime)), ['2026-09-14T12:00:00.000Z', accounts[0].calculated_at], 'The displayed 30-day window ends at the cached calculation date, not today');
+    assert.equal(await dialog.locator('.promo-price-calculation time:not([data-calculated-at]):not([data-cache-expires-at])').count(), 0, 'Full-history benchmarks have no rolling date cutoff');
+    assert.ok((await dialog.locator('.promo-price-history').textContent()).includes(dateText(accounts[0].first_post_at)), 'The historical sample can include posts older than 90 days');
     assert.equal(await price.inputValue(), '', 'Each account opens with an empty scenario price');
     await price.fill('500');
     assert.equal(await numberIn(result('cpe')), 0.2, 'CPE uses the account’s likes + comments average');
@@ -241,31 +243,28 @@ try {
     await picker.getByRole('button', { name: label('Select this group', 'Seleccionar este grupo'), exact: true }).click();
     assert.equal(await panel.locator('[data-engagement-account]').count(), 0, 'Changed account selections hide previous results');
     assert.ok((await panel.getByRole('status').textContent()).includes(label('Selection changed.', 'La selección cambió.')));
-    await panel.getByRole('combobox', { name: label('Period', 'Período'), exact: true }).selectOption('90');
-    await panel.getByRole('combobox', { name: label('Post format', 'Formato de post'), exact: true }).selectOption('reel');
-    assert.equal(engagementRequests.length, initialRequests, 'Changing sort, groups, accounts, period or format never aggregates automatically');
+    assert.equal(engagementRequests.length, initialRequests, 'Changing sort, groups or accounts never aggregates automatically');
     await apply.click();
     await row('alpha').waitFor();
-    assert.deepEqual(engagementRequests.at(-1), { days: '90', format: 'reel', accounts: ['alpha', 'gamma'], method: 'GET' });
+    assert.deepEqual(engagementRequests.at(-1), { days: '0', format: 'all', accounts: ['alpha', 'gamma'], method: 'GET' });
     assert.equal(await panel.locator('[data-engagement-account]').count(), 2);
     assert.equal(await row('beta').count(), 0, 'Only the selected accounts are requested and rendered');
     await accountButton('alpha').click();
     await dialog.waitFor();
-    assert.deepEqual(await dialog.locator('.promo-price-calculation time:not([data-calculated-at]):not([data-cache-expires-at])').evaluateAll(nodes => nodes.map(node => node.dateTime)), ['2026-07-16T12:00:00.000Z', accounts[0].calculated_at], 'Changing period displays that saved calculation’s own window');
+    assert.equal(await dialog.locator('.promo-price-calculation time:not([data-calculated-at]):not([data-cache-expires-at])').count(), 0, 'Changing accounts keeps the full-history benchmark');
     await page.keyboard.press('Escape');
     await dialog.waitFor({ state: 'detached' });
     failEngagement = true;
-    await panel.getByRole('combobox', { name: label('Period', 'Período'), exact: true }).selectOption('0');
-    assert.equal(engagementRequests.length, initialRequests + 1, 'Changing the period waits for View engagement');
+    assert.equal(engagementRequests.length, initialRequests + 1, 'Full-history refresh waits for View engagement');
     await apply.click();
     await panel.getByRole('alert').waitFor();
     assert.match(await panel.getByRole('alert').textContent(), /Stored engagement could not be loaded/);
-    assert.equal(await panel.locator('[data-engagement-account]').count(), 0, 'Failed refresh must not show stale account metrics for a new period');
+    assert.equal(await panel.locator('[data-engagement-account]').count(), 0, 'Failed refresh must not show stale account metrics');
     failEngagement = false;
     await panel.getByRole('button', { name: label('Retry', 'Reintentar'), exact: true }).click();
     await row('alpha').waitFor();
-    assert.deepEqual(engagementRequests.at(-1), { days: '0', format: 'reel', accounts: ['alpha', 'gamma'], method: 'GET' });
-    console.log(`PASS Promos ${language}: local sort, deferred account/period/format changes, selected-only requests and safe retries`);
+    assert.deepEqual(engagementRequests.at(-1), { days: '0', format: 'all', accounts: ['alpha', 'gamma'], method: 'GET' });
+    console.log(`PASS Promos ${language}: local sort, deferred account changes, full-history/all-format requests and safe retries`);
 
     for (const theme of ['dark', 'light']) {
       await page.evaluate(value => { document.documentElement.dataset.theme = value; }, theme);

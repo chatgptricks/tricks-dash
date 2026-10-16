@@ -90,21 +90,21 @@ Promos > Engagement lets members select all active dashboard accounts, including
 Leads, whether or not they are enabled in Promos or Research, from a group filter
 and a multi-account dropdown. Select an entire group
 or individual accounts, then choose **View engagement**. Opening the tab loads
-only the lightweight account roster; changing selections, period, or format
+only the lightweight account roster; changing selections
 never requests engagement until that button is pressed. Pending changes hide
-previous results. Calculations use stored posts from the last 30 days, 90 days,
-or the full history. Format
-filters select reels, carousels, or images. The comparable engagement rate is
+previous results. Calculations always use the account's entire available stored
+history across all dates and formats, including posts without a stored date.
+The comparable engagement rate is
 average (likes + comments) on measured posts divided by the latest stored follower
 count. Each counter shows its own sample coverage; shares, saves, impressions,
 and video views remain unavailable when they were not recorded.
 
-Engagement calculations are persisted per account, period, and format for up to
+Full-history Engagement calculations are persisted per account for up to
 seven days. Loading or refreshing reuses valid calculations and recalculates
 expired ones from stored data. Each row shows its calculation date; the account
-calculator also shows the expiry and exact calculation period. The 30- and
-90-day windows end on each account's calculation date, which can differ from
-today and from the report generation date. The cached snapshot includes metrics
+calculator also shows the expiry and history cutoff date. All stored history is
+included through each account's calculation date, which can differ from today
+and from the report generation date. The cached snapshot includes metrics
 and followers together so the engagement rate remains consistent.
 
 Click an account to try a price for one post. Prices reset on close and are never
