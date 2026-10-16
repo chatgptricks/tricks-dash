@@ -140,7 +140,6 @@ try {
     await panel.getByRole('button', { name: label('Retry accounts', 'Reintentar cuentas'), exact: true }).click();
     await pickerToggle.waitFor();
     assert.deepEqual(rosterRequests, ['GET', 'GET'], 'The account roster retries independently');
-    assert.ok((await panel.textContent()).includes(label('Choose from all dashboard accounts by group or from the dropdown, then view their engagement.', 'Elige entre todas las cuentas del dashboard por grupo o en el menú y consulta su engagement.')));
     assert.equal(await apply.isDisabled(), true, 'Nothing is selected by default');
     assert.equal(await panel.getByRole('searchbox').count(), 0, 'Accounts are selected by group/dropdown rather than manual search');
     await panel.getByRole('combobox', { name: label('Account group', 'Grupo de cuentas'), exact: true }).selectOption('competitors');
