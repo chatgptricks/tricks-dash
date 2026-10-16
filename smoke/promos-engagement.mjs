@@ -34,7 +34,8 @@ const accounts = [
     first_post_at: '2026-10-01T12:00:00Z', last_post_at: '2026-10-15T12:00:00Z', metrics_updated_at: captured,
   },
   {
-    handle: 'beta', label: 'Beta Studio', group: 'sentient', followers: null,
+    // Registered dashboard account outside the Promotions feed and disabled in Promos.
+    handle: 'beta', label: 'Beta Studio', group: 'sentient', promos_enabled: false, followers: null,
     calculated_at: '2026-10-16T12:00:00Z', cache_expires_at: '2026-10-23T12:00:00Z', from_cache: false,
     followers_captured_at: null, post_count: 4, engagement_post_count: 4,
     average_engagements: 0, engagement_rate_pct: null,
@@ -139,6 +140,7 @@ try {
     await panel.getByRole('button', { name: label('Retry accounts', 'Reintentar cuentas'), exact: true }).click();
     await pickerToggle.waitFor();
     assert.deepEqual(rosterRequests, ['GET', 'GET'], 'The account roster retries independently');
+    assert.ok((await panel.textContent()).includes(label('Choose from all dashboard accounts by group or from the dropdown, then view their engagement.', 'Elige entre todas las cuentas del dashboard por grupo o en el menú y consulta su engagement.')));
     assert.equal(await apply.isDisabled(), true, 'Nothing is selected by default');
     assert.equal(await panel.getByRole('searchbox').count(), 0, 'Accounts are selected by group/dropdown rather than manual search');
     await panel.getByRole('combobox', { name: label('Account group', 'Grupo de cuentas'), exact: true }).selectOption('competitors');
@@ -153,7 +155,7 @@ try {
     await panel.getByRole('combobox', { name: label('Account group', 'Grupo de cuentas'), exact: true }).selectOption('');
     await pickerToggle.click();
     await picker.getByRole('checkbox', { name: label('Select @beta', 'Seleccionar @beta'), exact: true }).check();
-    assert.equal(await picker.getByRole('checkbox', { checked: true }).count(), 3, 'Individual accounts can be added across groups');
+    assert.equal(await picker.getByRole('checkbox', { checked: true }).count(), 3, 'Dashboard accounts outside Promos can be selected across groups');
     assert.equal(engagementRequests.length, 0, 'Individual selection does not calculate engagement');
     await apply.click();
     await row('alpha').waitFor();

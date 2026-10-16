@@ -86,8 +86,9 @@ Downloads read the latest available data without starting a refresh or scrape.
 Performance figures describe analyzed public posts; unavailable measurements
 are never replaced with zero.
 
-Promos > Engagement lets members select active Promos-enabled accounts, including
-Leads, from a group filter and a multi-account dropdown. Select an entire group
+Promos > Engagement lets members select all active dashboard accounts, including
+Leads, whether or not they are enabled in Promos or Research, from a group filter
+and a multi-account dropdown. Select an entire group
 or individual accounts, then choose **View engagement**. Opening the tab loads
 only the lightweight account roster; changing selections, period, or format
 never requests engagement until that button is pressed. Pending changes hide

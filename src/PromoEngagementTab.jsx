@@ -180,7 +180,7 @@ export default function PromoEngagementTab({ request }) {
   const selectedSet = new Set(handles);
   const measured = accounts.reduce((sum, account) => sum + account.engagement_post_count, 0);
   return <section className="promo-engagement" aria-label={t('Account engagement')}>
-    <header className="promo-engagement-heading"><div><h2>{t('Account engagement and post pricing')}</h2><p>{t('Choose accounts by group or from the dropdown, then view their engagement.')}</p></div></header>
+    <header className="promo-engagement-heading"><div><h2>{t('Account engagement and post pricing')}</h2><p>{t('Choose from all dashboard accounts by group or from the dropdown, then view their engagement.')}</p></div></header>
     {rosterLoading && <div className="promo-empty" role="status">{t('Loading available accounts…')}</div>}
     {rosterError && <div className="promo-alert" role="alert"><div>{t('Account list could not be loaded. Please retry.')}<small>{t(rosterError)}</small></div><button onClick={loadRoster}>{t('Retry accounts')}</button></div>}
     {roster && <div className="promo-toolbar promo-engagement-toolbar product-page-controls">
@@ -191,7 +191,7 @@ export default function PromoEngagementTab({ request }) {
           <div className="promo-account-actions"><button type="button" disabled={!available.length} onClick={() => setHandles(current => [...new Set([...current, ...available.map(account => account.handle)])])}>{t(group ? 'Select this group' : 'Select all accounts')}</button><button type="button" disabled={!handles.length} onClick={() => setHandles([])}>{t('Clear selection')}</button></div>
           <div className="promo-account-checks" role="group" aria-label={t('Select accounts')}>
             {available.map(account => <label key={account.handle}><input type="checkbox" checked={selectedSet.has(account.handle)} aria-label={t('Select @{account}', { account: account.handle })} onChange={event => setHandles(current => event.target.checked ? [...current, account.handle] : current.filter(handle => handle !== account.handle))} /><span><strong>@{account.handle}</strong><small>{account.label || t(GROUPS[account.group] || account.group)}</small></span></label>)}
-            {!available.length && <p>{t('No accounts available for Promos.')}</p>}
+            {!available.length && <p>{t('No dashboard accounts available in this group.')}</p>}
           </div>
         </div>
       </details></div>
