@@ -26,6 +26,7 @@ const captured = '2026-10-16T12:00:00Z';
 const accounts = [
   {
     handle: 'alpha', label: 'Alpha Research', group: 'competitors', followers: 100000,
+    calculated_at: '2026-10-14T12:00:00Z', cache_expires_at: '2026-10-21T12:00:00Z', from_cache: true,
     followers_captured_at: captured, post_count: 10, engagement_post_count: 10,
     average_engagements: 2500, engagement_rate_pct: 2.5,
     complete_engagement_post_count: 8, average_complete_engagements: 2800,
@@ -34,6 +35,7 @@ const accounts = [
   },
   {
     handle: 'beta', label: 'Beta Studio', group: 'sentient', followers: null,
+    calculated_at: '2026-10-16T12:00:00Z', cache_expires_at: '2026-10-23T12:00:00Z', from_cache: false,
     followers_captured_at: null, post_count: 4, engagement_post_count: 4,
     average_engagements: 0, engagement_rate_pct: null,
     complete_engagement_post_count: 0, average_complete_engagements: null,
@@ -42,6 +44,7 @@ const accounts = [
   },
   {
     handle: 'gamma', label: 'Gamma News', group: 'competitors', followers: 250000,
+    calculated_at: '2026-10-13T12:00:00Z', cache_expires_at: '2026-10-20T12:00:00Z', from_cache: true,
     followers_captured_at: captured, post_count: 20, engagement_post_count: 0,
     average_engagements: null, engagement_rate_pct: null,
     complete_engagement_post_count: 0, average_complete_engagements: null,
@@ -65,8 +68,8 @@ try {
     const label = (en, spanish) => es ? spanish : en;
     // Sales has no developer/admin privileges and must have the same analysis tab.
     const context = await browser.newContext({ viewport: { width: 1440, height: 1050 }, reducedMotion: 'reduce' });
-    const errors = [], engagementRequests = [], mutations = [], remoteRequests = [];
-    let failEngagement = false;
+    const errors = [], engagementRequests = [], rosterRequests = [], mutations = [], remoteRequests = [];
+    let failEngagement = false, failRoster = true;
     await context.addInitScript(initial => {
       localStorage.setItem('sentient.lang', initial);
       localStorage.setItem('sentient.language', initial);
@@ -85,10 +88,21 @@ try {
         if (url.pathname === '/api/dashboard/me') data = { email: 'developer@example.test', role: 'sales', is_admin: false, is_dev: false };
         else if (url.pathname.endsWith('/me/preferences')) data = { preferences: { language } };
         else if (url.pathname === '/api/admin/promos') data = { items: [promotion], next_cursor: null };
+        else if (url.pathname === '/api/admin/promos/engagement/accounts') {
+          rosterRequests.push(request.method());
+          if (failRoster) return route.fulfill({ status: 400, json: { detail: 'Available accounts could not be loaded.' } });
+          data = { accounts: accounts.map(({ handle, label, group }) => ({ handle, label, group, subcategory: null, has_avatar: false })), generated_at: captured };
+        }
         else if (url.pathname === '/api/admin/promos/engagement') {
-          engagementRequests.push({ days: url.searchParams.get('days'), format: url.searchParams.get('format'), method: request.method() });
+          const selectedHandles = url.searchParams.getAll('accounts');
+          assert.ok(selectedHandles.length, 'Every aggregation request must explicitly select accounts');
+          engagementRequests.push({ days: url.searchParams.get('days'), format: url.searchParams.get('format'), accounts: selectedHandles, method: request.method() });
           if (failEngagement) return route.fulfill({ status: 400, json: { detail: 'Stored engagement could not be loaded. Please retry.' } });
-          data = { accounts, period: { days: Number(url.searchParams.get('days')), from: url.searchParams.get('days') === '0' ? null : '2026-09-16T12:00:00Z', to: captured }, format: url.searchParams.get('format') || 'all', generated_at: captured };
+          const days = Number(url.searchParams.get('days'));
+          const calculatedAccounts = accounts.filter(account => selectedHandles.includes(account.handle)).map(account => ({ ...account, calculation_period: {
+            days, from: days === 0 ? null : new Date(Date.parse(account.calculated_at) - days * 86400000).toISOString(), to: account.calculated_at,
+          } }));
+          data = { accounts: calculatedAccounts, period: { days, from: days === 0 ? null : '2026-09-16T12:00:00Z', to: captured }, format: url.searchParams.get('format') || 'all', generated_at: captured, cache: { ttl_days: 7, cached_count: 2, recalculated_count: 1 } };
         }
         return route.fulfill({ json: data });
       }
@@ -102,6 +116,10 @@ try {
     const row = handle => page.locator(`[data-engagement-account="${handle}"]`);
     const accountButton = handle => page.getByRole('button', { name: label(`Calculate post price for @${handle}`, `Calcular precio de post para @${handle}`), exact: true });
     const engagementTab = page.getByRole('tab', { name: 'Engagement', exact: true });
+    const panel = page.locator('.promo-engagement');
+    const picker = panel.locator('.promo-account-picker');
+    const pickerToggle = picker.locator('summary');
+    const apply = panel.getByRole('button', { name: label('View engagement', 'Ver engagement'), exact: true });
     const dialog = page.getByRole('dialog');
     const result = key => dialog.locator(`[data-cost="${key}"]`);
     const numberIn = async locator => {
@@ -113,23 +131,63 @@ try {
     await page.goto(`${base}/promos.html?desktop=1`);
     await page.locator('.promo-card').waitFor();
     assert.equal(await page.getByRole('tab', { name: label('Promotions', 'Promociones'), exact: true }).getAttribute('aria-selected'), 'true');
-    assert.equal(engagementRequests.length, 0, 'Stored account aggregation is fetched only when the tab opens');
+    assert.equal(engagementRequests.length, 0, 'Stored account aggregation waits for an explicit selection');
     await engagementTab.click();
+    await panel.getByRole('alert').waitFor();
+    assert.equal(engagementRequests.length, 0, 'A failed roster request must not start aggregation');
+    failRoster = false;
+    await panel.getByRole('button', { name: label('Retry accounts', 'Reintentar cuentas'), exact: true }).click();
+    await pickerToggle.waitFor();
+    assert.deepEqual(rosterRequests, ['GET', 'GET'], 'The account roster retries independently');
+    assert.equal(await apply.isDisabled(), true, 'Nothing is selected by default');
+    assert.equal(await panel.getByRole('searchbox').count(), 0, 'Accounts are selected by group/dropdown rather than manual search');
+    await panel.getByRole('combobox', { name: label('Account group', 'Grupo de cuentas'), exact: true }).selectOption('competitors');
+    await pickerToggle.click();
+    assert.equal(await picker.getByRole('checkbox').count(), 2);
+    await picker.getByRole('button', { name: label('Select this group', 'Seleccionar este grupo'), exact: true }).click();
+    assert.equal(await picker.getByRole('checkbox', { checked: true }).count(), 2, 'A whole group can be selected in one action');
+    assert.equal(engagementRequests.length, 0, 'Group selection does not calculate engagement');
+    await page.keyboard.press('Escape');
+    assert.equal(await picker.getAttribute('open'), null);
+    assert.equal(await pickerToggle.evaluate(node => document.activeElement === node), true);
+    await panel.getByRole('combobox', { name: label('Account group', 'Grupo de cuentas'), exact: true }).selectOption('');
+    await pickerToggle.click();
+    await picker.getByRole('checkbox', { name: label('Select @beta', 'Seleccionar @beta'), exact: true }).check();
+    assert.equal(await picker.getByRole('checkbox', { checked: true }).count(), 3, 'Individual accounts can be added across groups');
+    assert.equal(engagementRequests.length, 0, 'Individual selection does not calculate engagement');
+    await apply.click();
     await row('alpha').waitFor();
     assert.equal(await engagementTab.getAttribute('aria-selected'), 'true');
-    assert.deepEqual(engagementRequests, [{ days: '30', format: 'all', method: 'GET' }]);
+    assert.deepEqual(engagementRequests, [{ days: '30', format: 'all', accounts: ['alpha', 'beta', 'gamma'], method: 'GET' }]);
     assert.equal(await page.locator('.promo-engagement [data-engagement-account]').count(), 3);
     assert.match(await row('alpha').textContent(), /2[.,]5\s*%/);
     assert.match(await row('beta').textContent(), /[—–]|(?:Unknown|Desconocido|Sin datos)/);
     assert.match(await row('gamma').textContent(), /[—–]|(?:Unknown|Desconocido|Sin datos)/);
     assert.equal(await row('beta').locator('.promo-engagement-value > span').first().textContent(), '0', 'A measured zero is displayed as zero');
     assert.equal(await row('beta').locator('.promo-engagement-value > span').nth(2).textContent(), '—', 'Missing shares are distinct from measured-zero likes');
-    console.log(`PASS Promos ${language}: Sales access, lazy aggregation, measured rate and incomplete accounts`);
+    const dateText = value => new Intl.DateTimeFormat(es ? 'es-CR' : 'en-US', { dateStyle: 'medium', timeZone: 'America/Costa_Rica' }).format(new Date(value));
+    for (const account of accounts) {
+      const calculation = row(account.handle).locator('time[data-calculated-at]');
+      assert.equal(await calculation.getAttribute('datetime'), account.calculated_at, 'Each account displays its own stored calculation date');
+      assert.equal(await calculation.textContent(), dateText(account.calculated_at));
+    }
+    assert.notEqual(accounts[0].calculated_at, captured, 'Cached fixture must predate the report generation date');
+    assert.ok((await page.locator('.promo-engagement-footnote').textContent()).includes(label('Saved calculations are reused for up to 7 days, then recalculated on the next load.', 'Los cálculos guardados se reutilizan hasta por 7 días; después se recalculan al volver a cargar.')));
+    const methodology = page.locator('.promo-engagement-method');
+    await methodology.locator('summary').click();
+    assert.ok((await methodology.textContent()).includes(label('Each 30- or 90-day period ends on that account’s calculation date, which can differ from today.', 'Cada período de 30 o 90 días termina en la fecha del cálculo de esa cuenta, que puede ser distinta de hoy.')));
+    assert.ok((await methodology.textContent()).includes(label('Refresh reuses valid calculations and recalculates them after they expire.', 'Actualizar reutiliza los cálculos vigentes y los recalcula cuando vencen.')));
+    await methodology.locator('summary').click();
+    console.log(`PASS Promos ${language}: lightweight roster retry, group/dropdown selection, explicit apply and cached calculation dates`);
 
     await accountButton('alpha').click();
     await page.getByRole('dialog', { name: label('Post price · @alpha', 'Precio de post · @alpha'), exact: true }).waitFor();
     const price = dialog.getByLabel(label('Price per post', 'Precio por post'), { exact: true });
     const impressions = dialog.getByLabel(label('Expected impressions (optional)', 'Impresiones esperadas (opcional)'), { exact: true });
+    assert.equal(await dialog.locator('time[data-calculated-at]').getAttribute('datetime'), accounts[0].calculated_at);
+    assert.equal(await dialog.locator('time[data-cache-expires-at]').getAttribute('datetime'), accounts[0].cache_expires_at);
+    assert.equal(await dialog.locator('time[data-cache-expires-at]').textContent(), dateText(accounts[0].cache_expires_at));
+    assert.deepEqual(await dialog.locator('.promo-price-calculation time:not([data-calculated-at]):not([data-cache-expires-at])').evaluateAll(nodes => nodes.map(node => node.dateTime)), ['2026-09-14T12:00:00.000Z', accounts[0].calculated_at], 'The displayed 30-day window ends at the cached calculation date, not today');
     assert.equal(await price.inputValue(), '', 'Each account opens with an empty scenario price');
     await price.fill('500');
     assert.equal(await numberIn(result('cpe')), 0.2, 'CPE uses the account’s likes + comments average');
@@ -173,55 +231,55 @@ try {
     console.log(`PASS Promos ${language}: variable price, CPE/CPM, currency, missing metrics and discarded scenarios`);
 
     const initialRequests = engagementRequests.length;
-    const panel = page.locator('.promo-engagement');
-    await panel.getByLabel(label('Search accounts', 'Buscar cuentas'), { exact: true }).fill('Beta Studio');
-    assert.equal(await panel.locator('[data-engagement-account]').count(), 1);
-    assert.equal(await row('beta').count(), 1);
-    await panel.getByLabel(label('Search accounts', 'Buscar cuentas'), { exact: true }).fill('');
-    await panel.getByRole('combobox', { name: label('Account group', 'Grupo de cuentas'), exact: true }).selectOption('competitors');
-    assert.equal(await panel.locator('[data-engagement-account]').count(), 2);
-    assert.equal(await row('beta').count(), 0);
-    await panel.getByRole('combobox', { name: label('Account group', 'Grupo de cuentas'), exact: true }).selectOption('');
     await panel.getByRole('combobox', { name: label('Sort accounts', 'Ordenar cuentas'), exact: true }).selectOption('followers');
     assert.equal(await panel.locator('[data-engagement-account]').first().getAttribute('data-engagement-account'), 'gamma');
-    assert.equal(engagementRequests.length, initialRequests, 'Search, groups and sort use the loaded account snapshot');
-
-    const periodResponse = page.waitForResponse(response => {
-      const url = new URL(response.url());
-      return url.pathname === '/api/admin/promos/engagement' && url.searchParams.get('days') === '90';
-    });
+    await panel.getByRole('combobox', { name: label('Account group', 'Grupo de cuentas'), exact: true }).selectOption('competitors');
+    await pickerToggle.click();
+    await picker.getByRole('button', { name: label('Clear selection', 'Limpiar selección'), exact: true }).click();
+    assert.equal(await apply.isDisabled(), true);
+    await picker.getByRole('button', { name: label('Select this group', 'Seleccionar este grupo'), exact: true }).click();
+    assert.equal(await panel.locator('[data-engagement-account]').count(), 0, 'Changed account selections hide previous results');
+    assert.ok((await panel.getByRole('status').textContent()).includes(label('Selection changed.', 'La selección cambió.')));
     await panel.getByRole('combobox', { name: label('Period', 'Período'), exact: true }).selectOption('90');
-    await periodResponse;
-    await row('alpha').waitFor();
-    assert.equal(engagementRequests.at(-1).days, '90');
-    const formatResponse = page.waitForResponse(response => {
-      const url = new URL(response.url());
-      return url.pathname === '/api/admin/promos/engagement' && url.searchParams.get('format') === 'reel';
-    });
     await panel.getByRole('combobox', { name: label('Post format', 'Formato de post'), exact: true }).selectOption('reel');
-    await formatResponse;
+    assert.equal(engagementRequests.length, initialRequests, 'Changing sort, groups, accounts, period or format never aggregates automatically');
+    await apply.click();
     await row('alpha').waitFor();
-    assert.deepEqual(engagementRequests.at(-1), { days: '90', format: 'reel', method: 'GET' });
+    assert.deepEqual(engagementRequests.at(-1), { days: '90', format: 'reel', accounts: ['alpha', 'gamma'], method: 'GET' });
+    assert.equal(await panel.locator('[data-engagement-account]').count(), 2);
+    assert.equal(await row('beta').count(), 0, 'Only the selected accounts are requested and rendered');
+    await accountButton('alpha').click();
+    await dialog.waitFor();
+    assert.deepEqual(await dialog.locator('.promo-price-calculation time:not([data-calculated-at]):not([data-cache-expires-at])').evaluateAll(nodes => nodes.map(node => node.dateTime)), ['2026-07-16T12:00:00.000Z', accounts[0].calculated_at], 'Changing period displays that saved calculation’s own window');
+    await page.keyboard.press('Escape');
+    await dialog.waitFor({ state: 'detached' });
     failEngagement = true;
     await panel.getByRole('combobox', { name: label('Period', 'Período'), exact: true }).selectOption('0');
+    assert.equal(engagementRequests.length, initialRequests + 1, 'Changing the period waits for View engagement');
+    await apply.click();
     await panel.getByRole('alert').waitFor();
     assert.match(await panel.getByRole('alert').textContent(), /Stored engagement could not be loaded/);
     assert.equal(await panel.locator('[data-engagement-account]').count(), 0, 'Failed refresh must not show stale account metrics for a new period');
     failEngagement = false;
     await panel.getByRole('button', { name: label('Retry', 'Reintentar'), exact: true }).click();
     await row('alpha').waitFor();
-    assert.deepEqual(engagementRequests.at(-1), { days: '0', format: 'reel', method: 'GET' });
-    console.log(`PASS Promos ${language}: local filters, period/format requests, failed-refresh clearing and retry`);
+    assert.deepEqual(engagementRequests.at(-1), { days: '0', format: 'reel', accounts: ['alpha', 'gamma'], method: 'GET' });
+    console.log(`PASS Promos ${language}: local sort, deferred account/period/format changes, selected-only requests and safe retries`);
 
     for (const theme of ['dark', 'light']) {
       await page.evaluate(value => { document.documentElement.dataset.theme = value; }, theme);
       await page.screenshot({ path: path.join(output, `promos-engagement-${language}-${theme}.png`), animations: 'disabled' });
     }
     await page.setViewportSize({ width: 390, height: 844 });
+    await pickerToggle.click();
+    assert.equal(await picker.locator('.promo-account-options').evaluate(node => node.getBoundingClientRect().right <= innerWidth + 1), true, 'Account dropdown must fit a 390px viewport');
+    await page.screenshot({ path: path.join(output, `promos-account-picker-${language}-mobile.png`), animations: 'disabled' });
+    await page.keyboard.press('Escape');
     await page.screenshot({ path: path.join(output, `promos-engagement-${language}-mobile.png`), animations: 'disabled' });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true, 'Engagement page must fit a 390px viewport');
     await accountButton('alpha').click();
     await dialog.waitFor();
+    assert.ok((await dialog.locator('.promo-price-calculation').textContent()).includes(label(`All stored history through ${dateText(accounts[0].calculated_at)}`, `Todo el historial guardado hasta el ${dateText(accounts[0].calculated_at)}`)), 'Full-history calculations show their saved cutoff date');
     await price.fill('500');
     await impressions.fill('100000');
     await page.screenshot({ path: path.join(output, `promos-price-${language}-mobile.png`), animations: 'disabled' });

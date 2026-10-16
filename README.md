@@ -86,12 +86,25 @@ Downloads read the latest available data without starting a refresh or scrape.
 Performance figures describe analyzed public posts; unavailable measurements
 are never replaced with zero.
 
-Promos > Engagement compares all active Promos-enabled accounts, including Leads,
-using stored posts from the last 30 days, 90 days, or the full history. Format
+Promos > Engagement lets members select active Promos-enabled accounts, including
+Leads, from a group filter and a multi-account dropdown. Select an entire group
+or individual accounts, then choose **View engagement**. Opening the tab loads
+only the lightweight account roster; changing selections, period, or format
+never requests engagement until that button is pressed. Pending changes hide
+previous results. Calculations use stored posts from the last 30 days, 90 days,
+or the full history. Format
 filters select reels, carousels, or images. The comparable engagement rate is
 average (likes + comments) on measured posts divided by the latest stored follower
 count. Each counter shows its own sample coverage; shares, saves, impressions,
 and video views remain unavailable when they were not recorded.
+
+Engagement calculations are persisted per account, period, and format for up to
+seven days. Loading or refreshing reuses valid calculations and recalculates
+expired ones from stored data. Each row shows its calculation date; the account
+calculator also shows the expiry and exact calculation period. The 30- and
+90-day windows end on each account's calculation date, which can differ from
+today and from the report generation date. The cached snapshot includes metrics
+and followers together so the engagement rate remains consistent.
 
 Click an account to try a price for one post. Prices reset on close and are never
 saved as account rates. The calculator shows cost per public interaction, full
