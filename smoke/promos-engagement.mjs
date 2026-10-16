@@ -60,6 +60,7 @@ const promotion = {
   caption: 'Try Orbit Notes. #ad', permalink: 'https://www.instagram.com/p/ALPHA/',
   evidence: [{ family: 'explicit', rule: '#ad', source: 'caption', text: '#ad' }],
 };
+const batchAccounts = [...accounts, ...Array.from({ length: 10 }, (_, index) => ({ ...accounts[0], handle: `batch${String(index).padStart(2, '0')}`, label: `Batch account ${index}`, group: 'leads' }))];
 let browser, activePage;
 
 try {
@@ -71,6 +72,9 @@ try {
     const context = await browser.newContext({ viewport: { width: 1440, height: 1050 }, reducedMotion: 'reduce' });
     const errors = [], engagementRequests = [], rosterRequests = [], mutations = [], remoteRequests = [];
     let failEngagement = false, failRoster = true;
+    let largeRoster = false, holdBatches = false, heldBatches = [];
+    const batchWaiters = [];
+    const waitForBatches = count => heldBatches.length >= count ? Promise.resolve() : new Promise(resolve => batchWaiters.push({ count, resolve }));
     await context.addInitScript(initial => {
       localStorage.setItem('sentient.lang', initial);
       localStorage.setItem('sentient.language', initial);
@@ -92,7 +96,7 @@ try {
         else if (url.pathname === '/api/admin/promos/engagement/accounts') {
           rosterRequests.push(request.method());
           if (failRoster) return route.fulfill({ status: 400, json: { detail: 'Available accounts could not be loaded.' } });
-          data = { accounts: accounts.map(({ handle, label, group }) => ({ handle, label, group, subcategory: null, has_avatar: false })), generated_at: captured };
+          data = { accounts: (largeRoster ? batchAccounts : accounts).map(({ handle, label, group }) => ({ handle, label, group, subcategory: null, has_avatar: false })), generated_at: captured };
         }
         else if (url.pathname === '/api/admin/promos/engagement') {
           const selectedHandles = url.searchParams.getAll('accounts');
@@ -100,10 +104,18 @@ try {
           engagementRequests.push({ days: url.searchParams.get('days'), format: url.searchParams.get('format'), accounts: selectedHandles, method: request.method() });
           if (failEngagement) return route.fulfill({ status: 400, json: { detail: 'Stored engagement could not be loaded. Please retry.' } });
           const days = Number(url.searchParams.get('days'));
-          const calculatedAccounts = accounts.filter(account => selectedHandles.includes(account.handle)).map(account => ({ ...account, calculation_period: {
+          const calculatedAccounts = (largeRoster ? batchAccounts : accounts).filter(account => selectedHandles.includes(account.handle)).map(account => ({ ...account, calculation_period: {
             days, from: days === 0 ? null : new Date(Date.parse(account.calculated_at) - days * 86400000).toISOString(), to: account.calculated_at,
           } }));
           data = { accounts: calculatedAccounts, period: { days, from: days === 0 ? null : '2026-09-16T12:00:00Z', to: captured }, format: url.searchParams.get('format') || 'all', generated_at: captured, cache: { ttl_days: 7, cached_count: 2, recalculated_count: 1 } };
+          if (holdBatches) return new Promise(resolve => {
+            heldBatches.push({ handles: selectedHandles, release: async failed => {
+              try { await route.fulfill(failed ? { status: 400, json: { detail: 'Stored batch failed. Please retry.' } } : { json: data }); }
+              catch { /* The selected-account request may already have been cancelled. */ }
+              finally { resolve(); }
+            } });
+            batchWaiters.filter(waiter => heldBatches.length >= waiter.count).forEach(waiter => waiter.resolve());
+          });
         }
         return route.fulfill({ json: data });
       }
@@ -287,6 +299,60 @@ try {
     assert.deepEqual(mutations, []);
     assert.deepEqual(errors, []);
     console.log(`PASS Promos ${language}: dark/light, mobile table and calculator (${remoteRequests.length} external requests intercepted)`);
+    await page.keyboard.press('Escape');
+    await dialog.waitFor({ state: 'detached' });
+    await page.setViewportSize({ width: 1440, height: 1050 });
+    largeRoster = true;
+    await page.getByRole('tab', { name: label('Promotions', 'Promociones'), exact: true }).click();
+    await engagementTab.click();
+    await pickerToggle.waitFor();
+    await pickerToggle.click();
+    await picker.getByRole('button', { name: label('Select all accounts', 'Seleccionar todas las cuentas'), exact: true }).click();
+    assert.equal(await picker.getByRole('checkbox', { checked: true }).count(), 13);
+    const beforeBatches = engagementRequests.length;
+    assert.equal(await panel.locator('[data-engagement-account]').count(), 0);
+    holdBatches = true;
+    await apply.click();
+    await waitForBatches(2);
+    assert.equal(engagementRequests.length, beforeBatches + 2, 'Only two requests may start before a batch completes');
+    assert.ok(heldBatches.every(batch => batch.handles.length <= 5));
+    assert.equal(await panel.locator('[data-engagement-account]').count(), 0, 'Pending batches cannot publish partial rows');
+    await heldBatches[1].release();
+    await waitForBatches(3);
+    assert.equal(await panel.locator('[data-engagement-account]').count(), 0, 'Completing one batch still cannot publish partial rows');
+    await heldBatches[2].release();
+    await heldBatches[0].release();
+    await row('alpha').waitFor();
+    assert.equal(await panel.locator('[data-engagement-account]').count(), 13);
+    assert.deepEqual(engagementRequests.slice(beforeBatches).flatMap(batch => batch.accounts).sort(), batchAccounts.map(account => account.handle).sort(), 'The UI batches exactly the selected accounts, without duplicates');
+    assert.ok(engagementRequests.slice(beforeBatches).every(batch => batch.days === '0' && batch.format === 'all'));
+    assert.equal(await row('alpha').locator('time[data-calculated-at]').getAttribute('datetime'), accounts[0].calculated_at);
+
+    heldBatches = [];
+    await apply.click();
+    await waitForBatches(2);
+    await heldBatches[0].release();
+    await waitForBatches(3);
+    await heldBatches[2].release(true);
+    await panel.getByRole('alert').waitFor();
+    assert.match(await panel.getByRole('alert').textContent(), /Stored batch failed/);
+    assert.equal(await panel.locator('[data-engagement-account]').count(), 0, 'A later batch failure discards every earlier completed batch');
+    await heldBatches[1].release();
+
+    heldBatches = [];
+    const beforeCancellation = engagementRequests.length;
+    await panel.getByRole('button', { name: label('Retry', 'Reintentar'), exact: true }).click();
+    await waitForBatches(2);
+    await pickerToggle.click();
+    await picker.getByRole('checkbox', { name: label('Select @alpha', 'Seleccionar @alpha'), exact: true }).uncheck();
+    await page.keyboard.press('Escape');
+    assert.ok((await panel.getByRole('status').textContent()).includes(label('Selection changed.', 'La selección cambió.')));
+    await Promise.all(heldBatches.map(batch => batch.release()));
+    assert.equal(engagementRequests.length, beforeCancellation + 2, 'Cancelling selection prevents queued batches and automatic reloads');
+    assert.equal(await panel.locator('[data-engagement-account]').count(), 0, 'Cancelled batch responses cannot restore stale rows');
+    assert.equal(await panel.getByRole('alert').count(), 0, 'A selection cancellation does not show a request failure');
+    assert.deepEqual(errors, []);
+    console.log(`PASS Promos ${language}: 13 selected accounts, bounded batches, complete results, batch failure and selection cancellation`);
     await context.close();
   }
   console.log(`PASS Promos engagement browser smoke; screenshots: ${output}`);

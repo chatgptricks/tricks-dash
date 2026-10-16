@@ -43,6 +43,7 @@ export const PROMO_ENGAGEMENT_ES = {
   'No accounts available for this selection.': 'No hay cuentas disponibles para esta selección.',
   'Choose another account group or selection.': 'Elige otro grupo de cuentas o selección.',
   'Loading account engagement…': 'Cargando engagement de las cuentas…',
+  'Loading engagement: {completed} of {total} accounts': 'Cargando engagement: {completed} de {total} cuentas',
   'Engagement data could not be loaded. Please retry.': 'No se pudieron cargar los datos de engagement. Intenta de nuevo.',
   'Engagement returned incomplete data. Please retry.': 'Los datos de engagement están incompletos. Intenta de nuevo.',
   'Account group': 'Grupo de cuentas',

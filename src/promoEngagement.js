@@ -93,6 +93,64 @@ export function selectEngagementAccounts(accounts, options = {}) {
   });
 }
 
+// Small requests keep cold full-history calculations within the API's request
+// budget. Nothing is published until every selected account has been validated.
+export async function loadEngagementAccounts(request, handles, { signal, onProgress } = {}) {
+  const selected = [...new Map((Array.isArray(handles) ? handles : []).map(handle => {
+    const value = text(handle).replace(/^@+/, '');
+    return [fold(value), value];
+  }).filter(([key]) => key)).values()];
+  const controller = new AbortController();
+  const cancel = () => controller.abort(signal?.reason);
+  if (signal?.aborted) cancel();
+  else signal?.addEventListener('abort', cancel, { once: true });
+  const batches = [];
+  for (let index = 0; index < selected.length; index += 5) batches.push(selected.slice(index, index + 5));
+  const combined = new Map();
+  const cache = { ttl_days: 7, cached_count: 0, recalculated_count: 0 };
+  let next = 0, generatedAt = null, latestTime = -Infinity, failure = null;
+  const worker = async () => {
+    try {
+      while (next < batches.length) {
+        controller.signal.throwIfAborted();
+        const batch = batches[next++];
+        const params = new URLSearchParams({ days: '0', format: 'all' });
+        batch.forEach(handle => params.append('accounts', handle));
+        const body = await request(`/api/admin/promos/engagement?${params}`, { signal: controller.signal, timeout: 90000 });
+        controller.signal.throwIfAborted();
+        if (!Array.isArray(body?.accounts)) throw new Error('Engagement returned incomplete data. Please retry.');
+        const accounts = normalizeEngagementAccounts(body.accounts);
+        const expected = new Set(batch.map(fold));
+        const received = new Set(accounts.map(account => fold(account.handle)));
+        if (accounts.length !== batch.length || received.size !== batch.length || [...received].some(handle => !expected.has(handle))) {
+          throw new Error('Engagement returned incomplete data. Please retry.');
+        }
+        accounts.forEach(account => combined.set(fold(account.handle), account));
+        cache.cached_count += sampleCount(body.cache?.cached_count) || 0;
+        cache.recalculated_count += sampleCount(body.cache?.recalculated_count) || 0;
+        const timestamp = Date.parse(body.generated_at);
+        if (Number.isFinite(timestamp) && timestamp > latestTime) { latestTime = timestamp; generatedAt = body.generated_at; }
+        onProgress?.({ completed: combined.size, total: selected.length });
+      }
+    } catch (issue) {
+      failure ||= issue;
+      controller.abort();
+      throw issue;
+    }
+  };
+  try {
+    controller.signal.throwIfAborted();
+    await Promise.all(Array.from({ length: Math.min(2, batches.length) }, worker));
+    controller.signal.throwIfAborted();
+    return { accounts: selected.map(handle => combined.get(fold(handle))), generated_at: generatedAt, cache };
+  } catch (issue) {
+    controller.abort();
+    throw failure || issue;
+  } finally {
+    signal?.removeEventListener('abort', cancel);
+  }
+}
+
 function costFor(price, denominator, multiplier = 1) {
   const positiveDenominator = parsePositiveNumber(denominator);
   if (price === null || positiveDenominator === null) return null;

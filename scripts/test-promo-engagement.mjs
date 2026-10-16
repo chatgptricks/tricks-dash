@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {
   ENGAGEMENT_METRICS, normalizeEngagementAccount, normalizeEngagementAccounts,
   selectEngagementAccounts, parsePositiveNumber, calculatePostCosts,
+  loadEngagementAccounts,
 } from '../src/promoEngagement.js';
 
 const account = (handle, values = {}) => ({
@@ -106,4 +107,88 @@ assert.deepEqual(selectEngagementAccounts(rows, { search: 'alpha unseen' }), [])
 assert.deepEqual(selectEngagementAccounts(null), []);
 assert.equal(rows[0].handle, 'zeta', 'Selection must not reorder or mutate source rows');
 
+function controlledRequests() {
+  const calls = [];
+  let active = 0, maximum = 0;
+  const request = (path, options) => {
+    const url = new URL(path, 'https://example.test');
+    const call = { handles: url.searchParams.getAll('accounts'), options, days: url.searchParams.get('days'), format: url.searchParams.get('format') };
+    calls.push(call); active++; maximum = Math.max(maximum, active);
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const finish = action => value => {
+        if (settled) return;
+        settled = true; active--; options.signal.removeEventListener('abort', abort); action(value);
+      };
+      call.resolve = finish(resolve); call.reject = finish(reject);
+      const abort = () => call.reject(options.signal.reason);
+      options.signal.addEventListener('abort', abort, { once: true });
+      if (options.signal.aborted) abort();
+    });
+  };
+  return { calls, request, get maximum() { return maximum; } };
+}
+const flush = async () => { for (let index = 0; index < 4; index++) await Promise.resolve(); };
+const selected = Array.from({ length: 13 }, (_, index) => `account${String(index).padStart(2, '0')}`);
+const batchBody = (call, generatedAt = '2026-10-16T12:00:00Z') => ({
+  accounts: call.handles.map(handle => account(handle, { calculated_at: '2026-10-14T12:00:00Z', cache_expires_at: '2026-10-21T12:00:00Z', calculation_period: { days: 0, from: null, to: '2026-10-14T12:00:00Z' } })),
+  generated_at: generatedAt, cache: { ttl_days: 7, cached_count: Math.floor(call.handles.length / 2), recalculated_count: Math.ceil(call.handles.length / 2) },
+});
+const batched = controlledRequests(), progress = [];
+let published = false;
+const complete = loadEngagementAccounts(batched.request, [...selected, '@ACCOUNT00'], { onProgress: value => progress.push(value) }).then(value => { published = true; return value; });
+assert.equal(batched.calls.length, 2, 'Only two batches can start together');
+assert.deepEqual(batched.calls.map(call => call.handles.length), [5, 5]);
+batched.calls[1].resolve(batchBody(batched.calls[1], '2026-10-16T13:00:00Z'));
+await flush();
+assert.equal(batched.calls.length, 3, 'Completing one batch releases only one worker');
+assert.equal(batched.calls[2].handles.length, 3);
+assert.equal(published, false, 'One completed batch cannot publish a partial result');
+batched.calls[2].resolve(batchBody(batched.calls[2], '2026-10-16T14:00:00Z'));
+await flush();
+assert.equal(published, false, 'The remaining first batch must finish before publication');
+batched.calls[0].resolve(batchBody(batched.calls[0], '2026-10-16T12:00:00Z'));
+const merged = await complete;
+assert.equal(batched.maximum, 2);
+assert.deepEqual(batched.calls.flatMap(call => call.handles).map(value => value.toLowerCase()).sort(), [...selected].sort(), 'Every selected account is requested once without duplicates');
+for (const call of batched.calls) {
+  assert.equal(call.days, '0'); assert.equal(call.format, 'all'); assert.equal(call.options.timeout, 90000);
+  assert.equal(call.options.signal, batched.calls[0].options.signal, 'All in-flight batches share cancellation');
+}
+assert.deepEqual(merged.accounts.map(item => item.handle.toLowerCase()), selected, 'Out-of-order completions preserve selected account order');
+assert.equal(merged.accounts[0].calculated_at, '2026-10-14T12:00:00Z', 'Batch merging preserves saved calculation metadata');
+assert.deepEqual(merged.cache, { ttl_days: 7, cached_count: 5, recalculated_count: 8 });
+assert.equal(merged.generated_at, '2026-10-16T14:00:00Z', 'The combined report uses the newest generation timestamp');
+assert.deepEqual(progress, [{ completed: 5, total: 13 }, { completed: 8, total: 13 }, { completed: 13, total: 13 }]);
+
+const cancelled = controlledRequests(), cancellation = new AbortController();
+const cancelledLoad = loadEngagementAccounts(cancelled.request, selected, { signal: cancellation.signal });
+cancellation.abort();
+await assert.rejects(cancelledLoad, issue => issue.name === 'AbortError');
+assert.equal(cancelled.calls.length, 2, 'Cancelling prevents queued batches from starting');
+assert.ok(cancelled.calls.every(call => call.options.signal.aborted), 'Cancelling the selection aborts every in-flight request');
+
+const failed = controlledRequests(), failureParent = new AbortController(), originalFailure = new Error('Stored engagement failed');
+const failedLoad = loadEngagementAccounts(failed.request, selected, { signal: failureParent.signal });
+failed.calls[0].reject(originalFailure);
+await assert.rejects(failedLoad, issue => issue === originalFailure, 'Preserve the original failure instead of the sibling abort error');
+assert.equal(failureParent.signal.aborted, false, 'A batch failure must remain visible to the UI error handler');
+assert.equal(failed.calls.length, 2, 'A failure prevents queued batches from starting');
+assert.ok(failed.calls.every(call => call.options.signal.aborted));
+
+for (const corrupt of [
+  body => ({ ...body, accounts: body.accounts.slice(1) }),
+  body => ({ ...body, accounts: [...body.accounts, account('unselected')] }),
+  body => ({ ...body, accounts: [body.accounts[0], body.accounts[0]] }),
+]) {
+  const mock = controlledRequests();
+  const result = loadEngagementAccounts(mock.request, selected.slice(0, 2));
+  mock.calls[0].resolve(corrupt(batchBody(mock.calls[0])));
+  await assert.rejects(result, /incomplete data/, 'Missing, extra or duplicate accounts must reject the whole report');
+}
+let emptyRequests = 0;
+assert.deepEqual((await loadEngagementAccounts(() => { emptyRequests++; }, [])).accounts, []);
+assert.equal(emptyRequests, 0, 'An empty selection never starts aggregation');
+
 console.log('PASS Promos engagement: preserved unknowns and zeros, per-metric samples, scenario costs, separate views/plays, search, filters and deterministic ordering');
+console.log('PASS Promos engagement batches: bounded concurrency, exact coverage, complete publication, metadata, cancellation and preserved failures');

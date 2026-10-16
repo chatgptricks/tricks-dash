@@ -2,7 +2,7 @@ import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useSta
 import { createPortal } from 'react-dom';
 import { Calculator, X } from 'lucide-react';
 import { usePrefs } from './prefsContext';
-import { calculatePostCosts, normalizeEngagementAccounts, parsePositiveNumber, selectEngagementAccounts } from './promoEngagement';
+import { calculatePostCosts, loadEngagementAccounts, normalizeEngagementAccounts, parsePositiveNumber, selectEngagementAccounts } from './promoEngagement';
 import './promoEngagement.css';
 
 const METRICS = [
@@ -118,6 +118,7 @@ export default function PromoEngagementTab({ request }) {
   const [group, setGroup] = useState(''), [handles, setHandles] = useState([]), [sort, setSort] = useState('engagement_rate');
   const [roster, setRoster] = useState(null), [rosterLoading, setRosterLoading] = useState(true), [rosterError, setRosterError] = useState('');
   const [applied, setApplied] = useState(null), [data, setData] = useState(null), [loading, setLoading] = useState(false), [error, setError] = useState('');
+  const [progress, setProgress] = useState({ completed: 0, total: 0 });
   const [selected, setSelected] = useState(null);
   const requestRef = useRef(null), rosterRequestRef = useRef(null), pickerRef = useRef(null);
   const pickerId = useId();
@@ -153,14 +154,13 @@ export default function PromoEngagementTab({ request }) {
   const load = useCallback(async snapshot => {
     requestRef.current?.abort();
     const controller = new AbortController(); requestRef.current = controller;
-    setLoading(true); setError(''); setData(null); setSelected(null);
+    setLoading(true); setError(''); setData(null); setSelected(null); setProgress({ completed: 0, total: snapshot.handles.length });
     try {
-      const params = new URLSearchParams({ days: '0', format: 'all' });
-      snapshot.handles.forEach(handle => params.append('accounts', handle));
-      const body = await request(`/api/admin/promos/engagement?${params}`, { signal: controller.signal });
+      const body = await loadEngagementAccounts(request, snapshot.handles, { signal: controller.signal, onProgress: value => {
+        if (!controller.signal.aborted && requestRef.current === controller) setProgress(value);
+      } });
       if (controller.signal.aborted) return;
-      if (!Array.isArray(body.accounts)) throw new Error('Engagement returned incomplete data. Please retry.');
-      setData({ ...body, accounts: normalizeEngagementAccounts(body.accounts), key: snapshot.key });
+      setData({ ...body, key: snapshot.key });
     } catch (issue) { if (!controller.signal.aborted) setError(issue.message); }
     finally { if (requestRef.current === controller) setLoading(false); }
   }, [request]);
@@ -197,7 +197,7 @@ export default function PromoEngagementTab({ request }) {
     {!applied && roster && <div className="promo-empty">{t('Select accounts and choose View engagement to load their calculations.')}</div>}
     {pending && <p className="promo-engagement-pending" role="status">{t('Selection changed. Choose View engagement to apply it.')}</p>}
     {error && !pending && <div className="promo-alert" role="alert"><div>{t('Engagement data could not be loaded. Please retry.')}<small>{t(error)}</small></div><button onClick={() => load(applied)}>{t('Retry')}</button></div>}
-    {loading && !pending && <div className="promo-empty" role="status">{t('Loading account engagement…')}</div>}
+    {loading && !pending && <div className="promo-empty" role="status">{t('Loading engagement: {completed} of {total} accounts', progress)}</div>}
     {currentData && <>
       <div className="promo-engagement-summary"><div><span>{t('Accounts in view')}</span><strong>{numberLabel(accounts.length, lang, 0)}</strong></div><div><span>{t('Stored posts')}</span><strong>{numberLabel(accounts.reduce((sum, account) => sum + account.post_count, 0), lang, 0)}</strong></div><div><span>{t('Posts with likes + comments')}</span><strong>{numberLabel(measured, lang, 0)}</strong></div><div><span>{t('Accounts with engagement')}</span><strong>{numberLabel(accounts.filter(account => account.engagement_rate_pct != null).length, lang, 0)}</strong></div></div>
       <label className="promo-engagement-sort"><span>{t('Sort accounts')}</span><select value={sort} onChange={event => setSort(event.target.value)}><option value="engagement_rate">{t('Engagement rate')}</option><option value="engagements">{t('Public interactions / post')}</option><option value="followers">{t('Followers')}</option><option value="posts">{t('Stored posts')}</option></select></label>

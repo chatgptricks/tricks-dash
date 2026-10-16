@@ -94,6 +94,10 @@ only the lightweight account roster; changing selections
 never requests engagement until that button is pressed. Pending changes hide
 previous results. Calculations always use the account's entire available stored
 history across all dates and formats, including posts without a stored date.
+After applying a selection, the frontend loads up to five accounts per request,
+with at most two requests in parallel and a 90-second timeout per request. It
+shows progress and publishes results only when every selected account succeeds;
+changing the selection cancels outstanding requests.
 The comparable engagement rate is
 average (likes + comments) on measured posts divided by the latest stored follower
 count. Each counter shows its own sample coverage; shares, saves, impressions,
