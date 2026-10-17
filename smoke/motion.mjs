@@ -66,9 +66,12 @@ async function pageFixture({reduced=false,effects='immersive',touch=false,theme=
     }
     if(url.origin===api){
       const method=route.request().method();
-      assert.ok(method==='GET'||url.pathname.endsWith('/me/preferences'),'Motion QA must not issue content mutations');
+      const trackerRefresh = url.pathname === '/api/tracker/snapshot-now' || /^\/api\/tracker\/accounts\/[^/]+\/refresh$/.test(url.pathname);
+      assert.ok(method==='GET'||url.pathname.endsWith('/me/preferences')||method==='POST'&&trackerRefresh,'Only mocked preferences and Tracker refresh jobs may be written during motion QA');
       let data={};
-      if(url.pathname==='/api/dashboard/me')data={is_dev:true,is_admin:true,operating_roles:['admin','vc'],queue_role_preview_active:false,email:'developer@example.test'};
+      if(trackerRefresh)data={job_id:'motion-tracker-refresh',status:'queued'};
+      else if(url.pathname.startsWith('/api/tracker/refresh-jobs/'))data={status:'done',result:{snapshotted:accounts.map(account=>account.handle),failed:{}}};
+      else if(url.pathname==='/api/dashboard/me')data={is_dev:true,is_admin:true,operating_roles:['admin','vc'],queue_role_preview_active:false,email:'developer@example.test'};
       else if(url.pathname.endsWith('/me/preferences'))data={preferences:{effects,theme,language:'en'}};
       else if(url.pathname==='/api/dashboard/vault')data={items:vault};
       else if(url.pathname==='/api/dashboard/hooks')data={results:hooks,status:{total:2,captions:1,ocr:1,categorized:2,pending:0,drafts:0}};

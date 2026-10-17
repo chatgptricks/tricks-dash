@@ -60,12 +60,15 @@ async function fixturePage(theme, profile = 'dev') {
     if (filename.includes('PROMO5') && route.request().resourceType() === 'image') return route.fulfill({ status: 404, body: '' });
     if (filename.startsWith('/api/')) {
       const method = route.request().method();
-      if (method !== 'GET' && !filename.endsWith('/me/preferences') && !filename.endsWith('/presence')) {
+      const trackerRefresh = filename === '/api/tracker/snapshot-now' || /^\/api\/tracker\/accounts\/[^/]+\/refresh$/.test(filename);
+      if (method !== 'GET' && !filename.endsWith('/me/preferences') && !filename.endsWith('/presence') && !(method === 'POST' && trackerRefresh)) {
         errors.push(`Unexpected mutation: ${method} ${filename}`);
         return route.fulfill({ status: 405, json: { detail: 'Layout fixtures forbid content mutations.' } });
       }
       let data = {};
-      if (filename === '/api/dashboard/me' || filename === '/api/admin/me') data = roleViewer;
+      if (trackerRefresh) data = { job_id: 'layout-tracker-refresh', status: 'queued' };
+      else if (filename.startsWith('/api/tracker/refresh-jobs/')) data = { status: 'done', result: { snapshotted: accounts.map(account => account.handle), failed: {} } };
+      else if (filename === '/api/dashboard/me' || filename === '/api/admin/me') data = roleViewer;
       else if (filename.endsWith('/me/preferences')) data = { preferences: { theme, language: 'en', accent: 'lime', effects: 'off', queueGuideCompleted: true } };
       else if (filename.endsWith('/posts/manifest')) data = { revision: 'product-layout', sources: [{ source: 'canonical', upperBound: posts.length }, { source: 'dashboard', upperBound: 0 }] };
       else if (filename.endsWith('/posts/page')) data = { source: 'canonical', nextCursor: posts.length, done: true, upperBound: posts.length, revision: 'product-layout', posts };
