@@ -62,6 +62,7 @@ import { downloadAccountMediaKit } from './accountMediaKit';
 import { mergeUserDrafts, saveUserProfile, userProfileDraft as userDraft } from './userAdmin';
 import { clearDashboardSnapshot, readDashboardSnapshot, writeDashboardSnapshot } from './dashboardCache';
 import { DashboardCatalogueError, loadCompleteDashboardCatalogue } from './dashboardCatalogue';
+import { runDashboardRead } from './dashboardRead';
 import { followQueueLive } from './queueLive';
 import { decodeRouteState, encodeRouteState } from './urlCodec';
 import { PostDetailPanel } from './postDetail';
@@ -1069,9 +1070,9 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
         setLoading(true);
         setLoadError('');
       }
-      const [catalogue, resolvedAccounts] = await Promise.all([
+      const [catalogue, resolvedAccounts] = await runDashboardRead((readSignal) => Promise.all([
         loadCompleteDashboardCatalogue({
-          signal,
+          signal: readSignal,
           etag: dashboardEtagRef.current,
           cachedCatalogue: dashboardPostsRef.current.length && dashboardSourcesRef.current.length
             ? { posts: dashboardPostsRef.current, sources: dashboardSourcesRef.current,
@@ -1079,7 +1080,7 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
                 metricsAvailable: true, metricsAt: dashboardMetricsAtRef.current }
             : null,
         }),
-        apiFetch(`${API_BASE}/api/dashboard/accounts`, { signal }).then(async (accountsResponse) => {
+        apiFetch(`${API_BASE}/api/dashboard/accounts`, { signal: readSignal }).then(async (accountsResponse) => {
           if (accountsResponse.status === 401 || accountsResponse.status === 403) {
             throw new DashboardCatalogueError('Sign in required.', accountsResponse.status);
           }
@@ -1090,7 +1091,7 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
           }
           return nextAccounts;
         }),
-      ]);
+      ]), { signal });
       // A manual refresh, reconnect, or tab return can start another request
       // while this one is in flight. Only the newest response owns the UI.
       if (!isCurrentRequest()) return;
@@ -1274,9 +1275,11 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
     };
     const timer = setInterval(refreshVisibleCatalog, AUTO_POLL_MS);
     document.addEventListener('visibilitychange', refreshVisibleCatalog);
+    window.addEventListener('online', refreshVisibleCatalog);
     return () => {
       clearInterval(timer);
       document.removeEventListener('visibilitychange', refreshVisibleCatalog);
+      window.removeEventListener('online', refreshVisibleCatalog);
     };
   }, [loadDashboard]);
 

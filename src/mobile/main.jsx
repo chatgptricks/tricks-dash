@@ -14,6 +14,7 @@ import { browserPopupRedirectResolver, getRedirectResult, onAuthStateChanged, si
 import { API_BASE, apiFetch } from '../api';
 import { downloadPostMedia } from '../mediaDownload';
 import { loadCompleteDashboardCatalogue } from '../dashboardCatalogue';
+import { runDashboardRead } from '../dashboardRead';
 import { authPersistenceReady, describeSignInError, firebaseAuth, startGoogleSignIn } from '../firebase';
 import { onServerPreferences, savePreference, syncUserPreferences } from '../userPreferences';
 import { followQueueLive } from '../queueLive';
@@ -413,17 +414,57 @@ function DashboardView({ viewer }) {
     else url.searchParams.delete('r');
     history.replaceState(null, '', url);
   }, [collabOnly]);
-  const load = useCallback(() => {
-    setError('');
-    Promise.all([loadCompleteDashboardCatalogue(), apiJson('/api/dashboard/accounts')])
-      .then(([catalogue, roster]) => {
-        if (catalogue.notModified || !Array.isArray(catalogue.posts)) throw new Error('The complete post catalogue was not available.');
-        setPayload({ posts: catalogue.posts, summary: catalogue.summary || {} });
+  useEffect(() => {
+    let active = true;
+    let cachedCatalogue = null;
+    let flight = null;
+    const load = async () => {
+      if (!active || flight) return;
+      const controller = new AbortController();
+      flight = controller;
+      setError('');
+      try {
+        const [catalogue, roster] = await runDashboardRead((signal) => {
+          return Promise.all([
+            loadCompleteDashboardCatalogue({ signal, etag: cachedCatalogue?.etag || '', cachedCatalogue }),
+            apiJson('/api/dashboard/accounts', { signal }),
+          ]);
+        }, { signal: controller.signal });
+        if (!active || controller.signal.aborted || flight !== controller) return;
+        if (catalogue.notModified) {
+          if (catalogue.metricsAt) cachedCatalogue = { ...cachedCatalogue, metricsAt: catalogue.metricsAt };
+        } else {
+          if (!Array.isArray(catalogue.posts)) throw new Error('The complete post catalogue was not available.');
+          cachedCatalogue = catalogue;
+          setPayload({ posts: catalogue.posts, summary: catalogue.summary || {} });
+          setSelected((current) => current
+            ? catalogue.posts.find((post) => post.account === current.account && post.shortcode === current.shortcode) || current
+            : current);
+        }
         setAccounts(roster.accounts || []);
-      })
-      .catch((err) => setError(err.message));
+      } catch (error) {
+        if (active && error.name !== 'AbortError') setError(error.message);
+      } finally {
+        if (flight === controller) flight = null;
+      }
+    };
+    // An open phone/PWA must follow the same live catalogue as desktop.
+    // Conditional reads reuse the verified snapshot and fetch only new IDs.
+    const refreshVisible = () => {
+      if (document.visibilityState !== 'hidden') void load();
+    };
+    void load();
+    const timer = window.setInterval(refreshVisible, 3 * 60 * 1000);
+    document.addEventListener('visibilitychange', refreshVisible);
+    window.addEventListener('online', refreshVisible);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', refreshVisible);
+      window.removeEventListener('online', refreshVisible);
+      flight?.abort();
+    };
   }, []);
-  useEffect(() => { load(); }, [load]);
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const postId = decodeRouteState(params.get('r'))?.post || params.get('post');

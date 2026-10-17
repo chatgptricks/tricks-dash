@@ -33,6 +33,7 @@ const ACCOUNTS = [
 const CAPTION_REQUESTS = [];
 let storedLists = [], holdListReads = false, timeOutListWrite = false, listWrites = 0;
 const heldListReads = [], listSignals = [];
+let holdCatalogue = false, releaseCatalogue, catalogueCalls = 0, catalogueSignal;
 
 const stubFetch = async (url, options = {}) => {
   const u = String(url);
@@ -41,7 +42,12 @@ const stubFetch = async (url, options = {}) => {
     CAPTION_REQUESTS.push(Object.fromEntries(options.body.entries()));
     body = { caption: CAPTION_REQUESTS.length === 1 ? 'First generated caption' : 'Different regenerated caption' };
   }
-  else if (u.includes('/api/dashboard/posts/manifest')) body = { revision: 'desktop-smoke', sources: [{ source: 'canonical', upperBound: POSTS.length }, { source: 'dashboard', upperBound: 0 }] };
+  else if (u.includes('/api/dashboard/posts/manifest')) {
+    catalogueCalls += 1;
+    catalogueSignal = options.signal;
+    if (holdCatalogue) return new Promise(resolve => { releaseCatalogue = () => resolve(new Response(null, { status: 304 })); });
+    body = { revision: 'desktop-smoke', sources: [{ source: 'canonical', upperBound: POSTS.length }, { source: 'dashboard', upperBound: 0 }] };
+  }
   else if (u.includes('/api/dashboard/posts/page')) body = { source: 'canonical', afterId: 0, nextCursor: POSTS.length, done: true, upperBound: POSTS.length, revision: 'desktop-smoke', posts: POSTS };
   else if (u.includes('/api/dashboard/posts')) body = { posts: POSTS, summary: {}, ranges: {} };
   else if (u.includes('/api/dashboard/accounts')) body = { accounts: ACCOUNTS };
@@ -113,6 +119,34 @@ const el = document.getElementById('root') || document.body.appendChild(document
   const click = async (node) => { if (!node) return; await act(async () => { node.dispatchEvent(new window.MouseEvent('click', { bubbles: true })); }); };
   const press = async (key, opts = {}) => { await act(async () => { document.dispatchEvent(new window.KeyboardEvent('keydown', { key, bubbles: true, ...opts })); }); };
   const inter = {};
+  await click(qa('.group-tab').find(node => node.textContent === 'All'));
+
+  // An unresponsive token/network read must release Research's single-flight
+  // guard, retain the visible library and accept the next reconnect event.
+  const realSetTimeout = globalThis.setTimeout;
+  let expireCatalogue;
+  globalThis.setTimeout = (callback, milliseconds, ...args) => {
+    if (milliseconds === 120_000) { expireCatalogue = callback; return undefined; }
+    return realSetTimeout(callback, milliseconds, ...args);
+  };
+  try {
+    holdCatalogue = true;
+    const callsBefore = catalogueCalls;
+    await act(async () => window.dispatchEvent(new Event('online')));
+    inter['online event refreshes the post library'] = catalogueCalls === callsBefore + 1;
+    await act(async () => window.dispatchEvent(new Event('online')));
+    inter['overlapping refresh events reuse the current read'] = catalogueCalls === callsBefore + 1;
+    await act(async () => { expireCatalogue(); await Promise.resolve(); });
+    inter['hung read times out without discarding visible posts'] = catalogueSignal.aborted && el.querySelectorAll('.post-card').length > 0 && /Reconnecting/.test(el.textContent);
+    holdCatalogue = false;
+    await act(async () => window.dispatchEvent(new Event('online')));
+    inter['timed-out read releases the guard for a fresh reconnect'] = catalogueCalls === callsBefore + 2 && !/Reconnecting/.test(el.textContent);
+    await act(async () => { releaseCatalogue(); await Promise.resolve(); });
+    inter['late response from the cancelled read cannot block recovery'] = !/Reconnecting/.test(el.textContent) && el.querySelectorAll('.post-card').length > 0;
+  } finally {
+    globalThis.setTimeout = realSetTimeout;
+    holdCatalogue = false;
+  }
 
   // Confirmed list mutations must not wait on the follow-up roster read.
   holdListReads = true;
