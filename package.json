@@ -45,7 +45,7 @@
     "smoke:queue-reuse": "node smoke/queue-reuse.mjs",
     "smoke:oauth": "node smoke/oauth-connections.mjs",
     "smoke:collabs": "node smoke/research-collabs.mjs",
-    "test:tracker": "node smoke/tracker.mjs && node smoke/tracker-monthly.mjs && node smoke/tracker-sentient-overview.mjs"
+    "test:tracker": "node smoke/tracker.mjs && node smoke/tracker-refresh.mjs && node smoke/mobile-tracker-refresh.mjs && node smoke/tracker-monthly.mjs && node smoke/tracker-sentient-overview.mjs"
   },
   "overrides": {
     "@firebase/firestore": {

@@ -126,7 +126,9 @@ const fetchStub = async (url, options = {}) => {
     if (queueRefreshFailure) return { ...ok({ detail: 'Refresh temporarily unavailable.' }), ok: false, status: 400 };
     return ok({ ...queue });
   }
-  if (value.includes('/api/tracker/summary')) return ok(tracker);
+  if (value.includes('/api/tracker/snapshot-now') || options.method === 'POST' && /\/api\/tracker\/accounts\/[^/]+\/refresh/.test(value)) return ok({ job_id: 'tracker-fixture', status: 'queued' });
+  if (value.includes('/api/tracker/refresh-jobs/')) return ok({ status: 'done', result: { snapshotted: tracker.accounts.map(account => account.handle), failed: {} } });
+  if (value.includes('/api/tracker/summary')) return ok(structuredClone(tracker));
   if (value.includes('/api/tracker/accounts/')) {
     const handle = decodeURIComponent(new URL(value).pathname.split('/').at(-1));
     monthlyHistoryRequests.push({ handle, signal: options.signal });

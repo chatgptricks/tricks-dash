@@ -27,6 +27,7 @@ import { applyAccent, readLang, makeT } from '../prefs';
 import { PrefsProvider as SharedPrefsProvider } from '../prefsContext';
 import { LanguageSelector } from '../LanguageSelector';
 import PostCollaboration from '../PostCollaboration.jsx';
+import '../../public/tracker-refresh.js';
 import './mobile.css';
 
 const LEGACY_PASSWORD = 'authenticated';
@@ -211,7 +212,7 @@ async function apiJson(path, options = {}) {
   const url = path.startsWith('http') ? path : `${API_BASE}${path}`;
   const response = await apiFetch(url, options);
   const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(body.detail || body.message || `Request failed (${response.status}).`);
+  if (!response.ok) throw Object.assign(new Error(body.detail || body.message || `Request failed (${response.status}).`), { status: response.status });
   return body;
 }
 
@@ -783,7 +784,7 @@ function SentientMonthlyChart({ series, pending, month }) {
   </svg></section>;
 }
 
-function SentientMonthlyOverview({ accounts, onOpenAccount }) {
+function SentientMonthlyOverview({ accounts, onOpenAccount, onRefresh, refreshing = false }) {
   const { t, language } = usePrefs();
   const monthly = window.SentientTrackerMonthly;
   const [month, setMonth] = useState(() => /^\d{4}-(0[1-9]|1[0-2])$/.test(readTrackerRoute().month || '') ? readTrackerRoute().month : monthly.currentMonth());
@@ -826,7 +827,7 @@ function SentientMonthlyOverview({ accounts, onOpenAccount }) {
   const renameDetail = t('monthlyRenameDetail').replace('{added}', fmtExact(205765)).replace('{removed}', fmtExact(205765));
   const leader = (account, title, negative = false) => <button className={`m-monthly-leader${negative || account?.net < 0 ? ' is-negative' : ''}`} onClick={() => account && onOpenAccount(account.handle)} disabled={pending || !account}><span>{title}</span><b>{pending || !account ? '—' : `@${account.handle}`}</b><strong>{pending ? '—' : signedExact(account?.net ?? 0)}</strong></button>;
   return <section className="m-sentient-monthly" aria-labelledby="m-sentient-monthly-title" aria-busy={pending}>
-    <header className="m-monthly-head"><div><span>{t('monthlyGrowth')}</span><h2 id="m-sentient-monthly-title">{t('sentientMonthly')}</h2></div><label><span>{t('month')}</span><select value={month} onChange={(event) => { setMonth(event.target.value); writeTrackerRoute({ view: 'sentient', month: event.target.value }); }}>{months.map((value) => <option key={value} value={value}>{monthLabel(value)}</option>)}</select></label><button className="m-secondary m-monthly-refresh" onClick={() => setRetry((value) => value + 1)} disabled={pending} aria-label={t('refresh')}><RefreshCw size={16} className={pending ? 'spin' : ''} /></button></header>
+    <header className="m-monthly-head"><div><span>{t('monthlyGrowth')}</span><h2 id="m-sentient-monthly-title">{t('sentientMonthly')}</h2></div><label><span>{t('month')}</span><select value={month} onChange={(event) => { setMonth(event.target.value); writeTrackerRoute({ view: 'sentient', month: event.target.value }); }}>{months.map((value) => <option key={value} value={value}>{monthLabel(value)}</option>)}</select></label><button className="m-secondary m-monthly-refresh" onClick={() => onRefresh ? onRefresh() : setRetry((value) => value + 1)} disabled={pending || refreshing} aria-label={t('refresh')}><RefreshCw size={16} className={pending ? 'spin' : ''} /></button></header>
     <p className="m-monthly-scope">{t('monthlyAllAccounts')}</p>
     <div className="m-monthly-metrics" aria-live="polite"><div className="is-positive"><span>{t('followersGained')}</span><strong data-monthly-metric="gained">{signedMetric(summary.gained, '+')}</strong></div><div className="is-negative"><span>{t('followersLost')}</span><strong data-monthly-metric="lost">{signedMetric(summary.lost, '−')}</strong></div><div className={summary.net < 0 ? 'is-negative' : 'is-positive'}><span>{t('netFollowers')}</span><strong data-monthly-metric="net">{pending ? '—' : signedExact(summary.net ?? 0)}</strong></div><div><span>{t('totalFollowers')}</span><strong data-monthly-total-followers>{pending ? '—' : fmtExact(summary.totalFollowers)}</strong></div></div>
     <div className="m-monthly-leaders">{leader(summary.bestAccount, t('monthlyBest'))}{leader(summary.worstAccount, t('monthlyWorst'), true)}</div>
@@ -836,12 +837,82 @@ function SentientMonthlyOverview({ accounts, onOpenAccount }) {
   </section>;
 }
 
+// Bound a stalled connection without cancelling the server's paid refresh job.
+// Retrying later rejoins that job through the API's active-job deduplication.
+async function trackerJson(path, options = {}) {
+  return window.SentientTrackerRefresh.bounded(signal => apiJson(path, { ...options, cache: 'no-store', signal }), { signal: options.signal });
+}
+
 function TrackerView() {
   const [tab, setTab] = useState(() => readTrackerRoute().view === 'sentient' ? 'sentient' : 'overview');
-  const { t } = usePrefs(); const [data, setData] = useState(null); const [detail, setDetail] = useState(null); const [error, setError] = useState(''); const [busy, setBusy] = useState(''); const [favorites, setFavorites] = useState(readTrackerFavorites); useEffect(() => onServerPreferences((preferences) => { if (Array.isArray(preferences.trackerFavorites)) setFavorites(preferences.trackerFavorites); }), []);
-  const load = useCallback(() => { setError(''); apiJson('/api/tracker/summary').then(setData).catch((err) => setError(err.message)); }, []); useEffect(() => { load(); }, [load]);
-  const open = async (handle) => { setBusy(handle); try { setDetail(await apiJson(`/api/tracker/accounts/${encodeURIComponent(handle)}`)); } catch (err) { setError(err.message); } finally { setBusy(''); } };
-  const refresh = async (handle) => { setBusy(handle); try { await apiJson(`/api/tracker/accounts/${encodeURIComponent(handle)}/refresh`, { method: 'POST' }); load(); if (detail?.handle === handle) setDetail(await apiJson(`/api/tracker/accounts/${encodeURIComponent(handle)}`)); } catch (err) { setError(err.message); } finally { setBusy(''); } };
+  const { t, language } = usePrefs();
+  const [data, setData] = useState(null), [detail, setDetail] = useState(null), [error, setError] = useState('');
+  const [busy, setBusy] = useState(''), [refreshing, setRefreshing] = useState(false), [progress, setProgress] = useState(null), [refreshResult, setRefreshResult] = useState(null);
+  const [favorites, setFavorites] = useState(readTrackerFavorites);
+  const active = useRef(null), operation = useRef(null), selectedHandle = useRef(''), detailRequest = useRef(0), lastRefreshHandle = useRef('');
+  useEffect(() => onServerPreferences((preferences) => { if (Array.isArray(preferences.trackerFavorites)) setFavorites(preferences.trackerFavorites); }), []);
+  const current = (session) => active.current === session && !session.signal.aborted && firebaseAuth.currentUser === session.user;
+  const load = async (session) => {
+    const summary = await trackerJson('/api/tracker/summary', { signal: session.signal });
+    if (current(session)) setData(summary);
+    return summary;
+  };
+  const open = async (handle) => {
+    const session = active.current;
+    const request = ++detailRequest.current;
+    selectedHandle.current = handle; setBusy(handle); setError('');
+    writeTrackerRoute({ acc: handle });
+    try {
+      const account = await trackerJson(`/api/tracker/accounts/${encodeURIComponent(handle)}`, { signal: session.signal });
+      if (current(session) && detailRequest.current === request && selectedHandle.current === handle) setDetail(account);
+    } catch (err) { if (current(session) && detailRequest.current === request && selectedHandle.current === handle) setError(err.message); }
+    finally { if (current(session) && detailRequest.current === request && selectedHandle.current === handle) setBusy(''); }
+  };
+  const refresh = async (handle = '', session = active.current) => {
+    if (!session || !current(session) || operation.current) return;
+    const running = { session, handle };
+    operation.current = running;
+    lastRefreshHandle.current = handle;
+    setRefreshing(true); setError(''); setRefreshResult(null); setProgress({ status: 'queued' });
+    try {
+      const path = handle ? `/api/tracker/accounts/${encodeURIComponent(handle)}/refresh` : '/api/tracker/snapshot-now';
+      const job = await trackerJson(path, { method: 'POST', signal: session.signal });
+      if (!current(session)) return;
+      const result = await window.SentientTrackerRefresh.wait(job, {
+        read: trackerJson, signal: session.signal, isCurrent: () => current(session),
+        onProgress: (value) => { if (current(session)) setProgress(value); },
+      });
+      if (!current(session)) return;
+      const request = ++detailRequest.current;
+      await load(session);
+      const selected = selectedHandle.current;
+      if (selected) {
+        const account = await trackerJson(`/api/tracker/accounts/${encodeURIComponent(selected)}`, { signal: session.signal });
+        if (current(session) && detailRequest.current === request && selectedHandle.current === selected) { setDetail(account); setBusy(''); }
+      }
+      if (current(session)) setRefreshResult({ result, handle });
+    } catch (err) { if (current(session)) setError(err.message); }
+    finally {
+      if (operation.current === running) operation.current = null;
+      if (current(session)) { setRefreshing(false); setProgress(null); }
+    }
+  };
+  useEffect(() => {
+    const controller = new AbortController();
+    const session = { signal: controller.signal, user: firebaseAuth.currentUser };
+    active.current = session;
+    load(session).then(() => {
+      if (!current(session)) return;
+      const handle = readTrackerRoute().acc || '';
+      if (handle) void open(handle);
+      void refresh(handle, session);
+    }).catch((err) => { if (current(session)) setError(err.message); });
+    return () => { controller.abort(); if (active.current === session) active.current = null; if (operation.current?.session === session) operation.current = null; };
+  }, []);
+  const outcome = refreshResult ? window.SentientTrackerRefresh.outcome(refreshResult.result, language, refreshResult.handle) : null;
+  const status = progress ? window.SentientTrackerRefresh.describe(progress, language) : outcome?.message;
+  const retry = () => { if (data) void refresh(lastRefreshHandle.current); else { const session = active.current; setError(''); load(session).then(() => refresh(selectedHandle.current, session)).catch((err) => { if (current(session)) setError(err.message); }); } };
+  const close = () => { detailRequest.current += 1; selectedHandle.current = ''; setDetail(null); setBusy(''); writeTrackerRoute({ acc: '' }); };
   const toggleFavorite = (handle) => { const next = favorites.includes(handle) ? favorites.filter((value) => value !== handle) : [...favorites, handle]; setFavorites(next); writeTrackerFavorites(next); };
   if (!data && !error) return <Spinner label={t('loading')} />;
   const accounts = data?.accounts || [];
@@ -849,12 +920,12 @@ function TrackerView() {
   const ordered = [...accounts].sort((a, b) => { const aFav = favoriteOrder.has(a.handle); const bFav = favoriteOrder.has(b.handle); if (aFav !== bFav) return aFav ? -1 : 1; if (aFav) return favoriteOrder.get(a.handle) - favoriteOrder.get(b.handle); return Number(b.followers || 0) - Number(a.followers || 0); });
   const totalFollowers = accounts.reduce((sum, account) => sum + Number(account.followers || 0), 0);
   const todayGrowth = accounts.reduce((sum, account) => sum + Number(account.delta_1d?.delta || 0), 0);
-  return <div className="m-stack"><div className="m-tab-scroll m-tracker-tabs" role="tablist" aria-label={t('tracker')}>{['overview', 'sentient'].map((value) => <button key={value} role="tab" aria-selected={tab === value} className={tab === value ? 'is-on' : ''} onClick={() => { setTab(value); writeTrackerRoute({ view: value, month: readTrackerRoute().month || window.SentientTrackerMonthly.currentMonth() }); }}>{t(value)}</button>)}</div><Notice type="error">{error}</Notice>{tab === 'sentient' && data ? <SentientMonthlyOverview accounts={accounts} onOpenAccount={open} /> : <><div className="m-metric-grid"><Metric label={t('trackedAccounts')} value={accounts.length} hint={`${favorites.length} ${t('favorites').toLowerCase()}`} /><Metric label={t('totalFollowers')} value={fmtExact(totalFollowers)} /><Metric label={t('todayGrowth')} value={signedExact(todayGrowth)} /></div><section className="m-account-list">{ordered.map((account) => <article className="m-tracker-row" key={account.handle} data-context-type="account" data-context-title={`@${account.handle}`} data-context-account={account.handle}><button className={`m-favorite${favorites.includes(account.handle) ? ' is-on' : ''}`} onClick={() => toggleFavorite(account.handle)} aria-label={`${t('favorites')} @${account.handle}`}><Star size={16} fill={favorites.includes(account.handle) ? 'currentColor' : 'none'} /></button><button className="m-tracker-open" onClick={() => open(account.handle)}><Cover src={`/api/dashboard/avatar/${account.handle}`} /><div><b>@{account.handle}</b><span>{account.label}</span></div><strong>{fmtExact(account.followers)}<small className={(account.delta_1d?.delta || 0) < 0 ? 'is-negative' : ''}>{account.delta_1d ? `${signedExact(account.delta_1d.delta)} ${t('todayFollowers')}` : `— ${t('todayFollowers')}`}</small></strong>{busy === account.handle ? <LoaderCircle className="spin" size={16} /> : <ChevronRight size={18} />}</button></article>)}</section></>}{detail ? <TrackerDetail data={detail} busy={busy === detail.handle} onRefresh={() => refresh(detail.handle)} onClose={() => setDetail(null)} /> : null}</div>;
+  return <div className="m-stack"><div className="m-tab-scroll m-tracker-tabs" role="tablist" aria-label={t('tracker')}>{['overview', 'sentient'].map((value) => <button key={value} role="tab" aria-selected={tab === value} className={tab === value ? 'is-on' : ''} onClick={() => { setTab(value); writeTrackerRoute({ view: value, month: readTrackerRoute().month || window.SentientTrackerMonthly.currentMonth() }); }}>{t(value)}</button>)}</div><div className="m-tracker-refresh"><button type="button" className="m-secondary" onClick={() => refresh()} disabled={refreshing}><RefreshCw size={16} className={refreshing ? 'spin' : ''} />{language === 'es' ? 'Actualizar seguidores' : 'Refresh followers'}</button>{status ? <div role={outcome?.error ? 'alert' : 'status'} aria-live="polite"><Notice type={outcome?.error ? 'error' : 'success'}>{status}</Notice></div> : null}{error ? <Notice type="error">{error}</Notice> : null}{(error || outcome?.error) && !refreshing ? <button className="m-secondary" onClick={retry}>{t('retry')}</button> : null}</div>{tab === 'sentient' && data ? <SentientMonthlyOverview accounts={accounts} onOpenAccount={open} onRefresh={() => refresh()} refreshing={refreshing} /> : <><div className="m-metric-grid"><Metric label={t('trackedAccounts')} value={accounts.length} hint={`${favorites.length} ${t('favorites').toLowerCase()}`} /><Metric label={t('totalFollowers')} value={fmtExact(totalFollowers)} /><Metric label={t('todayGrowth')} value={signedExact(todayGrowth)} /></div><section className="m-account-list">{ordered.map((account) => <article className="m-tracker-row" key={account.handle} data-context-type="account" data-context-title={`@${account.handle}`} data-context-account={account.handle}><button className={`m-favorite${favorites.includes(account.handle) ? ' is-on' : ''}`} onClick={() => toggleFavorite(account.handle)} aria-label={`${t('favorites')} @${account.handle}`}><Star size={16} fill={favorites.includes(account.handle) ? 'currentColor' : 'none'} /></button><button className="m-tracker-open" onClick={() => open(account.handle)}><Cover src={`/api/dashboard/avatar/${account.handle}`} /><div><b>@{account.handle}</b><span>{account.label}</span></div><strong>{fmtExact(account.followers)}<small className={(account.delta_1d?.delta || 0) < 0 ? 'is-negative' : ''}>{account.delta_1d ? `${signedExact(account.delta_1d.delta)} ${t('todayFollowers')}` : `— ${t('todayFollowers')}`}</small></strong>{busy === account.handle ? <LoaderCircle className="spin" size={16} /> : <ChevronRight size={18} />}</button></article>)}</section></>}{detail ? <TrackerDetail data={detail} busy={refreshing || busy === detail.handle} status={status} error={error || (outcome?.error ? outcome.message : '')} onRefresh={() => refresh(detail.handle)} onClose={close} /> : null}</div>;
 }
 
-function TrackerDetail({ data, busy, onRefresh, onClose }) {
-  const { t } = usePrefs(); const history = data.followers_history || []; const points = history.slice(-30).map((item) => Number(item.followers || 0)); const min = Math.min(...points); const max = Math.max(...points); const path = points.length > 1 ? points.map((value, index) => `${index ? 'L' : 'M'} ${(index / (points.length - 1)) * 300} ${90 - ((value - min) / Math.max(1, max - min)) * 80}`).join(' ') : '';
-  return <Sheet title={`@${data.handle}`} onClose={onClose} wide><div className="m-stack"><div className="m-detail-account"><Cover src={`/api/dashboard/avatar/${data.handle}`} /><div><h3>{data.label || data.handle}</h3><span>{fmtExact(points.at(-1))} {t('followers')}</span></div><button onClick={onRefresh} disabled={busy}><RefreshCw className={busy ? 'spin' : ''} size={17} /></button></div><div className="m-sparkline"><svg viewBox="0 0 300 100" role="img"><path d={path} /></svg></div><div className="m-section-head"><div><span>{t('history')}</span><h2>{history.length} {t("snapshots")}</h2></div></div><div className="m-history-list"><div className="m-history-head"><span>{t('date')}</span><b>{t('followersGained')}</b><b>{t('total')}</b><small>{t('posts')}</small></div>{history.slice(-12).map((row) => <div key={row.date}><span>{dateLabel(row.date)}</span><b className={`m-history-growth${Number(row.followers_gained || 0) < 0 ? ' is-negative' : ''}`}>{row.followers_gained == null ? '—' : signedExact(row.followers_gained)}</b><b>{fmtExact(row.followers)}</b><small>{row.posts_that_day || 0}</small></div>)}</div></div></Sheet>;
+function TrackerDetail({ data, busy, status, error, onRefresh, onClose }) {
+  const { t, language } = usePrefs(); const history = data.followers_history || []; const points = history.slice(-30).map((item) => Number(item.followers || 0)); const min = Math.min(...points); const max = Math.max(...points); const path = points.length > 1 ? points.map((value, index) => `${index ? 'L' : 'M'} ${(index / (points.length - 1)) * 300} ${90 - ((value - min) / Math.max(1, max - min)) * 80}`).join(' ') : '';
+  return <Sheet title={`@${data.handle}`} onClose={onClose} wide><div className="m-stack"><div className="m-detail-account"><Cover src={`/api/dashboard/avatar/${data.handle}`} /><div><h3>{data.label || data.handle}</h3><span>{fmtExact(points.at(-1))} {t('followers')}</span></div><button onClick={onRefresh} disabled={busy} aria-label={t('refresh')}><RefreshCw className={busy ? 'spin' : ''} size={17} /></button></div>{error ? <Notice type="error">{error}</Notice> : status ? <div role="status" aria-live="polite"><Notice>{status}</Notice></div> : null}<div className="m-sparkline"><svg viewBox="0 0 300 100" role="img"><path d={path} /></svg></div><div className="m-section-head"><div><span>{t('history')}</span><h2>{history.length} {t("snapshots")}</h2></div></div><div className="m-history-list"><div className="m-history-head"><span>{t('date')}</span><b>{t('followersGained')}</b><b>{t('total')}</b><small>{t('posts')}</small></div>{history.slice(-12).map((row) => <div key={row.date}><span>{window.SentientTrackerRefresh.readingDate(row.date, language)}</span><b className={`m-history-growth${Number(row.followers_gained || 0) < 0 ? ' is-negative' : ''}`}>{row.followers_gained == null ? '—' : signedExact(row.followers_gained)}</b><b>{fmtExact(row.followers)}</b><small>{row.posts_that_day || 0}</small></div>)}</div></div></Sheet>;
 }
 
 const STOP_WORDS = new Set('the and for with this that from your you are was have has how what why who new best can use para por con que los las una un del como más este esta sus sin sobre hoy'.split(' '));

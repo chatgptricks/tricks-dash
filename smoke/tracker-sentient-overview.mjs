@@ -34,6 +34,7 @@ function fixture(accounts) {
   w.fetch = async () => { throw new Error('Unexpected request'); };
   w.eval(fs.readFileSync('public/tool-translations.js', 'utf8'));
   w.eval(fs.readFileSync('public/tracker-monthly.js', 'utf8'));
+  w.eval(fs.readFileSync('public/tracker-refresh.js', 'utf8'));
   const main = [...w.document.scripts].find(script => script.textContent.includes("const API = 'https://cortex-api-db2e.onrender.com'"));
   w.eval(main.textContent + `
     window.__test = {

@@ -46,6 +46,13 @@ React entry points live in `src/`; Tracker and Insights remain standalone
 pages in `public/`. The backend is the separate Cortex project
 (`chatgptricks/cortex`), not part of this frontend repository.
 
+Tracker refreshes Instagram followers when its page loads: the selected
+account on an account URL, or all active accounts on the overview. Desktop
+and mobile follow the server job through completion, show progress and
+per-account failures, then reload totals, growth and history together.
+Repeated requests share an active job; a new refresh after completion
+requests a new reading. These refreshes incur the profile scraper's usage.
+
 ## Build
 
 ```bash

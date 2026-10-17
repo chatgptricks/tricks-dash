@@ -40,9 +40,12 @@ await page.route('**/*',async route=>{
     await route.fulfill({contentType:url.pathname.endsWith('.html')?'text/html':url.pathname.endsWith('.css')?'text/css':'text/javascript',body});return;
   }
   if(url.hostname==='cortex-api-db2e.onrender.com'){
-    assert.ok(route.request().method()==='GET'||url.pathname.endsWith('/me/preferences'),'Only mock preference writes are allowed');
+    const trackerRefresh = url.pathname === '/api/tracker/snapshot-now' || /^\/api\/tracker\/accounts\/[^/]+\/refresh$/.test(url.pathname);
+    assert.ok(route.request().method()==='GET'||url.pathname.endsWith('/me/preferences')||route.request().method()==='POST'&&trackerRefresh,'Only mocked preference and Tracker refresh writes are allowed');
     let data={};
-    if(url.pathname==='/api/tracker/summary')data={tracking_since:'2026-09-01',accounts:trackerAccounts};
+    if(trackerRefresh)data={job_id:'browser-refresh',status:'queued'};
+    else if(url.pathname.startsWith('/api/tracker/refresh-jobs/'))data={job_id:'browser-refresh',status:'running',progress:{total:3,completed:1,succeeded:1,failed:0}};
+    else if(url.pathname==='/api/tracker/summary')data={tracking_since:'2026-09-01',accounts:trackerAccounts};
     else if(url.pathname.startsWith('/api/tracker/accounts/')){
       const handle=url.pathname.split('/').at(-1); trackerDetailRequests.push(handle);
       data={followers_history:handle==='gamma'?[{date:'2026-09-29',followers:2000},{date:'2026-09-30',followers:2000},{date:'2026-10-01',followers:2000},{date:'2026-10-02',followers:1980},{date:'2026-10-14',followers:1970}]:[{date:'2026-09-29',followers:880},{date:'2026-09-30',followers:900},{date:'2026-10-01',followers:970},{date:'2026-10-02',followers:950},{date:'2026-10-14',followers:1000}],engagement_weekly:[]};
@@ -51,7 +54,7 @@ await page.route('**/*',async route=>{
     else if(url.pathname==='/api/insights/follower-growth')data={accounts:[],peaks:[]};
     else if(url.pathname==='/api/dashboard/me')data={is_admin:false,is_dev:false,operating_roles:['vc'],email:'fixture@example.test'};
     else if(url.pathname.endsWith('/me/preferences'))data={preferences:{theme:'dark',language:'en'}};
-    else if(url.pathname.endsWith('/refresh-allowance'))data={unlimited:false,windowSeconds:3600,retryAfterSeconds:0};
+    else if(url.pathname.endsWith('/refresh-allowance'))data={unlimited:true,windowSeconds:0,retryAfterSeconds:0};
     await route.fulfill({json:data});return;
   }
   await route.fulfill({status:404,body:''});

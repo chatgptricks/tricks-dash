@@ -20,11 +20,12 @@ function fixture(tool) {
   w.matchMedia = () => ({ matches: false });
   w.setInterval = () => 0;
   const later = w.setTimeout.bind(w);
-  w.setTimeout = (fn, delay) => later(fn, Math.min(delay, 1));
+  w.setTimeout = (fn, delay) => later(fn, delay === 30000 ? delay : Math.min(delay, 1));
   w.fetch = async () => { throw new Error('Unexpected unmocked request'); };
   w.__firebaseIdToken = 'fixture';
   w.__refreshFirebaseIdToken = async () => 'fixture';
   w.__sentientRolePreviewHeaders = () => ({ 'X-Queue-Role-Preview': 'vc' });
+  if(tool === 'tracker') w.eval(fs.readFileSync('public/tracker-refresh.js', 'utf8'));
   const main = [...w.document.scripts].find(script => script.textContent.includes("const API = 'https://cortex-api-db2e.onrender.com'"));
   const settings = 'const settingsMenu' + source.split('const settingsMenu')[1].split('</script>')[0];
   const bridge = tool === 'tracker'
