@@ -8,6 +8,7 @@
 <script src="/user-preferences.js?v=20261009-i18n1"></script>
 <script src="/tool-translations.js?v=20261014-analytics"></script>
 <script src="/tracker-monthly.js?v=20261014-analytics"></script>
+<script src="/tracker-refresh.js?v=20261017-followers"></script>
 <script src="/role-preview.js?v=20260928-tracker" defer></script>
 <script src="/context-menu.js?v=20260901-context1" defer></script>
 <title>Tracker · sentientdash.app</title>
@@ -168,6 +169,9 @@ section>p.sub{margin:0 0 14px;color:var(--muted);font-size:11px;line-height:1.5}
 .row-refresh-btn:hover{color:var(--accent-text)}
 .row-refresh-btn:disabled,.refresh-btn:disabled{opacity:.5;cursor:default}
 .refresh-icon{display:inline-block}
+.tracker-refresh-status{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:12px 0;padding:10px 12px;border:1px solid var(--line);border-radius:8px;font-size:12px;color:var(--muted-2)}
+.tracker-refresh-status[hidden]{display:none}
+.tracker-refresh-status.is-error{color:#ff8f89;border-color:#ff8f8955}
 .is-spinning{animation:tspin 900ms linear infinite}
 @keyframes tspin{to{transform:rotate(360deg)}}
 
@@ -406,6 +410,7 @@ table.hist-table td{text-align:left;padding:11px 8px;white-space:nowrap}
     <button type="button" role="tab" id="trackerOverviewTab" data-view="overview" aria-controls="app" aria-selected="true">Overview</button>
     <button type="button" role="tab" id="trackerSentientTab" data-view="sentient" aria-controls="app" aria-selected="false" tabindex="-1">Sentient</button>
   </div>
+  <div id="trackerRefreshStatus" class="tracker-refresh-status" role="status" aria-live="polite" hidden></div>
   <div class="tracker-shell">
     <aside id="sidebar" class="tracker-sidebar"></aside>
     <div id="app" aria-busy="true">
@@ -483,6 +488,9 @@ window.__resetToolSession = () => {
   SUMMARY = null;
   DETAIL_CACHE = {};
   resetSentientMonthly();
+  REFRESH_OPERATION = null;
+  AUTO_REFRESH_SESSION = -1;
+  setTrackerRefreshStatus();
   REFRESH_READY_AT = 0;
   REFRESH_UNLIMITED = false;
   REFRESH_WINDOW_MS = 0;
@@ -553,6 +561,10 @@ async function boot(){
     await loadSummary();
     if(session !== TRACKER_SESSION) return;
     render();
+    if(AUTO_REFRESH_SESSION !== session){
+      AUTO_REFRESH_SESSION = session;
+      void (readAcc() ? refreshAccountNow(readAcc()) : refreshAllAccountsNow());
+    }
   }catch(e){
     if(session !== TRACKER_SESSION) return;
     $('#app').innerHTML = '<div class="empty" role="alert">Could not load the tracker.<br><small>'+escapeHtml(e.message || 'Connection failed.')+'</small><br><button class="linkbtn" id="retryTracker">Retry</button></div>';
@@ -565,90 +577,73 @@ async function boot(){
 const trackerDelay = ms => new Promise(resolve => setTimeout(resolve, ms));
 const RETRYABLE_TRACKER_STATUS = new Set([502, 503, 504]);
 
+async function trackerRequest(path, method, forceRefresh, session){
+  return window.SentientTrackerRefresh.bounded(async signal => {
+    if(window.__refreshFirebaseIdToken) await window.__refreshFirebaseIdToken(forceRefresh);
+    if(signal.aborted || session !== TRACKER_SESSION) throw Object.assign(new Error('Session changed.'), {final:true});
+    const headers = window.__sentientRolePreviewHeaders ? window.__sentientRolePreviewHeaders() : {};
+    if(window.__firebaseIdToken) headers.Authorization = 'Bearer '+window.__firebaseIdToken;
+    const response = await fetch(API+path, {method, headers, cache:'no-store', signal});
+    const body = await response.json();
+    if(signal.aborted || session !== TRACKER_SESSION) throw Object.assign(new Error('Session changed.'), {final:true});
+    return {response, body};
+  });
+}
 async function authedFetch(path){
   const session = TRACKER_SESSION;
-  let lastError = null;
-  // A Render restart or an expired Firebase token should not strand one user
-  // on a blank Tracker while everyone else is working. Refresh the token and
-  // retry short-lived network/server failures before surfacing an error.
-  for(let attempt = 0; attempt < 3; attempt += 1){
+  let lastError;
+  for(let attempt=0; attempt<3; attempt+=1){
     try{
-      if(window.__refreshFirebaseIdToken) await window.__refreshFirebaseIdToken(attempt > 0);
-      if(session !== TRACKER_SESSION) throw Object.assign(new Error('Session changed.'), {final:true});
-      const headers = window.__sentientRolePreviewHeaders ? window.__sentientRolePreviewHeaders() : {};
-      if(window.__firebaseIdToken) headers.Authorization = 'Bearer '+window.__firebaseIdToken;
-      const r = await fetch(API+path, {headers});
-      if(session !== TRACKER_SESSION) throw Object.assign(new Error('Session changed.'), {final:true});
-      if(r.status===403){
-        // A permission answer is not an expired session: never sign out.
-        let detail = 'You do not have access to this Tracker action.';
-        try{ const body = await r.json(); if(body && typeof body.detail === 'string') detail = body.detail; }catch{}
-        throw Object.assign(new Error(detail), { status: 403, final: true });
-      }
-      if(r.status===401){
-        if(attempt < 2) {
-          lastError = new Error('unauthorized');
-          await trackerDelay(350 * (attempt + 1));
-          continue;
-        }
-        window.__onInsightsUnauthorized && window.__onInsightsUnauthorized();
-        throw new Error('unauthorized');
-      }
-      if(!r.ok){
-        lastError = new Error('HTTP '+r.status);
-        if(RETRYABLE_TRACKER_STATUS.has(r.status) && attempt < 2){
-          await trackerDelay(500 * (attempt + 1));
-          continue;
-        }
-        throw lastError;
-      }
-      const data = await r.json();
-      if(session !== TRACKER_SESSION) throw Object.assign(new Error('Session changed.'), {final:true});
-      return data;
+      const {response, body} = await trackerRequest(path, 'GET', attempt > 0, session);
+      if(response.status === 401 && attempt < 2) throw new Error('unauthorized');
+      if(response.status === 401) window.__onInsightsUnauthorized?.();
+      if(!response.ok) throw Object.assign(new Error(body.detail || 'HTTP '+response.status), {status:response.status, final:!RETRYABLE_TRACKER_STATUS.has(response.status)});
+      return body;
     }catch(error){
       lastError = error;
-      if(error?.final) throw error;
-      if(attempt < 2){
-        await trackerDelay(500 * (attempt + 1));
-        continue;
-      }
+      if(error?.final || session !== TRACKER_SESSION) throw error;
+      if(attempt < 2) await trackerDelay(500 * (attempt + 1));
     }
   }
-  throw new Error(lastError?.message === 'Failed to fetch'
-    ? 'Connection to the Tracker is still reconnecting. Try again in a moment.'
-    : (lastError?.message || 'Could not load Tracker data.'));
+  throw lastError;
 }
-
 async function authedPost(path){
-  const headers = window.__sentientRolePreviewHeaders ? window.__sentientRolePreviewHeaders() : {};
-  if(window.__firebaseIdToken) headers.Authorization = 'Bearer '+window.__firebaseIdToken;
-  const r = await fetch(API+path, {method:'POST', headers});
-  // Only an expired session signs out. A refused action (403) or a refresh
-  // limit (429) is reported to the person instead.
-  if(r.status===401){ window.__onInsightsUnauthorized && window.__onInsightsUnauthorized(); throw new Error('unauthorized'); }
-  if(!r.ok){
-    let detail = 'HTTP '+r.status;
-    try{ const body = await r.json(); if(body && body.detail) detail = body.detail; }catch{}
-    throw Object.assign(new Error(detail), { status: r.status, retryAfter: Number(r.headers.get('Retry-After')) || 0 });
+  const session = TRACKER_SESSION;
+  for(let attempt=0; attempt<2; attempt+=1){
+    const {response, body} = await trackerRequest(path, 'POST', attempt > 0, session);
+    if(response.status === 401 && attempt === 0) continue;
+    if(response.status === 401) window.__onInsightsUnauthorized?.();
+    if(!response.ok) throw Object.assign(new Error(body.detail || 'HTTP '+response.status), {status:response.status, retryAfter:Number(response.headers.get('Retry-After')) || 0});
+    return body;
   }
-  return r.json();
 }
 
-async function waitForTrackerRefresh(job, session = TRACKER_SESSION){
-  if(!job?.job_id) return job;
-  for(let attempt=0; attempt<300; attempt+=1){
-    if(session !== TRACKER_SESSION) throw new Error('Session changed.');
-    const current = await authedFetch('/api/tracker/refresh-jobs/'+encodeURIComponent(job.job_id));
-    if(current.status === 'done') return current.result || {};
-    if(current.status === 'error') throw new Error(current.error || 'Tracker refresh failed.');
-    await trackerDelay(1000);
+let REFRESH_OPERATION = null, AUTO_REFRESH_SESSION = -1;
+function setTrackerRefreshStatus(message = '', error = false, handle = ''){
+  const status = document.getElementById('trackerRefreshStatus');
+  if(!status) return;
+  status.hidden = !message;
+  status.classList.toggle('is-error', error);
+  status.setAttribute('role', error ? 'alert' : 'status');
+  status.replaceChildren();
+  if(message) status.append(Object.assign(document.createElement('span'), {textContent:message}));
+  if(error){
+    const retry = Object.assign(document.createElement('button'), {type:'button',className:'linkbtn',textContent:document.documentElement.lang === 'es' ? 'Reintentar' : 'Retry'});
+    retry.onclick = () => handle ? refreshAccountNow(handle) : refreshAllAccountsNow();
+    status.append(retry);
   }
-  throw new Error('Tracker refresh is still running. Reopen this account in a moment.');
+}
+async function waitForTrackerRefresh(job, session = TRACKER_SESSION){
+  return window.SentientTrackerRefresh.wait(job, {
+    read:authedFetch,
+    isCurrent:() => session === TRACKER_SESSION,
+    onProgress:current => setTrackerRefreshStatus(window.SentientTrackerRefresh.describe(current, document.documentElement.lang)),
+  });
 }
 
 /* ---------------- Manual refresh allowance ----------------
-   Everyone may refresh. The API enforces a per-person limit (DEV unlimited,
-   admins every 5 minutes, everyone else hourly); the buttons mirror it. */
+   Compatibility with older servers; current refresh jobs coalesce active work
+   instead of imposing a long per-person cooldown. */
 let REFRESH_READY_AT = 0;
 let REFRESH_UNLIMITED = false;
 let REFRESH_WINDOW_MS = 0;
@@ -660,10 +655,10 @@ function refreshWaitMessage(ms){
 }
 function applyRefreshAllowance(){
   const wait = REFRESH_UNLIMITED ? 0 : REFRESH_READY_AT - Date.now();
-  document.querySelectorAll('#refreshAllBtn,#detailRefreshBtn,[data-refresh]').forEach((btn) => {
+  document.querySelectorAll('#refreshAllBtn,#monthlyRefreshBtn,#detailRefreshBtn,[data-refresh]').forEach((btn) => {
     if(btn.dataset.running) return;
     if(btn.dataset.baseTitle === undefined) btn.dataset.baseTitle = btn.title || '';
-    btn.disabled = wait > 0;
+    btn.disabled = Boolean(REFRESH_OPERATION) || wait > 0;
     btn.title = wait > 0 ? refreshWaitMessage(wait) : btn.dataset.baseTitle;
   });
 }
@@ -695,64 +690,47 @@ function refreshErrorMessage(error, fallback){
    refresh deliberately asks Instagram again and upserts today's one row, so
    the number visibly updates without creating duplicate same-day history. */
 async function refreshAccountNow(handle, btn){
-  const session = TRACKER_SESSION;
-  // Spins just the &#8635; glyph, not the whole element -- the leaderboard's
-  // button IS the glyph, but the detail page's button also has a "Refresh"
-  // label next to it that shouldn't spin along with the icon.
-  const icon = btn && (btn.querySelector('.refresh-icon') || btn);
-  if(btn){ btn.disabled = true; btn.dataset.running = '1'; }
-  if(icon){ icon.classList.add('is-spinning'); }
-  try{
-    const job = await authedPost('/api/tracker/accounts/'+encodeURIComponent(handle)+'/refresh');
-    if(session !== TRACKER_SESSION) return;
-    startRefreshCooldown();
-    const result = await waitForTrackerRefresh(job, session);
-    if(session !== TRACKER_SESSION) return;
-    const row = SUMMARY.accounts.find(r=>r.handle===handle);
-    if(row){
-      row.followers = result.followers ?? result.followers_count;
-      row.posts_count = result.posts_count;
-      row.captured_at = result.captured_at || row.captured_at;
-      row.full_name = result.full_name;
-      row.verified = result.verified;
-      row.private = result.private;
-    }
-    // The detail page's chart/history is stale the instant a new snapshot
-    // lands, so drop the cache rather than patch it -- it's a cheap re-fetch
-    // (no Apify call) the next time this account's page is opened.
-    delete DETAIL_CACHE[handle];
-    invalidateSentientMonthly(handle);
-    render();
-    void loadSentientMonthly();
-  }catch(e){
-    if(session === TRACKER_SESSION) alert(toolText(refreshErrorMessage(e, 'Could not refresh @'+handle+': ')));
-  }finally{
-    if(btn){ btn.disabled = false; delete btn.dataset.running; }
-    if(icon){ icon.classList.remove('is-spinning'); }
-    applyRefreshAllowance();
-  }
+  return runTrackerRefresh(handle, btn);
 }
-
 async function refreshAllAccountsNow(btn){
+  return runTrackerRefresh('', btn);
+}
+async function runTrackerRefresh(handle, btn){
+  if(REFRESH_OPERATION) return REFRESH_OPERATION.promise;
   const session = TRACKER_SESSION;
-  if(btn){ btn.disabled = true; btn.dataset.running = '1'; btn.dataset.label = btn.textContent; btn.textContent = 'Refreshing all…'; }
-  try{
-    const job = await authedPost('/api/tracker/snapshot-now');
-    if(session !== TRACKER_SESSION) return;
-    startRefreshCooldown();
-    await waitForTrackerRefresh(job, session);
-    if(session !== TRACKER_SESSION) return;
-    DETAIL_CACHE = {};
-    resetSentientMonthly(false);
-    await loadSummary();
-    render();
-    void loadSentientMonthly();
-  }catch(e){
-    if(session === TRACKER_SESSION) alert(toolText(refreshErrorMessage(e, 'Could not refresh accounts: ')));
-  }finally{
-    if(btn){ btn.disabled = false; delete btn.dataset.running; btn.textContent = btn.dataset.label || '↻ Refresh all'; }
-    applyRefreshAllowance();
-  }
+  const operation = {promise:null};
+  REFRESH_OPERATION = operation;
+  const icon = btn?.querySelector('.refresh-icon');
+  if(icon) icon.classList.add('is-spinning');
+  setTrackerRefreshStatus(window.SentientTrackerRefresh.describe(null, document.documentElement.lang));
+  applyRefreshAllowance();
+  operation.promise = (async () => {
+    try{
+      const path = handle ? '/api/tracker/accounts/'+encodeURIComponent(handle)+'/refresh' : '/api/tracker/snapshot-now';
+      const job = await authedPost(path);
+      if(session !== TRACKER_SESSION) return;
+      const result = await waitForTrackerRefresh(job, session);
+      if(session !== TRACKER_SESSION) return;
+      // An account request can join an existing full refresh. Always read the
+      // canonical summary so growth, ranks and timestamps agree with history.
+      DETAIL_REQUEST += 1;
+      DETAIL_CACHE = {};
+      resetSentientMonthly(false);
+      await loadSummary();
+      if(session !== TRACKER_SESSION) return;
+      render();
+      const outcome = window.SentientTrackerRefresh.outcome(result, document.documentElement.lang, handle);
+      setTrackerRefreshStatus(outcome.message, outcome.error, handle);
+    }catch(error){
+      if(session !== TRACKER_SESSION) return;
+      const message = toolText(refreshErrorMessage(error, 'Could not refresh followers: '));
+      setTrackerRefreshStatus(message, true, handle);
+    }finally{
+      if(icon) icon.classList.remove('is-spinning');
+      if(REFRESH_OPERATION === operation){ REFRESH_OPERATION = null; applyRefreshAllowance(); }
+    }
+  })();
+  return operation.promise;
 }
 
 async function loadSummary(){
@@ -989,7 +967,7 @@ function sentientMonthlyContent(){
   const bestDay = summary.series.reduce((best,day)=>!best || day.net>best.net?day:best,null);
   const dayLabel = day => new Date(day+'T12:00:00Z').toLocaleDateString(toolLocale(),{month:'short',day:'numeric',timeZone:'America/Costa_Rica'});
   return `<header class="sentient-hero"><div><h2>Sentient · Monthly overview</h2><p>All tracked Sentient accounts combined</p></div>
-    <label class="monthly-select"><span>Month</span><select id="sentientMonth" aria-label="Sentient summary month">${options.map(value=>`<option value="${value}" ${value===month?'selected':''} data-i18n-skip>${monthLabel(value)}</option>`).join('')}</select></label></header>
+    <label class="monthly-select"><span>Month</span><select id="sentientMonth" aria-label="Sentient summary month">${options.map(value=>`<option value="${value}" ${value===month?'selected':''} data-i18n-skip>${monthLabel(value)}</option>`).join('')}</select></label><button type="button" class="linkbtn refresh-btn" id="monthlyRefreshBtn">&#8635; Refresh all</button></header>
     <div class="sentient-metrics" aria-live="polite" aria-busy="${MONTHLY_LOADING}">
       <div class="kpi"><b>Followers gained</b><strong class="monthly-positive" data-monthly="gained">${unavailable?'—':'+'+fmt(summary.gained??0)}</strong></div>
       <div class="kpi"><b>Followers lost</b><strong class="monthly-negative" data-monthly="lost">${unavailable?'—':(summary.lost? '−':'')+fmt(summary.lost??0)}</strong></div>
@@ -1012,6 +990,9 @@ function paintSentientMonthly(){
   wireAvatarFallbacks(panel);
   const select = $('#sentientMonth');
   if(select) select.onchange = event => { MONTHLY_SELECTED = event.currentTarget.value; writeTrackerView('sentient', MONTHLY_SELECTED); paintSentientMonthly(); $('#sentientMonth')?.focus(); };
+  const refresh = $('#monthlyRefreshBtn');
+  if(refresh) refresh.onclick = event => refreshAllAccountsNow(event.currentTarget);
+  applyRefreshAllowance();
   const retry = $('#retrySentientMonthly');
   if(retry) retry.onclick = () => loadSentientMonthly();
   panel.querySelectorAll('[data-monthly-chart]').forEach(button=>button.onclick=()=>{MONTHLY_CHART_MODE=button.dataset.monthlyChart;paintSentientMonthly();panel.querySelector(`[data-monthly-chart="${MONTHLY_CHART_MODE}"]`)?.focus();});
@@ -1089,7 +1070,7 @@ function renderLeaderboard(){
     <section>
       <div class="section-head">
         <h2>Leaderboard</h2>
-        <button type="button" class="linkbtn refresh-btn" id="refreshAllBtn" title="Re-scrape every account's real follower count from Instagram right now (~$0.002 each)">&#8635; Refresh all</button>
+        <button type="button" class="linkbtn refresh-btn" id="refreshAllBtn" title="Update every account’s follower count from Instagram now">&#8635; Refresh all</button>
       </div>
       <p class="sub">Compare account growth. Select a column to sort or an account to explore its history.</p>
       <div class="tracker-toolbar">
