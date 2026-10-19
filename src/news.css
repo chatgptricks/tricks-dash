@@ -89,8 +89,10 @@ body { overflow-x: hidden; overflow-y: auto; overscroll-behavior-y: contain; }
 .news-search input { width: 100%; height: 34px; border: 0; outline: 0; background: transparent; color: var(--text); font-size: 11px; }
 .news-search input::placeholder { color: var(--muted); }
 .news-clear-search { width: 24px; height: 24px; border: 0; border-radius: 50%; background: var(--surface-3); color: var(--muted-strong); font-size: 17px; cursor: pointer; }
+.news-status-select,
 .news-feed-select,
 .news-sort-select { display: flex; align-items: center; gap: 6px; padding-left: 10px; border-left: 1px solid var(--line); color: var(--muted); font-size: 9px; }
+.news-status-select select,
 .news-feed-select select,
 .news-sort-select select { min-height: 32px; max-width: 155px; padding: 0 23px 0 5px; border: 0; background: transparent; color: var(--text); font-size: 10px; }
 .news-stop { flex: 0 0 auto; border-color: rgba(225,109,109,.3); color: #f49a9a; }
@@ -101,6 +103,26 @@ body { overflow-x: hidden; overflow-y: auto; overscroll-behavior-y: contain; }
 
 /* Card geometry, media and actions are shared with Research. Only News
    evidence and editorial status have tool-specific styling. */
+.news-shell .news-story.product-card,
+.news-shell .news-story.product-card:hover {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-1);
+  box-shadow: none;
+  transform: none;
+  transition: none;
+}
+.news-story.product-card .product-card-image { transform: none; transition: none; }
+.news-story-badges { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.news-status-badge { padding: 4px 6px; border: 1px solid var(--line); border-radius: 5px; color: var(--muted-strong); font-size: 9px; font-weight: 650; }
+.news-status-badge.is-done { color: #7cdbb7; border-color: #7cdbb740; }
+.news-status-badge.is-rejected { color: #e5a2a2; border-color: #e5a2a240; }
+.news-disposition-actions { display: flex; gap: 6px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.news-disposition-actions button { display: inline-flex; flex: 1; align-items: center; justify-content: center; gap: 5px; min-height: 36px; padding: 7px; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: var(--muted-strong); font: inherit; font-size: 11px; cursor: pointer; }
+.news-disposition-actions .news-mark-done { color: #7cdbb7; }
+.news-disposition-actions button:hover { background: var(--surface-2); color: var(--text); }
+.news-disposition-actions button:disabled { opacity: .45; cursor: wait; }
+.news-disposition-actions .news-reject:hover { color: #e5a2a2; }
 .news-story-rank { display: grid; place-items: center; width: 25px; height: 25px; border: 1px solid var(--line); border-radius: 50%; color: var(--muted); font-size: 9px; font-weight: 750; font-variant-numeric: tabular-nums; }
 .news-story.is-golden .news-story-rank { border-color: #dfb655; color: #dfb655; }
 .news-story.is-potential .news-story-rank { border-color: #45caa8; color: #45caa8; }
@@ -163,8 +185,10 @@ body { overflow-x: hidden; overflow-y: auto; overscroll-behavior-y: contain; }
   .news-feed-grid { grid-template-columns: 1fr 1fr; min-width: min(500px, 78vw); }
   .news-search-row { flex-wrap: wrap; }
   .news-search { flex-basis: 100%; }
+  .news-status-select,
   .news-feed-select,
   .news-sort-select { flex: 1; justify-content: space-between; }
+  .news-status-select select,
   .news-feed-select select,
   .news-sort-select select { max-width: none; flex: 1; }
 }

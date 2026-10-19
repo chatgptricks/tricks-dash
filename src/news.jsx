@@ -6,7 +6,7 @@ import { firebaseAuth, startGoogleSignIn, describeSignInError } from './firebase
 import { clearSsoCookie, startSsoRefresh, trySsoSignIn } from './sso';
 import ProductHeader from './ProductHeader';
 import ResearchCard, { CardMedia } from './ResearchCard';
-import { ExternalLink, FilePenLine, Sparkles, Star } from 'lucide-react';
+import { Check, ExternalLink, FilePenLine, RotateCcw, Sparkles, Star, X } from 'lucide-react';
 import { coordinatorFor, devAccessFor } from '../public/product-navigation';
 import { SettingsMenu } from './App';
 import { PrefsProvider } from './prefsContext';
@@ -78,7 +78,7 @@ function ReviewBadge({ review }) {
   return <span className={`news-review-badge ${golden ? 'gold' : potential ? 'promising' : 'not-yet'}`}>{t(golden ? 'Golden nugget' : potential ? 'Potential' : 'Explore later')} · {Math.round((review.score || 0) * 100)}%</span>;
 }
 
-function StoryCard({ item, rank, review, onReview, busy, locked, saved, onSave, onBrief, failure }) {
+function StoryCard({ item, rank, review, onReview, busy, locked, saved, onSave, onBrief, failure, status, onStatus, statusBusy, statusFailure }) {
   const { t, dateLabel, relativeAge, errorText } = useToolLanguage();
   const dimensions = review?.dimensions || {};
   const mainSignals = [['Viral potential', review?.viralPotential ?? dimensions.viral_potential?.score], ['Story freshness', dimensions.timeliness?.score], ['Evidence', review?.evidenceQuality ?? dimensions.evidence_quality?.score]];
@@ -86,6 +86,7 @@ function StoryCard({ item, rank, review, onReview, busy, locked, saved, onSave, 
   const golden = review?.label === 'golden_nugget' || review?.label === 'gold';
   const potential = review?.label === 'potential' || review?.label === 'promising';
   return <ResearchCard
+    effects={false}
     className={`news-story${golden ? ' is-golden' : ''}${potential ? ' is-potential' : ''}`}
     source={publisher}
     meta={item.published ? <time dateTime={item.published} title={dateLabel(item.published, true)}>{relativeAge(item.published) || dateLabel(item.published, true)}</time> : t('Date unavailable')}
@@ -100,7 +101,7 @@ function StoryCard({ item, rank, review, onReview, busy, locked, saved, onSave, 
     </>}
     footer={<><span>{t(item.feedLabel)}</span>{item.socialSignal && <span className="news-social-hint" title={t(item.socialSignal)}>{t('Filtered X discussion')}</span>}</>}
   >
-    <ReviewBadge review={review} />
+    <div className="news-story-badges"><ReviewBadge review={review} />{status !== 'pending' && <span className={`news-status-badge is-${status}`}>{t(status === 'done' ? 'Done' : 'Rejected')}</span>}</div>
     <h2 title={item.title}><a href={item.link} target="_blank" rel="noreferrer">{item.title}</a></h2>
     <p className="news-story-excerpt">{stripHtml(item.description).slice(0, 360) || t('The feed has no excerpt. Read the original source before developing this story.')}</p>
     {item.coverageCount > 1 && <div className="news-story-tags"><span className="news-coverage">{t('Seen across {sites} source sites · {feeds} feeds', { sites: item.coverageCount, feeds: item.coverageFeeds?.length || 0 })}</span></div>}
@@ -108,6 +109,13 @@ function StoryCard({ item, rank, review, onReview, busy, locked, saved, onSave, 
     {failure && <p role="status" className="news-error">{t('Review failed:')} {errorText(failure)}</p>}
     {review?.strengths?.length > 0 && <details className="news-review-details"><summary>{t('Why JEV ranked this story')}</summary><p><strong>{t('Strongest signals:')}</strong> {review.strengths.slice(0, 4).map(human).join(' · ')}. {review.weaknesses?.length ? <><strong>{t('Needs work:')}</strong> {review.weaknesses.map(human).join(' · ')}.</> : null}</p>{review.editorialAngle && <p><strong>{t('Post angle:')}</strong> {ANGLES[review.editorialAngle] ? t(ANGLES[review.editorialAngle]) : human(review.editorialAngle)} {review.postFormat && t('Best format: {format}.', { format: human(review.postFormat) })}</p>}{review.targetAccount && <p><strong>{t('Optional account fit:')}</strong> @{review.targetAccount}</p>}<p>{t('Evidence')}: {t(review.evidenceSource === 'article' ? 'article text extracted from the publisher' : 'RSS excerpt only')}. {t('Viral potential is an editorial estimate, not a promise of reach or a verified engagement count.')}</p></details>}
     {item.relatedStories?.length > 0 && <details className="news-review-details"><summary>{t('Other coverage ({count})', { count: item.relatedStories.length })}</summary><ul>{item.relatedStories.map((source,index) => <li key={`${source.link}-${index}`}><a href={source.link} target="_blank" rel="noreferrer">{source.title} · {source.source} ↗</a></li>)}</ul></details>}
+    <div className="news-disposition-actions" aria-busy={statusBusy}>
+      {status === 'pending' ? <>
+        <button type="button" className="news-mark-done" disabled={statusBusy} onClick={() => onStatus('done')} aria-label={t('Mark as done')}><Check size={14} aria-hidden="true" />{t('Done')}</button>
+        <button type="button" className="news-reject" disabled={statusBusy} onClick={() => onStatus('rejected')} aria-label={t('Reject story')}><X size={14} aria-hidden="true" />{t('Reject')}</button>
+      </> : <button type="button" disabled={statusBusy} onClick={() => onStatus('pending')} aria-label={t('Reopen story')}><RotateCcw size={14} aria-hidden="true" />{t('Reopen')}</button>}
+    </div>
+    {statusFailure && <p role="status" className="news-error news-status-error">{t('Could not update story status. Please try again.')} {errorText(statusFailure)}</p>}
   </ResearchCard>;
 }
 
@@ -115,6 +123,7 @@ function NewsApp() {
   const { lang, setLang, t, errorText } = useToolLanguage("News");
   const [user, setUser] = useState(undefined); const [viewer, setViewer] = useState(null); const [authError] = useState(''); const [items, setItems] = useState([]); const [reviews, setReviews] = useState({}); const [loading, setLoading] = useState(false); const [error, setError] = useState(''); const [feedStatuses, setFeedStatuses] = useState([]); const [reviewing, setReviewing] = useState('');
   const [query, setQuery] = useState(''); const [filter, setFilter] = useState('best'); const [feedFilter, setFeedFilter] = useState('all'); const [sortBy, setSortBy] = useState('recommended'); const [visibleLimit, setVisibleLimit] = useState(30); const [saved, setSaved] = useState({}); const [failures, setFailures] = useState({}); const [scanning, setScanning] = useState(false); const [progress, setProgress] = useState({ done: 0, total: 0 }); const stopScan = useRef(false); const busyRef = useRef(false); const loadingRef = useRef(false); const [brief, setBrief] = useState(null);
+  const [statuses, setStatuses] = useState({}); const [statusFilter, setStatusFilter] = useState('pending'); const [statusBusy, setStatusBusy] = useState({}); const [statusFailures, setStatusFailures] = useState({}); const statusRequests = useRef(new Set()); const statusRevision = useRef(0);
   useEffect(() => {
     const previousTheme = document.documentElement.dataset.theme;
     document.documentElement.dataset.theme = 'dark';
@@ -123,7 +132,7 @@ function NewsApp() {
       else delete document.documentElement.dataset.theme;
     };
   }, []);
-  useEffect(() => { setVisibleLimit(30); }, [filter, feedFilter, sortBy, query]);
+  useEffect(() => { setVisibleLimit(30); }, [filter, feedFilter, statusFilter, sortBy, query]);
   useEffect(() => { if (brief) document.getElementById('news-brief')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, [brief?.item.id]);
   useEffect(() => { trySsoSignIn().catch(() => {}); return onAuthStateChanged(firebaseAuth, value => { setUser(value || null); setViewer(null); }); }, []);
   useEffect(() => user ? startSsoRefresh() : undefined, [user]);
@@ -131,11 +140,15 @@ function NewsApp() {
   const load = useCallback(async () => {
     if (!user || loadingRef.current) return;
     loadingRef.current = true; setLoading(true);
+    const revision = statusRevision.current;
     try {
       const response = await apiFetch(`${API_BASE}/api/dashboard/news`);
       if (!response.ok) throw new Error(`News returned ${response.status}`);
       const data = await response.json();
       setItems(data.items || []); setReviews(data.reviews || {}); setSaved(data.saved || {});
+      // A polling response that started before an editorial action must not
+      // undo its result, or restore an old status while a write is in flight.
+      if (revision === statusRevision.current && !statusRequests.current.size) setStatuses(data.statuses || {});
       setFeedStatuses([]); setError('');
     } catch (reason) { setError(reason.message || 'Unable to load News.'); }
     finally { loadingRef.current = false; setLoading(false); }
@@ -153,6 +166,20 @@ function NewsApp() {
       if (!response.ok) throw new Error(`Save returned ${response.status}`);
       setSaved(current => { const next = { ...current }; if (nextSaved) next[item.id] = { item, ...(briefText == null ? {} : { brief: briefText }) }; else delete next[item.id]; return next; });
     } catch (reason) { setError(`Could not save idea: ${reason.message}`); }
+  }
+
+  async function updateStoryStatus(item, status) {
+    if (statusRequests.current.has(item.id)) return;
+    statusRequests.current.add(item.id); statusRevision.current += 1;
+    setStatusBusy(current => ({ ...current, [item.id]: true }));
+    setStatusFailures(current => ({ ...current, [item.id]: '' }));
+    try {
+      const response = await apiFetch(`${API_BASE}/api/dashboard/news/status`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: item.id, status }) });
+      if (!response.ok) { let detail = ''; try { detail = (await response.json()).detail || ''; } catch {} throw new Error(typeof detail === 'string' && detail ? detail : `News returned ${response.status}`); }
+      const result = await response.json();
+      setStatuses(current => ({ ...current, [item.id]: { item, status: result.status || status } }));
+    } catch (reason) { setStatusFailures(current => ({ ...current, [item.id]: reason.message })); }
+    finally { statusRequests.current.delete(item.id); statusRevision.current += 1; setStatusBusy(current => ({ ...current, [item.id]: false })); }
   }
 
   useEffect(() => {
@@ -183,10 +210,11 @@ function NewsApp() {
     finally { busyRef.current = false; setReviewing(''); }
   }
 
-  const candidates = useMemo(() => { const merged = new Map(items.map(item => [item.id, item])); Object.values(saved).forEach(value => { if (value.item && !merged.has(value.item.id)) merged.set(value.item.id, value.item); }); return [...merged.values()]; }, [items, saved]);
+  const candidates = useMemo(() => { const merged = new Map(items.map(item => [item.id, item])); [...Object.values(saved), ...Object.values(statuses)].forEach(value => { if (value.item && !merged.has(value.item.id)) merged.set(value.item.id, value.item); }); return [...merged.values()]; }, [items, saved, statuses]);
+  const statusCandidates = useMemo(() => candidates.filter(item => statusFilter === 'all' || (statuses[item.id]?.status || 'pending') === statusFilter), [candidates, statuses, statusFilter]);
   const pendingCount = candidates.filter(item => !reviews[item.id]).length;
   const ranked = useMemo(() => {
-    let rows = candidates.filter(item => (!query || `${item.searchText || `${item.title} ${stripHtml(item.description)} ${item.source}`}`.toLowerCase().includes(query.toLowerCase())) && (feedFilter === 'all' || item.feedGroup === feedFilter));
+    let rows = statusCandidates.filter(item => (!query || `${item.searchText || `${item.title} ${stripHtml(item.description)} ${item.source}`}`.toLowerCase().includes(query.toLowerCase())) && (feedFilter === 'all' || item.feedGroup === feedFilter));
     rows = rows.filter(item => {
       const label = reviews[item.id]?.label;
       if (filter === 'golden_nugget') return label === 'golden_nugget' || label === 'gold';
@@ -202,7 +230,7 @@ function NewsApp() {
       const labelRank = item => ({ golden_nugget: 4, potential: 3, promising: 3, not_yet: 1 }[reviews[item.id]?.label] || 0);
       return labelRank(b) - labelRank(a) || (reviews[b.id]?.viralPotential ?? 0) - (reviews[a.id]?.viralPotential ?? 0) || (reviews[b.id]?.score ?? 0) - (reviews[a.id]?.score ?? 0) || discoveryPriority(b) - discoveryPriority(a) || (Date.parse(b.published) || 0) - (Date.parse(a.published) || 0);
     });
-  }, [candidates, reviews, saved, query, feedFilter, filter, sortBy]);
+  }, [statusCandidates, reviews, saved, query, feedFilter, filter, sortBy]);
   const visibleRanked = ranked.slice(0, visibleLimit);
 
   function makeBrief(item) {
@@ -219,14 +247,14 @@ function NewsApp() {
 
   const reviewedCount = candidates.filter(item => reviews[item.id]).length;
   const counts = {
-    all: candidates.length,
-    golden: candidates.filter(item => ['golden_nugget', 'gold'].includes(reviews[item.id]?.label)).length,
-    potential: candidates.filter(item => ['potential', 'promising'].includes(reviews[item.id]?.label)).length,
-    x: candidates.filter(item => item.sourceType === 'x').length,
-    unreviewed: pendingCount,
-    saved: candidates.filter(item => Boolean(saved[item.id])).length,
+    all: statusCandidates.length,
+    golden: statusCandidates.filter(item => ['golden_nugget', 'gold'].includes(reviews[item.id]?.label)).length,
+    potential: statusCandidates.filter(item => ['potential', 'promising'].includes(reviews[item.id]?.label)).length,
+    x: statusCandidates.filter(item => item.sourceType === 'x').length,
+    unreviewed: statusCandidates.filter(item => !reviews[item.id]).length,
+    saved: statusCandidates.filter(item => Boolean(saved[item.id])).length,
   };
-  const filters = [['best','Recommended',null],['golden_nugget','Golden',counts.golden],['potential','Potential',counts.potential],['unreviewed','Needs review',pendingCount],['x','X signals',counts.x],['all','All stories',counts.all],['saved','Saved',counts.saved]];
+  const filters = [['best','Recommended',null],['golden_nugget','Golden',counts.golden],['potential','Potential',counts.potential],['unreviewed','Needs review',counts.unreviewed],['x','X signals',counts.x],['all','All stories',counts.all],['saved','Saved',counts.saved]];
   const feedGroups = [...new Set(NEWS_FEEDS.map(feed => feed.group))];
   return <main className="news-shell product-page">
     <ProductHeader current="news" coordinator={coordinatorFor(viewer)} isDev={devAccessFor(viewer)} canAccessNews={canAccessNews} account={<SettingsMenu email={user.email} avatarUrl={user.photoURL || viewer?.avatar_url} isAdmin={Boolean(viewer?.is_admin)} isDev={devAccessFor(viewer)} hideAppearanceControls onSignOut={handleSignOut} />}>
@@ -235,10 +263,10 @@ function NewsApp() {
     <section className="product-page-heading"><p>{t('Discover story ideas from 11 monitored feeds')}</p></section>
     <section className="news-source-health" aria-live="polite"><div className="news-health-copy"><span className={`news-health-dot ${candidates.length ? 'is-online' : ''}`} /><span>{loading ? t('Loading shared News…') : t('{count} shared stories · automatic feed and JEV updates', { count: candidates.length })}</span></div></section>
     {error && <div className="news-alert" role="status">{errorText(error)}</div>}
-    <section className="news-toolbar product-page-controls" aria-label={t('Story filters')}><div className="news-filter-row"><div className="news-filter-tabs" role="tablist" aria-label={t('Story filters')}>{filters.map(([key,label,count]) => <button key={key} role="tab" aria-selected={filter === key} className={filter === key ? 'active' : ''} onClick={() => setFilter(key)}>{t(label)}{count !== null && <b>{count}</b>}</button>)}</div><span className="news-result-count"><strong>{ranked.length}</strong> {t('stories')}<span className="news-result-reviewed"> · {t('{count} scored by JEV', { count: reviewedCount })}</span></span></div><div className="news-search-row"><label className="news-search"><span aria-hidden="true">⌕</span><input aria-label={t('Search stories')} value={query} onChange={event => setQuery(event.target.value)} placeholder={t('Search stories, sources or topics…')} />{query && <button className="news-clear-search" onClick={() => setQuery('')} aria-label={t('Clear search')}>×</button>}</label><label className="news-feed-select"><span>{t('Feed')}</span><select aria-label={t('Filter stories by topic')} value={feedFilter} onChange={event => setFeedFilter(event.target.value)}><option value="all">{t('All feeds')}</option>{feedGroups.map(group => <option value={group} key={group}>{t(group)}</option>)}</select></label><label className="news-sort-select"><span>{t('Sort')}</span><select aria-label={t('Sort stories')} value={sortBy} onChange={event => setSortBy(event.target.value)}><option value="recommended">{t('Recommended')}</option><option value="newest">{t('Newest')}</option><option value="coverage">{t('Most coverage')}</option></select></label><span className="news-up-to-date">{pendingCount > 0 ? t('{count} queued for automatic JEV review', { count: pendingCount }) : t('All caught up')}</span></div></section>
+    <section className="news-toolbar product-page-controls" aria-label={t('Story filters')}><div className="news-filter-row"><div className="news-filter-tabs" role="tablist" aria-label={t('Story filters')}>{filters.map(([key,label,count]) => <button key={key} role="tab" aria-selected={filter === key} className={filter === key ? 'active' : ''} onClick={() => setFilter(key)}>{t(label)}{count !== null && <b>{count}</b>}</button>)}</div><span className="news-result-count"><strong>{ranked.length}</strong> {t('stories')}<span className="news-result-reviewed"> · {t('{count} scored by JEV', { count: reviewedCount })}</span></span></div><div className="news-search-row"><label className="news-search"><span aria-hidden="true">⌕</span><input aria-label={t('Search stories')} value={query} onChange={event => setQuery(event.target.value)} placeholder={t('Search stories, sources or topics…')} />{query && <button className="news-clear-search" onClick={() => setQuery('')} aria-label={t('Clear search')}>×</button>}</label><label className="news-status-select"><span>{t('Status')}</span><select aria-label={t('Filter stories by status')} value={statusFilter} onChange={event => setStatusFilter(event.target.value)}>{[['pending', 'Pending'], ['done', 'Done'], ['rejected', 'Rejected'], ['all', 'All statuses']].map(([value, label]) => <option key={value} value={value}>{t(label)}</option>)}</select></label><label className="news-feed-select"><span>{t('Feed')}</span><select aria-label={t('Filter stories by topic')} value={feedFilter} onChange={event => setFeedFilter(event.target.value)}><option value="all">{t('All feeds')}</option>{feedGroups.map(group => <option value={group} key={group}>{t(group)}</option>)}</select></label><label className="news-sort-select"><span>{t('Sort')}</span><select aria-label={t('Sort stories')} value={sortBy} onChange={event => setSortBy(event.target.value)}><option value="recommended">{t('Recommended')}</option><option value="newest">{t('Newest')}</option><option value="coverage">{t('Most coverage')}</option></select></label><span className="news-up-to-date">{pendingCount > 0 ? t('{count} queued for automatic JEV review', { count: pendingCount }) : t('All caught up')}</span></div></section>
     {scanning && <div className="news-progress" role="progressbar" aria-label={t('JEV review progress')} aria-valuemin="0" aria-valuemax={progress.total} aria-valuenow={progress.done}><span style={{ width: `${progress.total ? progress.done / progress.total * 100 : 0}%` }} /></div>}
     {brief && <section id="news-brief" className="news-brief"><div><span className="news-kicker">{t('EDITORIAL WORKSPACE')}</span><h2>{t('Build an original post')}</h2><p>{t('Use the source and the story angle to create something clear, useful, and worth sharing.')}</p></div><textarea aria-label={t('Post brief')} value={brief.text} onChange={event => setBrief({ ...brief, text: event.target.value })} /><div className="news-story-actions"><button onClick={() => { saveStory(brief.item, true, brief.text); }}>{t('Save brief')}</button><button onClick={async () => { try { await navigator.clipboard.writeText(brief.text); setError('Brief copied.'); } catch { setError('Copy failed. Select the brief text and copy it manually.'); } }}>{t('Copy brief')}</button><button onClick={() => setBrief(null)}>{t('Close')}</button></div></section>}
-    <section className="news-results product-card-grid" aria-label={t('News stories')}>{visibleRanked.map((item,index) => <StoryCard key={item.id} rank={index} item={item} review={reviews[item.id]} busy={reviewing === item.id} locked={scanning || Boolean(reviewing)} failure={failures[item.id]} saved={Boolean(saved[item.id])} onReview={review} onSave={() => saveStory(item, !saved[item.id])} onBrief={() => makeBrief(item)} />)}{!ranked.length && <div className="news-empty"><strong>{t('No stories in this view.')}</strong><span>{t('Clear the search, change the feed, or review unassessed stories. A story without a review has not been rejected.')}</span>{!items.length && <button onClick={load} disabled={loading}>{t(loading ? 'Loading feeds…' : 'Load RSS stories')}</button>}</div>}</section>
+    <section className="news-results product-card-grid" aria-label={t('News stories')}>{visibleRanked.map((item,index) => <StoryCard key={item.id} rank={index} item={item} review={reviews[item.id]} busy={reviewing === item.id} locked={scanning || Boolean(reviewing)} failure={failures[item.id]} saved={Boolean(saved[item.id])} onReview={review} onSave={() => saveStory(item, !saved[item.id])} onBrief={() => makeBrief(item)} status={statuses[item.id]?.status || 'pending'} statusBusy={Boolean(statusBusy[item.id])} statusFailure={statusFailures[item.id]} onStatus={status => updateStoryStatus(item, status)} />)}{!ranked.length && <div className="news-empty"><strong>{t('No stories in this view.')}</strong><span>{t('Try another status, feed, or search. Done and rejected stories can be reopened.')}</span>{!items.length && <button onClick={load} disabled={loading}>{t(loading ? 'Loading feeds…' : 'Load RSS stories')}</button>}</div>}</section>
     {visibleRanked.length < ranked.length && <div className="news-load-more"><span>{t('Showing {visible} of {total} matching stories', { visible: visibleRanked.length, total: ranked.length })}</span><button onClick={() => setVisibleLimit(current => Math.min(current + 30, ranked.length))}>{t('Load 30 more stories')}</button></div>}
     {loading && <div className="news-loading-note">{t('Refreshing RSS.app feeds…')}</div>}
   </main>;

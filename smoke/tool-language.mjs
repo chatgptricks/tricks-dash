@@ -43,7 +43,7 @@ try {
     const errors = [], preferences = [], mutations = [];
     const date = '2026-09-01T10:00:00Z';
     const story = {id:'story-1',title:'Original English AI research story',description:'Original English reporting stays intact.',publisher:'Source Publisher',source:'Source Publisher',sourceType:'news',feedLabel:'Artificial intelligence',feedGroup:'Ticker',published:date,link:'https://publisher.test/original',image:'',coverageCount:1};
-    const saved = {};
+    const saved = {}, statuses = {};
     const link = {id:'link-1',title:'Original English saved idea',url:'https://publisher.test/idea',priority:1,shared_at:date,source:'Source workspace',discarded:false,done:false,tweet_text:'Original English source content.'};
     const hook = {id:'posts:1:ocr',source_table:'posts',source_id:1,source_kind:'ocr',account:'sourceaccount',shortcode:'abc',permalink:'https://instagram.com/p/abc',published_at:date,likes:12345,hook_text:'Original English hook stays intact.',primary_topic:'ai_tools',categories:['benefit'],categorized_at:date,matchType:'exact',saved:false};
     const drafts = [];
@@ -61,8 +61,9 @@ try {
           if(method==='POST') { const payload=request.postDataJSON(); preferences.push(payload); if(payload.preferences?.language) serverLanguage=payload.preferences.language; }
           data={preferences:{language:serverLanguage}};
         } else if(url.pathname==='/api/dashboard/me') data={email:'developer@example.test',is_dev:true,is_admin:true};
-        else if(url.pathname==='/api/dashboard/news') data={items:[story],reviews:{},saved};
+        else if(url.pathname==='/api/dashboard/news') data={items:[story],reviews:{},saved,statuses};
         else if(url.pathname==='/api/dashboard/news/save') { const payload=request.postDataJSON();mutations.push({path:url.pathname,payload});if(payload.saved) saved[payload.id]={item:story,brief:payload.brief};else delete saved[payload.id]; }
+        else if(url.pathname==='/api/dashboard/news/status') { const payload=request.postDataJSON();mutations.push({path:url.pathname,payload});statuses[payload.id]={status:payload.status,item:story};data={ok:true,...payload}; }
         else if(url.pathname==='/api/dashboard/vault' && method==='GET') data={items:[link]};
         else if(url.pathname==='/api/dashboard/vault/link-1') { const payload=request.postDataJSON();mutations.push({path:url.pathname,payload});Object.assign(link,payload);data=link; }
         else if(url.pathname==='/api/dashboard/hooks') data={results:url.searchParams.get('q')==='empty' ? [] : [hook],status:{total:1,ocr:1,categorized:1,pending:0},warning:''};
@@ -114,6 +115,26 @@ try {
     assert.ok((await brief.inputValue()).includes(story.title));
     await page.getByRole('button',{name:label('Copy brief','Copiar brief'),exact:true}).click();
     assert.equal(await page.evaluate(()=>window.__copiedText),await brief.inputValue());
+    await page.getByRole('button',{name:label('Close','Cerrar'),exact:true}).click();
+    const storyStatus = page.getByRole('combobox',{name:label('Filter stories by status','Filtrar noticias por estado'),exact:true});
+    assert.equal(await storyStatus.inputValue(),'pending');
+    await page.getByRole('button',{name:label('Mark as done','Marcar como completada'),exact:true}).click();
+    await page.locator('.news-story').waitFor({state:'detached'});
+    await storyStatus.selectOption('done');
+    await page.locator('.news-status-badge').waitFor();
+    assert.equal(await page.locator('.news-status-badge').innerText(),label('Done','Completada'));
+    await page.getByRole('button',{name:label('Reopen story','Reabrir noticia'),exact:true}).click();
+    await page.locator('.news-story').waitFor({state:'detached'});
+    await storyStatus.selectOption('pending');
+    await page.getByRole('button',{name:label('Reject story','Rechazar noticia'),exact:true}).click();
+    await page.locator('.news-story').waitFor({state:'detached'});
+    await storyStatus.selectOption('rejected');
+    await page.locator('.news-status-badge').waitFor();
+    assert.equal(await page.locator('.news-status-badge').innerText(),label('Rejected','Rechazada'));
+    await page.getByRole('button',{name:label('Reopen story','Reabrir noticia'),exact:true}).click();
+    await page.locator('.news-story').waitFor({state:'detached'});
+    await storyStatus.selectOption('pending');
+    await page.getByRole('button',{name:label('Mark as done','Marcar como completada'),exact:true}).waitFor();
     await screenshot('news');
 
     await page.goto(`${base}/vault.html?desktop=1`);

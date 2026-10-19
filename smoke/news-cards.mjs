@@ -35,29 +35,41 @@ const items = titles.map((title, index) => ({
 const reviewed = { label: 'potential', score: .78, viralPotential: .71, evidenceQuality: .83, dimensions: { timeliness: { score: .92 } }, strengths: ['useful_takeaway', 'clear_evidence'], weaknesses: ['needs_context'], editorialAngle: 'visual_explainer', postFormat: 'carousel', targetAccount: 'creative', evidenceSource: 'article' };
 const reviews = { 'story-1': reviewed };
 const saved = {};
-const writes = [], paid = [], errors = [], publisherRequests = [];
-let releaseReview, failReview = true;
+const statuses = {};
+const omittedFeedStories = new Set();
+const writes = [], statusWrites = [], paid = [], errors = [], publisherRequests = [];
+let releaseReview, failReview = true, releaseStatus, failStatus = true, holdStatus = true, releaseLoad, holdLoad = false;
 let browser;
 try {
   browser = await chromium.launch({ headless: true, executablePath: process.env.CHROME_PATH || (fs.existsSync(chrome) ? chrome : undefined) });
-  const context = await browser.newContext({ viewport: { width: 1440, height: 1100 }, reducedMotion: 'reduce' });
-  await context.addInitScript(() => {
+  const context = await browser.newContext({ viewport: { width: 1440, height: 1100 }, reducedMotion: 'no-preference' });
+  const initialize = () => {
     localStorage.setItem('sentient.theme', 'light');
     localStorage.setItem('sentient.accent', 'lime');
-    localStorage.setItem('sentient.effects', 'off');
+    localStorage.setItem('sentient.effects', 'on');
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async value => { window.__copiedBrief = value; } } });
-  });
-  await context.route('**/*', async route => {
+  };
+  await context.addInitScript(initialize);
+  const intercept = async route => {
     const request = route.request(), url = new URL(request.url());
     if (url.pathname.startsWith('/api/')) {
       let data = {};
       if (url.pathname === '/api/dashboard/me') data = { email: 'developer@example.test', is_admin: true, is_dev: true };
-      else if (url.pathname.endsWith('/me/preferences')) data = { preferences: { theme: 'light', accent: 'lime', effects: 'off' } };
-      else if (url.pathname === '/api/dashboard/news') data = { items, reviews, saved };
+      else if (url.pathname.endsWith('/me/preferences')) data = { preferences: { theme: 'light', accent: 'lime', effects: 'on' } };
+      else if (url.pathname === '/api/dashboard/news') {
+        data = JSON.parse(JSON.stringify({ items: items.filter(item => !omittedFeedStories.has(item.id)), reviews, saved, statuses }));
+        if (holdLoad) await new Promise(resolve => { releaseLoad = resolve; });
+      }
       else if (url.pathname === '/api/dashboard/news/save') {
         const payload = request.postDataJSON(); writes.push(payload);
         if (payload.saved) saved[payload.id] = { item: items.find(item => item.id === payload.id), brief: payload.brief };
         else delete saved[payload.id];
+      } else if (url.pathname === '/api/dashboard/news/status') {
+        const payload = request.postDataJSON(); statusWrites.push(payload);
+        if (holdStatus) await new Promise(resolve => { releaseStatus = resolve; });
+        if (failStatus) return route.fulfill({ status: 503, json: { detail: 'Fixture status unavailable. Please retry.' } });
+        statuses[payload.id] = { status: payload.status, item: items.find(item => item.id === payload.id) };
+        data = { ok: true, id: payload.id, status: payload.status };
       } else if (url.pathname === '/api/dashboard/news/review') {
         paid.push(request.postDataJSON());
         await new Promise(resolve => { releaseReview = resolve; });
@@ -77,7 +89,8 @@ try {
       return route.fulfill({ contentType: 'text/html', body: '<title>Publisher fixture</title><p>Mock original source</p>' });
     }
     return route.fulfill({ status: 204, body: '' });
-  });
+  };
+  await context.route('**/*', intercept);
   const page = await context.newPage();
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(`${base}/news.html?desktop=1`);
@@ -85,6 +98,7 @@ try {
   assert.equal(await page.locator('.news-story.product-card').count(), 6);
   assert.equal(paid.length, 0, 'Loading stories does not start paid JEV actions');
   assert.equal(writes.length, 0, 'Loading stories does not save or modify data');
+  assert.equal(statusWrites.length, 0, 'Loading stories does not change editorial status');
   assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'dark', 'News keeps the fixed shared News theme');
   const card = index => page.locator('.news-story').filter({ has: page.getByRole('heading', { name: titles[index], exact: true }) });
   const first = card(0), assessed = card(1);
@@ -93,6 +107,19 @@ try {
   assert.equal(await first.locator('img.product-card-image').evaluate(node => getComputedStyle(node).objectFit), 'contain');
   assert.equal(await first.locator('img.product-card-image').evaluate(node => getComputedStyle(node).filter), 'none');
   assert.equal(await first.getByRole('link', { name: titles[0], exact: true }).getAttribute('href'), items[0].link);
+  const assertCalm = async (story, label) => {
+    const effects = await story.evaluate(node => {
+      const style = getComputedStyle(node), media = node.querySelector('.product-card-image'), glare = node.querySelector('.obs-soft-glare');
+      return { transform: style.transform, shadow: style.boxShadow, imageTransform: media ? getComputedStyle(media).transform : 'none', glareVisible: Boolean(glare && getComputedStyle(glare).display !== 'none' && getComputedStyle(glare).visibility !== 'hidden' && Number(getComputedStyle(glare).opacity) > 0) };
+    });
+    assert.deepEqual(effects, { transform: 'none', shadow: 'none', imageTransform: 'none', glareVisible: false }, `${label} cards stay still without shadows, glare or image zoom, even with effects enabled`);
+    assert.equal(await story.evaluate(node => node.classList.contains('obs-card')), false, `${label} cards do not attach pointer tilt effects`);
+  };
+  await assertCalm(first, 'Resting');
+  await first.hover();
+  await page.mouse.move((await first.boundingBox()).x + 25, (await first.boundingBox()).y + 25);
+  await page.waitForTimeout(350);
+  await assertCalm(first, 'Hovered');
   for (const [width, columns] of [[1440, 6], [1280, 4], [900, 3], [600, 2], [390, 1]]) {
     await page.setViewportSize({ width, height: 1100 });
     const layout = await page.locator('.news-results').evaluate(node => ({ columns: getComputedStyle(node).gridTemplateColumns.split(' ').length, scrollWidth: document.documentElement.scrollWidth, viewport: innerWidth }));
@@ -106,7 +133,7 @@ try {
   await page.evaluate(() => window.dispatchEvent(new Event('resize')));
   await page.waitForTimeout(200);
   await page.screenshot({ path: path.join(output, 'news-desktop.png') });
-  console.log('PASS News uses shared Research cards, six-column desktop, responsive geometry, fixed theme and image fallbacks');
+  console.log('PASS News uses calm shared Research cards, six-column desktop, responsive geometry, fixed theme and image fallbacks');
 
   await first.getByRole('button', { name: 'Save', exact: true }).click();
   await first.getByRole('button', { name: 'Saved', exact: true }).waitFor();
@@ -164,11 +191,125 @@ try {
   assert.match(await first.locator('.news-review-badge').innerText(), /Potential/);
   assert.equal(await first.getByRole('status').count(), 0);
   assert.equal(paid.length, 2, 'Exactly two explicitly requested JEV calls were made');
-  assert.deepEqual(errors, []);
   console.log('PASS News evidence and coverage expansion; explicit JEV review locks, recoverable errors and retry');
+
+  const statusFilter = page.getByRole('combobox', { name: 'Filter stories by status', exact: true });
+  assert.equal(await statusFilter.inputValue(), 'pending', 'News opens on pending stories');
+  assert.deepEqual(await statusFilter.locator('option').allTextContents(), ['Pending', 'Done', 'Rejected', 'All statuses']);
+  assert.equal(await first.getByRole('button', { name: 'Mark as done', exact: true }).isEnabled(), true);
+  assert.equal(await first.getByRole('button', { name: 'Reject story', exact: true }).isEnabled(), true);
+  const pendingStatus = page.waitForRequest(request => request.url().endsWith('/api/dashboard/news/status'));
+  await first.getByRole('button', { name: 'Mark as done', exact: true }).click();
+  await pendingStatus;
+  await page.waitForFunction(() => [...document.querySelectorAll('.news-story')].find(node => node.querySelector('h2')?.textContent === 'Robots learn a useful new skill from video')?.querySelector('[aria-label="Reject story"]')?.disabled);
+  assert.equal(await first.getByRole('button', { name: 'Mark as done', exact: true }).isDisabled(), true);
+  assert.equal(await first.isVisible(), true, 'The pending story stays in view until its status is saved');
+  assert.equal(await assessed.getByRole('button', { name: 'Mark as done', exact: true }).isEnabled(), true, 'A status write only locks its own story');
+  assert.deepEqual(statusWrites, [{ id: 'story-0', status: 'done' }]);
+  releaseStatus();
+  await first.locator('.news-status-error').waitFor();
+  assert.match(await first.locator('.news-status-error').innerText(), /Fixture status unavailable/);
+  assert.equal(await first.getByRole('button', { name: 'Mark as done', exact: true }).isEnabled(), true, 'A failed status write can be retried');
+  assert.equal(await first.getByRole('button', { name: 'Reject story', exact: true }).isEnabled(), true);
+  assert.equal(statuses['story-0'], undefined, 'A failed status write does not alter persisted status');
+
+  holdLoad = true;
+  const staleLoad = page.waitForRequest(request => new URL(request.url()).pathname === '/api/dashboard/news');
+  await page.getByRole('button', { name: 'Refresh feeds', exact: true }).click();
+  await staleLoad;
+  failStatus = false; holdStatus = false;
+  await first.getByRole('button', { name: 'Mark as done', exact: true }).click();
+  await first.waitFor({ state: 'hidden' });
+  assert.equal(statuses['story-0'].status, 'done');
+  holdLoad = false;
+  releaseLoad();
+  await page.getByRole('button', { name: 'Refresh feeds', exact: true }).waitFor();
+  assert.equal(await first.count(), 0, 'A feed response started before the status mutation cannot restore an old status');
+  await statusFilter.selectOption({ label: 'Done' });
+  await first.locator('.news-status-badge').waitFor();
+  assert.equal(await first.locator('.news-status-badge').textContent(), 'Done');
+  assert.equal(await first.getByRole('button', { name: 'Reopen story', exact: true }).isEnabled(), true);
+  assert.equal(await first.locator('.news-status-error').count(), 0, 'Successful retry clears the status error');
+  assert.equal(await page.locator('.news-story').count(), 1);
+  await statusFilter.selectOption({ label: 'Pending' });
+  const rejected = card(2);
+  await rejected.getByRole('button', { name: 'Reject story', exact: true }).click();
+  await rejected.waitFor({ state: 'hidden' });
+  assert.deepEqual(statusWrites.at(-1), { id: 'story-2', status: 'rejected' });
+  assert.equal(await page.locator('.news-story').count(), 4);
+  await statusFilter.selectOption({ label: 'Rejected' });
+  await rejected.locator('.news-status-badge').waitFor();
+  assert.equal(await rejected.locator('.news-status-badge').textContent(), 'Rejected');
+  assert.equal(await page.locator('.news-story').count(), 1);
+
+  omittedFeedStories.add('story-0'); omittedFeedStories.add('story-2');
+  await page.reload();
+  await page.locator('.news-story').first().waitFor();
+  assert.equal(await statusFilter.inputValue(), 'pending');
+  assert.equal(await first.count(), 0, 'Done stories remain outside Pending after reload');
+  assert.equal(await rejected.count(), 0, 'Rejected stories remain outside Pending after reload');
+  await statusFilter.selectOption({ label: 'All statuses' });
+  assert.equal(await page.locator('.news-story').count(), 6, 'Processed story snapshots remain available after they leave the live feed');
+  assert.equal(await first.locator('.news-status-badge').textContent(), 'Done');
+  assert.equal(await rejected.locator('.news-status-badge').textContent(), 'Rejected');
+  await page.getByRole('tab', { name: /^Saved/ }).click();
+  assert.equal(await page.locator('.news-story').count(), 1, 'Status filtering composes with existing category tabs');
+  assert.equal(await first.isVisible(), true, 'Completing a story preserves its saved brief');
+  await page.getByRole('tab', { name: 'Recommended', exact: true }).click();
+  await statusFilter.selectOption({ label: 'Done' });
+  await first.getByRole('button', { name: 'Reopen story', exact: true }).click();
+  await first.waitFor({ state: 'hidden' });
+  assert.deepEqual(statusWrites.at(-1), { id: 'story-0', status: 'pending' });
+  await statusFilter.selectOption({ label: 'Rejected' });
+  await rejected.getByRole('button', { name: 'Reopen story', exact: true }).click();
+  await rejected.waitFor({ state: 'hidden' });
+  assert.deepEqual(statusWrites.at(-1), { id: 'story-2', status: 'pending' });
+  await page.reload();
+  await first.waitFor();
+  assert.equal(await page.locator('.news-story').count(), 6, 'Reopened stories remain Pending after reload even after leaving the live feed');
+  assert.equal(await first.locator('.news-status-badge').count(), 0);
+  assert.equal(statuses['story-0'].status, 'pending');
+  assert.equal(statuses['story-2'].status, 'pending');
+  omittedFeedStories.clear();
+  assert.equal(paid.length, 2, 'Editorial status actions do not invoke JEV');
+  console.log('PASS News Done/Reject/Reopen, composable status views, shared reload persistence and retry-safe per-story locks');
+
+  const mobileContext = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, reducedMotion: 'no-preference' });
+  await mobileContext.addInitScript(initialize);
+  await mobileContext.route('**/*', intercept);
+  const mobile = await mobileContext.newPage();
+  mobile.on('pageerror', error => errors.push(error.message));
+  await mobile.goto(`${base}/news.html?desktop=1`);
+  const mobileCard = index => mobile.locator('.news-story').filter({ has: mobile.getByRole('heading', { name: titles[index], exact: true }) });
+  const mobileFirst = mobileCard(0), mobileRejected = mobileCard(2);
+  await mobileFirst.waitFor();
+  const mobileFilter = mobile.getByRole('combobox', { name: 'Filter stories by status', exact: true });
+  const mobileBounds = await mobileFirst.locator('.news-disposition-actions').evaluate(node => ({ left: node.getBoundingClientRect().left, right: node.getBoundingClientRect().right, width: innerWidth, document: document.documentElement.scrollWidth }));
+  assert.ok(mobileBounds.left >= 0 && mobileBounds.right <= mobileBounds.width + 1 && mobileBounds.document <= mobileBounds.width + 1, 'Touch actions stay within the mobile viewport');
+  await assertCalm(mobileFirst, 'Mobile');
+  await mobileFirst.getByRole('button', { name: 'Mark as done', exact: true }).tap();
+  await mobileFirst.waitFor({ state: 'hidden' });
+  await mobileRejected.getByRole('button', { name: 'Reject story', exact: true }).tap();
+  await mobileRejected.waitFor({ state: 'hidden' });
+  await mobileFilter.selectOption({ label: 'Done' });
+  assert.equal(await mobileFirst.locator('.news-status-badge').textContent(), 'Done');
+  await mobileFirst.getByRole('button', { name: 'Reopen story', exact: true }).tap();
+  await mobileFirst.waitFor({ state: 'hidden' });
+  await mobileFilter.selectOption({ label: 'Rejected' });
+  assert.equal(await mobileRejected.locator('.news-status-badge').textContent(), 'Rejected');
+  await mobileRejected.getByRole('button', { name: 'Reopen story', exact: true }).tap();
+  await mobileRejected.waitFor({ state: 'hidden' });
+  await mobileFilter.selectOption({ label: 'Pending' });
+  await mobileFirst.waitFor();
+  await mobile.screenshot({ path: path.join(output, 'news-status-mobile.png') });
+  assert.deepEqual(errors, []);
+  await mobileContext.close();
+  console.log('PASS News mobile touch disposition actions and status views stay within the viewport');
   console.log(`News screenshots: ${output}`);
 } finally {
   releaseReview?.();
+  releaseStatus?.();
+  releaseLoad?.();
   await browser?.close();
   await server.close();
   fs.rmSync(temporary, { recursive: true, force: true });
