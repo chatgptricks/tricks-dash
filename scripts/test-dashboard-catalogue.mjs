@@ -134,7 +134,9 @@ try {
   assert.equal(metricOnly.posts[0].likesUpdatedAt, stamp);
   assert.equal(metricOnly.summary['Total likes'], 90);
   assert.equal(metricCalls.filter(path => path.endsWith('/page')).length, 0);
-  assert.deepEqual(await loadCompleteDashboardCatalogue({ etag: '"unchanged"', cachedCatalogue: metricOnly }), { notModified: true, metricsAt: stamp });
+  assert.deepEqual(await loadCompleteDashboardCatalogue({ etag: '"unchanged"', cachedCatalogue: metricOnly }), {
+    notModified: true, metricsAt: stamp, metricsCursor: { at: stamp, code: '' }, metricsPending: false,
+  });
 
   const appendCalls = [];
   globalThis.fetch = async (input) => {
@@ -189,7 +191,124 @@ try {
   assert.deepEqual(collabOnly.posts.map(value => value.likes), [10, 10, 10, 10], 'Metadata-only updates preserve engagement');
   assert.equal(collabOnly.summary['Total likes'], 40);
   assert.equal(collabCalls.filter(value => value.endsWith('/page')).length, 0);
-  assert.deepEqual(await loadCompleteDashboardCatalogue({ etag: '"unchanged"', cachedCatalogue: collabOnly }), { notModified: true, metricsAt: stamp }, 'Repeated metadata must settle to unchanged');
+  assert.deepEqual(await loadCompleteDashboardCatalogue({ etag: '"unchanged"', cachedCatalogue: collabOnly }), {
+    notModified: true, metricsAt: stamp, metricsCursor: { at: stamp, code: '' }, metricsPending: false,
+  }, 'Repeated metadata must settle to unchanged');
+
+  // A complete source snapshot must be available before a metric replay that
+  // hangs or is cancelled. The published value retains the source projection.
+  let publishedSnapshot;
+  let metricsStarted;
+  const reachedMetrics = new Promise(resolve => { metricsStarted = resolve; });
+  const cancelled = new AbortController();
+  globalThis.fetch = async (input, options = {}) => {
+    const url = new URL(input);
+    if (url.pathname.endsWith('/manifest')) return Response.json({ revision: 'cold-metrics', sources: sources(1, 1), metricsAvailable: true });
+    if (url.pathname.endsWith('/page')) return Response.json({
+      revision: 'cold-metrics', posts: [post(url.searchParams.get('source'), 42)], nextCursor: 1, done: true,
+    });
+    assert.ok(url.pathname.endsWith('/metrics'));
+    assert.equal(publishedSnapshot?.posts.length, 2, 'Only the full source catalogue can be published before metric catchup');
+    metricsStarted();
+    return new Promise((_, reject) => {
+      const abort = () => reject(options.signal.reason);
+      options.signal.addEventListener('abort', abort, { once: true });
+      if (options.signal.aborted) abort();
+    });
+  };
+  const heldMetrics = loadCompleteDashboardCatalogue({ signal: cancelled.signal, onSnapshot: snapshot => { publishedSnapshot = snapshot; } });
+  await reachedMetrics;
+  assert.deepEqual(ids(publishedSnapshot), ['canonical', 'dashboard']);
+  assert.equal(publishedSnapshot.summary['Total likes'], 84);
+  assert.ok(publishedSnapshot.posts.every(value => Object.hasOwn(value, 'isCollab') && Array.isArray(value.collaborators)));
+  let settled = false;
+  void heldMetrics.then(() => { settled = true; }, () => { settled = true; });
+  await Promise.resolve();
+  assert.equal(settled, false, 'The structural snapshot must be available while metric catchup is pending');
+  const metricTimeout = new DOMException('Metric replay deadline', 'TimeoutError');
+  cancelled.abort(metricTimeout);
+  await assert.rejects(heldMetrics, error => error === metricTimeout);
+  assert.deepEqual(ids(publishedSnapshot), ['canonical', 'dashboard'], 'Metric cancellation cannot remove the delivered complete catalogue');
+
+  // Stop each catchup after five pages, then resume using both cursor fields.
+  // All observations deliberately share one timestamp to catch dropped tails.
+  const boundedCalls = [];
+  const metricPosts = [post('checkpoint-5', 10), post('checkpoint-7', 10)];
+  globalThis.fetch = async input => {
+    const url = new URL(input);
+    if (url.pathname.endsWith('/manifest')) return new Response(null, { status: 304 });
+    assert.ok(url.pathname.endsWith('/metrics'), 'Catchup continuation must never re-download source pages');
+    assert.equal(url.searchParams.get('limit'), '1000');
+    const previous = Number((url.searchParams.get('after_code') || 'checkpoint-0').split('-')[1]);
+    if (previous) assert.equal(url.searchParams.get('after_at'), stamp);
+    const next = Math.min(previous + 1, 7);
+    boundedCalls.push({ after: previous, next });
+    return Response.json({
+      updates: next > previous ? [{ shortcode: `checkpoint-${next}`, likes: 10, comments: undefined, likesUpdatedAt: stamp }] : [],
+      cursor: { at: stamp, code: `checkpoint-${next}` }, hasMore: next < 7,
+    });
+  };
+  const catchup = await loadCompleteDashboardCatalogue({ etag: '"unchanged"', cachedCatalogue: { ...metricCached, posts: metricPosts } });
+  assert.equal(boundedCalls.length, 5, 'A long observation history must yield after five pages');
+  assert.equal(catchup.metricsPending, true);
+  assert.deepEqual(catchup.metricsCursor, { at: stamp, code: 'checkpoint-5' });
+  assert.equal(catchup.posts[0].likesUpdatedAt, stamp, 'Every completed batch must apply its patches before saving the cursor');
+  const resumed = await loadCompleteDashboardCatalogue({ etag: '"unchanged"', cachedCatalogue: catchup });
+  assert.deepEqual(boundedCalls.slice(5).map(value => value.after), [5, 6], 'Same-timestamp continuation must retain the shortcode cursor');
+  assert.equal(resumed.metricsPending, false);
+  assert.deepEqual(resumed.metricsCursor, { at: stamp, code: '' }, 'Completed polls must reread timestamp ties to include late commits');
+  assert.equal(resumed.posts[1].likesUpdatedAt, stamp);
+  const revalidatedTies = await loadCompleteDashboardCatalogue({ etag: '"unchanged"', cachedCatalogue: resumed });
+  assert.deepEqual(revalidatedTies, {
+    notModified: true, metricsAt: stamp, metricsCursor: { at: stamp, code: 'checkpoint-5' }, metricsPending: true,
+  }, 'A completed stream must revalidate timestamp ties while retaining bounded continuation');
+  assert.deepEqual(await loadCompleteDashboardCatalogue({ etag: '"unchanged"', cachedCatalogue: { ...resumed, ...revalidatedTies } }), {
+    notModified: true, metricsAt: stamp, metricsCursor: { at: stamp, code: '' }, metricsPending: false,
+  }, 'Revalidating unchanged ties must settle without restarting source pagination');
+
+  let lateObservation = false;
+  globalThis.fetch = async input => {
+    const url = new URL(input);
+    if (url.pathname.endsWith('/manifest')) return new Response(null, { status: 304 });
+    const rows = [
+      ...(lateObservation ? [{ shortcode: 'early-code', likes: 99, likesUpdatedAt: stamp }] : []),
+      { shortcode: 'later-code', likes: 20, likesUpdatedAt: stamp },
+    ].filter(value => value.shortcode > url.searchParams.get('after_code'));
+    return Response.json({ updates: rows, cursor: { at: stamp, code: rows.at(-1)?.shortcode || url.searchParams.get('after_code') }, hasMore: false });
+  };
+  const beforeLateCommit = await loadCompleteDashboardCatalogue({
+    etag: '"unchanged"', cachedCatalogue: { ...metricCached, posts: [post('early-code'), post('later-code')] },
+  });
+  lateObservation = true;
+  const afterLateCommit = await loadCompleteDashboardCatalogue({ etag: '"unchanged"', cachedCatalogue: beforeLateCommit });
+  assert.equal(afterLateCommit.posts[0].likes, 99, 'A lower shortcode committed after completion in the same second must not be skipped');
+
+  globalThis.fetch = async input => {
+    const url = new URL(input);
+    if (url.pathname.endsWith('/manifest')) return new Response(null, { status: 304 });
+    const previous = Number(url.searchParams.get('after_code') || 0);
+    return Response.json({ updates: [], cursor: { at: stamp, code: String(previous + 1) }, hasMore: true });
+  };
+  const unchangedPending = await loadCompleteDashboardCatalogue({ etag: '"unchanged"', cachedCatalogue: metricCached });
+  assert.deepEqual(unchangedPending, {
+    notModified: true, metricsAt: stamp, metricsCursor: { at: stamp, code: '5' }, metricsPending: true,
+  }, 'Cursor progress must survive even if none of the observations changes a catalogue card');
+
+  // Each range can eventually exceed JavaScript's function argument limit.
+  // Repeated source rows keep this transport-size regression lightweight.
+  const largeBound = 540_004;
+  const repeatedPost = post('large-source-duplicate');
+  globalThis.fetch = async input => {
+    const url = new URL(input);
+    if (url.pathname.endsWith('/manifest')) return Response.json({ revision: 'large', sources: sources(0, largeBound) });
+    const after = Number(url.searchParams.get('after_id'));
+    const until = Number(url.searchParams.get('until_id'));
+    const end = Math.min(until, after + 12_000);
+    return { ok: true, json: async () => ({ revision: 'large', posts: Array(end - after).fill(repeatedPost), nextCursor: end, done: end === until }) };
+  };
+  const large = await loadCompleteDashboardCatalogue();
+  assert.equal(large.rawTotal, largeBound, 'A large source must retain every transport row without argument overflow');
+  assert.equal(large.posts.length, 1, 'Large snapshots must retain account+shortcode deduplication');
 
   globalThis.fetch = async (input) => new URL(input).pathname.endsWith('/manifest')
     ? new Response(null, { status: 304 }) : new Response(null, { status: 404 });
@@ -197,6 +316,7 @@ try {
   console.log('PASS metric deltas: unchanged manifests, bounded pagination, stable repeats, new posts with older metric changes and independent deployment propagation');
   console.log('PASS collaboration metadata: legacy full upgrades despite ETags/growth, projection generation invalidation, account-scoped metadata-only changes, false/null replacements and stable repeats');
   console.log('PASS catalogue: bounded growth, changed revisions, source changes, watermark rollback, cold loads and conditional reads');
+  console.log('PASS startup: complete snapshot before stalled metrics, cancellation retention, bounded catchup, exact same-timestamp continuation and large source ranges');
 } finally {
   globalThis.fetch = originalFetch;
 }

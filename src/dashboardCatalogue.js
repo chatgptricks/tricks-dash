@@ -6,6 +6,8 @@ import { API_BASE, apiFetch } from './api';
 const PAGE_SIZE = 12_000;
 const FULL_SNAPSHOT_SHARDS = 4;
 const MAX_PARALLEL_PAGE_STREAMS = 4;
+const METRICS_PAGE_SIZE = 1_000;
+const MAX_METRICS_PAGES = 5;
 
 export class DashboardCatalogueError extends Error {
   constructor(message, status = 0) {
@@ -123,7 +125,9 @@ async function fetchRevision(manifest, signal, onProgress, startingBounds = new 
       if (!Number.isSafeInteger(nextCursor) || nextCursor < cursor || nextCursor > upperBound || (!done && nextCursor <= cursor)) {
         throw new DashboardCatalogueError('The post catalogue changed while loading.', 409);
       }
-      rows.push(...body.posts);
+      // Even a bounded page can grow beyond a runtime's argument limit as
+      // the transport evolves. Append values without spreading function args.
+      for (const post of body.posts) rows.push(post);
       received += body.posts.length;
       onProgress?.({ received, total: null });
       cursor = nextCursor;
@@ -156,7 +160,7 @@ async function fetchRevision(manifest, signal, onProgress, startingBounds = new 
     while (nextRange < ranges.length) {
       const rangeIndex = nextRange;
       nextRange += 1;
-      rawPosts.push(...await loadSourceRange(ranges[rangeIndex]));
+      for (const post of await loadSourceRange(ranges[rangeIndex])) rawPosts.push(post);
     }
   };
   await Promise.all(Array.from({ length: Math.min(MAX_PARALLEL_PAGE_STREAMS, ranges.length) }, worker));
@@ -185,12 +189,18 @@ function mergeCompleteCatalogue(cachedPosts, newerPosts) {
 
 async function refreshCatalogueMetrics(catalogue, signal, unchanged = false) {
   if (!catalogue.metricsAvailable || !Array.isArray(catalogue.posts)) return unchanged ? { notModified: true } : catalogue;
-  let cursor = { at: catalogue.metricsAt || '', code: '' };
+  const storedCursor = catalogue.metricsCursor;
+  let cursor = typeof storedCursor?.at === 'string' && typeof storedCursor?.code === 'string'
+    ? { at: storedCursor.at, code: storedCursor.code }
+    : { at: catalogue.metricsAt || '', code: '' };
   const updates = new Map();
   const collaborationUpdates = new Map();
   let hasMore = true;
-  while (hasMore) {
-    const params = new URLSearchParams({ after_at: cursor.at, after_code: cursor.code });
+  let pages = 0;
+  // A new browser may need years of stored observations. Publish and retain
+  // bounded progress instead of replaying that entire history in one read.
+  while (hasMore && pages < MAX_METRICS_PAGES) {
+    const params = new URLSearchParams({ after_at: cursor.at, after_code: cursor.code, limit: String(METRICS_PAGE_SIZE) });
     const response = await apiFetch(`${API_BASE}/api/dashboard/posts/metrics?${params}`, { signal });
     // Safe while frontend and API deployments propagate independently.
     if (response.status === 404) return unchanged ? { notModified: true } : catalogue;
@@ -211,6 +221,7 @@ async function refreshCatalogueMetrics(catalogue, signal, unchanged = false) {
     }
     cursor = data.cursor;
     hasMore = Boolean(data.hasMore);
+    pages += 1;
   }
   let changed = false;
   const posts = catalogue.posts.map((post, index) => {
@@ -225,11 +236,19 @@ async function refreshCatalogueMetrics(catalogue, signal, unchanged = false) {
     changed = true;
     return { ...post, ...metrics, ...collaboration };
   });
-  if (unchanged && !changed) return { notModified: true, metricsAt: cursor.at };
-  return { ...catalogue, posts, metricsAt: cursor.at, summary: catalogueSummary(posts) };
+  // Observations use second-resolution job timestamps, and another account's
+  // rows can commit later in that same second. Exact codes resume a pending
+  // batch; after completion, reread timestamp ties on the next ordinary poll.
+  const progress = {
+    metricsAt: cursor.at,
+    metricsCursor: hasMore ? cursor : { at: cursor.at, code: '' },
+    metricsPending: hasMore,
+  };
+  if (unchanged && !changed) return { notModified: true, ...progress };
+  return { ...catalogue, posts, ...progress, summary: catalogueSummary(posts) };
 }
 
-export async function loadCompleteDashboardCatalogue({ signal, etag = '', onProgress, cachedCatalogue = null } = {}) {
+export async function loadCompleteDashboardCatalogue({ signal, etag = '', onProgress, onSnapshot, cachedCatalogue = null } = {}) {
   // A persisted full library remains complete after an ID-bounded delta is
   // merged in. Normal reloads should not pull all historical posts again just
   // because the scheduler inserted one newer row.
@@ -263,16 +282,21 @@ export async function loadCompleteDashboardCatalogue({ signal, etag = '', onProg
         onProgress,
         canDelta ? cachedSources : new Map(),
       );
-      if (!canDelta) return refreshCatalogueMetrics({ ...catalogue, etag: manifestResult.etag, metricsAt: cachedCatalogue?.metricsAt }, signal);
-      const posts = mergeCompleteCatalogue(cachedCatalogue.posts, catalogue.posts);
-      return refreshCatalogueMetrics({
+      const posts = canDelta ? mergeCompleteCatalogue(cachedCatalogue.posts, catalogue.posts) : catalogue.posts;
+      const snapshot = {
         ...catalogue,
         posts,
-        summary: catalogueSummary(posts),
+        summary: canDelta ? catalogueSummary(posts) : catalogue.summary,
         etag: manifestResult.etag,
-        delta: true,
+        ...(canDelta ? { delta: true } : {}),
         metricsAt: cachedCatalogue?.metricsAt,
-      }, signal);
+        metricsCursor: cachedCatalogue?.metricsCursor,
+      };
+      // Source pages already contain the stored likes and collaboration
+      // projection. A verified complete library is usable while older metric
+      // observations catch up independently; never publish a partial page.
+      onSnapshot?.(snapshot);
+      return refreshCatalogueMetrics(snapshot, signal);
     } catch (error) {
       if (!(error instanceof DashboardCatalogueError) || error.status !== 409 || attempt === 1) throw error;
     }

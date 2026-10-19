@@ -419,32 +419,70 @@ function DashboardView({ viewer }) {
     let active = true;
     let cachedCatalogue = null;
     let flight = null;
+    let catchupTimer = null;
+    const scheduleCatchup = (delay) => {
+      window.clearTimeout(catchupTimer);
+      catchupTimer = window.setTimeout(() => {
+        catchupTimer = null;
+        if (document.visibilityState !== 'hidden') void load();
+      }, delay);
+    };
     const load = async () => {
       if (!active || flight) return;
+      window.clearTimeout(catchupTimer);
+      catchupTimer = null;
       const controller = new AbortController();
       flight = controller;
+      const isCurrent = () => active && !controller.signal.aborted && flight === controller;
+      const publishCatalogue = (catalogue) => {
+        if (!isCurrent()) return;
+        if (!Array.isArray(catalogue.posts)) throw new Error('The complete post catalogue was not available.');
+        cachedCatalogue = catalogue;
+        setPayload({ posts: catalogue.posts, summary: catalogue.summary || {} });
+        setSelected((current) => current
+          ? catalogue.posts.find((post) => post.account === current.account && post.shortcode === current.shortcode) || current
+          : current);
+      };
       setError('');
       try {
         const [catalogue, roster] = await runDashboardRead((signal) => {
+          let completeSnapshot = null;
+          let resolvedRoster = null;
+          const publishSnapshot = () => {
+            if (!completeSnapshot || !resolvedRoster || !isCurrent() || signal.aborted) return;
+            setAccounts(resolvedRoster.accounts || []);
+            publishCatalogue(completeSnapshot);
+          };
           return Promise.all([
-            loadCompleteDashboardCatalogue({ signal, etag: cachedCatalogue?.etag || '', cachedCatalogue }),
-            apiJson('/api/dashboard/accounts', { signal }),
+            loadCompleteDashboardCatalogue({
+              signal, etag: cachedCatalogue?.etag || '', cachedCatalogue,
+              onSnapshot: (snapshot) => { completeSnapshot = snapshot; publishSnapshot(); },
+            }),
+            apiJson('/api/dashboard/accounts', { signal }).then((value) => {
+              resolvedRoster = value;
+              publishSnapshot();
+              return value;
+            }),
           ]);
         }, { signal: controller.signal });
-        if (!active || controller.signal.aborted || flight !== controller) return;
+        if (!isCurrent()) return;
         if (catalogue.notModified) {
-          if (catalogue.metricsAt) cachedCatalogue = { ...cachedCatalogue, metricsAt: catalogue.metricsAt };
+          cachedCatalogue = {
+            ...cachedCatalogue,
+            metricsAt: catalogue.metricsAt || cachedCatalogue?.metricsAt || '',
+            metricsCursor: catalogue.metricsCursor || cachedCatalogue?.metricsCursor,
+            metricsPending: Boolean(catalogue.metricsPending),
+          };
         } else {
-          if (!Array.isArray(catalogue.posts)) throw new Error('The complete post catalogue was not available.');
-          cachedCatalogue = catalogue;
-          setPayload({ posts: catalogue.posts, summary: catalogue.summary || {} });
-          setSelected((current) => current
-            ? catalogue.posts.find((post) => post.account === current.account && post.shortcode === current.shortcode) || current
-            : current);
+          publishCatalogue(catalogue);
         }
         setAccounts(roster.accounts || []);
+        if (catalogue.metricsPending) scheduleCatchup(3_000);
       } catch (error) {
-        if (active && error.name !== 'AbortError') setError(error.message);
+        if (isCurrent() && error.name !== 'AbortError') {
+          setError(error.message);
+          scheduleCatchup(10_000);
+        }
       } finally {
         if (flight === controller) flight = null;
       }
@@ -461,6 +499,7 @@ function DashboardView({ viewer }) {
     return () => {
       active = false;
       window.clearInterval(timer);
+      window.clearTimeout(catchupTimer);
       document.removeEventListener('visibilitychange', refreshVisible);
       window.removeEventListener('online', refreshVisible);
       flight?.abort();

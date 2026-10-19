@@ -15,7 +15,7 @@
     "test:queue": "node scripts/test-queue-notes.mjs && node scripts/test-queue.mjs && npm run test:queue-refresh",
     "test:queue-refresh": "node scripts/test-queue-refresh.mjs",
     "test:resilience": "node scripts/test-language-preferences.mjs && node scripts/test-retry.mjs && node scripts/test-api-resilience.mjs && npm run test:catalogue && npm run test:auth-cache",
-    "test:catalogue": "node scripts/test-dashboard-read.mjs && node scripts/test-dashboard-catalogue.mjs",
+    "test:catalogue": "node scripts/test-dashboard-read.mjs && node scripts/test-dashboard-catalogue.mjs && node scripts/test-dashboard-reconcile.mjs && node smoke/research-startup.mjs",
     "test:users": "node scripts/test-user-admin.mjs",
     "test:media-kit": "node scripts/test-account-media-kit.mjs",
     "smoke:recovery": "node smoke/run-recovery.mjs",

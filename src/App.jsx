@@ -4,6 +4,7 @@ import { ACCOUNT_PROFILE_IMAGES, PROMO_HASHTAG, PROMO_HASHTAG_RE, InspectorCardS
 import TopicStack from './TopicStack';
 import { StackActions } from './StackActions';
 import { applyStackMembershipResult, resolveResearchPost } from './stackOperations';
+import { reconcileDashboardPosts } from './dashboardReconcile';
 import { useTopicGroups } from './useTopicGroups';
 import ProductHeader from './ProductHeader';
 import GenerateCaptionModal from './GenerateCaptionModal';
@@ -868,6 +869,7 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
   const dashboardCatalogueRevisionRef = useRef('');
   const dashboardProjectionGenerationRef = useRef(0);
   const dashboardMetricsAtRef = useRef('');
+  const dashboardMetricsCursorRef = useRef(null);
   const dashboardFlightRef = useRef(null);
   const dashboardAliveRef = useRef(true);
   const dashboardUserRef = useRef(firebaseAuth.currentUser);
@@ -1063,46 +1065,41 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
     dashboardFlightRef.current = flight;
     const requestVersion = dashboardRequestVersionRef.current + 1;
     dashboardRequestVersionRef.current = requestVersion;
-    const isCurrentRequest = () => ownsDashboardSession() && requestVersion === dashboardRequestVersionRef.current && !signal?.aborted;
+    const isCurrentRequest = () => ownsDashboardSession() && dashboardFlightRef.current === flight
+      && requestVersion === dashboardRequestVersionRef.current && !signal?.aborted;
     let loaded = false;
-    try {
-      if (!silent) {
-        setLoading(true);
-        setLoadError('');
-      }
-      const [catalogue, resolvedAccounts] = await runDashboardRead((readSignal) => Promise.all([
-        loadCompleteDashboardCatalogue({
-          signal: readSignal,
-          etag: dashboardEtagRef.current,
-          cachedCatalogue: dashboardPostsRef.current.length && dashboardSourcesRef.current.length
-            ? { posts: dashboardPostsRef.current, sources: dashboardSourcesRef.current,
-                revision: dashboardCatalogueRevisionRef.current, projectionGeneration: dashboardProjectionGenerationRef.current,
-                metricsAvailable: true, metricsAt: dashboardMetricsAtRef.current }
-            : null,
-        }),
-        apiFetch(`${API_BASE}/api/dashboard/accounts`, { signal: readSignal }).then(async (accountsResponse) => {
-          if (accountsResponse.status === 401 || accountsResponse.status === 403) {
-            throw new DashboardCatalogueError('Sign in required.', accountsResponse.status);
-          }
-          if (!accountsResponse.ok) throw new Error(`HTTP ${accountsResponse.status}`);
-          const nextAccounts = await accountsResponse.json();
-          if (!Array.isArray(nextAccounts.accounts)) {
-            throw new Error('The shared account roster returned an invalid response.');
-          }
-          return nextAccounts;
-        }),
-      ]), { signal });
+    let pendingSnapshot = null;
+    let accountRoster = null;
+    let readBasePosts = dashboardPostsRef.current;
+    const persistSnapshot = () => {
+      void writeDashboardSnapshot({
+        posts: dashboardPostsRef.current,
+        summary: dashboardSummaryRef.current,
+        accounts: dashboardAccountsRef.current,
+        catalogueComplete: true,
+        catalogueRevision: dashboardCatalogueRevisionRef.current,
+        projectionGeneration: dashboardProjectionGenerationRef.current,
+        catalogueSources: dashboardSourcesRef.current,
+        metricsAt: dashboardMetricsAtRef.current,
+        metricsCursor: dashboardMetricsCursorRef.current,
+      }, userEmail).catch(() => {});
+    };
+    const publishCatalogue = (catalogue, resolvedAccounts) => {
       // A manual refresh, reconnect, or tab return can start another request
       // while this one is in flight. Only the newest response owns the UI.
       if (!isCurrentRequest()) return;
       // The server has confirmed that the catalog has not changed. Keep the
       // current cards, selection and scroll intact while still accepting the
       // lightweight accounts roster response.
+      const previousCursor = dashboardMetricsCursorRef.current;
       if (catalogue.metricsAt) dashboardMetricsAtRef.current = catalogue.metricsAt;
+      if (catalogue.metricsCursor) dashboardMetricsCursorRef.current = catalogue.metricsCursor;
       if (catalogue.notModified) {
         dashboardAccountsRef.current = resolvedAccounts.accounts;
         setAccounts(resolvedAccounts.accounts);
+        if (catalogue.metricsCursor && JSON.stringify(previousCursor) !== JSON.stringify(catalogue.metricsCursor)) persistSnapshot();
         loaded = true;
+        setLoading(false);
         reconnectAttempt.current = 0;
         setConnectionNotice('');
         if (reconnectTimer.current) {
@@ -1114,6 +1111,21 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
       if (!isCurrentRequest()) return;
       if (!Array.isArray(catalogue.posts)) {
         throw new Error('The shared post database returned an invalid response.');
+      }
+      // A person can edit flags, groups or metrics while catchup is running.
+      // Carry those local changes over the response captured before the edit.
+      const incomingPosts = catalogue.posts;
+      const reconciledPosts = reconcileDashboardPosts(readBasePosts, dashboardPostsRef.current, incomingPosts);
+      readBasePosts = incomingPosts;
+      if (reconciledPosts !== incomingPosts) {
+        const knownLikes = reconciledPosts.map((post) => Number(post?.likes)).filter(Number.isFinite);
+        const totalLikes = knownLikes.reduce((total, likes) => total + likes, 0);
+        catalogue = { ...catalogue, posts: reconciledPosts, summary: {
+          ...catalogue.summary,
+          'Exported posts': reconciledPosts.length,
+          'Total likes': totalLikes,
+          'Average likes': knownLikes.length ? Math.round(totalLikes / knownLikes.length) : 0,
+        } };
       }
       const nextEtag = catalogue.etag;
       if (nextEtag) dashboardEtagRef.current = nextEtag;
@@ -1131,29 +1143,67 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
       dashboardAccountsRef.current = resolvedAccounts.accounts;
       // The complete response is ready to use. Persistence must never hold
       // the loading screen open when browser storage is slow or unavailable.
-      void writeDashboardSnapshot({
-          posts: catalogue.posts,
-          summary: catalogue.summary || {},
-          accounts: resolvedAccounts.accounts,
-          catalogueComplete: true,
-          catalogueRevision: catalogue.revision,
-          projectionGeneration: dashboardProjectionGenerationRef.current,
-          catalogueSources: dashboardSourcesRef.current,
-          metricsAt: dashboardMetricsAtRef.current,
-        }, userEmail).catch(() => {});
+      persistSnapshot();
       if (!isCurrentRequest()) return;
       setDashboard({ posts: catalogue.posts, summary: catalogue.summary || {} });
       setAccounts(resolvedAccounts.accounts);
       loaded = true;
+      setLoading(false);
       reconnectAttempt.current = 0;
       setConnectionNotice('');
       if (reconnectTimer.current) {
         window.clearTimeout(reconnectTimer.current);
         reconnectTimer.current = null;
       }
-      loadAccess(signal);
       if (hasIncomingData) {
         incomingDataTimerRef.current = window.setTimeout(() => setIncomingData(false), 900);
+      }
+    };
+    try {
+      if (!silent) {
+        setLoading(true);
+        setLoadError('');
+      }
+      const [catalogue, resolvedAccounts] = await runDashboardRead((readSignal) => Promise.all([
+        loadCompleteDashboardCatalogue({
+          signal: readSignal,
+          onSnapshot: (catalogue) => {
+            if (readSignal.aborted) return;
+            pendingSnapshot = catalogue;
+            if (accountRoster) publishCatalogue(catalogue, accountRoster);
+          },
+          etag: dashboardEtagRef.current,
+          cachedCatalogue: dashboardPostsRef.current.length && dashboardSourcesRef.current.length
+            ? { posts: dashboardPostsRef.current, sources: dashboardSourcesRef.current,
+                revision: dashboardCatalogueRevisionRef.current, projectionGeneration: dashboardProjectionGenerationRef.current,
+                metricsAvailable: true, metricsAt: dashboardMetricsAtRef.current, metricsCursor: dashboardMetricsCursorRef.current }
+            : null,
+        }),
+        apiFetch(`${API_BASE}/api/dashboard/accounts`, { signal: readSignal }).then(async (accountsResponse) => {
+          if (accountsResponse.status === 401 || accountsResponse.status === 403) {
+            throw new DashboardCatalogueError('Sign in required.', accountsResponse.status);
+          }
+          if (!accountsResponse.ok) throw new Error(`HTTP ${accountsResponse.status}`);
+          const nextAccounts = await accountsResponse.json();
+          if (!Array.isArray(nextAccounts.accounts)) {
+            throw new Error('The shared account roster returned an invalid response.');
+          }
+          if (readSignal.aborted) return nextAccounts;
+          accountRoster = nextAccounts;
+          if (pendingSnapshot) publishCatalogue(pendingSnapshot, nextAccounts);
+          return nextAccounts;
+        }),
+      ]), { signal });
+      if (!isCurrentRequest()) return;
+      publishCatalogue(catalogue, resolvedAccounts);
+      loadAccess(signal);
+      // Backlogs advance from their exact timestamp/shortcode cursor in short
+      // background reads. They never restart the full historical download.
+      if (catalogue.metricsPending && !reconnectTimer.current) {
+        reconnectTimer.current = window.setTimeout(() => {
+          reconnectTimer.current = null;
+          dashboardLoader.current?.(undefined, { silent: true });
+        }, RECONNECT_POLL_MS);
       }
     } catch (error) {
       if (isCurrentRequest() && error.name !== 'AbortError') {
@@ -1191,10 +1241,9 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
     // Start from the last verified full catalogue. Its revision is also an
     // ETag, so a normal refresh asks the server only for the tiny manifest and
     // roster instead of re-downloading the entire historical library. This
-    // keeps a last-known-complete Research view available. The first live
-    // verification deliberately stays in Loading until it confirms that same
-    // full revision; never replace the library with a misleading 500-card
-    // preview during a reload.
+    // keeps a last-known-complete Research view available while updates load.
+    // Cold reads publish only after every historical page is complete, then
+    // reconcile metrics in the background.
     (async () => {
       try {
         // A browser can retain an interrupted IndexedDB transaction from an
@@ -1214,6 +1263,7 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
           dashboardCatalogueRevisionRef.current = snapshot.catalogueRevision || '';
           dashboardProjectionGenerationRef.current = Number(snapshot.projectionGeneration) || 0;
           dashboardMetricsAtRef.current = snapshot.metricsAt || '';
+          dashboardMetricsCursorRef.current = snapshot.metricsCursor || null;
           setDashboard({ posts: snapshot.posts, summary: snapshot.summary || {} });
           setAccounts(snapshot.accounts);
           setLoading(false);
@@ -1935,6 +1985,8 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
       catalogueRevision: dashboardCatalogueRevisionRef.current,
       projectionGeneration: dashboardProjectionGenerationRef.current,
       catalogueSources: dashboardSourcesRef.current,
+      metricsAt: dashboardMetricsAtRef.current,
+      metricsCursor: dashboardMetricsCursorRef.current,
     }, userEmail).catch(() => {});
   }, [ownsDashboardSession, userEmail]);
 
@@ -1950,6 +2002,8 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
       catalogueRevision: dashboardCatalogueRevisionRef.current,
       projectionGeneration: dashboardProjectionGenerationRef.current,
       catalogueSources: dashboardSourcesRef.current,
+      metricsAt: dashboardMetricsAtRef.current,
+      metricsCursor: dashboardMetricsCursorRef.current,
     }, userEmail).catch(() => {});
   }, [ownsDashboardSession, userEmail]);
 
