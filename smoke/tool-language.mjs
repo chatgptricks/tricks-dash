@@ -42,7 +42,7 @@ try {
     let serverLanguage = language, failDraft = true;
     const errors = [], preferences = [], mutations = [];
     const date = '2026-09-01T10:00:00Z';
-    const story = {id:'story-1',title:'Original English AI research story',description:'Original English reporting stays intact.',publisher:'Source Publisher',source:'Source Publisher',sourceType:'news',feedLabel:'Artificial intelligence',feedGroup:'Ticker',published:date,link:'https://publisher.test/original',image:'',coverageCount:1};
+    const story = {id:'story-1',title:'Original English AI research story',description:'Original English reporting stays intact.',publisher:'Source Publisher',source:'Source Publisher',sourceType:'news',feedLabel:'Artificial intelligence',feedGroup:'Ticker',published:new Date(Date.now()-2*3600000).toISOString(),link:'https://publisher.test/original',image:'',coverageCount:1};
     const saved = {}, statuses = {};
     const link = {id:'link-1',title:'Original English saved idea',url:'https://publisher.test/idea',priority:1,shared_at:date,source:'Source workspace',discarded:false,done:false,tweet_text:'Original English source content.'};
     const hook = {id:'posts:1:ocr',source_table:'posts',source_id:1,source_kind:'ocr',account:'sourceaccount',shortcode:'abc',permalink:'https://instagram.com/p/abc',published_at:date,likes:12345,hook_text:'Original English hook stays intact.',primary_topic:'ai_tools',categories:['benefit'],categorized_at:date,matchType:'exact',saved:false};
@@ -88,8 +88,14 @@ try {
     await page.goto(`${base}/news.html?desktop=1`);
     await page.locator('.news-story').waitFor();
     await expectLocale(label('News','Noticias'));
-    await page.getByRole('button',{name:label('Refresh feeds','Actualizar feeds'),exact:true}).waitFor();
+    await page.getByRole('button',{name:label('Refresh stories','Actualizar noticias'),exact:true}).waitFor();
     assert.equal(await page.getByRole('heading',{name:story.title}).count(),1);
+    assert.equal(await page.locator('.news-recent-badge').textContent(),label('Last 24h','Últimas 24 h'));
+    assert.ok((await page.locator('.news-last-checked').textContent()).includes(label('Last checked','Última consulta')));
+    await page.getByRole('tab',{name:new RegExp(label('Last 24h','Últimas 24 h'))}).click();
+    assert.equal(await page.getByRole('combobox',{name:label('Sort stories','Ordenar noticias'),exact:true}).inputValue(),'newest');
+    assert.equal(await page.getByRole('heading',{name:story.title}).count(),1);
+    await page.getByRole('tab',{name:label('Recommended','Recomendadas'),exact:true}).click();
     await page.locator('.settings-menu-trigger').click();
     await page.getByRole('group',{name:label('Language','Idioma'),exact:true}).getByRole('button').nth(es ? 0 : 1).click();
     await page.waitForFunction(lang=>document.documentElement.lang!==lang,language);
@@ -122,7 +128,7 @@ try {
     await page.locator('.news-story').waitFor({state:'detached'});
     await storyStatus.selectOption('done');
     await page.locator('.news-status-badge').waitFor();
-    assert.equal(await page.locator('.news-status-badge').innerText(),label('Done','Completada'));
+    assert.equal(await page.locator('.news-status-badge').textContent(),label('Done','Completada'));
     await page.getByRole('button',{name:label('Reopen story','Reabrir noticia'),exact:true}).click();
     await page.locator('.news-story').waitFor({state:'detached'});
     await storyStatus.selectOption('pending');
@@ -130,7 +136,7 @@ try {
     await page.locator('.news-story').waitFor({state:'detached'});
     await storyStatus.selectOption('rejected');
     await page.locator('.news-status-badge').waitFor();
-    assert.equal(await page.locator('.news-status-badge').innerText(),label('Rejected','Rechazada'));
+    assert.equal(await page.locator('.news-status-badge').textContent(),label('Rejected','Rechazada'));
     await page.getByRole('button',{name:label('Reopen story','Reabrir noticia'),exact:true}).click();
     await page.locator('.news-story').waitFor({state:'detached'});
     await storyStatus.selectOption('pending');

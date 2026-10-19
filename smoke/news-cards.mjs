@@ -22,10 +22,13 @@ await server.listen();
 const base = server.resolvedUrls.local[0].replace(/\/$/, '');
 const chrome = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const image = '<svg xmlns="http://www.w3.org/2000/svg" width="600" height="800"><rect width="600" height="800" fill="#254c44"/><circle cx="300" cy="305" r="154" fill="#8ecdbb"/><path d="M100 800V625a200 200 0 0 1 400 0v175" fill="#679e9b"/><text x="45" y="730" font-family="sans-serif" font-size="36" fill="white">Research card fixture</text></svg>';
+const fixtureNow = Date.parse('2026-10-19T18:00:00.000Z');
+const publicationDates = [-10 * 60000, -3600000, -24 * 3600000, -24 * 3600000 - 1, 3600000].map(offset => new Date(fixtureNow + offset).toISOString());
+publicationDates.push('unknown-publication-date');
 const titles = ['Robots learn a useful new skill from video', 'A better way to compare AI results', 'What the new AI safety report found', 'How researchers test a smaller model', 'A visual guide to reliable AI tools', 'An important story without a preview'];
 const items = titles.map((title, index) => ({
   id: `story-${index}`, title, publisher: index === 1 ? 'Research Journal' : 'Technology Review', source: 'Technology Review', sourceType: index === 4 ? 'x' : 'news',
-  published: new Date(Date.now() - index * 3600000).toISOString(), image: index === 5 ? '' : index === 3 ? 'https://news-fixture.test/broken.jpg' : `https://news-fixture.test/cover-${index}.svg`,
+  published: publicationDates[index], image: index === 5 ? '' : index === 3 ? 'https://news-fixture.test/broken.jpg' : `https://news-fixture.test/cover-${index}.svg`,
   link: `https://publisher-fixture.test/story-${index}`, feedLabel: 'AI & robotics', feedGroup: 'Ticker',
   description: 'Researchers show how a useful idea can be tested, compared, and explained clearly. Read the original source to verify the evidence before developing a post.',
   coverageCount: index === 1 ? 3 : 1, coverageFeeds: ['Technology', 'Artificial intelligence'],
@@ -38,7 +41,7 @@ const saved = {};
 const statuses = {};
 const omittedFeedStories = new Set();
 const writes = [], statusWrites = [], paid = [], errors = [], publisherRequests = [];
-let releaseReview, failReview = true, releaseStatus, failStatus = true, holdStatus = true, releaseLoad, holdLoad = false;
+let releaseReview, failReview = true, releaseStatus, failStatus = true, holdStatus = true, releaseLoad, holdLoad = false, failLoad = false;
 let browser;
 try {
   browser = await chromium.launch({ headless: true, executablePath: process.env.CHROME_PATH || (fs.existsSync(chrome) ? chrome : undefined) });
@@ -59,6 +62,7 @@ try {
       else if (url.pathname === '/api/dashboard/news') {
         data = JSON.parse(JSON.stringify({ items: items.filter(item => !omittedFeedStories.has(item.id)), reviews, saved, statuses }));
         if (holdLoad) await new Promise(resolve => { releaseLoad = resolve; });
+        if (failLoad) return route.fulfill({ status: 400, json: { detail: 'Fixture feed refresh unavailable.' } });
       }
       else if (url.pathname === '/api/dashboard/news/save') {
         const payload = request.postDataJSON(); writes.push(payload);
@@ -92,6 +96,7 @@ try {
   };
   await context.route('**/*', intercept);
   const page = await context.newPage();
+  await page.clock.setFixedTime(fixtureNow);
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(`${base}/news.html?desktop=1`);
   await page.locator('.news-story').first().waitFor();
@@ -102,6 +107,23 @@ try {
   assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'dark', 'News keeps the fixed shared News theme');
   const card = index => page.locator('.news-story').filter({ has: page.getByRole('heading', { name: titles[index], exact: true }) });
   const first = card(0), assessed = card(1);
+  const lastChecked = page.locator('.news-last-checked time');
+  await lastChecked.waitFor();
+  assert.equal(await lastChecked.getAttribute('datetime'), new Date(fixtureNow).toISOString(), 'Last checked reports the last successful client fetch');
+  assert.match(await page.locator('.news-last-checked').textContent(), /Last checked/);
+  assert.equal(await page.getByRole('button', { name: 'Refresh stories', exact: true }).locator('svg').count(), 1, 'The visible refresh control includes its icon');
+  for (const index of [0, 1, 2]) {
+    assert.equal(await card(index).locator('.news-recent-badge').textContent(), 'Last 24h');
+    assert.equal(await card(index).locator('.news-recent-badge').getAttribute('title'), 'Published in the last 24 hours');
+  }
+  for (const index of [3, 4, 5]) assert.equal(await card(index).locator('.news-recent-badge').count(), 0, 'Old, future and unknown publication dates do not receive a recent badge');
+  const recentTab = page.getByRole('tab', { name: /^Last 24h/ });
+  assert.equal(await recentTab.locator('b').textContent(), '3', 'The exact 24h boundary is included');
+  await recentTab.click();
+  assert.deepEqual(await page.locator('.news-story h2').allTextContents(), titles.slice(0, 3), 'The recent view contains only past publication dates within 24h, newest first');
+  assert.equal(await page.getByRole('combobox', { name: 'Sort stories', exact: true }).inputValue(), 'newest');
+  await page.getByRole('tab', { name: 'Recommended', exact: true }).click();
+  await page.getByRole('combobox', { name: 'Sort stories', exact: true }).selectOption('recommended');
   await card(3).getByRole('img', { name: 'No story preview' }).waitFor();
   assert.equal(await card(5).getByRole('img', { name: 'No story preview' }).count(), 1);
   assert.equal(await first.locator('img.product-card-image').evaluate(node => getComputedStyle(node).objectFit), 'contain');
@@ -215,7 +237,7 @@ try {
 
   holdLoad = true;
   const staleLoad = page.waitForRequest(request => new URL(request.url()).pathname === '/api/dashboard/news');
-  await page.getByRole('button', { name: 'Refresh feeds', exact: true }).click();
+  await page.getByRole('button', { name: 'Refresh stories', exact: true }).click();
   await staleLoad;
   failStatus = false; holdStatus = false;
   await first.getByRole('button', { name: 'Mark as done', exact: true }).click();
@@ -223,7 +245,7 @@ try {
   assert.equal(statuses['story-0'].status, 'done');
   holdLoad = false;
   releaseLoad();
-  await page.getByRole('button', { name: 'Refresh feeds', exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Refresh stories', exact: true }).waitFor();
   assert.equal(await first.count(), 0, 'A feed response started before the status mutation cannot restore an old status');
   await statusFilter.selectOption({ label: 'Done' });
   await first.locator('.news-status-badge').waitFor();
@@ -274,15 +296,91 @@ try {
   assert.equal(paid.length, 2, 'Editorial status actions do not invoke JEV');
   console.log('PASS News Done/Reject/Reopen, composable status views, shared reload persistence and retry-safe per-story locks');
 
+  await first.getByRole('button', { name: 'Mark as done', exact: true }).click();
+  await first.waitFor({ state: 'hidden' });
+  await statusFilter.selectOption({ label: 'Done' });
+  await recentTab.click();
+  const search = page.getByRole('textbox', { name: 'Search stories', exact: true });
+  const topicFilter = page.getByRole('combobox', { name: 'Filter stories by topic', exact: true });
+  const sortFilter = page.getByRole('combobox', { name: 'Sort stories', exact: true });
+  await search.fill('Robots');
+  await topicFilter.selectOption('Ticker');
+  const assertRefreshView = async () => {
+    assert.equal(await recentTab.getAttribute('aria-selected'), 'true');
+    assert.equal(await statusFilter.inputValue(), 'done');
+    assert.equal(await topicFilter.inputValue(), 'Ticker');
+    assert.equal(await sortFilter.inputValue(), 'newest');
+    assert.equal(await search.inputValue(), 'Robots');
+    assert.equal(await page.locator('.news-story').count(), 1);
+    assert.equal(await first.locator('.news-status-badge').textContent(), 'Done');
+  };
+  await assertRefreshView();
+  const previousCheck = await lastChecked.getAttribute('datetime');
+  const mutationsBeforeRefresh = { saves: writes.length, statuses: statusWrites.length, reviews: paid.length };
+  const refreshButton = page.locator('.news-refresh');
+  await page.clock.setFixedTime(fixtureNow + 2 * 60000);
+  holdLoad = true;
+  const refreshRequest = page.waitForRequest(request => new URL(request.url()).pathname === '/api/dashboard/news');
+  await refreshButton.click();
+  await refreshRequest;
+  assert.equal(await refreshButton.isDisabled(), true, 'The refresh button is disabled while checking stories');
+  assert.match(await refreshButton.textContent(), /Refreshing/);
+  assert.equal(await lastChecked.getAttribute('datetime'), previousCheck, 'An in-flight refresh retains the last successful check time');
+  holdLoad = false; releaseLoad();
+  await page.getByRole('button', { name: 'Refresh stories', exact: true }).waitFor();
+  const successfulCheck = await lastChecked.getAttribute('datetime');
+  assert.equal(successfulCheck, new Date(fixtureNow + 2 * 60000).toISOString(), 'Successful refresh advances the last checked time');
+  await assertRefreshView();
+
+  await page.clock.setFixedTime(fixtureNow + 4 * 60000);
+  failLoad = true; holdLoad = true;
+  const failedRefresh = page.waitForRequest(request => new URL(request.url()).pathname === '/api/dashboard/news');
+  await refreshButton.click();
+  await failedRefresh;
+  assert.equal(await refreshButton.isDisabled(), true);
+  holdLoad = false; releaseLoad();
+  await page.locator('.news-alert').filter({ hasText: 'News returned 400' }).waitFor();
+  assert.equal(await refreshButton.isEnabled(), true, 'A failed refresh leaves the refresh control actionable');
+  assert.equal(await lastChecked.getAttribute('datetime'), successfulCheck, 'A failed refresh does not claim a new successful check time');
+  await assertRefreshView();
+  assert.deepEqual({ saves: writes.length, statuses: statusWrites.length, reviews: paid.length }, mutationsBeforeRefresh, 'Refreshing reads stories without saving, changing status or invoking JEV');
+
+  failLoad = false;
+  await refreshButton.click();
+  await page.waitForFunction(expected => document.querySelector('.news-last-checked time')?.getAttribute('datetime') === expected, new Date(fixtureNow + 4 * 60000).toISOString());
+  assert.equal(await page.locator('.news-alert').count(), 0, 'Successful refresh clears the previous refresh error');
+  await assertRefreshView();
+  await statusFilter.selectOption({ label: 'All statuses' });
+  await search.fill('');
+  await topicFilter.selectOption('all');
+  assert.deepEqual(await page.locator('.news-story h2').allTextContents(), titles.slice(0, 2), 'Refreshing reevaluates the rolling 24h boundary');
+  assert.equal(await recentTab.locator('b').textContent(), '2');
+  await page.screenshot({ path: path.join(output, 'news-freshness-desktop.png') });
+  await page.getByRole('tab', { name: 'Recommended', exact: true }).click();
+  assert.equal(await card(2).locator('.news-recent-badge').count(), 0, 'A story that ages beyond 24h loses its recent badge');
+  await first.getByRole('button', { name: 'Reopen story', exact: true }).click();
+  await first.getByRole('button', { name: 'Mark as done', exact: true }).waitFor();
+  await statusFilter.selectOption({ label: 'Pending' });
+  await sortFilter.selectOption('recommended');
+  assert.equal(await page.locator('.news-story').count(), 6);
+  console.log('PASS News recent date boundaries, newest-first view and refresh loading/success/failure feedback preserve filters and editorial status');
+
   const mobileContext = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, reducedMotion: 'no-preference' });
   await mobileContext.addInitScript(initialize);
   await mobileContext.route('**/*', intercept);
   const mobile = await mobileContext.newPage();
+  await mobile.clock.setFixedTime(fixtureNow);
   mobile.on('pageerror', error => errors.push(error.message));
   await mobile.goto(`${base}/news.html?desktop=1`);
   const mobileCard = index => mobile.locator('.news-story').filter({ has: mobile.getByRole('heading', { name: titles[index], exact: true }) });
   const mobileFirst = mobileCard(0), mobileRejected = mobileCard(2);
   await mobileFirst.waitFor();
+  assert.equal(await mobile.locator('.news-last-checked time').getAttribute('datetime'), new Date(fixtureNow).toISOString());
+  await mobile.getByRole('tab', { name: /^Last 24h/ }).tap();
+  assert.deepEqual(await mobile.locator('.news-story h2').allTextContents(), titles.slice(0, 3), 'The recent view is usable through touch');
+  await mobile.screenshot({ path: path.join(output, 'news-freshness-mobile.png') });
+  await mobile.getByRole('tab', { name: 'Recommended', exact: true }).tap();
+  await mobile.getByRole('combobox', { name: 'Sort stories', exact: true }).selectOption('recommended');
   const mobileFilter = mobile.getByRole('combobox', { name: 'Filter stories by status', exact: true });
   const mobileBounds = await mobileFirst.locator('.news-disposition-actions').evaluate(node => ({ left: node.getBoundingClientRect().left, right: node.getBoundingClientRect().right, width: innerWidth, document: document.documentElement.scrollWidth }));
   assert.ok(mobileBounds.left >= 0 && mobileBounds.right <= mobileBounds.width + 1 && mobileBounds.document <= mobileBounds.width + 1, 'Touch actions stay within the mobile viewport');

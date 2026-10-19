@@ -6,7 +6,7 @@ import { firebaseAuth, startGoogleSignIn, describeSignInError } from './firebase
 import { clearSsoCookie, startSsoRefresh, trySsoSignIn } from './sso';
 import ProductHeader from './ProductHeader';
 import ResearchCard, { CardMedia } from './ResearchCard';
-import { Check, ExternalLink, FilePenLine, RotateCcw, Sparkles, Star, X } from 'lucide-react';
+import { Check, ExternalLink, FilePenLine, RefreshCw, RotateCcw, Sparkles, Star, X } from 'lucide-react';
 import { coordinatorFor, devAccessFor } from '../public/product-navigation';
 import { SettingsMenu } from './App';
 import { PrefsProvider } from './prefsContext';
@@ -69,6 +69,11 @@ function discoveryPriority(item) {
   return (relevant ? 0.8 : 0) + recent * 0.7 + richEvidence * 0.35 + discussionSignal + coverage;
 }
 function human(value) { return String(value || '').replaceAll('_', ' '); }
+function isRecentStory(item, now) {
+  const publishedAt = Date.parse(item.published || '');
+  const age = now - publishedAt;
+  return Number.isFinite(publishedAt) && age >= 0 && age <= 24 * 3600000;
+}
 
 function ReviewBadge({ review }) {
   const { t } = useToolLanguage();
@@ -78,7 +83,7 @@ function ReviewBadge({ review }) {
   return <span className={`news-review-badge ${golden ? 'gold' : potential ? 'promising' : 'not-yet'}`}>{t(golden ? 'Golden nugget' : potential ? 'Potential' : 'Explore later')} · {Math.round((review.score || 0) * 100)}%</span>;
 }
 
-function StoryCard({ item, rank, review, onReview, busy, locked, saved, onSave, onBrief, failure, status, onStatus, statusBusy, statusFailure }) {
+function StoryCard({ item, rank, review, onReview, busy, locked, saved, onSave, onBrief, failure, status, onStatus, statusBusy, statusFailure, recent }) {
   const { t, dateLabel, relativeAge, errorText } = useToolLanguage();
   const dimensions = review?.dimensions || {};
   const mainSignals = [['Viral potential', review?.viralPotential ?? dimensions.viral_potential?.score], ['Story freshness', dimensions.timeliness?.score], ['Evidence', review?.evidenceQuality ?? dimensions.evidence_quality?.score]];
@@ -89,7 +94,7 @@ function StoryCard({ item, rank, review, onReview, busy, locked, saved, onSave, 
     effects={false}
     className={`news-story${golden ? ' is-golden' : ''}${potential ? ' is-potential' : ''}`}
     source={publisher}
-    meta={item.published ? <time dateTime={item.published} title={dateLabel(item.published, true)}>{relativeAge(item.published) || dateLabel(item.published, true)}</time> : t('Date unavailable')}
+    meta={<span className="news-published-meta">{item.published ? <time dateTime={item.published} title={dateLabel(item.published, true)}>{relativeAge(item.published) || dateLabel(item.published, true)}</time> : t('Date unavailable')}{recent && <span className="news-recent-badge" title={t('Published in the last 24 hours')}>{t('Last 24h')}</span>}</span>}
     avatar={<span className={`news-origin-mark${item.sourceType === 'x' ? ' is-x' : ''}`} aria-hidden="true">{item.sourceType === 'x' ? '𝕏' : publisher.slice(0, 2).toUpperCase()}</span>}
     marker={<span className="news-story-rank" aria-label={t('Story {number}', { number: rank + 1 })}>{String(rank + 1).padStart(2, '0')}</span>}
     media={<CardMedia src={item.image} alt="" label={t('No story preview')} />}
@@ -124,6 +129,8 @@ function NewsApp() {
   const [user, setUser] = useState(undefined); const [viewer, setViewer] = useState(null); const [authError] = useState(''); const [items, setItems] = useState([]); const [reviews, setReviews] = useState({}); const [loading, setLoading] = useState(false); const [error, setError] = useState(''); const [feedStatuses, setFeedStatuses] = useState([]); const [reviewing, setReviewing] = useState('');
   const [query, setQuery] = useState(''); const [filter, setFilter] = useState('best'); const [feedFilter, setFeedFilter] = useState('all'); const [sortBy, setSortBy] = useState('recommended'); const [visibleLimit, setVisibleLimit] = useState(30); const [saved, setSaved] = useState({}); const [failures, setFailures] = useState({}); const [scanning, setScanning] = useState(false); const [progress, setProgress] = useState({ done: 0, total: 0 }); const stopScan = useRef(false); const busyRef = useRef(false); const loadingRef = useRef(false); const [brief, setBrief] = useState(null);
   const [statuses, setStatuses] = useState({}); const [statusFilter, setStatusFilter] = useState('pending'); const [statusBusy, setStatusBusy] = useState({}); const [statusFailures, setStatusFailures] = useState({}); const statusRequests = useRef(new Set()); const statusRevision = useRef(0);
+  const [now, setNow] = useState(Date.now); const [lastChecked, setLastChecked] = useState(null);
+  useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 60000); return () => window.clearInterval(timer); }, []);
   useEffect(() => {
     const previousTheme = document.documentElement.dataset.theme;
     document.documentElement.dataset.theme = 'dark';
@@ -149,6 +156,7 @@ function NewsApp() {
       // A polling response that started before an editorial action must not
       // undo its result, or restore an old status while a write is in flight.
       if (revision === statusRevision.current && !statusRequests.current.size) setStatuses(data.statuses || {});
+      const checkedAt = Date.now(); setLastChecked(checkedAt); setNow(checkedAt);
       setFeedStatuses([]); setError('');
     } catch (reason) { setError(reason.message || 'Unable to load News.'); }
     finally { loadingRef.current = false; setLoading(false); }
@@ -217,6 +225,7 @@ function NewsApp() {
     let rows = statusCandidates.filter(item => (!query || `${item.searchText || `${item.title} ${stripHtml(item.description)} ${item.source}`}`.toLowerCase().includes(query.toLowerCase())) && (feedFilter === 'all' || item.feedGroup === feedFilter));
     rows = rows.filter(item => {
       const label = reviews[item.id]?.label;
+      if (filter === 'recent') return isRecentStory(item, now);
       if (filter === 'golden_nugget') return label === 'golden_nugget' || label === 'gold';
       if (filter === 'potential') return label === 'potential' || label === 'promising';
       if (filter === 'saved') return Boolean(saved[item.id]);
@@ -230,7 +239,7 @@ function NewsApp() {
       const labelRank = item => ({ golden_nugget: 4, potential: 3, promising: 3, not_yet: 1 }[reviews[item.id]?.label] || 0);
       return labelRank(b) - labelRank(a) || (reviews[b.id]?.viralPotential ?? 0) - (reviews[a.id]?.viralPotential ?? 0) || (reviews[b.id]?.score ?? 0) - (reviews[a.id]?.score ?? 0) || discoveryPriority(b) - discoveryPriority(a) || (Date.parse(b.published) || 0) - (Date.parse(a.published) || 0);
     });
-  }, [statusCandidates, reviews, saved, query, feedFilter, filter, sortBy]);
+  }, [statusCandidates, reviews, saved, query, feedFilter, filter, sortBy, now]);
   const visibleRanked = ranked.slice(0, visibleLimit);
 
   function makeBrief(item) {
@@ -248,27 +257,28 @@ function NewsApp() {
   const reviewedCount = candidates.filter(item => reviews[item.id]).length;
   const counts = {
     all: statusCandidates.length,
+    recent: statusCandidates.filter(item => isRecentStory(item, now)).length,
     golden: statusCandidates.filter(item => ['golden_nugget', 'gold'].includes(reviews[item.id]?.label)).length,
     potential: statusCandidates.filter(item => ['potential', 'promising'].includes(reviews[item.id]?.label)).length,
     x: statusCandidates.filter(item => item.sourceType === 'x').length,
     unreviewed: statusCandidates.filter(item => !reviews[item.id]).length,
     saved: statusCandidates.filter(item => Boolean(saved[item.id])).length,
   };
-  const filters = [['best','Recommended',null],['golden_nugget','Golden',counts.golden],['potential','Potential',counts.potential],['unreviewed','Needs review',counts.unreviewed],['x','X signals',counts.x],['all','All stories',counts.all],['saved','Saved',counts.saved]];
+  const filters = [['best','Recommended',null],['recent','Last 24h',counts.recent],['golden_nugget','Golden',counts.golden],['potential','Potential',counts.potential],['unreviewed','Needs review',counts.unreviewed],['x','X signals',counts.x],['all','All stories',counts.all],['saved','Saved',counts.saved]];
   const feedGroups = [...new Set(NEWS_FEEDS.map(feed => feed.group))];
   return <main className="news-shell product-page">
     <ProductHeader current="news" coordinator={coordinatorFor(viewer)} isDev={devAccessFor(viewer)} canAccessNews={canAccessNews} account={<SettingsMenu email={user.email} avatarUrl={user.photoURL || viewer?.avatar_url} isAdmin={Boolean(viewer?.is_admin)} isDev={devAccessFor(viewer)} hideAppearanceControls onSignOut={handleSignOut} />}>
-      <h1>{t('News')}</h1><button className="news-refresh" onClick={load} disabled={loading}>{t(loading ? 'Refreshing…' : 'Refresh feeds')}</button>
+      <h1>{t('News')}</h1><button className="news-refresh" onClick={load} disabled={loading} title={t('Load the latest available stories')}><RefreshCw size={14} aria-hidden="true" />{t(loading ? 'Refreshing…' : 'Refresh stories')}</button>
     </ProductHeader>
     <section className="product-page-heading"><p>{t('Discover story ideas from 11 monitored feeds')}</p></section>
-    <section className="news-source-health" aria-live="polite"><div className="news-health-copy"><span className={`news-health-dot ${candidates.length ? 'is-online' : ''}`} /><span>{loading ? t('Loading shared News…') : t('{count} shared stories · automatic feed and JEV updates', { count: candidates.length })}</span></div></section>
+    <section className="news-source-health" aria-live="polite"><div className="news-health-copy"><span className={`news-health-dot ${candidates.length ? 'is-online' : ''}`} /><span>{loading ? t('Loading shared News…') : t('{count} shared stories · automatic feed and JEV updates', { count: candidates.length })}</span></div>{lastChecked !== null && <span className="news-last-checked">{t('Last checked')} <time dateTime={new Date(lastChecked).toISOString()} title={new Intl.DateTimeFormat(lang === 'es' ? 'es-CR' : 'en-US', { dateStyle: 'medium', timeStyle: 'medium' }).format(lastChecked)}>{new Intl.DateTimeFormat(lang === 'es' ? 'es-CR' : 'en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit' }).format(lastChecked)}</time></span>}</section>
     {error && <div className="news-alert" role="status">{errorText(error)}</div>}
-    <section className="news-toolbar product-page-controls" aria-label={t('Story filters')}><div className="news-filter-row"><div className="news-filter-tabs" role="tablist" aria-label={t('Story filters')}>{filters.map(([key,label,count]) => <button key={key} role="tab" aria-selected={filter === key} className={filter === key ? 'active' : ''} onClick={() => setFilter(key)}>{t(label)}{count !== null && <b>{count}</b>}</button>)}</div><span className="news-result-count"><strong>{ranked.length}</strong> {t('stories')}<span className="news-result-reviewed"> · {t('{count} scored by JEV', { count: reviewedCount })}</span></span></div><div className="news-search-row"><label className="news-search"><span aria-hidden="true">⌕</span><input aria-label={t('Search stories')} value={query} onChange={event => setQuery(event.target.value)} placeholder={t('Search stories, sources or topics…')} />{query && <button className="news-clear-search" onClick={() => setQuery('')} aria-label={t('Clear search')}>×</button>}</label><label className="news-status-select"><span>{t('Status')}</span><select aria-label={t('Filter stories by status')} value={statusFilter} onChange={event => setStatusFilter(event.target.value)}>{[['pending', 'Pending'], ['done', 'Done'], ['rejected', 'Rejected'], ['all', 'All statuses']].map(([value, label]) => <option key={value} value={value}>{t(label)}</option>)}</select></label><label className="news-feed-select"><span>{t('Feed')}</span><select aria-label={t('Filter stories by topic')} value={feedFilter} onChange={event => setFeedFilter(event.target.value)}><option value="all">{t('All feeds')}</option>{feedGroups.map(group => <option value={group} key={group}>{t(group)}</option>)}</select></label><label className="news-sort-select"><span>{t('Sort')}</span><select aria-label={t('Sort stories')} value={sortBy} onChange={event => setSortBy(event.target.value)}><option value="recommended">{t('Recommended')}</option><option value="newest">{t('Newest')}</option><option value="coverage">{t('Most coverage')}</option></select></label><span className="news-up-to-date">{pendingCount > 0 ? t('{count} queued for automatic JEV review', { count: pendingCount }) : t('All caught up')}</span></div></section>
+    <section className="news-toolbar product-page-controls" aria-label={t('Story filters')}><div className="news-filter-row"><div className="news-filter-tabs" role="tablist" aria-label={t('Story filters')}>{filters.map(([key,label,count]) => <button key={key} role="tab" aria-selected={filter === key} className={filter === key ? 'active' : ''} onClick={() => { setFilter(key); if (key === 'recent') setSortBy('newest'); }}>{t(label)}{count !== null && <b>{count}</b>}</button>)}</div><span className="news-result-count"><strong>{ranked.length}</strong> {t('stories')}<span className="news-result-reviewed"> · {t('{count} scored by JEV', { count: reviewedCount })}</span></span></div><div className="news-search-row"><label className="news-search"><span aria-hidden="true">⌕</span><input aria-label={t('Search stories')} value={query} onChange={event => setQuery(event.target.value)} placeholder={t('Search stories, sources or topics…')} />{query && <button className="news-clear-search" onClick={() => setQuery('')} aria-label={t('Clear search')}>×</button>}</label><label className="news-status-select"><span>{t('Status')}</span><select aria-label={t('Filter stories by status')} value={statusFilter} onChange={event => setStatusFilter(event.target.value)}>{[['pending', 'Pending'], ['done', 'Done'], ['rejected', 'Rejected'], ['all', 'All statuses']].map(([value, label]) => <option key={value} value={value}>{t(label)}</option>)}</select></label><label className="news-feed-select"><span>{t('Feed')}</span><select aria-label={t('Filter stories by topic')} value={feedFilter} onChange={event => setFeedFilter(event.target.value)}><option value="all">{t('All feeds')}</option>{feedGroups.map(group => <option value={group} key={group}>{t(group)}</option>)}</select></label><label className="news-sort-select"><span>{t('Sort')}</span><select aria-label={t('Sort stories')} value={sortBy} onChange={event => setSortBy(event.target.value)}><option value="recommended">{t('Recommended')}</option><option value="newest">{t('Newest')}</option><option value="coverage">{t('Most coverage')}</option></select></label><span className="news-up-to-date">{pendingCount > 0 ? t('{count} queued for automatic JEV review', { count: pendingCount }) : t('All caught up')}</span></div></section>
     {scanning && <div className="news-progress" role="progressbar" aria-label={t('JEV review progress')} aria-valuemin="0" aria-valuemax={progress.total} aria-valuenow={progress.done}><span style={{ width: `${progress.total ? progress.done / progress.total * 100 : 0}%` }} /></div>}
     {brief && <section id="news-brief" className="news-brief"><div><span className="news-kicker">{t('EDITORIAL WORKSPACE')}</span><h2>{t('Build an original post')}</h2><p>{t('Use the source and the story angle to create something clear, useful, and worth sharing.')}</p></div><textarea aria-label={t('Post brief')} value={brief.text} onChange={event => setBrief({ ...brief, text: event.target.value })} /><div className="news-story-actions"><button onClick={() => { saveStory(brief.item, true, brief.text); }}>{t('Save brief')}</button><button onClick={async () => { try { await navigator.clipboard.writeText(brief.text); setError('Brief copied.'); } catch { setError('Copy failed. Select the brief text and copy it manually.'); } }}>{t('Copy brief')}</button><button onClick={() => setBrief(null)}>{t('Close')}</button></div></section>}
-    <section className="news-results product-card-grid" aria-label={t('News stories')}>{visibleRanked.map((item,index) => <StoryCard key={item.id} rank={index} item={item} review={reviews[item.id]} busy={reviewing === item.id} locked={scanning || Boolean(reviewing)} failure={failures[item.id]} saved={Boolean(saved[item.id])} onReview={review} onSave={() => saveStory(item, !saved[item.id])} onBrief={() => makeBrief(item)} status={statuses[item.id]?.status || 'pending'} statusBusy={Boolean(statusBusy[item.id])} statusFailure={statusFailures[item.id]} onStatus={status => updateStoryStatus(item, status)} />)}{!ranked.length && <div className="news-empty"><strong>{t('No stories in this view.')}</strong><span>{t('Try another status, feed, or search. Done and rejected stories can be reopened.')}</span>{!items.length && <button onClick={load} disabled={loading}>{t(loading ? 'Loading feeds…' : 'Load RSS stories')}</button>}</div>}</section>
+    <section className="news-results product-card-grid" aria-label={t('News stories')}>{visibleRanked.map((item,index) => <StoryCard key={item.id} rank={index} item={item} recent={isRecentStory(item, now)} review={reviews[item.id]} busy={reviewing === item.id} locked={scanning || Boolean(reviewing)} failure={failures[item.id]} saved={Boolean(saved[item.id])} onReview={review} onSave={() => saveStory(item, !saved[item.id])} onBrief={() => makeBrief(item)} status={statuses[item.id]?.status || 'pending'} statusBusy={Boolean(statusBusy[item.id])} statusFailure={statusFailures[item.id]} onStatus={status => updateStoryStatus(item, status)} />)}{!ranked.length && <div className="news-empty"><strong>{t('No stories in this view.')}</strong><span>{t('Try another status, feed, or search. Done and rejected stories can be reopened.')}</span>{!items.length && <button onClick={load} disabled={loading}>{t(loading ? 'Loading feeds…' : 'Load RSS stories')}</button>}</div>}</section>
     {visibleRanked.length < ranked.length && <div className="news-load-more"><span>{t('Showing {visible} of {total} matching stories', { visible: visibleRanked.length, total: ranked.length })}</span><button onClick={() => setVisibleLimit(current => Math.min(current + 30, ranked.length))}>{t('Load 30 more stories')}</button></div>}
-    {loading && <div className="news-loading-note">{t('Refreshing RSS.app feeds…')}</div>}
+    {loading && <div className="news-loading-note">{t('Checking for stories…')}</div>}
   </main>;
 }
 
