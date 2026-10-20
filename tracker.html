@@ -4,11 +4,11 @@
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; connect-src 'self' https://cortex-api-db2e.onrender.com https://*.googleapis.com https://*.firebaseio.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://www.gstatic.com;">
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<script src="/mobile-redirect.js?v=20260908-device"></script>
+<script src="/mobile-redirect.js?v=20261019-tracker-route"></script>
 <script src="/user-preferences.js?v=20261009-i18n1"></script>
 <script src="/tool-translations.js?v=20261014-analytics"></script>
 <script src="/tracker-monthly.js?v=20261014-analytics"></script>
-<script src="/tracker-refresh.js?v=20261017-followers"></script>
+<script src="/tracker-refresh.js?v=20261019-refresh-recovery"></script>
 <script src="/role-preview.js?v=20260928-tracker" defer></script>
 <script src="/context-menu.js?v=20260901-context1" defer></script>
 <title>Tracker · sentientdash.app</title>
@@ -168,6 +168,8 @@ section>p.sub{margin:0 0 14px;color:var(--muted);font-size:11px;line-height:1.5}
   font-size:13px;line-height:1;cursor:pointer}
 .row-refresh-btn:hover{color:var(--accent-text)}
 .row-refresh-btn:disabled,.refresh-btn:disabled{opacity:.5;cursor:default}
+.row-refresh-btn.is-refreshing,.refresh-btn.is-refreshing{opacity:1;color:var(--accent-text)}
+.refresh-btn.is-refreshing{border-color:rgba(var(--accent-rgb),.4);background:rgba(var(--accent-rgb),.1)}
 .refresh-icon{display:inline-block}
 .tracker-refresh-status{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:12px 0;padding:10px 12px;border:1px solid var(--line);border-radius:8px;font-size:12px;color:var(--muted-2)}
 .tracker-refresh-status[hidden]{display:none}
@@ -488,6 +490,7 @@ window.__resetToolSession = () => {
   SUMMARY = null;
   DETAIL_CACHE = {};
   resetSentientMonthly();
+  REFRESH_OPERATION?.controller?.abort();
   REFRESH_OPERATION = null;
   AUTO_REFRESH_SESSION = -1;
   setTrackerRefreshStatus();
@@ -574,43 +577,48 @@ async function boot(){
   }
 }
 
-const trackerDelay = ms => new Promise(resolve => setTimeout(resolve, ms));
+const trackerDelay = (ms, signal) => new Promise((resolve, reject) => {
+  const abort = () => { clearTimeout(timer); reject(Object.assign(new Error('Refresh cancelled.'), {name:'AbortError'})); };
+  const timer = setTimeout(() => { signal?.removeEventListener('abort', abort); resolve(); }, ms);
+  if(signal?.aborted) abort();
+  else signal?.addEventListener('abort', abort, {once:true});
+});
 const RETRYABLE_TRACKER_STATUS = new Set([502, 503, 504]);
 
-async function trackerRequest(path, method, forceRefresh, session){
-  return window.SentientTrackerRefresh.bounded(async signal => {
+async function trackerRequest(path, method, forceRefresh, session, signal){
+  return window.SentientTrackerRefresh.bounded(async requestSignal => {
     if(window.__refreshFirebaseIdToken) await window.__refreshFirebaseIdToken(forceRefresh);
-    if(signal.aborted || session !== TRACKER_SESSION) throw Object.assign(new Error('Session changed.'), {final:true});
+    if(requestSignal.aborted || session !== TRACKER_SESSION) throw Object.assign(new Error('Session changed.'), {final:true});
     const headers = window.__sentientRolePreviewHeaders ? window.__sentientRolePreviewHeaders() : {};
     if(window.__firebaseIdToken) headers.Authorization = 'Bearer '+window.__firebaseIdToken;
-    const response = await fetch(API+path, {method, headers, cache:'no-store', signal});
+    const response = await fetch(API+path, {method, headers, cache:'no-store', signal:requestSignal});
     const body = await response.json();
-    if(signal.aborted || session !== TRACKER_SESSION) throw Object.assign(new Error('Session changed.'), {final:true});
+    if(requestSignal.aborted || session !== TRACKER_SESSION) throw Object.assign(new Error('Session changed.'), {final:true});
     return {response, body};
-  });
+  }, {signal});
 }
-async function authedFetch(path){
+async function authedFetch(path, {signal} = {}){
   const session = TRACKER_SESSION;
   let lastError;
   for(let attempt=0; attempt<3; attempt+=1){
     try{
-      const {response, body} = await trackerRequest(path, 'GET', attempt > 0, session);
+      const {response, body} = await trackerRequest(path, 'GET', attempt > 0, session, signal);
       if(response.status === 401 && attempt < 2) throw new Error('unauthorized');
       if(response.status === 401) window.__onInsightsUnauthorized?.();
       if(!response.ok) throw Object.assign(new Error(body.detail || 'HTTP '+response.status), {status:response.status, final:!RETRYABLE_TRACKER_STATUS.has(response.status)});
       return body;
     }catch(error){
       lastError = error;
-      if(error?.final || session !== TRACKER_SESSION) throw error;
-      if(attempt < 2) await trackerDelay(500 * (attempt + 1));
+      if(error?.final || error?.name === 'AbortError' || signal?.aborted || session !== TRACKER_SESSION) throw error;
+      if(attempt < 2) await trackerDelay(500 * (attempt + 1), signal);
     }
   }
   throw lastError;
 }
-async function authedPost(path){
+async function authedPost(path, {signal} = {}){
   const session = TRACKER_SESSION;
   for(let attempt=0; attempt<2; attempt+=1){
-    const {response, body} = await trackerRequest(path, 'POST', attempt > 0, session);
+    const {response, body} = await trackerRequest(path, 'POST', attempt > 0, session, signal);
     if(response.status === 401 && attempt === 0) continue;
     if(response.status === 401) window.__onInsightsUnauthorized?.();
     if(!response.ok) throw Object.assign(new Error(body.detail || 'HTTP '+response.status), {status:response.status, retryAfter:Number(response.headers.get('Retry-After')) || 0});
@@ -633,11 +641,17 @@ function setTrackerRefreshStatus(message = '', error = false, handle = ''){
     status.append(retry);
   }
 }
-async function waitForTrackerRefresh(job, session = TRACKER_SESSION){
+async function waitForTrackerRefresh(job, session = TRACKER_SESSION, signal){
   return window.SentientTrackerRefresh.wait(job, {
     read:authedFetch,
+    signal,
     isCurrent:() => session === TRACKER_SESSION,
-    onProgress:current => setTrackerRefreshStatus(window.SentientTrackerRefresh.describe(current, document.documentElement.lang)),
+    onProgress:current => {
+      if(session !== TRACKER_SESSION) return;
+      if(REFRESH_OPERATION) REFRESH_OPERATION.progress = current;
+      setTrackerRefreshStatus(window.SentientTrackerRefresh.describe(current, document.documentElement.lang));
+      applyRefreshAllowance();
+    },
   });
 }
 
@@ -655,11 +669,30 @@ function refreshWaitMessage(ms){
 }
 function applyRefreshAllowance(){
   const wait = REFRESH_UNLIMITED ? 0 : REFRESH_READY_AT - Date.now();
+  const operation = REFRESH_OPERATION;
+  const activeLabel = operation ? window.SentientTrackerRefresh.buttonLabel(operation.progress, document.documentElement.lang) : '';
   document.querySelectorAll('#refreshAllBtn,#monthlyRefreshBtn,#detailRefreshBtn,[data-refresh]').forEach((btn) => {
-    if(btn.dataset.running) return;
     if(btn.dataset.baseTitle === undefined) btn.dataset.baseTitle = btn.title || '';
-    btn.disabled = Boolean(REFRESH_OPERATION) || wait > 0;
-    btn.title = wait > 0 ? refreshWaitMessage(wait) : btn.dataset.baseTitle;
+    const rowButton = btn.hasAttribute('data-refresh');
+    const handle = rowButton ? btn.dataset.refresh : btn.id === 'detailRefreshBtn' ? readAcc() : '';
+    const busy = Boolean(operation) && (!handle || !operation.handle || operation.handle === handle);
+    let icon = btn.querySelector('.refresh-icon');
+    if(!icon){ icon = Object.assign(document.createElement('span'), {className:'refresh-icon',textContent:'↻'}); btn.prepend(icon); }
+    icon.setAttribute('aria-hidden', 'true');
+    icon.classList.toggle('is-spinning', busy);
+    if(!rowButton){
+      let label = btn.querySelector('.refresh-label');
+      if(!label){
+        [...btn.childNodes].filter(node => node.nodeType === Node.TEXT_NODE).forEach(node => node.remove());
+        label = Object.assign(document.createElement('span'), {className:'refresh-label'}); btn.append(label);
+      }
+      label.textContent = busy ? activeLabel : toolText(btn.id === 'detailRefreshBtn' ? 'Refresh' : 'Refresh all');
+    }
+    btn.disabled = Boolean(operation) || wait > 0;
+    btn.classList.toggle('is-refreshing', busy);
+    btn.setAttribute('aria-busy', String(busy));
+    btn.title = operation ? activeLabel + (operation.handle ? ' @' + operation.handle : '') : wait > 0 ? refreshWaitMessage(wait) : btn.dataset.baseTitle;
+    btn.setAttribute('aria-label', busy ? activeLabel + (handle ? ' @' + handle : '') : btn.title || toolText('Refresh all'));
   });
 }
 function startRefreshCooldown(retryAfterSeconds){
@@ -695,28 +728,26 @@ async function refreshAccountNow(handle, btn){
 async function refreshAllAccountsNow(btn){
   return runTrackerRefresh('', btn);
 }
-async function runTrackerRefresh(handle, btn){
+async function runTrackerRefresh(handle){
   if(REFRESH_OPERATION) return REFRESH_OPERATION.promise;
   const session = TRACKER_SESSION;
-  const operation = {promise:null};
+  const operation = {promise:null,controller:new AbortController(),handle,progress:{status:'submitting'}};
   REFRESH_OPERATION = operation;
-  const icon = btn?.querySelector('.refresh-icon');
-  if(icon) icon.classList.add('is-spinning');
-  setTrackerRefreshStatus(window.SentientTrackerRefresh.describe(null, document.documentElement.lang));
+  setTrackerRefreshStatus(window.SentientTrackerRefresh.describe(operation.progress, document.documentElement.lang));
   applyRefreshAllowance();
   operation.promise = (async () => {
     try{
       const path = handle ? '/api/tracker/accounts/'+encodeURIComponent(handle)+'/refresh' : '/api/tracker/snapshot-now';
-      const job = await authedPost(path);
+      const job = await authedPost(path, {signal:operation.controller.signal});
       if(session !== TRACKER_SESSION) return;
-      const result = await waitForTrackerRefresh(job, session);
+      const result = await waitForTrackerRefresh(job, session, operation.controller.signal);
       if(session !== TRACKER_SESSION) return;
       // An account request can join an existing full refresh. Always read the
       // canonical summary so growth, ranks and timestamps agree with history.
       DETAIL_REQUEST += 1;
       DETAIL_CACHE = {};
       resetSentientMonthly(false);
-      await loadSummary();
+      await loadSummary({signal:operation.controller.signal});
       if(session !== TRACKER_SESSION) return;
       render();
       const outcome = window.SentientTrackerRefresh.outcome(result, document.documentElement.lang, handle);
@@ -726,16 +757,15 @@ async function runTrackerRefresh(handle, btn){
       const message = toolText(refreshErrorMessage(error, 'Could not refresh followers: '));
       setTrackerRefreshStatus(message, true, handle);
     }finally{
-      if(icon) icon.classList.remove('is-spinning');
       if(REFRESH_OPERATION === operation){ REFRESH_OPERATION = null; applyRefreshAllowance(); }
     }
   })();
   return operation.promise;
 }
 
-async function loadSummary(){
+async function loadSummary({signal} = {}){
   const session = TRACKER_SESSION;
-  const summary = await authedFetch('/api/tracker/summary');
+  const summary = await authedFetch('/api/tracker/summary', {signal});
   if(session === TRACKER_SESSION) SUMMARY = summary;
 }
 
