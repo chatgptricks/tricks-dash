@@ -52,6 +52,11 @@ and mobile follow the server job through completion, show progress and
 per-account failures, then reload totals, growth and history together.
 Repeated requests share an active job; a new refresh after completion
 requests a new reading. These refreshes incur the profile scraper's usage.
+Refresh buttons show starting, queued and updating states with a spinner and
+account progress, and block repeated clicks until the operation finishes.
+Account refreshes run independently of full refreshes on the server, and
+returning to a sleeping tab checks the job's final status before reporting
+a wait timeout.
 
 ## Build
 

@@ -39,6 +39,7 @@
   }
   var path = location.pathname;
   var state = decodeRoute(query.get('r')) || {};
+  if (!Object.prototype.hasOwnProperty.call(state, 'acc') && query.has('acc')) state.acc = query.get('acc');
   var post = query.get('post') || state.post;
   var task = query.get('task') || state.task;
   var tab = state.tab || query.get('tab') || query.get('view') || (task ? 'queue' : post ? 'dashboard' : path.includes('queue') ? 'queue' : path.includes('tracker') ? 'tracker' : path.includes('insights') ? 'insights' : path.includes('settings') ? 'settings' : 'home');

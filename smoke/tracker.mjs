@@ -72,7 +72,7 @@ assert.equal(window.document.querySelectorAll('.hist-missing').length, 3);
 dom.window.close();
 // Refresh is open to everyone with a per-person limit. A refused action (403)
 // or the limit (429) must be reported, never treated as a signed-out session.
-const refreshSection = source.split('const trackerDelay')[1].split('async function loadSummary(){')[0];
+const refreshSection = source.split('const trackerDelay')[1].split('async function loadSummary(')[0];
 const refreshDom = new JSDOM('<div id="trackerRefreshStatus"></div><button id="refreshAllBtn" title="Refresh all"></button><button data-refresh="alpha" title="Refresh"></button>', { runScripts: 'outside-only' });
 const rw = refreshDom.window;
 const status = () => rw.document.querySelector('#trackerRefreshStatus').textContent;

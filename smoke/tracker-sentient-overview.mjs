@@ -81,7 +81,7 @@ function fixture(accounts) {
     const loading = test.enter(); await tick();
     assert.equal(peak, 3, 'History loading is bounded to three concurrent requests');
     assert.deepEqual(values(), { gained: '—', lost: '—', net: '—' }, 'Loading must not show an incomplete total');
-    assert.equal(w.document.querySelector('#sentientMonthly [aria-busy]').getAttribute('aria-busy'), 'true');
+    assert.equal(w.document.querySelector('#sentientMonthly .sentient-metrics').getAttribute('aria-busy'), 'true');
     assertNoMonthlyNotices(w);
     for (const handle of ['beta', 'gamma', 'delta', 'epsilon']) {
       assert.ok(pending.has(handle), `${handle} was scheduled by a history worker`);

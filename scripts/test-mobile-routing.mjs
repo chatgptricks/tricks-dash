@@ -70,6 +70,14 @@ checks += 7;
 const suggestion = { suggest: 'https://www.instagram.com/p/RESEARCH1/', sourceAccount: 'researchsource', sourceShortcode: 'RESEARCH1' };
 const sentientMonth = { view: 'sentient', month: '2026-10' };
 for (const agent of ['iphone', 'android']) {
+  const legacyAccount = run('/tracker.html?acc=chatgptricks', { agent });
+  assert.equal(legacyAccount.pathname, '/mobile/');
+  assert.deepEqual(route(legacyAccount), { acc: 'chatgptricks', tab: 'tracker' }, 'A legacy account link must remain a selected-only refresh after redirect');
+  const encodedAccount = run(`/tracker.html?acc=oldaccount&r=${encode({ acc: 'chatgptricks' })}`, { agent });
+  assert.equal(route(encodedAccount).acc, 'chatgptricks', 'The canonical route takes precedence over a stale legacy parameter');
+  checks += 3;
+}
+for (const agent of ['iphone', 'android']) {
   const mobileMonth = run(`/tracker.html?r=${encode(sentientMonth)}`, { agent });
   assert.equal(mobileMonth.pathname, '/mobile/');
   assert.deepEqual(route(mobileMonth), { ...sentientMonth, tab: 'tracker' });
@@ -90,7 +98,7 @@ for (const agent of ['iphone', 'android']) {
 
 for (const entry of ['index.html', 'queue.html', 'settings.html', 'public/tracker.html', 'public/insights.html', 'mobile/index.html']) {
   const html = fs.readFileSync(new URL(`../${entry}`, import.meta.url), 'utf8');
-  assert.match(html, /<script src="\/mobile-redirect\.js\?v=20260908-device"><\/script>/, `${entry} must run the current device gate before app startup`);
+  assert.match(html, /<script src="\/mobile-redirect\.js\?v=20261019-tracker-route"><\/script>/, `${entry} must run the current device gate before app startup`);
   checks++;
 }
 console.log(`Mobile routing: ${checks} checks passed.`);

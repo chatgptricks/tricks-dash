@@ -64,6 +64,10 @@ try{
   await page.goto(`${base}/tracker.html`);
   await page.locator('#trackerSearch').waitFor();
   await page.locator('#authGate.hidden').waitFor({state:'attached'});
+  await page.waitForFunction(()=>document.querySelector('#refreshAllBtn')?.textContent.includes('1/3'));
+  assert.equal(await page.locator('#refreshAllBtn').isDisabled(),true);
+  assert.equal(await page.locator('#refreshAllBtn').getAttribute('aria-busy'),'true');
+  assert.equal(await page.locator('#refreshAllBtn .refresh-icon.is-spinning').count(),1);
   assert.equal(await page.locator('#sentientMonthly').count(),0);
   assert.equal(await page.locator('#trackerOverviewTab').getAttribute('aria-selected'),'true');
   assert.deepEqual(trackerDetailRequests,[],'The default overview does not fetch Sentient histories');
@@ -108,6 +112,11 @@ try{
   assert.equal(await page.locator('#sentientMonthly').count(),0);
   await page.locator('tr[data-handle="alpha"]').click();
   await page.locator('#historyWindow').waitFor();
+  await page.waitForFunction(()=>document.querySelector('#detailRefreshBtn')?.textContent.includes('1/3'));
+  assert.match(await page.locator('#detailRefreshBtn').innerText(),/Updating 1\/3/);
+  assert.equal(await page.locator('#detailRefreshBtn').getAttribute('aria-busy'),'true');
+  assert.equal(await page.locator('#detailRefreshBtn .refresh-icon.is-spinning').count(),1);
+  await page.screenshot({path:path.join(screenshotDir,'desktop-refresh-detail.png')});
   await page.locator('#historyWindow').selectOption('7');
   await page.locator('#settingsTrigger').click();
   await page.locator('#settingsPanel [data-lang="es"]').click();
