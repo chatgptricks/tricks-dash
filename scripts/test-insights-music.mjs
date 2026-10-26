@@ -172,6 +172,31 @@ test('safe identity preserves numeric strings and rejects already-rounded numeri
   assert.equal(analyze([{ oa: 1 }, { oa: 1 }]).tracks.length, 2);
 });
 
+test('missing audio ID sentinels do not create fictitious shared audio or inflate coverage', () => {
+  const invalid = [0, -0, -1, '0', '000', ' 0 ', '0.0', '-0', '-1', '-100', '', '  ', null, undefined, 'null', 'NULL', 'undefined'];
+  const input = invalid.map((ai, index) => post(`missing-${index}`, { ai, ms: null, ma: null, oa: false }));
+  const result = analyze(input);
+  assert.equal(result.tracks.length, 0);
+  assert.equal(result.coverage.detectedAudio, 0);
+  assert.equal(result.coverage.unknown, invalid.length);
+  assert.ok(result.posts.every(item => item.audio.id === null && item.audio.key === null));
+  assert.equal(classifyAudio(post('alphanumeric', { ai: 'audio-1' })).id, 'audio-1', 'Existing alphanumeric identities are not reinterpreted');
+  assert.equal(classifyAudio(post('leading-zero', { ai: '00012345678901234567890' })).id, '00012345678901234567890');
+});
+
+test('originals with missing-ID sentinels stay separate and named songs use the title/artist fallback', () => {
+  const result = analyze([
+    post('original-a', { ms: 'Original audio', ma: 'creator', ai: '0', oa: true }),
+    post('original-b', { ms: 'Original audio', ma: 'creator', ai: 0, oa: true }),
+    post('named-a', { ai: '0' }), post('named-b', { ai: null }),
+  ]);
+  assert.equal(result.tracks.length, 3);
+  const originals = result.tracks.filter(track => track.kind === 'original');
+  assert.equal(originals.length, 2);
+  assert.ok(originals.every(track => track.id === null && track.postCount === 1 && !track.label.includes('#0')));
+  assert.equal(result.tracks.find(track => track.kind === 'named').postCount, 2);
+});
+
 test('empty selection has honest empty coverage and null percentages', () => {
   const result = analyze([]);
   assert.deepEqual(result.tracks, []);

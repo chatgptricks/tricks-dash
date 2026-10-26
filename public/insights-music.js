@@ -21,8 +21,12 @@
   };
   const audioId = value => {
     // Unsafe numeric IDs have already lost precision; do not invent an exact identity.
-    if (typeof value === 'number') return Number.isSafeInteger(value) && value >= 0 ? String(value) : '';
-    return clean(value);
+    if (typeof value === 'number') return Number.isSafeInteger(value) && value > 0 ? String(value) : '';
+    const id = clean(value);
+    // Providers use 0 for missing audio. It must not become one shared sound
+    // across unrelated posts. Keep positive IDs as strings to preserve precision.
+    if (!id || /^(?:null|undefined)$/i.test(id) || /^[+-]?0+(?:\.0+)?$/.test(id) || /^-\d+(?:\.\d+)?$/.test(id)) return '';
+    return id;
   };
   const postKey = (post, index = 0) => {
     const shortcode = clean(post?.sc) || clean(post?.u).match(/\/(?:p|reels?|tv)\/([^/?#]+)/)?.[1];
