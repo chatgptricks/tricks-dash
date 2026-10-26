@@ -174,8 +174,9 @@ the example proxy.
 
 Open `/insights.html?view=music` or choose Music in Insights. Account, date and
 format filters apply to the audio rankings, top posts and coverage counters.
-Songs, original audio and untitled audio have separate lists; Songs opens by
-default. Searching and ranking always stay within the selected list.
+Songs and original audio have separate tabs; Songs opens by default. Searching
+and ranking always stay within the selected tab. Untitled audio is counted in
+coverage without being presented as a named song.
 Music loads its own read-only `/api/insights/music` catalogue on demand, including
 canonical historical posts and metadata recovered from stored provider responses.
 Opening the view does not run a scrape or refresh Instagram metrics.

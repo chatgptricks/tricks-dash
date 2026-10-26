@@ -4,12 +4,12 @@
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; connect-src 'self' https://cortex-api-db2e.onrender.com https://*.googleapis.com https://*.firebaseio.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://www.gstatic.com;">
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<script src="/mobile-redirect.js?v=20261025-music2"></script>
+<script src="/mobile-redirect.js?v=20261026-music3"></script>
 <script src="/user-preferences.js?v=20261009-i18n1"></script>
-<script src="/tool-translations.js?v=20261025-music2"></script>
-<script src="/insights-music.js?v=20261025-music2"></script>
-<script src="/insights-music-view.js?v=20261025-music2"></script>
-<link rel="stylesheet" href="/insights-music.css?v=20261025-music2">
+<script src="/tool-translations.js?v=20261026-music3"></script>
+<script src="/insights-music.js?v=20261026-music3"></script>
+<script src="/insights-music-view.js?v=20261026-music3"></script>
+<link rel="stylesheet" href="/insights-music.css?v=20261026-music3">
 <script src="/role-preview.js?v=20260928-tracker" defer></script>
 <script src="/context-menu.js?v=20260901-context1" defer></script>
 <title>Insights · sentientdash.app</title>
@@ -584,7 +584,7 @@ async function boot(){
     $('#ftype').value = u.ftype;
     $('#metric').value = u.metric;
     MUSIC_STATE.search=u.musicSearch.slice(0,200);
-    MUSIC_STATE.kind=['named','original','identified'].includes(u.musicKind)?u.musicKind:'named';
+    MUSIC_STATE.kind=['named','original'].includes(u.musicKind)?u.musicKind:'named';
     MUSIC_STATE.sort=['total','mean','median','uses','relative','topPosts'].includes(u.musicSort)?u.musicSort:'total';
     MUSIC_STATE.minUses=['1','3','5','10'].includes(u.musicMin)?u.musicMin:'1';
 

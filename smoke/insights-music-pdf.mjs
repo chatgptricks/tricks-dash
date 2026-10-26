@@ -31,7 +31,7 @@ function reportHtml(kind) {
   return `<button id="pdfBtn">Export PDF</button><div id="scope">28 posts · 3 accounts</div>
   <div class="filters"><div class="f"><label>Music order</label><input value="total"></div><div class="f" hidden><label>HIDDEN METRIC</label><input value="DO NOT EXPORT"></div></div>
   <div id="accChips"><button class="chip on">@selected</button></div>
-  <div id="musicKinds"><button data-kind="named" aria-pressed="${!isOriginal}">Songs</button><button data-kind="original" aria-pressed="${isOriginal}">Original audio</button><button data-kind="identified" aria-pressed="false">Untitled audio</button></div>
+  <div id="musicKinds" role="tablist"><button data-kind="named" role="tab" aria-selected="${!isOriginal}">Songs</button><button data-kind="original" role="tab" aria-selected="${isOriginal}">Original audio</button></div>
   <section><h2 id="musicRankingTitle">${isOriginal ? 'Original audio' : 'Songs'}</h2><p class="sub">Selected sounds</p>${table}</section>
   <section hidden><h2>HIDDEN DETAIL</h2><table><thead><tr><th>Secret</th></tr></thead><tbody><tr><td>HIDDEN POST</td></tr></tbody></table></section>
   <div style="display:none"><section><h2>CSS HIDDEN SECTION</h2>${table}</section></div>`;

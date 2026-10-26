@@ -52,6 +52,29 @@ The initial live schema contains 163 exposed API operations (read and write comb
 
 Credential-minting endpoints, Slack callbacks, media image routes, continuous live streams, binary uploads and unsupported body formats are excluded. File upload and browser visual control need dedicated adapters. The MCP provides API-level product task execution, not a browser session. It exposes a `sentient://guide` resource as well as product tools.
 
+## Music data
+
+Use `get_insights_music_page` (read only) with a `query` object. Supported
+parameters are `account` (comma-separated handles), `start` and `end`
+(`YYYY-MM-DD`), `sort` (`date`, `likes`, `comments`, `views`, `hot`), `limit`
+(1–100, default 20), and `offset` (default 0). Example:
+
+```json
+{"query":{"account":"chatgptricks","sort":"likes","limit":20,"offset":0}}
+```
+
+The response envelope contains `data` and `pagination.next_offset`. Each post
+includes `song`, `artist`, `audio_id`, `is_original_audio`, `audio_url`, and its
+account, shortcode, publication date, permalink and engagement metrics. Keep
+audio IDs as exact strings. Missing fields mean unavailable metadata; zero IDs
+are not real sounds. This reads retained data and does not start a scrape.
+
+For REST integrations using an API connection key, the equivalent endpoint is
+`GET /api/v1/insights/music` with the **Insights** permission. It preserves the
+connection's account restrictions. Agent codes and Firebase sessions use
+`GET /api/insights/music/page`. OAuth agents invoke the MCP tool. Avoid the
+unpaginated `/api/insights/music` browser catalogue in agent calls.
+
 ## Validation
 
 `npm test` checks schema generation, authorization gates, path handling, form encoding, HTTP errors and a real MCP client/server connection against a mock Cortex API. Public production OpenAPI discovery was verified; authenticated production execution requires your authorized token. These tests do not mutate production.

@@ -88,6 +88,38 @@ test("base and traversal constraints", async () => {
     /Invalid path/,
   );
 });
+test("music discovery supports bounded read pages and preserves exact audio IDs", async () => {
+  const music = catalogue({ paths: {
+    "/api/insights/music/page": { get: {
+      summary: "Read music metadata and engagement for a page of posts",
+      parameters: [
+        { in: "query", name: "account", schema: { type: "string" } },
+        { in: "query", name: "limit", schema: { type: "integer", minimum: 1, maximum: 100 } },
+        { in: "query", name: "offset", schema: { type: "integer", minimum: 0 } },
+        { in: "query", name: "sort", schema: { type: "string", enum: ["date", "likes", "comments", "views", "hot"] } },
+      ],
+    } },
+    "/api/v1/insights/music": { get: { summary: "API key music data" } },
+  } });
+  assert.deepEqual([...music.keys()], ["get_insights_music_page"]);
+  const tool = music.get("get_insights_music_page");
+  assert.equal(tool.annotations.readOnlyHint, true);
+  assert.equal(tool.validate({ query: { limit: 101 } }), false);
+  assert.equal(tool.validate({ query: { offset: -1 } }), false);
+  const payload = { data: [{ song: null, artist: "creator", audio_id: "9007199254740993123", is_original_audio: true, likes: 900 }], pagination: { next_offset: 20 } };
+  const result = await execute(tool, { query: { account: "one,two", limit: 20, offset: 0, sort: "likes" } }, {
+    base: "https://example.com", token: "test-agent",
+    fetchImpl: async (url, options) => {
+      assert.equal(url.pathname, "/api/insights/music/page");
+      assert.equal(url.searchParams.get("account"), "one,two");
+      assert.equal(url.searchParams.get("limit"), "20");
+      assert.equal(options.method, "GET");
+      assert.equal(options.headers.Authorization, "Bearer test-agent");
+      return Response.json(payload);
+    },
+  });
+  assert.deepEqual(JSON.parse(result.content[0].text).data, payload);
+});
 test("real MCP client initializes, discovers and invokes tools over stdio", async () => {
   const { createServer } = await import("node:http");
   const { Client } = await import("@modelcontextprotocol/sdk/client/index.js");
