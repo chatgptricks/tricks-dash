@@ -17,6 +17,9 @@
     try { forceDesktop = sessionStorage.getItem('sentient.forceDesktop') === '1'; } catch (_) {}
   }
   var useMobile = mobileDevice && !forceDesktop;
+  // Music uses the same responsive explorer on phones and desktop. Preserve
+  // shared filter links without changing the user's global desktop preference.
+  if (location.pathname === '/insights.html' && (query.get('view') || (decodeRoute(query.get('r')) || {}).view) === 'music') return;
   if (mobilePath === useMobile) return;
   if (useMobile && window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) return;
   function decodeRoute(token) {
