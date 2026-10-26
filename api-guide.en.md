@@ -148,6 +148,7 @@ Every row below is `GET`. A missing scope returns `403`; account-linked data rem
 | `/tracker/accounts/{handle}/history` | `tracker` | Account follower history | `from, to, limit, offset` |
 | `/insights/posts` | `insights` | Stored analytics posts across selected accounts | `account, from, to, q, is_promo, is_collab, is_hot, include_hidden, include_deleted, sort, limit, offset` |
 | `/insights/top-posts` | `insights` | Ranked stored posts; default sort likes | `account, from, to, sort, limit, offset` |
+| `/insights/music` | `insights` | Stored song/audio metadata and post engagement | `account, from, to, sort, limit, offset` |
 | `/tracker/accounts/{handle}/engagement` | `tracker` | Daily or monthly post engagement observations | `granularity, from, to, limit, offset` |
 | `/insights/follower-growth` | `insights` | Evidence-bound follower-growth events and candidate posts | `account, lookback_days` |
 | `/insights/summary` | `insights` | Stored analytics summary for the selected range | `account, from, to` |
@@ -219,6 +220,37 @@ Research and Insights queries accept `account` as one handle or a comma-separate
 `/research/golden-nuggets` reads existing confirmed classifications, never generating or re-scoring a candidate. Its optional `min_score` is from 0 to 1; `account` and `target_account` narrow stored results. Rows include `account`, `shortcode`, `label`, `target_account` or `null`, `score`, `reviewed_by`, `reviewed_at` and a safe stored `review`. Account-linked results and referenced targets respect the key’s boundaries.
 
 Research and Insights post objects include a `metrics` map for available stored performance facts, such as shares, saves, reach, impressions, measured checkpoints and model scores. The exact keys depend on source coverage. Preserve a missing/`null` measurement as unknown and keep model scores distinct from observed audience counts. `hashtags` and `mentions` are normalized arrays; audio and paid-partnership flags may be `null`. `transcript_available` and `alt_text_available` describe stored availability; the detail endpoint returns the text when it exists. Public account and HOT-only projections do not expose internal model or private performance measurements.
+
+### Post music
+
+`GET /api/v1/insights/music?account=chatgptricks&sort=likes&limit=20` returns
+stored music metadata alongside post metrics. It requires the `insights`
+scope and respects the connection's authorized accounts.
+
+Each item includes `song`, `artist`, `audio_id`, `is_original_audio` and
+`audio_url`, together with `account`, `accounts`, `shortcode`, `published_at`,
+`permalink`, `likes`, `comments`, `views` and `metrics_updated_at`. Preserve
+`audio_id` as a string to avoid losing precision. Nulls mean unavailable
+metadata; ID `0` does not identify a song. Distinguish original audio by its
+artist and exact ID; without an ID, retain the post shortcode rather than
+merging all original audio into one sound.
+
+Filters accept `account` as one handle or a comma-separated subset, inclusive
+`from`/`to` dates, `sort=date|likes|comments|views|hot`, `limit` from 1 to 100
+(default 20), and `offset` starting at 0. Follow `pagination.next_offset`
+while `has_more` is true. The endpoint recovers music only for the selected
+page and never starts a scrape or refreshes Instagram metrics. `coverage`
+describes that page only. A collaborative post can appear once per account;
+deduplicate by `shortcode` when aggregating across accounts.
+
+Pagination ordering uses stored index metrics. Returned metrics can include
+newer observations for those posts, so a later page may contain a higher like
+count. For an exact ranking of returned values, collect the pages, deduplicate
+and sort again. Preserve `ordering` and `metrics_updated_at` in reports.
+
+Agents use the `get_insights_music_page` MCP tool. Sessions and agent codes
+can read `/api/insights/music/page`; API connection keys use the versioned
+`/api/v1/insights/music` route.
 
 ### Tracker and Insights coverage
 
