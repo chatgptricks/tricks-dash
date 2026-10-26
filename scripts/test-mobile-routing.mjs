@@ -101,7 +101,7 @@ for (const agent of ['iphone', 'android']) {
 
 for (const entry of ['index.html', 'queue.html', 'settings.html', 'public/tracker.html', 'public/insights.html', 'mobile/index.html']) {
   const html = fs.readFileSync(new URL(`../${entry}`, import.meta.url), 'utf8');
-  assert.match(html, /<script src="\/mobile-redirect\.js\?v=202610(?:19-tracker-route|25-music1)"><\/script>/, `${entry} must run the current device gate before app startup`);
+  assert.match(html, /<script src="\/mobile-redirect\.js\?v=202610(?:19-tracker-route|25-music2)"><\/script>/, `${entry} must run the current device gate before app startup`);
   checks++;
 }
 console.log(`Mobile routing: ${checks} checks passed.`);
