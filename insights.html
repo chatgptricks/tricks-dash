@@ -4,12 +4,12 @@
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; connect-src 'self' https://cortex-api-db2e.onrender.com https://*.googleapis.com https://*.firebaseio.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://www.gstatic.com;">
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<script src="/mobile-redirect.js?v=20261025-music1"></script>
+<script src="/mobile-redirect.js?v=20261025-music2"></script>
 <script src="/user-preferences.js?v=20261009-i18n1"></script>
-<script src="/tool-translations.js?v=20261025-music1"></script>
-<script src="/insights-music.js?v=20261025-music1"></script>
-<script src="/insights-music-view.js?v=20261025-music1"></script>
-<link rel="stylesheet" href="/insights-music.css?v=20261025-music1">
+<script src="/tool-translations.js?v=20261025-music2"></script>
+<script src="/insights-music.js?v=20261025-music2"></script>
+<script src="/insights-music-view.js?v=20261025-music2"></script>
+<link rel="stylesheet" href="/insights-music.css?v=20261025-music2">
 <script src="/role-preview.js?v=20260928-tracker" defer></script>
 <script src="/context-menu.js?v=20260901-context1" defer></script>
 <title>Insights · sentientdash.app</title>
@@ -350,7 +350,7 @@ const safeUrl = value => { try { const url = new URL(String(value || '')); retur
 
 let RAW=[], MUSIC_RAW=[], MUSIC_READY=false, OVERVIEW_READY=false, VIEW='overview';
 let MUSIC_ACCOUNTS=[], OVERVIEW_ACCOUNTS=[];
-const MUSIC_STATE={search:'',kind:'',sort:'total',minUses:'1'};
+const MUSIC_STATE={search:'',kind:'named',sort:'total',minUses:'1'};
 let ACCOUNTS=[], SEL=new Set(), CHARTS=[], FOLLOWER_GROWTH=null, FOLLOWER_GROWTH_ERROR='';
 let INSIGHTS_SESSION=0, INSIGHTS_BOOT=0;
 window.__resetToolSession = () => {
@@ -406,7 +406,7 @@ const WORD_ALIASES={openal:'openai'};
 // it exactly for someone else. Defaults are omitted so a plain view keeps a
 // plain URL. Accounts are only written when the selection is a real subset.
 // ---------------------------------------------------------------------------
-const URL_DEFAULTS = {acc:'', selection:'', from:'', to:'', preset:'', ftype:'', metric:'l',view:'overview',musicSearch:'',musicKind:'',musicSort:'total',musicMin:'1'};
+const URL_DEFAULTS = {acc:'', selection:'', from:'', to:'', preset:'', ftype:'', metric:'l',view:'overview',musicSearch:'',musicKind:'named',musicSort:'total',musicMin:'1'};
 
 function encodeRoute(state){
   try{
@@ -534,6 +534,14 @@ async function insightsGet(path){
   throw lastError || new Error('Connection to Insights is still reconnecting.');
 }
 
+function insightsAccountSelection(state, accounts){
+  const known=new Set(accounts.map(account=>account.handle));
+  const wanted=state.acc.split(',').map(handle=>handle.trim()).filter(Boolean);
+  // An explicit subset stays a subset even when none of its accounts belong
+  // to this view. Only an absent account filter means all available accounts.
+  return state.selection==='none' ? new Set() : wanted.length ? new Set(wanted.filter(handle=>known.has(handle))) : known;
+}
+
 async function boot(){
   const route=readUrl();
   VIEW=route.view==='music'?'music':'overview';
@@ -569,16 +577,14 @@ async function boot(){
     // The URL wins over the defaults, and only over accounts that still exist
     // (a shared link can outlive an account being removed).
     const u = readUrl();
-    const known = new Set(ACCOUNTS.map(a=>a.handle));
-    const wanted = u.acc.split(',').map(h=>h.trim()).filter(h=>known.has(h));
-    SEL = u.selection==='none' ? new Set() : wanted.length ? new Set(wanted) : new Set(known);
+    SEL = insightsAccountSelection(u, ACCOUNTS);
     $('#from').value = u.from;
     $('#to').value = u.to;
     $('#preset').value = u.preset;
     $('#ftype').value = u.ftype;
     $('#metric').value = u.metric;
     MUSIC_STATE.search=u.musicSearch.slice(0,200);
-    MUSIC_STATE.kind=['','named','original','identified'].includes(u.musicKind)?u.musicKind:'';
+    MUSIC_STATE.kind=['named','original','identified'].includes(u.musicKind)?u.musicKind:'named';
     MUSIC_STATE.sort=['total','mean','median','uses','relative','topPosts'].includes(u.musicSort)?u.musicSort:'total';
     MUSIC_STATE.minUses=['1','3','5','10'].includes(u.musicMin)?u.musicMin:'1';
 
@@ -747,14 +753,13 @@ function syncInsightsView(){
 }
 function switchInsightsView(view){
   if(VIEW===view) return;
-  const wasAll=ACCOUNTS.length>0&&ACCOUNTS.every(account=>SEL.has(account.handle));
   VIEW=view; syncInsightsView();
   if(!ACCOUNTS.length){ const p=new URLSearchParams(location.search);p.set('view',view);history.replaceState(null,'',location.pathname+'?'+p);boot();return; }
   writeUrl();
   if(view==='music'?MUSIC_READY:OVERVIEW_READY){
     INSIGHTS_BOOT+=1;
     ACCOUNTS=view==='music'?MUSIC_ACCOUNTS:OVERVIEW_ACCOUNTS;
-    SEL=wasAll?new Set(ACCOUNTS.map(account=>account.handle)):new Set([...SEL].filter(handle=>ACCOUNTS.some(account=>account.handle===handle)));
+    SEL=insightsAccountSelection(readUrl(),ACCOUNTS);
     buildNameWords();buildChips();
     $('#app').setAttribute('aria-busy','false');render();
   }
