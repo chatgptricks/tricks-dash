@@ -268,6 +268,34 @@ try{
 
   await page.goto(`${base}/insights.html`);
   await page.locator('#tAcc').waitFor();
+  await page.getByRole('button',{name:/^(Clear|Limpiar)$/}).click();
+  await page.getByRole('button',{name:'@gamma',exact:true}).click();
+  assert.match(await page.locator('#scope').innerText(),/1 (accounts|cuentas)/);
+  await page.locator('#insightsMusic').click();
+  await page.locator('#musicCoverage').waitFor();
+  await countIs('total',0);
+  assert.match(await page.locator('#scope').innerText(),/0 (accounts|cuentas)/,'A first Music load must not broaden an unavailable account subset to all accounts');
+  assert.equal(await tracks().count(),0);
+  await page.locator('#insightsOverview').click();
+  await page.getByRole('button',{name:'@gamma',exact:true}).click();
+  assert.match(await page.locator('#scope').innerText(),/1 (accounts|cuentas)/);
+  const subsetMusicRequests = requests.filter(request=>request.path==='/api/insights/music').length;
+  await page.locator('#insightsMusic').click();
+  await page.locator('#musicCoverage').waitFor();
+  await countIs('total',0);
+  assert.match(await page.locator('#scope').innerText(),/0 (accounts|cuentas)/,'Cached Music applies the same account subset intersection as its first load');
+  assert.equal(requests.filter(request=>request.path==='/api/insights/music').length,subsetMusicRequests);
+  await page.reload();
+  await page.locator('#musicCoverage').waitFor();
+  await countIs('total',0);
+  assert.match(await page.locator('#scope').innerText(),/0 (accounts|cuentas)/,'The empty subset remains empty after a shared-link reload');
+  await page.goto(`${base}/insights.html?view=music&acc=gamma`);
+  await page.locator('#musicCoverage').waitFor();
+  await countIs('total',0);
+  assert.match(await page.locator('#scope').innerText(),/0 (accounts|cuentas)/,'A direct link with unavailable account IDs does not silently select everyone');
+
+  await page.goto(`${base}/insights.html`);
+  await page.locator('#tAcc').waitFor();
   delayedMusic = {started:deferred(),release:deferred()};
   await page.locator('#insightsMusic').click();
   await delayedMusic.started.promise;

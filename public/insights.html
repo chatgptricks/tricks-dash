@@ -534,6 +534,14 @@ async function insightsGet(path){
   throw lastError || new Error('Connection to Insights is still reconnecting.');
 }
 
+function insightsAccountSelection(state, accounts){
+  const known=new Set(accounts.map(account=>account.handle));
+  const wanted=state.acc.split(',').map(handle=>handle.trim()).filter(Boolean);
+  // An explicit subset stays a subset even when none of its accounts belong
+  // to this view. Only an absent account filter means all available accounts.
+  return state.selection==='none' ? new Set() : wanted.length ? new Set(wanted.filter(handle=>known.has(handle))) : known;
+}
+
 async function boot(){
   const route=readUrl();
   VIEW=route.view==='music'?'music':'overview';
@@ -569,9 +577,7 @@ async function boot(){
     // The URL wins over the defaults, and only over accounts that still exist
     // (a shared link can outlive an account being removed).
     const u = readUrl();
-    const known = new Set(ACCOUNTS.map(a=>a.handle));
-    const wanted = u.acc.split(',').map(h=>h.trim()).filter(h=>known.has(h));
-    SEL = u.selection==='none' ? new Set() : wanted.length ? new Set(wanted) : new Set(known);
+    SEL = insightsAccountSelection(u, ACCOUNTS);
     $('#from').value = u.from;
     $('#to').value = u.to;
     $('#preset').value = u.preset;
@@ -747,14 +753,13 @@ function syncInsightsView(){
 }
 function switchInsightsView(view){
   if(VIEW===view) return;
-  const wasAll=ACCOUNTS.length>0&&ACCOUNTS.every(account=>SEL.has(account.handle));
   VIEW=view; syncInsightsView();
   if(!ACCOUNTS.length){ const p=new URLSearchParams(location.search);p.set('view',view);history.replaceState(null,'',location.pathname+'?'+p);boot();return; }
   writeUrl();
   if(view==='music'?MUSIC_READY:OVERVIEW_READY){
     INSIGHTS_BOOT+=1;
     ACCOUNTS=view==='music'?MUSIC_ACCOUNTS:OVERVIEW_ACCOUNTS;
-    SEL=wasAll?new Set(ACCOUNTS.map(account=>account.handle)):new Set([...SEL].filter(handle=>ACCOUNTS.some(account=>account.handle===handle)));
+    SEL=insightsAccountSelection(readUrl(),ACCOUNTS);
     buildNameWords();buildChips();
     $('#app').setAttribute('aria-busy','false');render();
   }
