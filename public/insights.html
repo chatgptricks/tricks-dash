@@ -350,7 +350,7 @@ const safeUrl = value => { try { const url = new URL(String(value || '')); retur
 
 let RAW=[], MUSIC_RAW=[], MUSIC_READY=false, OVERVIEW_READY=false, VIEW='overview';
 let MUSIC_ACCOUNTS=[], OVERVIEW_ACCOUNTS=[];
-const MUSIC_STATE={search:'',kind:'',sort:'total',minUses:'1'};
+const MUSIC_STATE={search:'',kind:'named',sort:'total',minUses:'1'};
 let ACCOUNTS=[], SEL=new Set(), CHARTS=[], FOLLOWER_GROWTH=null, FOLLOWER_GROWTH_ERROR='';
 let INSIGHTS_SESSION=0, INSIGHTS_BOOT=0;
 window.__resetToolSession = () => {
@@ -406,7 +406,7 @@ const WORD_ALIASES={openal:'openai'};
 // it exactly for someone else. Defaults are omitted so a plain view keeps a
 // plain URL. Accounts are only written when the selection is a real subset.
 // ---------------------------------------------------------------------------
-const URL_DEFAULTS = {acc:'', selection:'', from:'', to:'', preset:'', ftype:'', metric:'l',view:'overview',musicSearch:'',musicKind:'',musicSort:'total',musicMin:'1'};
+const URL_DEFAULTS = {acc:'', selection:'', from:'', to:'', preset:'', ftype:'', metric:'l',view:'overview',musicSearch:'',musicKind:'named',musicSort:'total',musicMin:'1'};
 
 function encodeRoute(state){
   try{
@@ -584,7 +584,7 @@ async function boot(){
     $('#ftype').value = u.ftype;
     $('#metric').value = u.metric;
     MUSIC_STATE.search=u.musicSearch.slice(0,200);
-    MUSIC_STATE.kind=['','named','original','identified'].includes(u.musicKind)?u.musicKind:'';
+    MUSIC_STATE.kind=['named','original','identified'].includes(u.musicKind)?u.musicKind:'named';
     MUSIC_STATE.sort=['total','mean','median','uses','relative','topPosts'].includes(u.musicSort)?u.musicSort:'total';
     MUSIC_STATE.minUses=['1','3','5','10'].includes(u.musicMin)?u.musicMin:'1';
 

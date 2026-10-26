@@ -21,12 +21,33 @@ function fixture(tool) {
   const scripts = [...w.document.scripts].filter(script => !script.src && script.type !== 'module').map(script => script.textContent);
   const bridge = tool === 'tracker'
     ? 'window.__test={summary:value=>{SUMMARY=value},detail:value=>{DETAIL_CACHE.fixture=value},charts:()=>CHARTS};'
-    : 'window.__test={seed:value=>{ACCOUNTS=value.accounts;SEL=new Set(value.selected);RAW=value.posts;FOLLOWER_GROWTH=value.growth},charts:()=>CHARTS};';
+    : 'window.__test={charts:()=>CHARTS};';
   // Real classic scripts share one global lexical scope; evaluate together.
   w.eval(helper + '\n' + scripts.join('\n') + '\n' + bridge);
   const describe = source.split('function describeSignInError(err) {')[1].split('const gate =')[0];
   w.eval('function describeSignInError(err) {' + describe);
   return { dom, w };
+}
+async function loadInsights(w, value) {
+  const noFetch = w.fetch;
+  const requested = [];
+  const route = new URL(w.location.href);
+  route.search = '';
+  route.searchParams.set(value.selected.length ? 'acc' : 'selection', value.selected.length ? value.selected.join(',') : 'none');
+  w.history.replaceState(null, '', route.href);
+  w.fetch = async (input) => {
+    const pathname = new URL(input).pathname;
+    requested.push(pathname);
+    assert.ok(['/api/insights/posts', '/api/insights/follower-growth'].includes(pathname));
+    return { ok: true, status: 200, json: async () => pathname.endsWith('/posts') ? { accounts: value.accounts, posts: value.posts } : value.growth };
+  };
+  try {
+    // Complete the production boot path, including its readiness state,
+    // before testing render/localization. Language changes must still avoid API calls.
+    await w.__startInsightsBoot();
+    assert.equal(w.document.querySelector('#app').getAttribute('aria-busy'), 'false');
+    assert.deepEqual(requested.sort(), ['/api/insights/follower-growth', '/api/insights/posts']);
+  } finally { w.fetch = noFetch; }
 }
 {
   const { dom, w } = fixture('tracker');
@@ -65,9 +86,9 @@ function fixture(tool) {
   const { dom, w } = fixture('insights');
   try {
     const insightData = { accounts: [{ handle: 'fixture', label: 'Date', group: 'sentient' }], selected: ['fixture'],
-      posts: [{ a: 'fixture', ts: Date.parse('2026-10-01T12:00:00Z'), l: 200, c: 5, v: 1000, t: 'Video', pt: 'clips', ocr: 'Date', u: 'https://instagram.com/p/fixture/', dur: 25, hour: 12, dow: 4 }],
+      posts: [{ a: 'fixture', d: '2026-10-01T12:00:00Z', l: 200, c: 5, v: 1000, t: 'Video', pt: 'clips', ocr: 'Date', u: 'https://instagram.com/p/fixture/', dur: 25 }],
       growth: { accounts: [{ handle: 'fixture', eligible_intervals: 8, baseline_ready_intervals: 1, snapshot_days: 9, peaks: [{ date: '2026-10-01', captured_at: '2026-10-01T14:00:00Z', followers_gained: 200, baseline_median: 20, growth_pct: 1.2, candidate_posts: [{ format: 'Video', cover_text: 'Date', permalink: 'https://instagram.com/p/fixture/' }] }] }] } };
-    w.__test.seed(insightData); w.render(); w.__applyI18n(); w.__charts = w.__test.charts();
+    await loadInsights(w, insightData); w.__applyI18n(); w.__charts = w.__test.charts();
     const app = w.document.querySelector('#app').textContent;
     assert.match(app, /Análisis de seguidores/);
     assert.match(app, /Qué formato funciona mejor/);
@@ -95,7 +116,7 @@ function fixture(tool) {
     assert.match(gate.textContent, /Your browser blocked/);
     // Later render mutations get translated, while account content is retained.
     w.document.querySelector('[data-lang="es"]').click();
-    w.__test.seed({ ...insightData, posts: [] }); w.render(); w.__applyI18n();
+    await loadInsights(w, { ...insightData, posts: [] }); w.__applyI18n();
     assert.match(w.document.querySelector('#app').textContent, /No hay publicaciones que coincidan/);
   } finally { dom.window.close(); }
 }

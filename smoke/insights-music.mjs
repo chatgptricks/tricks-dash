@@ -106,7 +106,7 @@ async function setSearch(text){
 }
 async function clearMusicFilters(){
   await setSearch('');
-  await page.locator('#musicKind').selectOption('');
+  await page.locator('#musicKinds [data-kind="named"]').click();
   await page.locator('#musicMinUses').selectOption('1');
   await page.locator('#musicSort').selectOption('total');
 }
@@ -122,27 +122,41 @@ try{
   assert.equal(await page.locator('#insightsMusic').getAttribute('aria-pressed'),'true');
   assert.ok(requests.some(request=>request.path==='/api/insights/music'),'The Music tab loads its dedicated endpoint');
   for(const [key,value] of Object.entries({total:14,detected:12,named:8,original:3,unknown:2}))await countIs(key,value);
-  assert.equal(await tracks().count(),8,'Repeated audio IDs are grouped, and unknown music is not invented');
+  assert.equal(await page.locator('#musicKinds [data-kind="named"]').getAttribute('aria-pressed'),'true');
+  assert.equal(await page.locator('#musicKind').count(),0,'Music has separate category lists instead of an all-audio selector');
+  assert.equal(await page.locator('#musicRankingTitle').innerText(),'Songs');
+  assert.equal(await tracks().count(),5,'The default list contains named songs only');
+  for(const id of originalIds)assert.equal(await tracks().filter({hasText:id}).count(),0,'Original audio never appears in the song list');
   assert.match(await tracks().first().innerText(),/Night Road/,'The default ranking is ordered by total known likes');
   assert.equal(await page.locator('#musicRanking img').count(),0,'Source text must be escaped rather than interpreted as HTML');
   assert.equal(await page.evaluate(()=>Boolean(window.musicInjected)),false);
   assert.ok((await rowFor('Bright Lights').innerText()).includes('400'),'Known likes contribute to the total');
   assert.ok((await rowFor('Bright Lights').innerText()).match(/200/g)?.length>=2,'Null likes are excluded from both mean and median');
   assert.match(await rowFor('Unknown likes').innerText(),/[—–]/,'A track without known likes retains an unknown metric');
-  assert.equal(await page.locator('#musicTopPosts tbody tr').count(),10,'The most-liked posts require identified audio and measured likes');
+  assert.equal(await page.locator('#musicTopPosts tbody tr').count(),6,'The most-liked posts respect the selected song category and measured likes');
   assert.match(await page.locator('#musicTopPosts tbody tr').first().innerText(),/night1/);
   assert.equal(await page.locator('#musicTopPosts a[href*="withoutmusic"]').count(),0);
 
-  await page.locator('#musicKind').selectOption('original');
+  await page.locator('#musicKinds [data-kind="original"]').click();
   assert.equal(await tracks().count(),2,'Different original audio IDs remain separate tracks');
+  assert.equal(await page.locator('#musicRankingTitle').innerText(),'Original audio');
+  assert.equal(await page.locator('#musicTopPosts tbody tr').count(),3);
+  assert.equal(await tracks().filter({hasText:'Bright Lights'}).count(),0,'Songs never appear in the original-audio list');
   const originals = await tracks().allTextContents();
   for(const id of originalIds)assert.ok(originals.some(label=>label.includes(id)),`Original audio exposes the full ID ${id}`);
   assert.ok(originals.every(label=>label.includes('alpha')),'Original audio includes the creator for easier recognition');
-  await page.locator('#musicKind').selectOption('named');
+  const originalListUrl = page.url();
+  await page.reload();
+  await page.locator('#musicRanking').waitFor();
+  assert.equal(page.url(),originalListUrl);
+  assert.equal(await page.locator('#musicKinds [data-kind="original"]').getAttribute('aria-pressed'),'true','Shared links retain the separate original-audio list');
+  assert.equal(await tracks().count(),2);
+  await page.locator('#musicKinds [data-kind="named"]').click();
   assert.equal(await tracks().count(),5);
-  await page.locator('#musicKind').selectOption('identified');
+  await page.locator('#musicKinds [data-kind="identified"]').click();
   assert.equal(await tracks().count(),1,'ID-only metadata is visible as an untitled sound');
   assert.match(await tracks().first().innerText(),/60006/);
+  assert.equal(await page.locator('#musicTopPosts tbody tr').count(),1);
   await clearMusicFilters();
 
   await setSearch('The Test Band');
@@ -172,7 +186,7 @@ try{
 
   for(const sort of ['mean','median','uses','relative','topPosts']){
     await page.locator('#musicSort').selectOption(sort);
-    assert.equal(await tracks().count(),8,`Sorting by ${sort} preserves every group`);
+    assert.equal(await tracks().count(),5,`Sorting by ${sort} preserves only the selected category`);
     if(sort==='mean'||sort==='median')assert.match(await tracks().first().innerText(),/Night Road/);
   }
   await page.locator('#musicSort').selectOption('uses');
@@ -206,14 +220,21 @@ try{
   await page.waitForFunction(()=>document.documentElement.lang==='es'&&document.querySelector('#insightsMusic')?.textContent.trim()==='Música');
   assert.equal(await page.locator('#insightsOverview').innerText(),'Resumen');
   assert.equal(await page.locator('#musicMinUses option[value="1"]').innerText(),'1 publicación');
-  assert.match(await tracks().filter({hasText:'60006'}).innerText(),/Audio sin título/);
+  assert.equal(await page.locator('#musicRankingTitle').innerText(),'Canciones');
   assert.match(await rowFor('Views').innerText(),/Views/,'Song titles retain their source language');
   assert.match(await rowFor('Views').innerText(),/Comments/,'Artist names retain their source language');
   assert.match(await rowFor(unsafeTitle).innerText(),/<img src=x/);
   await page.locator('#settingsPanel [data-theme-choice="light"]').click();
   await page.waitForFunction(()=>document.documentElement.dataset.theme==='light');
   await page.keyboard.press('Escape');
+  await page.locator('#musicKinds [data-kind="identified"]').click();
+  assert.match(await tracks().filter({hasText:'60006'}).innerText(),/Audio sin título/);
+  await page.locator('#musicKinds [data-kind="named"]').click();
   await page.screenshot({path:path.join(screenshotDir,'desktop-es-light.png'),fullPage:true});
+  await page.locator('#musicKinds [data-kind="original"]').click();
+  assert.equal(await page.locator('#musicRankingTitle').innerText(),'Audio original');
+  await page.screenshot({path:path.join(screenshotDir,'desktop-es-light-original.png'),fullPage:true});
+  await page.locator('#musicKinds [data-kind="named"]').click();
   await page.setViewportSize({width:390,height:844});
   const overflow = await page.evaluate(()=>Math.max(0,document.documentElement.scrollWidth-innerWidth));
   assert.ok(overflow<=1,`Music fits a narrow viewport; page overflow was ${overflow}px`);
@@ -330,13 +351,13 @@ try{
   await phone.goto(`${base}/insights.html?view=music`);
   await phone.locator('#musicRanking').waitFor();
   assert.equal(new URL(phone.url()).pathname,'/insights.html','The Music link opens the responsive explorer on a phone');
-  await phone.locator('#musicKind').selectOption('original');
+  await phone.locator('#musicKinds [data-kind="original"]').click();
   const phoneUrl = phone.url();
   assert.ok(new URL(phoneUrl).searchParams.has('r'),'Phone filter state is saved in the shared encoded route');
   await phone.reload();
   await phone.locator('#musicRanking').waitFor();
   assert.equal(phone.url(),phoneUrl,'A phone reload preserves the encoded music link');
-  assert.equal(await phone.locator('#musicKind').inputValue(),'original');
+  assert.equal(await phone.locator('#musicKinds [data-kind="original"]').getAttribute('aria-pressed'),'true');
   assert.equal(await phone.locator('#musicRanking .music-track-open').count(),2);
   assert.equal(await phone.evaluate(()=>sessionStorage.getItem('sentient.forceDesktop')),null,'Music does not force the rest of the app into desktop mode');
   await phone.close();

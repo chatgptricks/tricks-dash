@@ -6,6 +6,9 @@
   const url = value => { try { const parsed=new URL(value);return parsed.protocol==='https:'?parsed.href:''; } catch { return ''; } };
 
   function mount(container, {posts,selectedAccounts,state,onChange,translate,locale}) {
+    const categories=[['named','Songs'],['original','Original audio'],['identified','Untitled audio']];
+    if(!categories.some(([kind])=>kind===state.kind)) state.kind='named';
+    const categoryLabel=()=>categories.find(([kind])=>kind===state.kind)[1];
     const model=globalThis.InsightsMusic.analyze(posts,{selectedAccounts,rankBy:state.sort});
     const t=value=>escape(translate(value));
     const number=value=>value==null||!Number.isFinite(value)?'—':new Intl.NumberFormat(locale,{maximumFractionDigits:1}).format(value);
@@ -36,15 +39,15 @@
         <p class="sub music-footnote">${t('Coverage includes all selected posts, including those without audio data. Collaborations count once. Stored metrics are not refreshed by opening this view.')}</p>
       </section>
       <section id="musicExplorer">
-        <h2>${t('Song and audio ranking')}</h2><p class="sub">${t('Compare exact Instagram sounds. Open a sound to see every matching post.')}</p>
+        <h2 id="musicRankingTitle">${t(categoryLabel())}</h2><p class="sub">${t('Compare exact Instagram sounds. Open a sound to see every matching post.')}</p>
+        <div id="musicKinds" class="music-kind-tabs" role="group" aria-label="${t('Audio type')}">${categories.map(([kind,label])=>`<button type="button" data-kind="${kind}" aria-pressed="${state.kind===kind}">${t(label)}</button>`).join('')}</div>
         <div class="filters music-filters">
           <div class="f"><label for="musicSearch">${t('Search music')}</label><input id="musicSearch" type="search" maxlength="200" value="${escape(state.search)}" placeholder="${t('Song, artist, creator or audio ID')}"></div>
-          <div class="f"><label for="musicKind">${t('Audio type')}</label><select id="musicKind">${options([['','All audio'],['named','Named music'],['original','Original audio'],['identified','Untitled audio']],state.kind)}</select></div>
           <div class="f"><label for="musicSort">${t('Rank audio by')}</label><select id="musicSort">${options([['total','Total likes'],['mean','Average likes'],['median','Median likes'],['uses','Number of posts'],['relative','Relative performance'],['topPosts','Appearances in top posts']],state.sort)}</select></div>
           <div class="f"><label for="musicMinUses">${t('Minimum posts per sound')}</label><select id="musicMinUses">${options([['1','1 post'],['3','3 posts'],['5','5 posts'],['10','10 posts']],state.minUses)}</select></div>
         </div>
         <p id="musicResultCount" class="sub" aria-live="polite"></p>
-        <div class="music-table-scroll" tabindex="0" role="region" aria-label="${t('Song and audio ranking')}">
+        <div id="musicRankingRegion" class="music-table-scroll" tabindex="0" role="region" aria-label="${t(categoryLabel())}">
           <table id="musicRanking"><thead><tr><th>${t('Song / audio')}</th><th>${t('Posts')}</th><th>${t('Accounts')}</th><th>${t('Measured likes')}</th><th>${t('Total likes')}</th><th>${t('Average likes')}</th><th>${t('Median likes')}</th><th>${t('Relative performance')}</th><th>${t('Top posts')}</th><th>${t('Best post')}</th></tr></thead><tbody></tbody></table>
         </div>
         <button type="button" class="linkbtn music-more" id="musicMore">${t('Show more sounds')}</button>
@@ -78,8 +81,11 @@
     }
     function results(){
       const search=state.search.trim().toLocaleLowerCase();
-      shownTracks=globalThis.InsightsMusic.rankTracks(model.tracks,state.sort).filter(track=>(!state.kind||track.kind===state.kind)&&track.postCount>=Number(state.minUses)&&(!search||`${track.label} ${track.title} ${track.artist} ${track.id} ${track.accounts.join(' ')}`.toLocaleLowerCase().includes(search)));
-      container.querySelector('#musicResultCount').innerHTML=`<span>${t('Matching sounds')}</span>: <b data-i18n-skip>${number(shownTracks.length)}</b>`;
+      shownTracks=globalThis.InsightsMusic.rankTracks(model.tracks,state.sort).filter(track=>track.kind===state.kind&&track.postCount>=Number(state.minUses)&&(!search||`${track.label} ${track.title} ${track.artist} ${track.id} ${track.accounts.join(' ')}`.toLocaleLowerCase().includes(search)));
+      container.querySelector('#musicRankingTitle').textContent=translate(categoryLabel());
+      container.querySelector('#musicRankingRegion').setAttribute('aria-label',translate(categoryLabel()));
+      container.querySelectorAll('#musicKinds button').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.kind===state.kind)));
+      container.querySelector('#musicResultCount').innerHTML=`<span>${t(categoryLabel())} · ${t('Matching sounds')}</span>: <b data-i18n-skip>${number(shownTracks.length)}</b>`;
       container.querySelector('#musicRanking tbody').innerHTML=shownTracks.slice(0,limit).map(track=>`<tr>
         <td class="music-name"><button class="music-track-open" type="button" data-key="${escape(track.key)}">${title(track)}</button><small>${track.kind==='original'?'':source(track.artist||'')} ${audioLink(track)}</small></td>
         <td>${number(track.postCount)}</td><td>${number(track.accountCount)}</td><td>${number(track.knownLikesCount)} / ${number(track.postCount)}</td><td>${number(track.totalLikes)}</td><td>${number(track.meanLikes)}</td><td>${number(track.medianLikes)}</td><td>${ratio(track.relativePerformance)}</td><td>${number(track.topPostCount)}</td><td>${track.bestPost?link(track.bestPost.u,number(track.maxLikes)):'—'}</td>
@@ -90,7 +96,11 @@
       container.querySelectorAll('.music-track-open').forEach(button=>button.onclick=()=>showDetail(button.dataset.key));
       if(selectedKey&&!keys.has(selectedKey))closeDetail();
     }
-    [['musicSearch','search','input'],['musicKind','kind','change'],['musicSort','sort','change'],['musicMinUses','minUses','change']].forEach(([id,key,event])=>{
+    container.querySelectorAll('#musicKinds button').forEach(button=>button.addEventListener('click',()=>{
+      if(state.kind===button.dataset.kind)return;
+      state.kind=button.dataset.kind;limit=50;onChange();results();
+    }));
+    [['musicSearch','search','input'],['musicSort','sort','change'],['musicMinUses','minUses','change']].forEach(([id,key,event])=>{
       container.querySelector('#'+id).addEventListener(event,e=>{state[key]=e.target.value;limit=50;onChange();results();});
     });
     container.querySelector('#musicMore').onclick=()=>{limit+=50;results();};

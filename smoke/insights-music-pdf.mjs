@@ -15,24 +15,30 @@ const longId = '178900000000000012345678901234567890';
 const creator = 'creator_with_a_long_but_exact_handle';
 const artist = 'Artist with a deliberately long exact display name';
 const original = `Original audio · @${creator} · #${longId}`;
-const rows = Array.from({ length: 27 }, (_, index) => [
-  `${index === 0 ? original : `Song ${index + 1}`} · ${artist}`,
-  '10', '3', '8 / 10', '200000', '25000', '15000', '2.3×', '3', '50000',
-]);
-// An unusually long title must span pages without dropping its tail or making
-// the pagination loop stall. Normal Instagram labels use much less room.
-const tallTitle = `Very long title ${'retained-word '.repeat(650)}TAIL-EXACT-${longId}`;
-rows.push([tallTitle, '1', '1', '1 / 1', '90', '90', '90', '—', '—', '90']);
-const table = `<table><thead><tr>${headers.map(value=>`<th>${value}</th>`).join('')}</tr></thead><tbody>${rows.map((cells,rowIndex)=>`<tr>${cells.map((value,columnIndex)=>`<td>${rowIndex === 0 && columnIndex === 0 ? `<button>${original}</button><small>${artist}</small>` : value}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
-const html = `<button id="pdfBtn">Export PDF</button><div id="scope">28 posts · 3 accounts</div>
+function reportHtml(kind) {
+  const isOriginal = kind === 'original';
+  const firstLabel = isOriginal ? original : 'Song 1';
+  const firstSub = isOriginal ? 'Open audio' : artist;
+  const rows = Array.from({ length: 27 }, (_, index) => [
+    isOriginal ? index === 0 ? original : `Original audio · @creator_${index + 1} · #${longId}${index + 1}` : `Song ${index + 1} · ${artist}`,
+    '10', '3', '8 / 10', '200000', '25000', '15000', '2.3×', '3', '50000',
+  ]);
+  // An unusually long identity must span pages without dropping its tail or
+  // making pagination stall. Normal Instagram labels use much less room.
+  const tallTitle = `${isOriginal ? 'Original audio · @' : 'Very long title '}${'retained-word '.repeat(650)}TAIL-EXACT-${longId}`;
+  rows.push([tallTitle, '1', '1', '1 / 1', '90', '90', '90', '—', '—', '90']);
+  const table = `<table><thead><tr>${headers.map(value=>`<th>${value}</th>`).join('')}</tr></thead><tbody>${rows.map((cells,rowIndex)=>`<tr>${cells.map((value,columnIndex)=>`<td>${rowIndex === 0 && columnIndex === 0 ? `<button>${firstLabel}</button><small>${firstSub}</small>` : value}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+  return `<button id="pdfBtn">Export PDF</button><div id="scope">28 posts · 3 accounts</div>
   <div class="filters"><div class="f"><label>Music order</label><input value="total"></div><div class="f" hidden><label>HIDDEN METRIC</label><input value="DO NOT EXPORT"></div></div>
   <div id="accChips"><button class="chip on">@selected</button></div>
-  <section><h2>Song and audio ranking</h2><p class="sub">Selected sounds</p>${table}</section>
+  <div id="musicKinds"><button data-kind="named" aria-pressed="${!isOriginal}">Songs</button><button data-kind="original" aria-pressed="${isOriginal}">Original audio</button><button data-kind="identified" aria-pressed="false">Untitled audio</button></div>
+  <section><h2 id="musicRankingTitle">${isOriginal ? 'Original audio' : 'Songs'}</h2><p class="sub">Selected sounds</p>${table}</section>
   <section hidden><h2>HIDDEN DETAIL</h2><table><thead><tr><th>Secret</th></tr></thead><tbody><tr><td>HIDDEN POST</td></tr></tbody></table></section>
   <div style="display:none"><section><h2>CSS HIDDEN SECTION</h2>${table}</section></div>`;
+}
 
-async function run(view) {
-  const dom = new JSDOM(html, { runScripts: 'outside-only', url: 'https://sentientdash.app/insights.html' });
+async function run(view, kind = 'original') {
+  const dom = new JSDOM(reportHtml(kind), { runScripts: 'outside-only', url: 'https://sentientdash.app/insights.html' });
   let result;
   const errors = [];
   class PdfRecorder {
@@ -79,9 +85,9 @@ assert.equal(music.options.orientation, 'landscape');
 assert.ok(music.page > 2, 'Long labels and rows exercise multiple real page breaks');
 const text = music.calls.map(call=>call.lines.join('')).join('\n');
 assert.ok(text.includes(original), 'The full original-audio label preserves creator and exact long ID');
-assert.ok(text.includes(artist), 'Artist text is retained in the exported sound cell');
-assert.ok(text.includes(`${original} ${artist}`), 'Adjacent button and artist blocks remain separated in PDF text');
-assert.ok(text.includes('Song 27'), 'Music exports every rendered row, including beyond the Overview cap of 20');
+assert.ok(text.includes(`${original} Open audio`), 'Adjacent title and secondary blocks remain separated in PDF text');
+assert.ok(text.includes('Original audio · @creator_27'), 'Music exports every rendered row, including beyond the Overview cap of 20');
+assert.ok(!text.includes('Song 27') && !text.includes(artist), 'An original-audio report contains no song-list rows');
 assert.ok(text.includes(`TAIL-EXACT-${longId}`), 'A row taller than a page preserves its final line');
 assert.ok(!text.includes('HIDDEN'), 'Hidden filters, sections and ancestor-hidden content are excluded');
 const relativeHeaders = music.calls.filter(call=>call.style === 'bold' && call.lines.join('') === 'Relative performance');
@@ -96,9 +102,16 @@ const firstBody = music.calls.find(call=>call.lines.join('').includes(original))
 const nextMetric = music.calls.find(call=>call.page === firstBody.page && call.y === firstBody.y && call.x > firstBody.x);
 assert.ok(nextMetric.x - firstBody.x > (music.width - 80) / headers.length * 2, 'Audio gets a wider first column');
 
-const overview = await run('overview');
+const named = await run('music', 'named');
+const namedText = named.calls.map(call=>call.lines.join('')).join('\n');
+assert.ok(namedText.includes('Songs'), 'The report identifies its selected category');
+assert.ok(namedText.includes(`Song 1 ${artist}`), 'Named songs retain their artist as a separate text block');
+assert.ok(namedText.includes('Song 27'), 'The songs report exports every rendered song');
+assert.ok(!namedText.includes(original), 'A song report contains no original-audio identities');
+
+const overview = await run('overview', 'named');
 assert.equal(overview.options.orientation, undefined, 'Overview retains the existing portrait constructor');
 const overviewText = overview.calls.map(call=>call.lines.join('')).join('\n');
 assert.ok(!overviewText.includes('Song 27'), 'Overview retains its existing 20-row limit');
 assert.ok(!overviewText.includes('HIDDEN'), 'Hidden content is excluded from either view');
-console.log('PASS Music PDF: landscape, full audio identity, wrapped cells/headers, multi-page rows, visibility and unchanged Overview path');
+console.log('PASS Music PDF: separate song/original-audio reports, landscape, full audio identity, wrapped cells/headers, multi-page rows, visibility and unchanged Overview path');

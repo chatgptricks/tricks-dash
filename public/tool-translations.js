@@ -12,7 +12,7 @@
     'Audio coverage':'Cobertura de audio', 'Untitled audio':'Audio sin título', 'Audio ID unavailable':'ID del audio no disponible',
     'Date unavailable':'Fecha no disponible', 'Open audio':'Abrir audio', 'Close':'Cerrar',
     'Coverage includes all selected posts, including those without audio data. Collaborations count once. Stored metrics are not refreshed by opening this view.':'La cobertura incluye todas las publicaciones seleccionadas, también las que no tienen datos de audio. Las colaboraciones se cuentan una vez. Abrir esta vista no actualiza las métricas guardadas.',
-    'Song and audio ranking':'Ranking de canciones y audios',
+    'Song and audio ranking':'Ranking de canciones y audios', 'Songs':'Canciones',
     'Compare exact Instagram sounds. Open a sound to see every matching post.':'Compara sonidos específicos de Instagram. Abre un sonido para ver todas sus publicaciones.',
     'Search music':'Buscar música', 'Song, artist, creator or audio ID':'Canción, artista, creador o ID del audio',
     'Audio type':'Tipo de audio', 'All audio':'Todos los audios', 'Rank audio by':'Ordenar audios por',
