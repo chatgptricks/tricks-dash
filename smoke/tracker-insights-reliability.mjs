@@ -20,7 +20,7 @@ function fixture(tool) {
   w.matchMedia = () => ({ matches: false });
   w.setInterval = () => 0;
   const later = w.setTimeout.bind(w);
-  w.setTimeout = (fn, delay) => later(fn, delay === 30000 ? delay : Math.min(delay, 1));
+  w.setTimeout = (fn, delay) => later(fn, delay >= 30000 ? delay : Math.min(delay, 1));
   w.fetch = async () => { throw new Error('Unexpected unmocked request'); };
   w.__firebaseIdToken = 'fixture';
   w.__refreshFirebaseIdToken = async () => 'fixture';
@@ -132,6 +132,19 @@ const growth = { accounts: [], peaks: [] };
     await assert.rejects(test.get('/fixture'), /HTTP 404/);
     assert.equal(calls, 1, 'Permanent failures do not repeat');
 
+    let requestSignal;
+    w.fetch = async (_url, options) => { requestSignal = options.signal; return new Promise(() => {}); };
+    await assert.rejects(test.get('/stalled-headers', { timeoutMs: 20 }), /timed out/);
+    assert.equal(requestSignal.aborted, true, 'The whole read deadline cancels a stalled network request');
+    w.fetch = async (_url, options) => { requestSignal = options.signal; return { ...reply(200, {}), json: () => new Promise(() => {}) }; };
+    await assert.rejects(test.get('/stalled-body', { timeoutMs: 20 }), /timed out/);
+    assert.equal(requestSignal.aborted, true, 'The deadline also covers response-body downloads');
+    w.__refreshFirebaseIdToken = () => new Promise(() => {});
+    calls = 0; w.fetch = async () => { calls++; return reply(200, {}); };
+    await assert.rejects(test.get('/stalled-token', { timeoutMs: 20 }), /timed out/);
+    assert.equal(calls, 0, 'A stalled token refresh is bounded without sending an unauthenticated request');
+    w.__refreshFirebaseIdToken = async () => 'fixture';
+
     w.fetch = async url => reply(200, String(url).includes('follower-growth') ? growth : posts);
     await test.boot();
     assert.equal(test.state().selected.length, 2);
@@ -160,6 +173,40 @@ const growth = { accounts: [], peaks: [] };
       { a:'alpha', d:'2026-10-01T12:00:00Z', l:200, c:5, v:1000, t:'Video', pt:'clips', ocr:'Useful fixture alpha', u:'https://instagram.com/p/alpha/' },
       { a:'beta', d:'2026-10-02T12:00:00Z', l:500, c:10, v:2000, t:'Video', pt:'clips', ocr:'Useful fixture beta', u:'https://instagram.com/p/beta/' },
     ] };
+    const pendingGrowth = deferred();
+    w.fetch = async url => String(url).includes('follower-growth') ? pendingGrowth.promise : reply(200, populated);
+    await test.boot();
+    const performanceTable = w.document.querySelector('#tAcc');
+    assert.ok(performanceTable, 'Post performance renders while the optional follower request remains unresolved');
+    assert.equal(w.document.querySelector('#app').getAttribute('aria-busy'), 'false', 'Optional signals do not hold the workspace loader');
+    assert.match(w.document.querySelector('#followerGrowth').textContent, /Loading the daily follower signal/);
+    pendingGrowth.resolve(reply(200, growth)); await tick();
+    assert.equal(w.document.querySelector('#tAcc'), performanceTable, 'Follower completion updates only its own panel, preserving post charts and sort state');
+    assert.equal(test.state().growth.accounts.length, 0);
+
+    const timers=[];
+    const setTimeout=w.setTimeout;
+    w.setTimeout=(callback,delay,...args)=>{ if(delay===30000) timers.push(callback); return setTimeout(callback,delay,...args); };
+    w.fetch = async url => String(url).includes('follower-growth') ? new Promise(() => {}) : reply(200, populated);
+    await test.boot();
+    timers[0](); await tick();
+    w.setTimeout=setTimeout;
+    assert.ok(w.document.querySelector('[data-retry-follower-growth]'), 'A stalled optional signal times out into its own retry control');
+    assert.ok(w.document.querySelector('#tAcc'), 'Optional timeout preserves usable post performance');
+
+    const obsoleteGrowth = deferred();
+    w.fetch = async url => String(url).includes('follower-growth') ? obsoleteGrowth.promise : reply(200, populated);
+    await test.boot();
+    w.InsightsMusicView = { mount: element => { element.innerHTML='<div id="music-fixture">Music report</div>'; return {coverage:{totalPosts:0}}; } };
+    w.history.replaceState(null, '', '/insights.html?view=music');
+    await test.boot();
+    const musicReport = w.document.querySelector('#music-fixture');
+    assert.ok(musicReport);
+    obsoleteGrowth.resolve(reply(200, { accounts:[{handle:'obsolete'}],peaks:[] })); await tick();
+    assert.equal(w.document.querySelector('#music-fixture'), musicReport, 'A late overview signal cannot replace the Music view');
+    assert.equal(test.state().growth, null, 'An obsolete view does not install its late follower results');
+    w.history.replaceState(null, '', '/insights.html');
+
     w.fetch = async url => reply(200, String(url).includes('follower-growth') ? growth : populated);
     await test.boot();
     const accountOrder = () => [...w.document.querySelectorAll('#tAcc tbody tr')].map(row => row.firstElementChild.textContent.match(/@\w+/)[0]);

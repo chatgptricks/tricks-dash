@@ -14,8 +14,9 @@ globalThis.matchMedia = window.matchMedia = () => ({ matches: false, addListener
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 localStorage.setItem('sentient.lang', 'en');
 const stored = new Map();
+let beforeCacheRead;
 window.caches = {
-  async match(key) { const value = stored.get(key); return value ? new Response(value) : undefined; },
+  async match(key) { await beforeCacheRead?.(); const value = stored.get(key); return value ? new Response(value) : undefined; },
   async open() { return { async put(key, response) { stored.set(key, await response.text()); }, async delete(key) { return stored.delete(key); } }; },
 };
 
@@ -79,10 +80,12 @@ const run = (action) => act(async () => { action(); await settle(); });
 const calls = (endpoint) => requests.filter(({ url }) => url.pathname.endsWith(`/${endpoint}`));
 let expireRead;
 let continueMetrics;
+let continueWithoutCache;
 const originalTimeout = globalThis.setTimeout;
 globalThis.setTimeout = (callback, delay, ...args) => {
   if (delay === 120_000) { expireRead = callback; return undefined; }
   if (delay === 3_000) { continueMetrics = callback; return undefined; }
+  if (delay === 250) { continueWithoutCache = callback; return undefined; }
   return originalTimeout(callback, delay, ...args);
 };
 
@@ -93,17 +96,35 @@ try {
     holdMetrics = true;
     catchupPage = null;
     continueMetrics = null;
+    let releaseCacheRead;
+    if (!mobile) beforeCacheRead = () => new Promise((resolve) => { releaseCacheRead = resolve; });
     const root = createRoot(document.getElementById('root'));
     const cardSelector = mobile ? '.m-post-card' : '.gallery-grid .post-card[data-context-shortcode]';
     await run(() => root.render(mobile
       ? React.createElement(Prefs.Provider, { value: { t: (value) => value } }, React.createElement(DashboardView, { viewer: {} }))
       : React.createElement(App)));
+    if (!mobile) {
+      assert.equal(calls('manifest').length, 0, 'Fast storage gets a brief head start');
+      assert.equal(typeof continueWithoutCache, 'function', 'Slow storage must yield to the network after only 250 ms');
+      await run(() => continueWithoutCache());
+      assert.equal(calls('manifest').length, 1, 'A stalled cache must not delay the live catalogue by seconds');
+      beforeCacheRead = null;
+      await run(() => releaseCacheRead());
+    }
     assert.equal(calls('page').length, 2, 'Both bounded sources begin loading');
     assert.equal(document.querySelectorAll(cardSelector).length, 0, 'An incomplete historical snapshot cannot appear as a complete library');
+    const cancelledPage = releaseLastPage;
+    await run(() => expireRead());
+    assert.equal(document.querySelectorAll(cardSelector).length, 0, 'A timeout must not publish a partial catalogue');
+    await run(() => window.dispatchEvent(new Event('online')));
+    assert.equal(calls('page').filter(({ url }) => url.searchParams.get('source') === 'canonical').length, 1, 'Recovery must retain a completed source instead of downloading it again');
+    assert.equal(calls('page').length, 3, 'Only the unfinished source retries');
     holdLastPage = false;
     await run(() => releaseLastPage());
     assert.equal(calls('metrics').length, 1, 'Metric replay starts after structural verification');
     assert.equal(document.querySelectorAll(cardSelector).length, posts.length, 'Every post is usable while metric replay is still pending');
+    await run(() => cancelledPage());
+    assert.equal(document.querySelectorAll(cardSelector).length, posts.length, 'A late cancelled source cannot append duplicate rows to the recovered catalogue');
     if (!mobile) {
       assert.equal(document.querySelector('.topbar-search input').disabled, false, 'The complete library enables search before metrics finish');
       assert.equal([...stored.values()].map((value) => JSON.parse(value)).at(-1).posts.length, posts.length, 'The verified complete snapshot is persisted before metric replay finishes');

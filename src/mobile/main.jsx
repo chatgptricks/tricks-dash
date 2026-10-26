@@ -424,6 +424,7 @@ function DashboardView({ viewer }) {
   useEffect(() => {
     let active = true;
     let cachedCatalogue = null;
+    const checkpoint = {};
     let flight = null;
     let catchupTimer = null;
     const scheduleCatchup = (delay) => {
@@ -461,7 +462,7 @@ function DashboardView({ viewer }) {
           };
           return Promise.all([
             loadCompleteDashboardCatalogue({
-              signal, etag: cachedCatalogue?.etag || '', cachedCatalogue,
+              signal, etag: cachedCatalogue?.etag || '', cachedCatalogue, checkpoint,
               onSnapshot: (snapshot) => { completeSnapshot = snapshot; publishSnapshot(); },
             }),
             apiJson('/api/dashboard/accounts', { signal }).then((value) => {

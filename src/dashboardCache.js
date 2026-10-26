@@ -86,9 +86,17 @@ export async function writeDashboardSnapshot(snapshot, owner) {
   if (!owner) return;
   const generation = generationFor(owner);
   const ownedSnapshot = { ...snapshot, owner, cachedAt: Date.now() };
-  const payload = JSON.stringify(ownedSnapshot);
   return mutate(owner, async () => {
     if (generationFor(owner) !== generation) return;
+    // Serializing a complete library is substantial main-thread work. Yield
+    // before doing it so callers can paint the verified posts immediately;
+    // making this function async alone does not defer JSON.stringify.
+    await new Promise((resolve) => {
+      if (typeof window.requestIdleCallback === 'function') window.requestIdleCallback(resolve, { timeout: 1_000 });
+      else globalThis.setTimeout(resolve, 0);
+    });
+    if (generationFor(owner) !== generation) return;
+    const payload = JSON.stringify(ownedSnapshot);
     // Cache Storage is shared by tabs and survives hard reloads. Store the
     // complete response atomically, independently of IndexedDB transaction locks.
     if (window.caches) {

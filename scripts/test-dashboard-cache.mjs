@@ -40,6 +40,35 @@ assert.equal((await cache.readDashboardSnapshot('a@example.test')).posts[0].shor
 stored.set('sentient-complete-library-v2:/__sentient_complete_library_v2__/c%40example.test', JSON.stringify({ ...snapshot('wrong-owner'), owner: 'a@example.test' }));
 assert.equal(await cache.readDashboardSnapshot('c@example.test'), null, 'the stored owner must match the requested identity');
 
+let resumeSerialization;
+let idleStarted;
+window.requestIdleCallback = (callback, options) => {
+  assert.equal(options.timeout, 1_000, 'Persistence must remain bounded when the browser stays busy');
+  resumeSerialization = callback;
+  idleStarted();
+};
+let serialized = 0;
+const deferredSnapshot = { ...snapshot('deferred'), posts: [{ toJSON() { serialized += 1; return { shortcode: 'deferred' }; } }] };
+let reachedIdle = new Promise((resolve) => { idleStarted = resolve; });
+const deferredWrite = cache.writeDashboardSnapshot(deferredSnapshot, 'deferred@example.test');
+await reachedIdle;
+assert.equal(serialized, 0, 'Large snapshot serialization must yield so Research can paint first');
+resumeSerialization();
+await deferredWrite;
+assert.equal(serialized, 1);
+assert.equal(JSON.parse(stored.get('sentient-complete-library-v2:/__sentient_complete_library_v2__/deferred%40example.test')).posts[0].shortcode, 'deferred');
+
+serialized = 0;
+reachedIdle = new Promise((resolve) => { idleStarted = resolve; });
+const deferredSignOutWrite = cache.writeDashboardSnapshot(deferredSnapshot, 'deferred@example.test');
+await reachedIdle;
+const deferredClear = cache.clearDashboardSnapshot('deferred@example.test');
+resumeSerialization();
+await Promise.all([deferredSignOutWrite, deferredClear]);
+assert.equal(serialized, 0, 'Sign-out must discard a deferred private write before serialization');
+assert.equal(await cache.readDashboardSnapshot('deferred@example.test'), null);
+delete window.requestIdleCallback;
+
 let finishPut;
 let putStarted;
 const started = new Promise((resolve) => { putStarted = resolve; });
@@ -69,4 +98,4 @@ window.caches = undefined;
 cache = await reload('no-storage');
 assert.equal(await cache.readDashboardSnapshot('a@example.test'), null);
 await cache.writeDashboardSnapshot(snapshot('no-storage'), 'a@example.test');
-console.log('Dashboard cache ownership, reload, sign-out races, and unavailable-storage checks passed.');
+console.log('Dashboard cache ownership, deferred serialization, reload, sign-out races, and unavailable-storage checks passed.');

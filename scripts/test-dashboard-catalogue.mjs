@@ -230,6 +230,19 @@ try {
   await assert.rejects(heldMetrics, error => error === metricTimeout);
   assert.deepEqual(ids(publishedSnapshot), ['canonical', 'dashboard'], 'Metric cancellation cannot remove the delivered complete catalogue');
 
+  globalThis.fetch = async input => {
+    const url = new URL(input);
+    if (url.pathname.endsWith('/manifest')) return Response.json({ revision: 'no-op-metrics', sources: sources(1, 1), metricsAvailable: true });
+    if (url.pathname.endsWith('/page')) return Response.json({
+      revision: 'no-op-metrics', posts: [post(url.searchParams.get('source'), 42)], nextCursor: 1, done: true,
+    });
+    return Response.json({ updates: [], cursor: { at: stamp, code: 'complete' }, hasMore: false });
+  };
+  const unchangedSnapshot = await loadCompleteDashboardCatalogue({ onSnapshot: snapshot => { publishedSnapshot = snapshot; } });
+  assert.equal(unchangedSnapshot.posts, publishedSnapshot.posts, 'A no-op metric batch must retain the rendered post identities');
+  assert.equal(unchangedSnapshot.summary, publishedSnapshot.summary, 'A no-op metric batch must not rebuild the complete summary');
+  assert.deepEqual(unchangedSnapshot.metricsCursor, { at: stamp, code: '' }, 'Retaining the rendered library must still advance metric progress');
+
   // Stop each catchup after five pages, then resume using both cursor fields.
   // All observations deliberately share one timestamp to catch dropped tails.
   const boundedCalls = [];
@@ -303,12 +316,91 @@ try {
     if (url.pathname.endsWith('/manifest')) return Response.json({ revision: 'large', sources: sources(0, largeBound) });
     const after = Number(url.searchParams.get('after_id'));
     const until = Number(url.searchParams.get('until_id'));
-    const end = Math.min(until, after + 12_000);
+    assert.equal(url.searchParams.get('limit'), '2000', 'Historical pages must stay below the slow 12k-row payload size');
+    const end = Math.min(until, after + Number(url.searchParams.get('limit')));
     return { ok: true, json: async () => ({ revision: 'large', posts: Array(end - after).fill(repeatedPost), nextCursor: end, done: end === until }) };
   };
   const large = await loadCompleteDashboardCatalogue();
   assert.equal(large.rawTotal, largeBound, 'A large source must retain every transport row without argument overflow');
   assert.equal(large.posts.length, 1, 'Large snapshots must retain account+shortcode deduplication');
+
+  // Each successful page is a private checkpoint, even when a later page
+  // times out. A changed manifest must discard the previous partial history.
+  for (const changeRevision of [false, true]) {
+    const checkpoint = {};
+    const retryCalls = [];
+    let revision = 'checkpoint-a';
+    let failing = true;
+    let snapshots = 0;
+    globalThis.fetch = async input => {
+      const url = new URL(input);
+      if (url.pathname.endsWith('/manifest')) return Response.json({ revision, sources: sources(5, 0) });
+      const after = Number(url.searchParams.get('after_id'));
+      retryCalls.push({ after, revision });
+      if (after === 2 && failing) return new Response('', { status: 503 });
+      const end = Math.min(after + 2, 5);
+      return Response.json({ revision, posts: Array.from({ length: end - after }, (_, index) => post(`${revision}-${after + index + 1}`)), nextCursor: end, done: end === 5 });
+    };
+    await assert.rejects(loadCompleteDashboardCatalogue({ checkpoint, onSnapshot: () => { snapshots += 1; } }), error => error.status === 503);
+    assert.equal(snapshots, 0, 'A failed partial snapshot must never reach the UI');
+    assert.equal(checkpoint.current.received, 2, 'Only verified completed pages are retained');
+    failing = false;
+    if (changeRevision) revision = 'checkpoint-b';
+    const resumedSnapshot = await loadCompleteDashboardCatalogue({ checkpoint, onSnapshot: () => { snapshots += 1; } });
+    assert.equal(retryCalls[2].after, changeRevision ? 0 : 2, 'Retry resumes its cursor unless the manifest changed');
+    assert.deepEqual(ids(resumedSnapshot), [1, 2, 3, 4, 5].map(id => `${revision}-${id}`));
+    assert.equal(snapshots, 1);
+    assert.equal(checkpoint.current, null, 'A verified complete snapshot releases its private transport checkpoint');
+  }
+
+  const racingCheckpoint = {};
+  let releaseCancelledBody;
+  let releaseRetryBody;
+  let retryBodyStarted;
+  const retryBodyReady = new Promise(resolve => { retryBodyStarted = resolve; });
+  let failedFlight = true;
+  globalThis.fetch = async input => {
+    const url = new URL(input);
+    if (url.pathname.endsWith('/manifest')) return Response.json({ revision: 'racing', sources: sources(1, 1) });
+    const source = url.searchParams.get('source');
+    if (failedFlight && source === 'dashboard') return new Response('', { status: 503 });
+    if (failedFlight) return { ok: true, json: () => new Promise(resolve => { releaseCancelledBody = resolve; }) };
+    if (source === 'dashboard') return { ok: true, json: () => new Promise(resolve => { releaseRetryBody = resolve; retryBodyStarted(); }) };
+    return Response.json({ revision: 'racing', posts: [post('fresh-canonical')], nextCursor: 1, done: true });
+  };
+  await assert.rejects(loadCompleteDashboardCatalogue({ checkpoint: racingCheckpoint }), error => error.status === 503);
+  failedFlight = false;
+  const racingRetry = loadCompleteDashboardCatalogue({ checkpoint: racingCheckpoint });
+  await retryBodyReady;
+  releaseCancelledBody({ revision: 'racing', posts: [post('cancelled-private-row')], nextCursor: 1, done: true });
+  for (let index = 0; index < 10; index += 1) await Promise.resolve();
+  assert.equal(racingCheckpoint.current.received, 1, 'A late sibling JSON body must not mutate the new flight checkpoint');
+  releaseRetryBody({ revision: 'racing', posts: [post('fresh-dashboard')], nextCursor: 1, done: true });
+  assert.deepEqual(ids(await racingRetry), ['fresh-canonical', 'fresh-dashboard'], 'Only the active retry may publish retained pages');
+
+  const sparseIds = [...Array.from({ length: 3_500 }, (_, index) => index + 1), 8_001, 32_001, 63_999];
+  const sparseCalls = [];
+  let inFlight = 0;
+  let maxInFlight = 0;
+  globalThis.fetch = async input => {
+    const url = new URL(input);
+    if (url.pathname.endsWith('/manifest')) return Response.json({ revision: 'sparse', sources: sources(0, 64_000) });
+    const after = Number(url.searchParams.get('after_id'));
+    const until = Number(url.searchParams.get('until_id'));
+    const limit = Number(url.searchParams.get('limit'));
+    sparseCalls.push({ after, until, limit });
+    maxInFlight = Math.max(maxInFlight, ++inFlight);
+    await new Promise(resolve => setImmediate(resolve));
+    inFlight -= 1;
+    const rows = sparseIds.filter(id => id > after && id <= until).slice(0, limit);
+    const cursor = rows.at(-1) || until;
+    return Response.json({ revision: 'sparse', posts: rows.map(id => post(String(id))), nextCursor: cursor, done: rows.length < limit || cursor === until });
+  };
+  const sparse = await loadCompleteDashboardCatalogue();
+  assert.deepEqual(sparse.posts.map(value => Number(value.shortcode)).sort((a, b) => a - b), sparseIds, 'Queued ranges must cover dense and sparse IDs without gaps or duplicate rows');
+  assert.equal(new Set(sparseCalls.map(value => value.until)).size, 16, 'Small ID ranges distribute uneven history among available workers');
+  assert.equal(maxInFlight, 4, 'Extra queued ranges must never increase the four-request concurrency ceiling');
+  assert.ok(sparseCalls.every(value => value.limit === 2_000));
 
   globalThis.fetch = async (input) => new URL(input).pathname.endsWith('/manifest')
     ? new Response(null, { status: 304 }) : new Response(null, { status: 404 });

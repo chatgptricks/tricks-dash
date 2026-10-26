@@ -1,6 +1,5 @@
 (() => {
   const ROLE_KEY = 'sentient.queueRolePreview';
-  const API = 'https://cortex-api-db2e.onrender.com';
   const ALL_ROLES = ['sales', 'pd', 'vc', 'trainee', 'admin'];
   const LABELS = { sales: 'Sales', pd: 'Post Designer', vc: 'Viral Coordinator', trainee: 'Trainee', admin: 'Admin' };
   let mountRun = 0, mountedRoot = null, mountedStyle = null, outsideHandler = null, navTimer = null;
@@ -34,12 +33,9 @@
     clearMount();
     const token = wait ? await waitForToken(run) : window.__firebaseIdToken;
     if (!token) return;
-    const headers = window.__sentientRolePreviewHeaders({ Authorization: `Bearer ${token}` });
     let viewer;
     try {
-      const response = await fetch(`${API}/api/dashboard/me`, { headers });
-      if (!response.ok) return;
-      viewer = await response.json();
+      viewer = await window.SentientViewerAccess.read();
     } catch {
       return;
     }

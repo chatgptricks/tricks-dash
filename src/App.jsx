@@ -870,6 +870,7 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
   const dashboardProjectionGenerationRef = useRef(0);
   const dashboardMetricsAtRef = useRef('');
   const dashboardMetricsCursorRef = useRef(null);
+  const dashboardCheckpointRef = useRef({});
   const dashboardFlightRef = useRef(null);
   const dashboardAliveRef = useRef(true);
   const dashboardUserRef = useRef(firebaseAuth.currentUser);
@@ -880,6 +881,7 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
     dashboardAliveRef.current = true;
     return () => {
       dashboardAliveRef.current = false;
+      dashboardCheckpointRef.current = {};
       dashboardRequestVersionRef.current += 1;
     };
   }, []);
@@ -1094,7 +1096,8 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
       const previousCursor = dashboardMetricsCursorRef.current;
       if (catalogue.metricsAt) dashboardMetricsAtRef.current = catalogue.metricsAt;
       if (catalogue.metricsCursor) dashboardMetricsCursorRef.current = catalogue.metricsCursor;
-      if (catalogue.notModified) {
+      if (catalogue.notModified || (catalogue.posts === dashboardPostsRef.current
+        && catalogue.summary === dashboardSummaryRef.current)) {
         dashboardAccountsRef.current = resolvedAccounts.accounts;
         setAccounts(resolvedAccounts.accounts);
         if (catalogue.metricsCursor && JSON.stringify(previousCursor) !== JSON.stringify(catalogue.metricsCursor)) persistSnapshot();
@@ -1167,6 +1170,7 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
       const [catalogue, resolvedAccounts] = await runDashboardRead((readSignal) => Promise.all([
         loadCompleteDashboardCatalogue({
           signal: readSignal,
+          checkpoint: dashboardCheckpointRef.current,
           onSnapshot: (catalogue) => {
             if (readSignal.aborted) return;
             pendingSnapshot = catalogue;
@@ -1271,10 +1275,11 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
         }
         });
         // A slow cache read remains useful after the network fallback starts.
-        // Never discard a complete snapshot merely because it took >5 seconds.
+        // Give fast storage a brief head start without adding seconds to a
+        // cold load. A later complete snapshot can still populate the view.
         await Promise.race([
           restore,
-          new Promise((resolve) => window.setTimeout(resolve, 5_000)),
+          new Promise((resolve) => window.setTimeout(resolve, 250)),
         ]);
       } catch {
         // IndexedDB is an acceleration path only. A blocked/private browser

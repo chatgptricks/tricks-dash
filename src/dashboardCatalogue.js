@@ -1,10 +1,9 @@
 import { API_BASE, apiFetch } from './api';
 
-// A six-thousand-row page made a cold Research load wait on ten or more
-// sequential request/JSON-parse cycles.  Twelve thousand stays well within
-// the API's bounded-response budget while materially reducing that overhead.
-const PAGE_SIZE = 12_000;
-const FULL_SNAPSHOT_SHARDS = 4;
+// Keep individual requests short enough to complete under a busy API. Large
+// pages can consume the entire read deadline before any cursor is saved.
+const PAGE_SIZE = 2_000;
+const FULL_SNAPSHOT_SHARDS = 16;
 const MAX_PARALLEL_PAGE_STREAMS = 4;
 const METRICS_PAGE_SIZE = 1_000;
 const MAX_METRICS_PAGES = 5;
@@ -92,79 +91,93 @@ function catalogueSummary(posts) {
   };
 }
 
-async function fetchRevision(manifest, signal, onProgress, startingBounds = new Map()) {
-  const sources = manifest.sources.map((entry) => {
-    const source = String(entry?.source || '');
-    const upperBound = Math.max(0, Number(entry?.upperBound) || 0);
-    if (!source || !Number.isSafeInteger(upperBound)) {
-      throw new DashboardCatalogueError('The post catalogue named an invalid source.');
-    }
-    return { source, upperBound };
-  });
-  let received = 0;
-  onProgress?.({ received, total: null });
-
-  const loadSourceRange = async ({ source, afterId, upperBound }) => {
-    const rows = [];
-    let cursor = afterId;
-    while (cursor < upperBound) {
-      const params = new URLSearchParams({
+async function fetchRevision(manifest, signal, onProgress, startingBounds = new Map(), checkpoint = {}) {
+  const sources = normaliseSources(manifest.sources);
+  if (!sources) throw new DashboardCatalogueError('The post catalogue named an invalid source.');
+  const key = JSON.stringify([manifest.revision, [...sources], [...startingBounds]]);
+  if (checkpoint.current?.key !== key) {
+    const ranges = [...sources].flatMap(([source, upperBound]) => {
+      const afterId = Math.min(upperBound, Math.max(0, startingBounds.get(source) || 0));
+      if (afterId >= upperBound) return [];
+      // Sparse IDs make four equal ranges badly unbalanced. Smaller queued
+      // ranges let free workers share dense history without adding requests
+      // in flight; an empty sparse range needs only one lightweight probe.
+      const shardCount = afterId === 0
+        ? Math.min(FULL_SNAPSHOT_SHARDS, Math.ceil(upperBound / PAGE_SIZE)) : 1;
+      const span = upperBound - afterId;
+      return Array.from({ length: shardCount }, (_, index) => ({
         source,
-        after_id: String(cursor),
-        until_id: String(upperBound),
+        cursor: afterId + Math.floor((span * index) / shardCount),
+        upperBound: afterId + Math.floor((span * (index + 1)) / shardCount),
+        posts: [],
+        done: false,
+      }));
+    });
+    checkpoint.current = { key, ranges, received: 0 };
+  }
+  const progress = checkpoint.current;
+  const controller = new AbortController();
+  const onAbort = () => controller.abort(signal.reason);
+  if (signal?.aborted) onAbort();
+  else signal?.addEventListener('abort', onAbort, { once: true });
+  const assertActive = () => {
+    if (controller.signal.aborted) throw controller.signal.reason || new DOMException('Request aborted.', 'AbortError');
+  };
+  onProgress?.({ received: progress.received, total: null });
+  const loadSourceRange = async (range) => {
+    while (!range.done && range.cursor < range.upperBound) {
+      assertActive();
+      const params = new URLSearchParams({
+        source: range.source,
+        after_id: String(range.cursor),
+        until_id: String(range.upperBound),
         limit: String(PAGE_SIZE),
         revision: manifest.revision,
       });
-      const response = await apiFetch(`${API_BASE}/api/dashboard/posts/page?${params}`, { signal });
+      const response = await apiFetch(`${API_BASE}/api/dashboard/posts/page?${params}`, { signal: controller.signal });
+      assertActive();
       const body = await jsonOrError(response);
+      // An aborted JSON parse may finish after the next retry has begun.
+      // It must not append duplicate rows or advance that retry's cursor.
+      assertActive();
       if (body?.revision !== manifest.revision || !Array.isArray(body?.posts)) {
         throw new DashboardCatalogueError('The post catalogue changed while loading.', 409);
       }
       const nextCursor = Number(body?.nextCursor);
       const done = body?.done === true;
-      if (!Number.isSafeInteger(nextCursor) || nextCursor < cursor || nextCursor > upperBound || (!done && nextCursor <= cursor)) {
+      if (!Number.isSafeInteger(nextCursor) || nextCursor < range.cursor || nextCursor > range.upperBound || (!done && nextCursor <= range.cursor)) {
         throw new DashboardCatalogueError('The post catalogue changed while loading.', 409);
       }
-      // Even a bounded page can grow beyond a runtime's argument limit as
-      // the transport evolves. Append values without spreading function args.
-      for (const post of body.posts) rows.push(post);
-      received += body.posts.length;
-      onProgress?.({ received, total: null });
-      cursor = nextCursor;
-      if (done) break;
+      for (const post of body.posts) range.posts.push(post);
+      range.cursor = nextCursor;
+      range.done = done || nextCursor === range.upperBound;
+      progress.received += body.posts.length;
+      onProgress?.({ received: progress.received, total: null });
     }
-    return rows;
   };
 
-  const ranges = sources.flatMap(({ source, upperBound }) => {
-    const afterId = Math.min(upperBound, Math.max(0, startingBounds.get(source) || 0));
-    if (afterId >= upperBound) return [];
-    // A cold snapshot is immutable below its high-water mark, so independent
-    // primary-key ranges can be read concurrently without either gaps or
-    // duplicate posts. Deltas stay as one tiny stream; only the first full
-    // library load needs this acceleration.
-    const shardCount = afterId === 0 && upperBound > PAGE_SIZE ? FULL_SNAPSHOT_SHARDS : 1;
-    const span = upperBound - afterId;
-    return Array.from({ length: shardCount }, (_, index) => ({
-      source,
-      afterId: afterId + Math.floor((span * index) / shardCount),
-      upperBound: afterId + Math.floor((span * (index + 1)) / shardCount),
-    })).filter((range) => range.afterId < range.upperBound);
-  });
-
-  // Keep a deliberate ceiling: a few parallel streams use the upgraded API
-  // efficiently, while many tabs cannot stampede Postgres or the browser.
-  const rawPosts = [];
   let nextRange = 0;
+  const pendingRanges = progress.ranges.filter(range => !range.done);
   const worker = async () => {
-    while (nextRange < ranges.length) {
-      const rangeIndex = nextRange;
-      nextRange += 1;
-      for (const post of await loadSourceRange(ranges[rangeIndex])) rawPosts.push(post);
+    while (nextRange < pendingRanges.length) {
+      const range = pendingRanges[nextRange++];
+      await loadSourceRange(range);
     }
   };
-  await Promise.all(Array.from({ length: Math.min(MAX_PARALLEL_PAGE_STREAMS, ranges.length) }, worker));
+  try {
+    await Promise.all(Array.from({ length: Math.min(MAX_PARALLEL_PAGE_STREAMS, pendingRanges.length) }, worker));
+    assertActive();
+  } catch (error) {
+    // Stop siblings before a retry can reuse these range checkpoints. Every
+    // completed page remains private to this view until all ranges finish.
+    controller.abort(error);
+    throw error;
+  } finally {
+    signal?.removeEventListener('abort', onAbort);
+  }
+  const rawPosts = progress.ranges.flatMap(range => range.posts);
   const posts = dedupePosts(rawPosts);
+  checkpoint.current = null;
   return {
     posts,
     summary: catalogueSummary(posts),
@@ -245,10 +258,18 @@ async function refreshCatalogueMetrics(catalogue, signal, unchanged = false) {
     metricsPending: hasMore,
   };
   if (unchanged && !changed) return { notModified: true, ...progress };
-  return { ...catalogue, posts, ...progress, summary: catalogueSummary(posts) };
+  // A no-op metric batch should only advance its cursor. Keep the complete
+  // snapshot identities so the UI does not normalize the entire history a
+  // second time immediately after first paint.
+  return {
+    ...catalogue,
+    posts: changed ? posts : catalogue.posts,
+    ...progress,
+    summary: changed ? catalogueSummary(posts) : catalogue.summary,
+  };
 }
 
-export async function loadCompleteDashboardCatalogue({ signal, etag = '', onProgress, onSnapshot, cachedCatalogue = null } = {}) {
+export async function loadCompleteDashboardCatalogue({ signal, etag = '', onProgress, onSnapshot, cachedCatalogue = null, checkpoint = {} } = {}) {
   // A persisted full library remains complete after an ID-bounded delta is
   // merged in. Normal reloads should not pull all historical posts again just
   // because the scheduler inserted one newer row.
@@ -257,7 +278,10 @@ export async function loadCompleteDashboardCatalogue({ signal, etag = '', onProg
   const collaborationReady = hasCollaborationMetadata(cachedCatalogue);
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const manifestResult = await fetchManifest(signal, attempt === 0 && collaborationReady ? etag : '');
-    if (manifestResult.notModified) return refreshCatalogueMetrics({ ...cachedCatalogue, etag }, signal, true);
+    if (manifestResult.notModified) {
+      checkpoint.current = null;
+      return refreshCatalogueMetrics({ ...cachedCatalogue, etag }, signal, true);
+    }
     try {
       const cachedSources = normaliseSources(cachedCatalogue?.sources);
       const currentSources = normaliseSources(manifestResult.manifest.sources);
@@ -281,6 +305,7 @@ export async function loadCompleteDashboardCatalogue({ signal, etag = '', onProg
         signal,
         onProgress,
         canDelta ? cachedSources : new Map(),
+        checkpoint,
       );
       const posts = canDelta ? mergeCompleteCatalogue(cachedCatalogue.posts, catalogue.posts) : catalogue.posts;
       const snapshot = {
@@ -298,6 +323,7 @@ export async function loadCompleteDashboardCatalogue({ signal, etag = '', onProg
       onSnapshot?.(snapshot);
       return refreshCatalogueMetrics(snapshot, signal);
     } catch (error) {
+      if (error instanceof DashboardCatalogueError && [401, 403, 409].includes(error.status)) checkpoint.current = null;
       if (!(error instanceof DashboardCatalogueError) || error.status !== 409 || attempt === 1) throw error;
     }
   }
