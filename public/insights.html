@@ -4,9 +4,12 @@
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; connect-src 'self' https://cortex-api-db2e.onrender.com https://*.googleapis.com https://*.firebaseio.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://www.gstatic.com;">
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<script src="/mobile-redirect.js?v=20261019-tracker-route"></script>
+<script src="/mobile-redirect.js?v=20261025-music1"></script>
 <script src="/user-preferences.js?v=20261009-i18n1"></script>
-<script src="/tool-translations.js?v=20261009-i18n1"></script>
+<script src="/tool-translations.js?v=20261025-music1"></script>
+<script src="/insights-music.js?v=20261025-music1"></script>
+<script src="/insights-music-view.js?v=20261025-music1"></script>
+<link rel="stylesheet" href="/insights-music.css?v=20261025-music1">
 <script src="/role-preview.js?v=20260928-tracker" defer></script>
 <script src="/context-menu.js?v=20260901-context1" defer></script>
 <title>Insights · sentientdash.app</title>
@@ -284,6 +287,10 @@ tbody tr:hover{background:rgba(var(--edge),.03)}
     <button class="linkbtn" id="pdfBtn" title="Download a PDF of the current selection">Export PDF</button>
   </div>
 
+  <nav class="insights-views" aria-label="Insights views">
+    <button type="button" id="insightsOverview" aria-pressed="true">Overview</button>
+    <button type="button" id="insightsMusic" aria-pressed="false">Music</button>
+  </nav>
   <div class="filters">
     <div class="f f-wide">
       <label>Accounts</label>
@@ -303,7 +310,7 @@ tbody tr:hover{background:rgba(var(--edge),.03)}
     <div class="f"><label>Format</label>
       <select id="ftype"><option value="">All</option><option value="Video">Video</option><option value="Carousel">Carousel</option><option value="Image">Image</option></select>
     </div>
-    <div class="f"><label>Rank by</label>
+    <div class="f" id="overviewMetric"><label>Rank by</label>
       <select id="metric">
         <option value="l">Likes</option>
         <option value="v">Views</option>
@@ -341,12 +348,17 @@ const pct = n => (n===null||n===undefined||!isFinite(n)) ? '—' : n.toFixed(1)+
 const escapeHtml = value => String(value ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 const safeUrl = value => { try { const url = new URL(String(value || '')); return /^https?:$/.test(url.protocol) ? url.href : ''; } catch { return ''; } };
 
-let RAW=[], ACCOUNTS=[], SEL=new Set(), CHARTS=[], FOLLOWER_GROWTH=null, FOLLOWER_GROWTH_ERROR='';
+let RAW=[], MUSIC_RAW=[], MUSIC_READY=false, OVERVIEW_READY=false, VIEW='overview';
+let MUSIC_ACCOUNTS=[], OVERVIEW_ACCOUNTS=[];
+const MUSIC_STATE={search:'',kind:'',sort:'total',minUses:'1'};
+let ACCOUNTS=[], SEL=new Set(), CHARTS=[], FOLLOWER_GROWTH=null, FOLLOWER_GROWTH_ERROR='';
 let INSIGHTS_SESSION=0, INSIGHTS_BOOT=0;
 window.__resetToolSession = () => {
   INSIGHTS_SESSION += 1;
   INSIGHTS_BOOT += 1;
-  RAW=[]; ACCOUNTS=[]; SEL=new Set(); FOLLOWER_GROWTH=null; FOLLOWER_GROWTH_ERROR='';
+  RAW=[]; MUSIC_RAW=[]; MUSIC_READY=false; OVERVIEW_READY=false;
+  MUSIC_ACCOUNTS=[]; OVERVIEW_ACCOUNTS=[];
+  ACCOUNTS=[]; SEL=new Set(); FOLLOWER_GROWTH=null; FOLLOWER_GROWTH_ERROR='';
   NAME_WORDS_BY_ACCOUNT={}; BASE={};
   destroyCharts();
   $('#accChips').textContent='';
@@ -394,7 +406,7 @@ const WORD_ALIASES={openal:'openai'};
 // it exactly for someone else. Defaults are omitted so a plain view keeps a
 // plain URL. Accounts are only written when the selection is a real subset.
 // ---------------------------------------------------------------------------
-const URL_DEFAULTS = {acc:'', selection:'', from:'', to:'', preset:'', ftype:'', metric:'l'};
+const URL_DEFAULTS = {acc:'', selection:'', from:'', to:'', preset:'', ftype:'', metric:'l',view:'overview',musicSearch:'',musicKind:'',musicSort:'total',musicMin:'1'};
 
 function encodeRoute(state){
   try{
@@ -431,6 +443,7 @@ function writeUrl(){
     selection: SEL.size === 0 ? 'none' : '',
     from: $('#from').value, to: $('#to').value,
     preset: $('#preset').value, ftype: $('#ftype').value, metric: $('#metric').value,
+    view:VIEW,musicSearch:MUSIC_STATE.search,musicKind:MUSIC_STATE.kind,musicSort:MUSIC_STATE.sort,musicMin:MUSIC_STATE.minUses,
   };
   const p = new URLSearchParams();
   const payload = {};
@@ -522,14 +535,18 @@ async function insightsGet(path){
 }
 
 async function boot(){
+  const route=readUrl();
+  VIEW=route.view==='music'?'music':'overview';
+  syncInsightsView();
+  const requestedView=VIEW;
   const session=INSIGHTS_SESSION, request=++INSIGHTS_BOOT;
-  const current=()=>session===INSIGHTS_SESSION && request===INSIGHTS_BOOT;
+  const current=()=>session===INSIGHTS_SESSION && request===INSIGHTS_BOOT && VIEW===requestedView;
   $('#app').setAttribute('aria-busy','true');
   FOLLOWER_GROWTH_ERROR='';
   try{
     const [r, growth] = await Promise.all([
-      insightsGet('/api/insights/posts'),
-      insightsGet('/api/insights/follower-growth').then(response=>response.json()).catch(error=>{
+      insightsGet(VIEW==='music'?'/api/insights/music':'/api/insights/posts'),
+      VIEW==='music'?Promise.resolve(null):insightsGet('/api/insights/follower-growth').then(response=>response.json()).catch(error=>{
         if(current()) FOLLOWER_GROWTH_ERROR=error?.message || 'Follower-growth signals are temporarily unavailable.';
         return null;
       }),
@@ -537,13 +554,16 @@ async function boot(){
     const data = await r.json();
     if(!current()) return;
     if(!Array.isArray(data.posts) || !Array.isArray(data.accounts)) throw new Error('Insights returned incomplete data. Please retry.');
-    FOLLOWER_GROWTH = growth;
-    RAW = data.posts.map(p=>{
+    if(VIEW==='overview') FOLLOWER_GROWTH = growth;
+    const normalized = data.posts.map(p=>{
       const t = p.d ? new Date(p.d).getTime() : NaN;
       const dt = new Date(t);
       return {...p, ts:t, hour:isNaN(t)?null:dt.getUTCHours(), dow:isNaN(t)?null:dt.getUTCDay()};
-    }).filter(p=>!isNaN(p.ts));
+    });
+    if(VIEW==='music'){ MUSIC_RAW=normalized; MUSIC_READY=true; }
+    else{ RAW=normalized.filter(p=>!isNaN(p.ts)); OVERVIEW_READY=true; }
     ACCOUNTS = data.accounts;
+    if(VIEW==='music') MUSIC_ACCOUNTS=ACCOUNTS; else OVERVIEW_ACCOUNTS=ACCOUNTS;
     buildNameWords();
 
     // The URL wins over the defaults, and only over accounts that still exist
@@ -557,6 +577,10 @@ async function boot(){
     $('#preset').value = u.preset;
     $('#ftype').value = u.ftype;
     $('#metric').value = u.metric;
+    MUSIC_STATE.search=u.musicSearch.slice(0,200);
+    MUSIC_STATE.kind=['','named','original','identified'].includes(u.musicKind)?u.musicKind:'';
+    MUSIC_STATE.sort=['total','mean','median','uses','relative','topPosts'].includes(u.musicSort)?u.musicSort:'total';
+    MUSIC_STATE.minUses=['1','3','5','10'].includes(u.musicMin)?u.musicMin:'1';
 
     buildChips();
     ['from','to','ftype','metric'].forEach(id=>$('#'+id).onchange=render);
@@ -628,12 +652,13 @@ async function shareLink(){
   }
 }
 
-function filtered(){
+function filtered(list=RAW){
   const f=$('#from').value?new Date($('#from').value+'T00:00:00').getTime():null;
   const t=$('#to').value?new Date($('#to').value+'T23:59:59').getTime():null;
   const ty=$('#ftype').value;
-  return RAW.filter(p=>{
-    if(!SEL.has(p.a)) return false;
+  return list.filter(p=>{
+    if(!(VIEW==='music'?[p.a,...(p.aa||[])].some(a=>SEL.has(a)):SEL.has(p.a))) return false;
+    if((f||t)&&!Number.isFinite(p.ts)) return false;
     if(f&&p.ts<f) return false;
     if(t&&p.ts>t) return false;
     if(ty&&p.t!==ty) return false;
@@ -682,7 +707,18 @@ function idx(p){
 
 function render(){
   destroyCharts();
+  syncInsightsView();
   writeUrl();
+  if(!(VIEW==='music'?MUSIC_READY:OVERVIEW_READY)){
+    $('#app').innerHTML='<div class="empty" role="status">Loading Insights data…</div>';
+    return;
+  }
+  if(VIEW==='music'){
+    const posts=filtered(MUSIC_RAW);
+    const analysis=window.InsightsMusicView.mount($('#app'),{posts,selectedAccounts:SEL,state:MUSIC_STATE,onChange:writeUrl,translate:toolText,locale:toolLocale()});
+    $('#scope').textContent=analysis.coverage.totalPosts.toLocaleString(toolLocale())+' posts · '+SEL.size+' accounts';
+    return;
+  }
   const P = filtered();
   computeBaselines(P);
   $('#scope').textContent = P.length.toLocaleString(toolLocale())+' posts · '+SEL.size+' accounts';
@@ -703,6 +739,33 @@ function render(){
   `;
   drawFollowerGrowth(); drawFormat(P); drawAccounts(P); drawTopics(P); drawTiming(P);
 }
+
+function syncInsightsView(){
+  $('#insightsOverview').setAttribute('aria-pressed',String(VIEW==='overview'));
+  $('#insightsMusic').setAttribute('aria-pressed',String(VIEW==='music'));
+  $('#overviewMetric').hidden=VIEW==='music';
+}
+function switchInsightsView(view){
+  if(VIEW===view) return;
+  const wasAll=ACCOUNTS.length>0&&ACCOUNTS.every(account=>SEL.has(account.handle));
+  VIEW=view; syncInsightsView();
+  if(!ACCOUNTS.length){ const p=new URLSearchParams(location.search);p.set('view',view);history.replaceState(null,'',location.pathname+'?'+p);boot();return; }
+  writeUrl();
+  if(view==='music'?MUSIC_READY:OVERVIEW_READY){
+    INSIGHTS_BOOT+=1;
+    ACCOUNTS=view==='music'?MUSIC_ACCOUNTS:OVERVIEW_ACCOUNTS;
+    SEL=wasAll?new Set(ACCOUNTS.map(account=>account.handle)):new Set([...SEL].filter(handle=>ACCOUNTS.some(account=>account.handle===handle)));
+    buildNameWords();buildChips();
+    $('#app').setAttribute('aria-busy','false');render();
+  }
+  else{
+    destroyCharts();
+    $('#app').innerHTML='<div class="empty" role="status">Loading Insights data…</div>';
+    boot();
+  }
+}
+$('#insightsOverview').onclick=()=>switchInsightsView('overview');
+$('#insightsMusic').onclick=()=>switchInsightsView('music');
 
 /* ---------------- strategy: follower growth ---------------- */
 // A follower delta is measured between two profile snapshots. Posts inside
@@ -1144,7 +1207,7 @@ document.addEventListener('click', event => {
   if(url) window.open(url, '_blank', 'noopener');
 });
 
-window.__rerenderCharts = () => { if (RAW.length || FOLLOWER_GROWTH) render(); };
+window.__rerenderCharts = () => { if (OVERVIEW_READY || MUSIC_READY) render(); };
 window.__startInsightsBoot = boot;
 </script>
 
@@ -1337,7 +1400,10 @@ async function exportPdf(){
   btn.disabled = true; btn.textContent = 'Building…';
   try {
     const JsPDF = await loadJsPdf();
-    const doc = new JsPDF({ unit: 'pt', format: 'a4' });
+    const musicReport = VIEW === 'music';
+    const doc = new JsPDF(musicReport
+      ? { unit: 'pt', format: 'a4', orientation: 'landscape' }
+      : { unit: 'pt', format: 'a4' });
     const M = 40, W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
     const CW = W - M * 2;
     let y = M;
@@ -1350,6 +1416,50 @@ async function exportPdf(){
       doc.text(lines, M, y);
       y += lines.length * (size + 2) + (gap === undefined ? 6 : gap);
     };
+    const visible = element => {
+      for(let node=element;node;node=node.parentElement){
+        if(node.hidden || getComputedStyle(node).display === 'none' || getComputedStyle(node).visibility === 'hidden') return false;
+      }
+      return true;
+    };
+    const musicTable = (head, rows) => {
+      // A sound's creator and exact ID are part of its identity. Reserve room
+      // for those labels and preserve every wrapped line, including on a new page.
+      const widths = head.length === 5
+        ? [CW*.23,CW*.41,CW*.12,CW*.12,CW*.12]
+        : head.map((_, index) => head.length === 1 ? CW : index === 0 ? CW*.29 : CW*.71/(head.length-1));
+      const xs = widths.map((_, index) => M + widths.slice(0,index).reduce((sum,width)=>sum+width,0));
+      const fontSize=7, lineHeight=9.5, padding=6, bottom=H-M;
+      const split = cells => cells.map((cell,index)=>doc.splitTextToSize(String(cell),widths[index]-6));
+      const lineCount = cells => Math.max(1,...cells.map(lines=>lines.length));
+      doc.setFont('helvetica','bold');doc.setFontSize(fontSize);
+      const headers=split(head), headerHeight=lineCount(headers)*lineHeight+padding;
+      const draw = (cells, start=0, count=Infinity) => cells.forEach((lines,index)=>{
+        const part=lines.slice(start,start+count);
+        if(part.length) doc.text(part,xs[index],y,{lineHeightFactor:lineHeight/fontSize});
+      });
+      const heading = () => {
+        doc.setFont('helvetica','bold');doc.setFontSize(fontSize);doc.setTextColor(120);
+        draw(headers);y+=headerHeight;
+        doc.setFont('helvetica','normal');doc.setTextColor(0);
+      };
+      const newPage = () => {doc.addPage();y=M;heading();};
+      room(headerHeight+lineHeight+padding);heading();
+      for(const row of rows){
+        const cells=split(row), totalLines=lineCount(cells), rowHeight=totalLines*lineHeight+padding;
+        const pageCapacity=bottom-M-headerHeight;
+        if(rowHeight<=pageCapacity && y+rowHeight>bottom) newPage();
+        let offset=0;
+        while(offset<totalLines){
+          const available=Math.floor((bottom-y-padding)/lineHeight);
+          if(available<1){newPage();continue;}
+          const count=Math.min(totalLines-offset,available);
+          draw(cells,offset,count);y+=count*lineHeight+padding;offset+=count;
+          if(offset<totalLines) newPage();
+        }
+      }
+      y+=8;
+    };
 
     // header
     text('Sentient Insights', 20, 'bold', 2);
@@ -1360,6 +1470,7 @@ async function exportPdf(){
     // the filters this report was built from
     const filters = [];
     document.querySelectorAll('.filters .f').forEach((f) => {
+      if(!visible(f)) return;
       const lab = f.querySelector('label')?.textContent?.trim();
       const ctl = f.querySelector('select, input');
       if(lab && ctl && ctl.value) filters.push(`${lab}: ${ctl.selectedOptions ? ctl.selectedOptions[0].text : ctl.value}`);
@@ -1371,7 +1482,7 @@ async function exportPdf(){
     doc.setTextColor(0);
 
     // KPIs, two columns
-    const kpis = [...document.querySelectorAll('.kpi')].map(k => ({
+    const kpis = [...document.querySelectorAll('.kpi')].filter(visible).map(k => ({
       label: k.querySelector('b')?.textContent?.trim() || '',
       value: k.querySelector('strong')?.textContent?.trim() || '',
       note: k.querySelector('em')?.textContent?.trim() || '',
@@ -1396,6 +1507,7 @@ async function exportPdf(){
     // container, so the child combinator matched nothing and the report
     // came out as just the header and KPIs.
     for(const sec of document.querySelectorAll('section')){
+      if(!visible(sec)) continue;
       const h = sec.querySelector('h2');
       const canvases = [...sec.querySelectorAll('canvas')].filter(c => c.width && c.height);
       const table = sec.querySelector('table');
@@ -1416,9 +1528,12 @@ async function exportPdf(){
 
       if(table){
         const head = [...table.querySelectorAll('thead th')].map(t => t.textContent.trim());
-        const rows = [...table.querySelectorAll('tbody tr')].slice(0, 20)
-          .map(tr => [...tr.children].map(td => td.textContent.replace(/\s+/g,' ').trim()));
+        const rows = [...table.querySelectorAll('tbody tr')].filter(visible).slice(0, musicReport ? undefined : 20)
+          .map(tr => [...tr.children].map(td => (musicReport
+            ? [...td.childNodes].map(node=>node.textContent).join(' ')
+            : td.textContent).replace(/\s+/g,' ').trim()));
         if(head.length && rows.length){
+          if(musicReport){musicTable(head,rows);continue;}
           const cw = CW / head.length;
           room(20);
           doc.setFont('helvetica','bold'); doc.setFontSize(7); doc.setTextColor(120);

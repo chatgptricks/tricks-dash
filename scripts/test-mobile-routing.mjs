@@ -41,6 +41,9 @@ for (const agent of ['mac', 'windows', 'linux']) {
 assert.equal(run('/queue.html', { userAgentData: { platform: 'macOS', mobile: true }, maxTouchPoints: 10 }), null);
 checks++;
 for (const agent of ['iphone', 'android', 'ipad']) {
+  assert.equal(run('/insights.html?view=music', {agent}), null, 'Music opens the responsive explorer on mobile');
+  assert.equal(run(`/insights.html?r=${encode({view:'music',musicKind:'original'})}`, {agent}), null, 'Shared music filters stay in the responsive explorer');
+  checks += 2;
   const destination = run('/queue.html?task=42', { agent, narrow: false, coarse: false });
   assert.equal(destination.pathname, '/mobile/');
   assert.deepEqual(route(destination), { tab: 'queue', task: '42' });
@@ -98,7 +101,7 @@ for (const agent of ['iphone', 'android']) {
 
 for (const entry of ['index.html', 'queue.html', 'settings.html', 'public/tracker.html', 'public/insights.html', 'mobile/index.html']) {
   const html = fs.readFileSync(new URL(`../${entry}`, import.meta.url), 'utf8');
-  assert.match(html, /<script src="\/mobile-redirect\.js\?v=20261019-tracker-route"><\/script>/, `${entry} must run the current device gate before app startup`);
+  assert.match(html, /<script src="\/mobile-redirect\.js\?v=202610(?:19-tracker-route|25-music1)"><\/script>/, `${entry} must run the current device gate before app startup`);
   checks++;
 }
 console.log(`Mobile routing: ${checks} checks passed.`);

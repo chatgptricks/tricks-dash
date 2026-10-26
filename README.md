@@ -169,3 +169,21 @@ The guide covers websites, applications, reports and automations. Its hosted
 HTML is generated from the Markdown reference by `scripts/build-api-guide.mjs`
 during each build. Run `npm run test:website-api` to verify key management and
 the example proxy.
+
+## Music in Insights
+
+Open `/insights.html?view=music` or choose Music in Insights. Account, date and
+format filters apply to the audio rankings, top posts and coverage counters.
+Music loads its own read-only `/api/insights/music` catalogue on demand, including
+canonical historical posts and metadata recovered from stored provider responses.
+Opening the view does not run a scrape or refresh Instagram metrics.
+
+Exact Instagram audio IDs identify sounds. Original audio is labelled with its
+creator and full ID; missing IDs stay separate by post. Named music without an ID
+uses normalized title and artist. Collaborations count once, unknown audio remains
+visible in coverage, and unknown likes are excluded from statistics. Rankings
+include total, mean and median likes, uses, relative likes and top-decile appearances.
+The comparison baseline is the same account, format and selected period, requiring
+five measured posts for ratios and ten for the top decile. These are associations,
+not causal or age-normalized estimates. `npm run test:insights-music` verifies the
+calculations and the browser workflow in English, Spanish and narrow layouts.
