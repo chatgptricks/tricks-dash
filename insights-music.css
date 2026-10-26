@@ -12,7 +12,7 @@
 section>p.music-footnote{margin:12px 0 0}
 .music-kind-tabs{display:flex;flex-wrap:wrap;gap:4px;width:fit-content;margin-top:16px;padding:4px;border:1px solid var(--line);border-radius:9px;background:var(--panel-2)}
 .music-kind-tabs button{min-height:34px;padding:0 16px;border:0;border-radius:6px;background:transparent;color:var(--muted);font:inherit;font-size:11px;font-weight:700;cursor:pointer}
-.music-kind-tabs button[aria-pressed="true"]{color:var(--accent-text);background:rgba(var(--accent-rgb),.12)}
+.music-kind-tabs button[aria-selected="true"]{color:var(--accent-text);background:rgba(var(--accent-rgb),.12)}
 .music-kind-tabs button:hover{color:var(--text)}
 .music-filters{padding:0;border:0;background:transparent;grid-template-columns:minmax(220px,2fr) repeat(2,minmax(150px,1fr));margin-top:16px}
 .music-table-scroll{width:100%;overflow-x:auto;border-radius:6px}
