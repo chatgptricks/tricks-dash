@@ -10,7 +10,8 @@
 <script src="/insights-music.js?v=20261026-music3"></script>
 <script src="/insights-music-view.js?v=20261026-music3"></script>
 <link rel="stylesheet" href="/insights-music.css?v=20261026-music3">
-<script src="/role-preview.js?v=20260928-tracker" defer></script>
+<script src="/viewer-access.js?v=20261026-startup" defer></script>
+<script src="/role-preview.js?v=20261026-startup" defer></script>
 <script src="/context-menu.js?v=20260901-context1" defer></script>
 <title>Insights · sentientdash.app</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext x='50' y='54' font-size='84' text-anchor='middle' dominant-baseline='central'%3E%F0%9F%93%8A%3C/text%3E%3C/svg%3E" />
@@ -352,10 +353,12 @@ let RAW=[], MUSIC_RAW=[], MUSIC_READY=false, OVERVIEW_READY=false, VIEW='overvie
 let MUSIC_ACCOUNTS=[], OVERVIEW_ACCOUNTS=[];
 const MUSIC_STATE={search:'',kind:'named',sort:'total',minUses:'1'};
 let ACCOUNTS=[], SEL=new Set(), CHARTS=[], FOLLOWER_GROWTH=null, FOLLOWER_GROWTH_ERROR='';
-let INSIGHTS_SESSION=0, INSIGHTS_BOOT=0;
+let INSIGHTS_SESSION=0, INSIGHTS_BOOT=0, FOLLOWER_GROWTH_RUN=0;
+const INSIGHTS_READS=new Set();
 window.__resetToolSession = () => {
   INSIGHTS_SESSION += 1;
   INSIGHTS_BOOT += 1;
+  for(const controller of INSIGHTS_READS) controller.abort();
   RAW=[]; MUSIC_RAW=[]; MUSIC_READY=false; OVERVIEW_READY=false;
   MUSIC_ACCOUNTS=[]; OVERVIEW_ACCOUNTS=[];
   ACCOUNTS=[]; SEL=new Set(); FOLLOWER_GROWTH=null; FOLLOWER_GROWTH_ERROR='';
@@ -493,45 +496,72 @@ function textColorFor(name){
 
 function destroyCharts(){ CHARTS.forEach(c=>{try{c.destroy()}catch(e){}}); CHARTS=[]; }
 
-const insightsDelay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const insightsDelay = (ms, signal) => new Promise((resolve, reject) => {
+  const abort=()=>{ clearTimeout(timer); reject(new DOMException('Request cancelled.','AbortError')); };
+  const timer=setTimeout(()=>{ signal.removeEventListener('abort',abort); resolve(); },ms);
+  if(signal.aborted) abort(); else signal.addEventListener('abort',abort,{once:true});
+});
 const INSIGHTS_RETRYABLE = new Set([502, 503, 504]);
-async function insightsGet(path){
+async function insightsGet(path, {signal,timeoutMs=30000}={}){
   const session=INSIGHTS_SESSION;
+  const controller=new AbortController();
+  INSIGHTS_READS.add(controller);
+  const assertCurrent=()=>{
+    if(controller.signal.aborted || session!==INSIGHTS_SESSION) throw new DOMException('Request cancelled.','AbortError');
+  };
+  let timer, abort;
+  const deadline=new Promise((_,reject)=>{
+    abort=()=>{ controller.abort(); reject(new DOMException('Request cancelled.','AbortError')); };
+    signal?.addEventListener('abort',abort,{once:true});
+    controller.signal.addEventListener('abort',()=>reject(new DOMException('Request cancelled.','AbortError')),{once:true});
+    if(signal?.aborted) abort();
+    timer=setTimeout(()=>{
+      reject(new Error('The Insights connection timed out. Try again.'));
+      controller.abort();
+    },timeoutMs);
+  });
+  const read=async()=>{
   let lastError = null;
   for(let attempt=0; attempt<4; attempt+=1){
     try{
+      assertCurrent();
       if(window.__refreshFirebaseIdToken) await window.__refreshFirebaseIdToken(attempt>0);
-      if(session!==INSIGHTS_SESSION) throw Object.assign(new Error('Session changed.'), {final:true});
+      assertCurrent();
       const headers = window.__sentientRolePreviewHeaders ? window.__sentientRolePreviewHeaders() : {};
       if(window.__firebaseIdToken) headers.Authorization = 'Bearer '+window.__firebaseIdToken;
-      const response = await fetch(API+path, {headers});
-      if(session!==INSIGHTS_SESSION) throw Object.assign(new Error('Session changed.'), {final:true});
+      const response = await fetch(API+path, {headers,signal:controller.signal});
+      assertCurrent();
       if(response.status===403){
         let detail='You do not have access to this Insights action.';
         try{ const body=await response.json(); if(typeof body?.detail==='string') detail=body.detail; }catch{}
         throw Object.assign(new Error(detail), {status:403,final:true});
       }
       if(response.status===401){
-        if(attempt<3){ await insightsDelay(350*(attempt+1)); continue; }
+        if(attempt<3){ await insightsDelay(350*(attempt+1),controller.signal); continue; }
         window.__onInsightsUnauthorized && window.__onInsightsUnauthorized();
         throw Object.assign(new Error('unauthorized'), {final:true});
       }
       if(!response.ok){
         lastError = new Error('HTTP '+response.status);
         if(INSIGHTS_RETRYABLE.has(response.status) && attempt<3){
-          await insightsDelay(700*(2**attempt));
+          await insightsDelay(700*(2**attempt),controller.signal);
           continue;
         }
         throw Object.assign(lastError, {final:true});
       }
-      return response;
+      const body=await response.json();
+      assertCurrent();
+      return body;
     }catch(error){
       lastError = error;
-      if(error?.final) throw error;
-      if(attempt<3){ await insightsDelay(700*(2**attempt)); continue; }
+      if(error?.final || error?.name==='AbortError') throw error;
+      if(attempt<3){ await insightsDelay(700*(2**attempt),controller.signal); continue; }
     }
   }
   throw lastError || new Error('Connection to Insights is still reconnecting.');
+  };
+  try{ return await Promise.race([deadline,read()]); }
+  finally{ clearTimeout(timer); signal?.removeEventListener('abort',abort); INSIGHTS_READS.delete(controller); }
 }
 
 function insightsAccountSelection(state, accounts){
@@ -551,18 +581,18 @@ async function boot(){
   const current=()=>session===INSIGHTS_SESSION && request===INSIGHTS_BOOT && VIEW===requestedView;
   $('#app').setAttribute('aria-busy','true');
   FOLLOWER_GROWTH_ERROR='';
+  if(requestedView==='overview'){
+    FOLLOWER_GROWTH=null;
+    // Follower intelligence is optional. Its slower Tracker calculation must
+    // not keep the post-performance workspace behind the initial loader.
+    void retryFollowerGrowth();
+  }
   try{
-    const [r, growth] = await Promise.all([
-      insightsGet(VIEW==='music'?'/api/insights/music':'/api/insights/posts'),
-      VIEW==='music'?Promise.resolve(null):insightsGet('/api/insights/follower-growth').then(response=>response.json()).catch(error=>{
-        if(current()) FOLLOWER_GROWTH_ERROR=error?.message || 'Follower-growth signals are temporarily unavailable.';
-        return null;
-      }),
-    ]);
-    const data = await r.json();
+    // Full reports can contain the complete multi-account catalogue. Preserve
+    // a longer cold-load window than the optional follower panel.
+    const data = await insightsGet(requestedView==='music'?'/api/insights/music':'/api/insights/posts',{timeoutMs:90000});
     if(!current()) return;
     if(!Array.isArray(data.posts) || !Array.isArray(data.accounts)) throw new Error('Insights returned incomplete data. Please retry.');
-    if(VIEW==='overview') FOLLOWER_GROWTH = growth;
     const normalized = data.posts.map(p=>{
       const t = p.d ? new Date(p.d).getTime() : NaN;
       const dt = new Date(t);
@@ -606,19 +636,28 @@ async function boot(){
 }
 
 async function retryFollowerGrowth(){
-  const session=INSIGHTS_SESSION, request=INSIGHTS_BOOT;
+  const session=INSIGHTS_SESSION, request=INSIGHTS_BOOT, growthRun=++FOLLOWER_GROWTH_RUN;
+  const current=()=>session===INSIGHTS_SESSION && request===INSIGHTS_BOOT && growthRun===FOLLOWER_GROWTH_RUN && VIEW==='overview';
   FOLLOWER_GROWTH_ERROR='';
-  render();
+  renderFollowerGrowth();
   try{
-    const response=await insightsGet('/api/insights/follower-growth');
-    const growth=await response.json();
-    if(session!==INSIGHTS_SESSION || request!==INSIGHTS_BOOT) return;
+    const growth=await insightsGet('/api/insights/follower-growth');
+    if(!current()) return;
     FOLLOWER_GROWTH=growth;
   }catch(error){
-    if(session!==INSIGHTS_SESSION || request!==INSIGHTS_BOOT) return;
+    if(!current()) return;
     FOLLOWER_GROWTH_ERROR=error?.message || 'Follower-growth signals are temporarily unavailable.';
   }
-  render();
+  renderFollowerGrowth();
+}
+
+function renderFollowerGrowth(){
+  const section=$('#followerGrowth');
+  if(VIEW!=='overview' || !OVERVIEW_READY || !section) return;
+  const canvas=section.querySelector('canvas');
+  CHARTS=CHARTS.filter(chart=>{ if(canvas && chart.canvas===canvas){ try{chart.destroy();}catch{} return false; } return true; });
+  section.outerHTML=sectionFollowerGrowth();
+  drawFollowerGrowth();
 }
 
 function buildChips(){
@@ -762,6 +801,7 @@ function switchInsightsView(view){
     SEL=insightsAccountSelection(readUrl(),ACCOUNTS);
     buildNameWords();buildChips();
     $('#app').setAttribute('aria-busy','false');render();
+    if(view==='overview' && !FOLLOWER_GROWTH) void retryFollowerGrowth();
   }
   else{
     destroyCharts();
@@ -840,7 +880,7 @@ function sectionFollowerGrowth(){
     const message=FOLLOWER_GROWTH_ERROR
       ? 'Post performance is available; follower signals could not load. Retry to reconnect to the Tracker source.'
       : 'Loading the daily follower signal…';
-    return `<section><h2>Follower intelligence <span class="tag">strategy</span></h2><p class="sub">${message}</p>${FOLLOWER_GROWTH_ERROR?'<button class="linkbtn" data-retry-follower-growth>Retry follower signals</button>':''}</section>`;
+    return `<section id="followerGrowth"><h2>Follower intelligence <span class="tag">strategy</span></h2><p class="sub">${message}</p>${FOLLOWER_GROWTH_ERROR?'<button class="linkbtn" data-retry-follower-growth>Retry follower signals</button>':''}</section>`;
   }
   const peaks=followerPeakRows();
   const coverage=followerGrowthCoverage();
@@ -848,7 +888,7 @@ function sectionFollowerGrowth(){
   const unresolved=peaks.length-single.length;
   const totalLift=peaks.reduce((sum,event)=>sum+(Number(event.followers_gained)||0),0);
   const rows=peaks.slice(0,18);
-  return `<section>
+  return `<section id="followerGrowth">
     <h2>Follower intelligence <span class="tag">strategy</span></h2>
     <p class="sub">Peak days are measured against each account’s own trailing daily growth, not against other accounts. A post shown here is a <b>time-aligned candidate</b>, never a confirmed Instagram follower conversion.</p>
     <div class="kpis">
@@ -1805,7 +1845,6 @@ function checkAdminForSettings() {
   const session = INSIGHTS_SESSION;
   adminChecked = true;
   insightsGet('/api/dashboard/me')
-    .then((r) => r.json())
     .then((me) => {
       if(session !== INSIGHTS_SESSION) return;
       const preview = sessionStorage.getItem('sentient.queueRolePreview');
@@ -1816,6 +1855,6 @@ function checkAdminForSettings() {
     .catch(() => { if(session === INSIGHTS_SESSION) adminChecked = false; });
 }
 </script>
-<script type="module" src="/product-static.js?v=20261004-shell1"></script>
+<script type="module" src="/product-static.js?v=20261026-startup"></script>
 </body>
 </html>

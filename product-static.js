@@ -42,16 +42,16 @@ async function refreshStaticAccess() {
   setStaticNavigation(null);
   if (!token) return;
   try {
-    const headers = { Authorization: `Bearer ${token}` };
-    const response = await fetch('https://cortex-api-db2e.onrender.com/api/dashboard/me', { headers: window.__sentientRolePreviewHeaders ? window.__sentientRolePreviewHeaders(headers) : headers });
-    if (!response.ok) return;
-    const viewer = await response.json();
+    const viewer = await window.SentientViewerAccess.read();
     if (run !== accessRun || token !== window.__firebaseIdToken) return;
     // Tracker is open to everyone; only Insights stays coordinator-only.
     setStaticNavigation(viewer);
   } catch {}
 }
-window.addEventListener('sentient-auth-changed', refreshStaticAccess);
+window.addEventListener('sentient-auth-changed', () => {
+  if (window.__firebaseIdToken) clearInterval(accessTimer);
+  refreshStaticAccess();
+});
 const accessTimer = setInterval(() => {
   if (++attempts > 120) { clearInterval(accessTimer); return; }
   if (!window.__firebaseIdToken) return;
