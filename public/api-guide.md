@@ -148,6 +148,7 @@ Todas las filas siguientes usan `GET`. La falta de un scope devuelve `403`; los 
 | `/tracker/accounts/{handle}/history` | `tracker` | Historial de seguidores de una cuenta | `from, to, limit, offset` |
 | `/insights/posts` | `insights` | Posts de análisis guardados entre las cuentas seleccionadas | `account, from, to, q, is_promo, is_collab, is_hot, include_hidden, include_deleted, sort, limit, offset` |
 | `/insights/top-posts` | `insights` | Posts guardados ordenados; por defecto por likes | `account, from, to, sort, limit, offset` |
+| `/insights/music` | `insights` | Canción y audio guardados de cada post junto a sus métricas | `account, from, to, sort, limit, offset` |
 | `/tracker/accounts/{handle}/engagement` | `tracker` | Observaciones diarias o mensuales de interacción de posts | `granularity, from, to, limit, offset` |
 | `/insights/follower-growth` | `insights` | Eventos de crecimiento de seguidores y posts candidatos con evidencia limitada | `account, lookback_days` |
 | `/insights/summary` | `insights` | Resumen de análisis guardados para el rango elegido | `account, from, to` |
@@ -219,6 +220,38 @@ Las consultas de Research e Insights aceptan `account` con un handle o varios se
 `/research/golden-nuggets` lee clasificaciones confirmadas existentes, sin generar ni puntuar nuevos candidatos. `min_score` es opcional, de 0 a 1; `account` y `target_account` limitan los resultados guardados. Las filas incluyen `account`, `shortcode`, `label`, `target_account` o `null`, `score`, `reviewed_by`, `reviewed_at` y una `review` guardada segura. Los resultados vinculados con cuentas y los destinos referenciados respetan el alcance de la clave.
 
 Los posts de Research e Insights incluyen un mapa `metrics` con los datos de rendimiento guardados disponibles, como compartidos, guardados, alcance, impresiones, mediciones en distintos momentos y puntajes de modelos. Las claves exactas dependen de la cobertura de fuentes. Conserva una medición ausente o `null` como desconocida y distingue puntajes de modelos de conteos observados de audiencia. `hashtags` y `mentions` son arreglos normalizados; los flags de audio y colaboración pagada pueden ser `null`. `transcript_available` y `alt_text_available` describen disponibilidad guardada; el detalle devuelve los textos cuando existen. Las proyecciones públicas de cuentas y de acceso únicamente a HOT no exponen modelos internos ni métricas privadas de rendimiento.
+
+### Música de los posts
+
+`GET /api/v1/insights/music?account=chatgptricks&sort=likes&limit=20` devuelve
+los metadatos musicales guardados junto a las métricas del post. Requiere el
+scope `insights` y respeta las cuentas autorizadas de la conexión.
+
+Cada elemento incluye `song`, `artist`, `audio_id`, `is_original_audio` y
+`audio_url`, además de `account`, `accounts`, `shortcode`, `published_at`,
+`permalink`, `likes`, `comments`, `views` y `metrics_updated_at`. Conserva
+`audio_id` como texto para no perder precisión. Los valores `null` indican
+datos no disponibles; un ID `0` no identifica una canción. Los audios
+originales se distinguen por artista y por su ID; si falta el ID, conserva
+el shortcode para no agrupar todos los Original audio como si fueran uno.
+
+Acepta `account` como uno o varios handles separados por coma, fechas `from`
+y `to`, `sort=date|likes|comments|views|hot`, `limit` de 1 a 100 (20 por defecto)
+y `offset` desde 0. Sigue `pagination.next_offset` mientras `has_more` sea
+verdadero. La lectura recupera música únicamente para los posts de la página
+y no inicia scraping ni actualiza las métricas de Instagram. La cobertura
+`coverage` describe solo esa página. Una colaboración puede generar una fila
+por cuenta: deduplica por `shortcode` al calcular totales entre cuentas.
+
+El orden de paginación usa las métricas del índice guardado. Las métricas
+devueltas pueden incorporar observaciones posteriores de esos posts; por eso
+un post de otra página podría tener más likes. Para un ranking exacto de los
+valores devueltos, reúne las páginas, deduplica y vuelve a ordenar. Conserva
+`ordering` y `metrics_updated_at` al generar reportes.
+
+Los agentes usan `get_insights_music_page` en MCP; la ruta equivalente para
+sesiones y códigos de agente es `/api/insights/music/page`. Una clave de
+conexión API usa la ruta versionada `/api/v1/insights/music`.
 
 ### Cobertura de Tracker e Insights
 

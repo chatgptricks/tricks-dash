@@ -55,7 +55,7 @@ Credential-minting endpoints, Slack callbacks, media image routes, continuous li
 ## Music data
 
 Use `get_insights_music_page` (read only) with a `query` object. Supported
-parameters are `account` (comma-separated handles), `start` and `end`
+parameters are `account` (comma-separated handles), `from` and `to`
 (`YYYY-MM-DD`), `sort` (`date`, `likes`, `comments`, `views`, `hot`), `limit`
 (1–100, default 20), and `offset` (default 0). Example:
 
@@ -68,6 +68,12 @@ includes `song`, `artist`, `audio_id`, `is_original_audio`, `audio_url`, and its
 account, shortcode, publication date, permalink and engagement metrics. Keep
 audio IDs as exact strings. Missing fields mean unavailable metadata; zero IDs
 are not real sounds. This reads retained data and does not start a scrape.
+
+Pagination uses stored index metrics; returned measurements can include newer
+retained observations. Preserve `ordering` and `metrics_updated_at`; for an
+exact ranking of returned values, collect the pages and sort again. A
+collaboration can appear under multiple accounts: deduplicate by shortcode
+for cross-account totals. `coverage` applies only to the returned page.
 
 For REST integrations using an API connection key, the equivalent endpoint is
 `GET /api/v1/insights/music` with the **Insights** permission. It preserves the
