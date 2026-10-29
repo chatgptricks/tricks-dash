@@ -6,6 +6,7 @@ import { useInspectorModal } from './use-inspector-modal';
 import { usePrefs } from './prefsContext';
 import { CoordinatorNotes, QueueNotesBadge } from './QueueNotes.jsx';
 import { manualQueueNotes } from './queueNoteText.js';
+import StackIdentity from './StackIdentity';
 
 let queueOrigin=null;
 export function captureQueueCardOrigin(event) {
@@ -63,6 +64,7 @@ export default function QueuePostInspector({post,onClose,children,notes,notesCop
     <div className="obs-inspector-info">
       <CoordinatorNotes notes={notes} copyControl={notesCopyControl} noteRef={noteRef} id={noteId} />
       {post.permalink ? <a className="ghost-button obs-open-original" href={post.permalink} target="_blank" rel="noopener noreferrer">{t('Open original')} ↗</a> : null}
+      <StackIdentity stackId={post.stackId} />
       {detailActions}{info}
     </div>
   </aside>;

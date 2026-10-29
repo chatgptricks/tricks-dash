@@ -17,7 +17,11 @@ const pool = { ...base, id: 1, post: post('chatgptricks', 'POOL1'), status: 'poo
 window.localStorage.setItem('sentient.queueDrafts.v2', JSON.stringify([{ ...pool, status: 'scheduled', designerEmail: 'staff-8@example.test', scheduledDate: day, scheduledStartMinutes: 600 }]));
 const active = { ...base, id: 2, notes: 'Automatically added to the Queue because this post exceeded 3× its account HOT threshold.', post: post('chatgptricks', 'ACTIVE1'), status: 'in_progress', designerEmail: 'developer@example.test', scheduledDate: day, scheduledStartMinutes: 540 };
 const manualNotes = 'Preserve the source visual system.\n[Creative reference](https://example.com/coordinator-brief)';
-const scheduled = { ...base, id: 3, notes: manualNotes, post: post('chatgptricks', 'NEXT1'), recommendedAccounts: ['chatgptricks'], status: 'scheduled', designerEmail: 'developer@example.test', scheduledDate: day, scheduledStartMinutes: 570 };
+const staleStackId = 'old-queue-snapshot-stack';
+const freshStackId = 'b72ba3c7-9810-433f-a436-dd88d10ca65a';
+const changedStackId = 'ca59c450-e15d-4529-b1df-bd626af6d671';
+let holdActiveStackLookup = false, releaseActiveStackLookup;
+const scheduled = { ...base, id: 3, notes: manualNotes, post: { ...post('chatgptricks', 'NEXT1'), stackId: staleStackId, stackSize: 3 }, recommendedAccounts: ['chatgptricks'], status: 'scheduled', designerEmail: 'developer@example.test', scheduledDate: day, scheduledStartMinutes: 570 };
 const payload = {
   viewer: { displayName: 'Developer Current', email: 'developer@example.test', isAdmin: false, isDev: true, operatingRoles: ['pd'] },
   date: day,
@@ -176,10 +180,17 @@ const stubFetch = async (url, options = {}) => {
     for (const key of ['requests', 'planningRequests', 'assignedRequests']) payload[key] = payload[key].map(task => task.id === id ? { ...task, status: 'completed', completedAt: new Date().toISOString() } : task);
     return response({ ok: true });
   }
-  if (value.includes('/api/dashboard/stacks/')) return response({ posts: [
-    { ...scheduled.post, postKey: 'chatgptricks:NEXT1', likes: 100, postDate: '2026-09-03' },
-    { ...scheduled.post, account: 'another', shortcode: 'VERSION2', postKey: 'another:VERSION2', likes: 40, postDate: '2026-09-02' },
-  ] });
+  if (value.includes('/api/dashboard/stacks/')) {
+    if (value.endsWith('/ACTIVE1')) {
+      if (holdActiveStackLookup) await new Promise(resolve => { releaseActiveStackLookup = resolve; });
+      return response({ posts: [{ ...active.post, stackId: changedStackId, stackSize: 1 }] });
+    }
+    return response({ posts: [
+      { ...scheduled.post, postKey: 'chatgptricks:NEXT1', stackId: freshStackId, stackSize: 3, likes: 100, postDate: '2026-09-03' },
+      { ...scheduled.post, account: 'another', shortcode: 'VERSION2', postKey: 'another:VERSION2', stackId: freshStackId, stackSize: 3, likes: 40, postDate: '2026-09-02' },
+      { ...active.post, postKey: 'chatgptricks:ACTIVE1', stackId: freshStackId, stackSize: 3, likes: 20, postDate: '2026-09-01' },
+    ] });
+  }
   if (value.includes('/history')) return response({ events: [] });
   if (value.includes('/api/dashboard/me')) return response({ email: 'developer@example.test', is_dev: true });
   if (value.includes('/api/dashboard/queue/v2')) {
@@ -473,6 +484,8 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     const nextBlock = document.querySelector('.scheduler-block.state-scheduled');
     await click(nextBlock);
     checks['Sideview opens'] = Boolean(document.querySelector('.queue-request-rail'));
+    checks['Queue detail replaces an old snapshot stack ID with current membership'] = document.querySelector('.queue-request-rail .stack-identity code')?.textContent === freshStackId
+      && !document.querySelector('.queue-request-rail')?.textContent.includes(staleStackId);
     // Let the inspector's opening frame establish focus before simulating
     // a person following the floating comment icon.
     await act(async () => { await new Promise((resolve) => requestAnimationFrame(resolve)); });
@@ -510,18 +523,29 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     const stack = document.querySelector('.post-stack-modal');
     const closeStack = stack?.querySelector('[aria-label="Close stack"]');
     checks['Queue stack provides a focused close control and locks the background'] = Boolean(closeStack) && document.activeElement === closeStack && document.querySelector('#root').inert;
-    checks['Queue stack shows real Research links without fake mutation menus'] = stack?.querySelectorAll('a[href^="/index.html?r="]').length === 2 && !stack.querySelector('.post-menu');
+    checks['Queue stack ID includes every current member'] = stack?.querySelector('.stack-identity code')?.textContent === freshStackId && stack?.querySelectorAll('.post-card').length === 3;
+    checks['Queue stack shows real Research links without fake mutation menus'] = stack?.querySelectorAll('a[href^="/index.html?r="]').length === 3 && !stack.querySelector('.post-menu');
     const stackLinks = stack.querySelectorAll('a[href]');
-    await act(async () => closeStack.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true })));
+    const firstStackControl = stack.querySelector('button:not(:disabled),a[href],[tabindex="0"]');
+    firstStackControl.focus();
+    await act(async () => firstStackControl.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true })));
     checks['Queue stack traps reverse Tab'] = document.activeElement === stackLinks[stackLinks.length - 1];
     await act(async () => document.activeElement.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true })));
-    checks['Queue stack traps forward Tab'] = document.activeElement === closeStack;
+    checks['Queue stack traps forward Tab'] = document.activeElement === firstStackControl;
     let researchTarget = null;
     window.open = (url, target) => { researchTarget = { url, target }; return null; };
     await click(stack.querySelectorAll('.post-card')[1]);
     checks['Queue version selection opens the exact Research post without replacing assignment'] = researchTarget?.target === 'sentient-dashboard' && decodeRouteState(new URL(researchTarget.url, window.location.origin).searchParams.get('r')).post === 'another:VERSION2' && document.querySelector('.queue-request-rail')?.textContent.includes('chatgptricks source post');
     await act(async () => document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })));
     checks['Escape closes only the nested stack and restores its opener'] = !document.querySelector('.post-stack-modal') && Boolean(document.querySelector('.queue-request-rail')) && document.activeElement === stackButton && !document.querySelector('#root').inert;
+    holdActiveStackLookup = true;
+    await click(document.querySelector('.scheduler-block.state-in_progress'));
+    checks['Changing tasks does not reuse the previous source stack while its lookup is pending'] = Boolean(releaseActiveStackLookup)
+      && !document.querySelector('.queue-request-rail .stack-identity code');
+    holdActiveStackLookup = false;
+    await act(async () => { releaseActiveStackLookup(); await Promise.resolve(); });
+    checks['The new task receives its own current stack ID'] = document.querySelector('.queue-request-rail .stack-identity code')?.textContent === changedStackId;
+    await click(document.querySelector('.scheduler-block.state-scheduled'));
     const start = [...document.querySelectorAll('.queue-detail-actions button')].find((node) => /Start work|Empezar trabajo/.test(node.textContent));
     failNextStart = true;
     await click(start);

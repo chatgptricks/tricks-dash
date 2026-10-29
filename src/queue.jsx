@@ -18,6 +18,7 @@ import { onServerPreferences, readPreference, savePreference, syncUserPreference
 import { ACCENT_CHOICES, accentHex, readLang } from './prefs';
 import { SelectedPost, SlideDownload, coverUrlForPost } from './postDetail';
 import { PostCard } from './PostCard';
+import StackIdentity from './StackIdentity';
 import chatgptricksProfileImage from './assets/chatgptricks-profile.jpg';
 import traselvelorealProfileImage from './assets/traselveloreal-profile.jpg';
 import { QUEUE_BUFFER_MINUTES, QUEUE_DAY_END, QUEUE_DAY_START, minutesPerPPOf, planQueueDrop } from './queuePlanner';
@@ -1153,9 +1154,11 @@ function Detail({ task, tags, availableAccounts = [], canCoordinate, canDuplicat
   const [requestReason, setRequestReason] = useState('');
   const [form, setForm] = useState({});
   const [stackPosts, setStackPosts] = useState(null);
-  const [resolvedStackPosts, setResolvedStackPosts] = useState([]);
+  const [resolvedStack, setResolvedStack] = useState(null);
   const [stackOpening, setStackOpening] = useState(false);
   const visiblePost = queuePost(task);
+  const sourceKey = `${visiblePost.account || ''}:${visiblePost.shortcode || ''}`;
+  const resolvedStackPosts = resolvedStack?.sourceKey === sourceKey ? resolvedStack.posts : [];
   useEffect(() => {
     const destinations = task?.recommendedAccounts?.length ? task.recommendedAccounts : task?.post?.account ? [task.post.account] : ['instagram'];
     const saved = Object.fromEntries((task?.finalPermalinks || []).map((item) => [item.account, item.url]));
@@ -1165,15 +1168,17 @@ function Detail({ task, tags, availableAccounts = [], canCoordinate, canDuplicat
   useEffect(() => {
     const account = visiblePost.account;
     const shortcode = visiblePost.shortcode;
-    if (!account || !shortcode) { setResolvedStackPosts([]); return undefined; }
+    if (!account || !shortcode) return undefined;
     let cancelled = false;
     apiFetch(`${API_BASE}/api/dashboard/stacks/${encodeURIComponent(account)}/${encodeURIComponent(shortcode)}`)
       .then((response) => response.ok ? response.json() : null)
-      .then((result) => { if (!cancelled) setResolvedStackPosts(Array.isArray(result?.posts) ? result.posts : []); })
-      .catch(() => { if (!cancelled) setResolvedStackPosts([]); });
+      .then((result) => { if (!cancelled) setResolvedStack({ sourceKey, posts: Array.isArray(result?.posts) ? result.posts : [] }); })
+      .catch(() => { if (!cancelled) setResolvedStack(null); });
     return () => { cancelled = true; };
   }, [task?.id, visiblePost.account, visiblePost.shortcode]);
   if (!task) return null;
+  const currentMember = resolvedStackPosts.find((post) => post.account === visiblePost.account && post.shortcode === visiblePost.shortcode);
+  if (currentMember) task = { ...task, post: { ...task.post, stackId: currentMember.stackId, stackSize: currentMember.stackSize } };
   // Queue snapshots can be older than a manual stack edit. Resolve the
   // membership from Research when the detail opens, so the stack icon never
   // disappears merely because this Queue request was loaded earlier.
@@ -1208,7 +1213,7 @@ function Detail({ task, tags, availableAccounts = [], canCoordinate, canDuplicat
       try {
         const response = await apiFetch(`${API_BASE}/api/dashboard/stacks/${encodeURIComponent(post.account)}/${encodeURIComponent(post.shortcode)}`);
         const result = response.ok ? await response.json() : null;
-        if (result?.posts?.length > 1) { setResolvedStackPosts(result.posts); setStackPosts(result.posts); setStackOpening(false); return; }
+        if (result?.posts?.length > 1) { setResolvedStack({ sourceKey, posts: result.posts }); setStackPosts(result.posts); setStackOpening(false); return; }
       } catch { /* Keep a failed detail lookup out of the browser console. */ }
     }
     // Use Research's own payload as the durable fallback. This also covers a
@@ -1219,7 +1224,7 @@ function Detail({ task, tags, availableAccounts = [], canCoordinate, canDuplicat
       const allPosts = Array.isArray(result?.posts) ? result.posts : [];
       const current = allPosts.find((item) => candidates.some((post) => item.account === post.account && item.shortcode === post.shortcode));
       const members = current?.stackId ? allPosts.filter((item) => item.stackId === current.stackId) : [];
-      if (members.length > 1) { setResolvedStackPosts(members); setStackPosts(members); setStackOpening(false); return; }
+      if (members.length > 1) { setResolvedStack({ sourceKey, posts: members }); setStackPosts(members); setStackOpening(false); return; }
     } catch { /* Continue to the explicit similarity action below. */ }
     // If Queue encountered this post before Research had persisted its
     // membership, run the same user-initiated similar-post action once and
@@ -1234,7 +1239,7 @@ function Detail({ task, tags, availableAccounts = [], canCoordinate, canDuplicat
       if (match?.stackSize > 1) {
         const response = await apiFetch(`${API_BASE}/api/dashboard/stacks/${encodeURIComponent(post.account)}/${encodeURIComponent(post.shortcode)}`);
         const result = response.ok ? await response.json() : null;
-        if (result?.posts?.length > 1) { setResolvedStackPosts(result.posts); setStackPosts(result.posts); }
+        if (result?.posts?.length > 1) { setResolvedStack({ sourceKey, posts: result.posts }); setStackPosts(result.posts); }
       }
     } catch { /* The stack button remains quiet if no similar post is found. */ }
     finally { setStackOpening(false); }
@@ -1669,7 +1674,7 @@ function QueueStackModal({ posts, onClose }) {
     const previous = document.activeElement;
     const background = [...document.body.children].filter((node) => node !== modal && !node.inert);
     background.forEach((node) => { node.inert = true; });
-    modal.querySelector('button')?.focus({ preventScroll: true });
+    modal.querySelector('.obs-deck-controls button')?.focus({ preventScroll: true });
     const onKey = (event) => {
       if (event.defaultPrevented || modal.querySelector('.post-menu-panel')) return;
       if (event.key === 'Escape') { event.preventDefault(); closeRef.current(); }
@@ -1689,7 +1694,7 @@ function QueueStackModal({ posts, onClose }) {
   const researchUrl = (post) => `/index.html?r=${encodeRouteState({ post: post.postKey || `${post.account}:${post.shortcode}` })}`;
   return createPortal(<div ref={dialogRef} className="post-stack-modal" role="dialog" aria-modal="true" aria-label={t('Posts in this stack')} onClick={onClose}>
     <div className="post-stack-modal-inner" onClick={(event) => event.stopPropagation()}>
-      <div className="post-stack-heading"><span><b>{ranked.length} {t('posts')}</b><small>{t('Open a version in Research')}</small></span><div className="obs-deck-controls"><button type="button" aria-label={t('Close stack')} onClick={onClose}><X size={16} /></button></div></div>
+      <div className="post-stack-heading"><div><b>{ranked.length} {t('posts')}</b><small>{t('Open a version in Research')}</small><StackIdentity stackId={posts[0]?.stackId} /></div><div className="obs-deck-controls"><button type="button" aria-label={t('Close stack')} onClick={onClose}><X size={16} /></button></div></div>
       <div className="post-stack-grid">{ranked.map((post, index) => <div key={`${post.account}:${post.shortcode}`} className={index === 0 ? 'stack-champion' : ''}>
         {index === 0 ? <span className="stack-champion-label">👑 {t('Champion · Most likes')}</span> : null}
         <PostCard post={{ ...post, postDate: post.postDate || post.publishedAt, timestamp: Date.parse(post.postDate || post.publishedAt || '') }} priority={index < 4} selected={false} onSelect={() => window.open(researchUrl(post), 'sentient-dashboard')} readOnly animateSelection={false} hideCaption />

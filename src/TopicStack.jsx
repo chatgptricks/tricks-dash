@@ -5,6 +5,7 @@ import { Clock3, X } from 'lucide-react';
 import { StackCard, postIdentity } from './StackActions';
 import { rankTopicPosts } from './topicGroups';
 import { usePrefs } from './prefsContext';
+import StackIdentity from './StackIdentity';
 
 function postTime(post) { return Number(post?.timestamp) || Date.parse(post?.publishedAt || post?.postDate) || 0; }
 function elapsed(ms) {
@@ -18,7 +19,7 @@ function elapsed(ms) {
 // `renderLayer` draws the decorative cards peeking behind a collapsed stack.
 // Only their edges show, so callers can pass a cheap shell instead of a full
 // card (no cover download, no handlers); without it the full card is reused.
-export default function TopicStack({ posts, visiblePosts = posts, renderCard, renderLayer, total = posts.length }) {
+export default function TopicStack({ posts, visiblePosts = posts, stackId = posts[0]?.stackId, renderCard, renderLayer, total = posts.length }) {
   const { t } = usePrefs();
   const [expanded, setExpanded] = useState(false);
   const ranked = rankTopicPosts(posts, 'likes');
@@ -198,7 +199,7 @@ export default function TopicStack({ posts, visiblePosts = posts, renderCard, re
   }, [expanded]);
   if (!newest) return null;
   if (total === 1) return <StackCard posts={posts}>{renderCard(newest)}</StackCard>;
-  return <section ref={stackRef} className={`post-stack${expanded ? ' obs-stack-open' : ''}`} aria-label={`${ranked.length} posts about the same topic`}>
+  return <section ref={stackRef} className={`post-stack${expanded ? ' obs-stack-open' : ''}`} data-stack-id={stackId} aria-label={`${ranked.length} posts about the same topic`}>
     {Array.from({length:Math.min(Math.max(total-1,0),4)},(_,index) => {
       const post = ranked.filter(post => postIdentity(post) !== postIdentity(newest))[index];
       return <div className="obs-deck-layer" style={{'--layer':index+1,'--layer-angle':`${index%2 ? 1 : -1}deg`,zIndex:-(index+1)}} key={index} aria-hidden="true" inert>{renderLayer ? renderLayer(post || newest) : renderCard(post || newest, () => {})}</div>;
@@ -209,7 +210,7 @@ export default function TopicStack({ posts, visiblePosts = posts, renderCard, re
           should stay clear for the image, menu, and primary post badges. */}
       <StackCard posts={posts}>{renderCard(newest, () => setExpanded(true))}</StackCard>
       <button type="button" className="post-stack-trigger" aria-expanded={expanded} onClick={() => setExpanded(true)} aria-label={`Open ${total} posts in this group`}>+{total}</button>
-      {expanded ? createPortal(<div className="post-stack-modal" role="dialog" aria-modal="true" aria-label={t('Posts in this stack')} tabIndex={-1} ref={dialog} onClick={closeStack}><div className="post-stack-modal-inner" style={{ '--deck-visible': Math.min(ranked.length, 3) }} onClick={(event) => event.stopPropagation()}><div className="post-stack-heading"><span><b>{total} {t('versions')}</b><small>{posts.length < total ? `${posts.length} ${t('match the filters')} · ` : ''}{t('Explore this collection')}</small></span><div className="obs-deck-controls"><button type="button" aria-label={t('Close stack')} onClick={closeStack}><X size={16} /></button></div></div><div className="post-stack-grid" ref={cardsRef} tabIndex={0} aria-label={t('Stack versions')}>{ranked.map((post, index) => <div className={index === 0 ? 'stack-champion' : ''} key={postIdentity(post)} style={{ '--deck-delay': `${Math.min(index, 4) * 35}ms` }}>{index === 0 && <span className="stack-champion-label">👑 {t('Champion · Most likes')}</span>}<StackCard posts={[post]}>{cardWithTiming(post, <div onClick={(event) => {
+      {expanded ? createPortal(<div className="post-stack-modal" data-stack-id={stackId} role="dialog" aria-modal="true" aria-label={t('Posts in this stack')} tabIndex={-1} ref={dialog} onClick={closeStack}><div className="post-stack-modal-inner" style={{ '--deck-visible': Math.min(ranked.length, 3) }} onClick={(event) => event.stopPropagation()}><div className="post-stack-heading"><div><b>{total} {t('versions')}</b><small>{filtered ? `${visiblePosts.length} ${t('match the filters')} · ` : ''}{t('Explore this collection')}</small><StackIdentity stackId={stackId} /></div><div className="obs-deck-controls"><button type="button" aria-label={t('Close stack')} onClick={closeStack}><X size={16} /></button></div></div><div className="post-stack-grid" ref={cardsRef} tabIndex={0} aria-label={t('Stack versions')}>{ranked.map((post, index) => <div className={index === 0 ? 'stack-champion' : ''} key={postIdentity(post)} style={{ '--deck-delay': `${Math.min(index, 4) * 35}ms` }}>{index === 0 && <span className="stack-champion-label">👑 {t('Champion · Most likes')}</span>}<StackCard posts={[post]}>{cardWithTiming(post, <div onClick={(event) => {
         // Native PostCard selections dispatch the animated handoff themselves.
         // Keep the shared component's selection contract for other card renderers.
         if (!event.target.closest('.post-card,.m-post-card')) closeStack(event.currentTarget.closest('.post-stack-grid > div'));

@@ -700,7 +700,8 @@ function searchablePostText(post) {
 
 function matchesSearch(post, { include, exclude }) {
   if (!include.length && !exclude.length) return true;
-  const searchText = searchablePostText(post);
+  // Membership can change after a manual merge without rebuilding caption search text.
+  const searchText = `${searchablePostText(post)} ${normalizeSearchValue(post.stackId)}`;
   for (const term of include) if (!searchText.includes(term)) return false;
   for (const term of exclude) if (searchText.includes(term)) return false;
   return true;
@@ -2419,7 +2420,7 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
           <div ref={resultsScrollRef} className="results-scroll">
             {grouping && !filtered.length ? <p className="home-loading" role="status">{t("Grouping similar posts… You can keep using Research.")}</p> : filtered.length ? (
               <StackActions onSaved={applyStackResult} hideLauncher={isSidebarOpen}><div className="gallery-grid">
-                {visibleTopics.map((group, index) => <TopicStack key={group.id} posts={group.posts} visiblePosts={group.visiblePosts} total={group.total} renderLayer={(post) => <PostCardLayer post={post} />} renderCard={(post, expand, dragProps) => (
+                {visibleTopics.map((group, index) => <TopicStack key={group.id} stackId={group.id} posts={group.posts} visiblePosts={group.visiblePosts} total={group.total} renderLayer={(post) => <PostCardLayer post={post} />} renderCard={(post, expand, dragProps) => (
                   <PostCard
                     // Keyed by account+shortcode, not shortcode alone: accounts
                     // repost each other, so ~21 shortcodes exist under two

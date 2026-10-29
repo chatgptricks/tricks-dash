@@ -1,0 +1,12 @@
+.stack-identity{min-width:0;color:inherit;text-align:left}
+.stack-identity-label{display:block;font-size:11px;font-weight:650;opacity:.7;margin-bottom:4px}
+.stack-identity-value{display:flex;align-items:flex-start;gap:8px;min-width:0}
+.stack-identity-value code{min-width:0;font-size:11px;line-height:1.6;overflow-wrap:anywhere;user-select:all}
+.stack-identity-value button{display:grid;place-items:center;flex:0 0 28px;width:28px;height:28px;padding:0;border:1px solid currentColor;border-radius:7px;background:transparent;color:inherit;cursor:pointer;opacity:.8}
+.stack-identity-value button:hover{opacity:1}
+.stack-identity-value button:focus-visible{outline:2px solid var(--accent-text,var(--m-accent,#00ac80));outline-offset:3px}
+.stack-identity>small{display:block;margin-top:5px;font-size:11px;line-height:1.4}
+.post-stack-heading>div:first-child{min-width:0}
+.post-stack-heading .stack-identity{margin-top:10px}
+.post-stack-heading .stack-identity small{opacity:1}
+.obs-inspector-info>.stack-identity,.m-stack>.stack-identity,.queue-post-inspector-info>.stack-identity{padding:12px 0}

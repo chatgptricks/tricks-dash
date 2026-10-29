@@ -46,6 +46,14 @@ React entry points live in `src/`; Tracker and Insights remain standalone
 pages in `public/`. The backend is the separate Cortex project
 (`chatgptricks/cortex`), not part of this frontend repository.
 
+Research stacks expose their persisted **Stack ID** in the expanded stack and
+each member's details, with a copy button. Pasting that ID into Research search
+finds its members; opening the stack includes all members in the loaded catalogue,
+even when account, date or other filters match only some versions. The ID stays
+the same when sorting or changing filters. Integrations can use it with
+`GET /api/v1/research/stacks/{stack_id}/posts`; follow pagination to retrieve all
+members allowed by the integration's account permissions.
+
 Tracker refreshes Instagram followers when its page loads: the selected
 account on an account URL, or all active accounts on the overview. Desktop
 and mobile follow the server job through completion, show progress and
