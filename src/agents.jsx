@@ -6,7 +6,7 @@ import { firebaseAuth, startGoogleSignIn } from './firebase';
 import { PrefsProvider } from './prefsContext';
 import { ConnectionLanguageSelector, connectionRequestError, useConnectionLanguage } from './connectionI18n';
 import { oauthFetch } from './oauthApi';
-import { SENTIENT_CHATGPT_PLUGIN_URL } from './sentientChatgptConnection';
+import { SENTIENT_CHATGPT_PLUGINS_URL, SENTIENT_CHATGPT_PLUGIN_URL } from './sentientChatgptConnection';
 import './agents.css';
 
 const URL = `${API_BASE}/api/dashboard/me/agent-connections`;
@@ -114,9 +114,10 @@ function AgentConnections() {
     <p>{t('Connect ChatGPT or another agent to Sentient Dash. For websites and external applications, use')} <a href={`${import.meta.env.BASE_URL}api.html`}>{t('API connections')}</a>.</p>
     <section className="agent-chatgpt" aria-labelledby="chatgpt-connect-heading">
       <h2 id="chatgpt-connect-heading">{t('Connect ChatGPT')}</h2>
-      <p>{t('Open the SentientDash plugin and follow the connection steps with your authorized Sentient account.')}</p>
-      <a className="agent-primary agent-link" href={SENTIENT_CHATGPT_PLUGIN_URL} target="_blank" rel="noopener noreferrer">{t('Open in ChatGPT')}</a>
-      <p>{t('Connection availability depends on your ChatGPT workspace. Check the guide if you cannot connect.')} <a href={`${import.meta.env.BASE_URL}connect-chatgpt.html`}>{t('Guide for your dot')}</a></p>
+      <p>{t('Add your own SentientDash connection in ChatGPT and sign in with your authorized Sentient account.')}</p>
+      <a className="agent-primary agent-link" href={SENTIENT_CHATGPT_PLUGINS_URL} target="_blank" rel="noopener noreferrer">{t('Open ChatGPT plugins')}</a>
+      <p>{t('Follow the guide to connect. If your connection already works, keep using it.')} <a href={`${import.meta.env.BASE_URL}connect-chatgpt.html`}>{t('Guide for your dot')}</a></p>
+      <p><a href={SENTIENT_CHATGPT_PLUGIN_URL} target="_blank" rel="noopener noreferrer">{t('Optional workflow skills')}</a> · {t('Workflow skills only; account connection is separate.')}</p>
     </section>
     {error ? <p className="agent-error" role="alert">{errorText(error)}</p> : null}
     {notice ? <p className="agent-notice" role="status">{t(notice)}</p> : null}

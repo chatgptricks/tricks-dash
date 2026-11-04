@@ -6,7 +6,8 @@ import path from 'node:path';
 import { build } from 'esbuild';
 import { chromium } from 'playwright';
 
-const CHATGPT_PLUGIN_URL = 'https://chatgpt.com/plugins/Plugin_502d0e5e00e8819197bfa51ca6c7d6f4';
+const CHATGPT_WORKFLOW_PLUGIN_URL = 'https://chatgpt.com/plugins/Plugin_502d0e5e00e8819197bfa51ca6c7d6f4';
+const CHATGPT_PLUGINS_URL = 'https://chatgpt.com/plugins';
 const directory = path.resolve('work/oauth-connections');
 await mkdir(directory, { recursive: true });
 const authFixture = path.join(directory, 'firebase-auth.js');
@@ -61,7 +62,8 @@ const browser = await chromium.launch({ headless: true, executablePath: process.
 const transaction = 'fixture_' + 'x'.repeat(43);
 const ES = {
   'Authorize a connection': 'Autorizar una conexión', 'Authorize connection': 'Autorizar conexión',
-  'Start from ChatGPT': 'Comienza desde ChatGPT', 'Open in ChatGPT': 'Abrir en ChatGPT',
+  'Start from ChatGPT': 'Comienza desde ChatGPT', 'Open ChatGPT plugins': 'Abrir plugins de ChatGPT',
+  'Guide for your dot': 'Guía para tu dot',
   'Read and perform actions': 'Leer y realizar acciones', 'Cancel': 'Cancelar',
   'OAuth connections': 'Conexiones OAuth', 'Revoke': 'Revocar', 'Confirm revoke': 'Confirmar revocación',
   'OAuth connection revoked.': 'Conexión OAuth revocada.', 'Sign in with Google': 'Iniciar sesión con Google',
@@ -70,7 +72,7 @@ const ES = {
 async function fixture({ language = 'en', width = 390, signedOut = false, scopes = ['sentient:read', 'sentient:write'], callback, authorizationStatus = 200, grants = false } = {}) {
   const page = await browser.newPage({ viewport: { width, height: 900 }, timezoneId: 'America/Costa_Rica' });
   const errors = [], decisions = [], management = [], credentialWrites = [];
-  await page.context().route(CHATGPT_PLUGIN_URL, async route => {
+  await page.context().route(CHATGPT_PLUGINS_URL, async route => {
     assert.equal(route.request().headers().authorization, undefined);
     assert.equal(route.request().headers().referer, undefined);
     await route.fulfill({ contentType: 'text/html', body: '<p>SentientDash plugin fixture</p>' });
@@ -143,12 +145,13 @@ try {
   assert.equal(guideResponse.status, 200);
   assert.match(guideResponse.headers.get('content-type'), /text\/html/);
   const guide = await guideResponse.text();
-  assert.ok(guide.includes(CHATGPT_PLUGIN_URL));
+  assert.ok(guide.includes(CHATGPT_PLUGINS_URL));
   assert.doesNotMatch(guide, /<script\b/i, 'The public guide requires no JavaScript or authentication');
   const markdownResponse = await fetch(`${origin}/connect-chatgpt.md`);
   assert.equal(markdownResponse.status, 200);
   const markdown = await markdownResponse.text();
-  for (const fact of [CHATGPT_PLUGIN_URL, 'workflow skills only', 'publishing workspace',
+  for (const fact of [CHATGPT_PLUGINS_URL, CHATGPT_WORKFLOW_PLUGIN_URL, 'workflow skills only', 'publishing workspace',
+    'SentientDash for Oopart', 'Add custom MCP server', 'Create as a plugin', 'risk warning', 'explicit', 'confirmation', 'CIMD',
     'https://cortex-api-db2e.onrender.com/mcp', '/.well-known/oauth-protected-resource/mcp',
     '/.well-known/oauth-authorization-server', 'PKCE', 'S256', 'sentient:read', 'sentient:write',
     'product_guide', 'product_me', 'auth_method', 'Do not bypass policy']) {
@@ -159,8 +162,12 @@ try {
     const page = await browser.newPage({ viewport: { width, height: 900 }, javaScriptEnabled: false });
     await page.goto(`${origin}/connect-chatgpt.html`);
     await page.getByRole('heading', { level: 1, name: 'Connect a ChatGPT dot to SentientDash', exact: true }).waitFor();
-    assert.equal(await page.getByRole('heading', { name: 'Current plugin status', exact: true }).isVisible(), true);
-    assert.equal(await page.getByRole('link', { name: 'Open SentientDash in ChatGPT', exact: true }).getAttribute('href'), CHATGPT_PLUGIN_URL);
+    assert.equal(await page.getByRole('heading', { name: 'Verified OAuth connection', exact: true }).isVisible(), true);
+    assert.equal(await page.getByRole('link', { name: 'Open ChatGPT Plugins', exact: true }).getAttribute('href'), CHATGPT_PLUGINS_URL);
+    assert.equal(await page.getByRole('link', { name: 'Optional SentientDash workflow skills', exact: true }).getAttribute('href'), CHATGPT_WORKFLOW_PLUGIN_URL);
+    const workflowSection = page.getByRole('region', { name: 'Optional workflow skills plugin', exact: true });
+    assert.match(await workflowSection.innerText(), /returned 403/);
+    assert.match(await workflowSection.innerText(), /not to every custom MCP connection/);
     assert.equal(await page.getByRole('link', { name: 'Markdown version', exact: true }).getAttribute('href'), '/connect-chatgpt.md');
     assert.equal(await page.locator('script, form, input').count(), 0);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
@@ -180,7 +187,7 @@ try {
     assert.equal(await f.page.title(), `${f.t('Authorize a connection')} · Sentient Dash`);
     assert.equal(await f.page.getByText(f.t('Read and perform actions'), { exact: true }).count(), 1);
     assert.equal(f.decisions.length, 0);
-    assert.equal(await f.page.getByRole('link', { name: f.t('Open in ChatGPT'), exact: true }).count(), 0, 'An active consent request keeps its own approve/cancel flow');
+    assert.equal(await f.page.getByRole('link', { name: f.t('Open ChatGPT plugins'), exact: true }).count(), 0, 'An active consent request keeps its own approve/cancel flow');
     assert.equal(await f.page.evaluate(() => window.__oauthRedirectChecked), true);
     assert.equal(await f.page.evaluate(() => sessionStorage.getItem('sentient.oauthTransaction')), transaction);
     assert.equal(await f.page.evaluate(() => JSON.stringify({ ...localStorage, ...sessionStorage }).includes('fixture-firebase-token')), false);
@@ -238,14 +245,15 @@ try {
         const missing = await fixture({ language, signedOut });
         await missing.page.goto(`${origin}/oauth.html${suffix}`);
         await missing.page.getByRole('heading', { name: missing.t('Start from ChatGPT') }).waitFor();
-        const link = missing.page.getByRole('link', { name: missing.t('Open in ChatGPT'), exact: true });
+        const link = missing.page.getByRole('link', { name: missing.t('Open ChatGPT plugins'), exact: true });
         assert.equal(await link.isVisible(), true);
-        assert.equal(await link.getAttribute('href'), CHATGPT_PLUGIN_URL);
+        assert.equal(await link.getAttribute('href'), CHATGPT_PLUGINS_URL);
+        assert.equal(await missing.page.getByRole('link', { name: missing.t('Guide for your dot'), exact: true }).getAttribute('href'), '/connect-chatgpt.html');
         const opened = missing.page.waitForEvent('popup');
         await link.click();
         const popup = await opened;
         await popup.waitForLoadState('domcontentloaded');
-        assert.equal(popup.url(), CHATGPT_PLUGIN_URL);
+        assert.equal(popup.url(), CHATGPT_PLUGINS_URL);
         await popup.close();
         assert.equal(missing.loads(), 0); assert.equal(missing.decisions.length, 0);
         assert.deepEqual(missing.credentialWrites, [], 'The entry link does not create or approve credentials');

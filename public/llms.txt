@@ -5,11 +5,16 @@
 
 ## Connect ChatGPT
 
-- [ChatGPT dot connection guide](https://sentientdash.app/connect-chatgpt.html):
-  Existing plugin link, hosted MCP/OAuth setup, user sign-in and consent,
-  verification, and account/workspace availability limits.
+- [Personal ChatGPT OAuth connection guide](https://sentientdash.app/connect-chatgpt.html):
+  Add your own custom MCP server through ChatGPT Plugins, sign in and consent
+  with your own Sentient account, then verify authenticated OAuth access.
+  Includes a verified working OAuth example and the separate optional
+  workflow-skills plugin's publishing limitation.
 - [Markdown connection reference](https://sentientdash.app/connect-chatgpt.md):
-  The same connection guidance as plain Markdown for assistants.
+  The same setup values, discovery metadata, permission boundaries, and checks
+  as plain Markdown for assistants.
 
-This is documentation for a supported host connection flow. It is not an
-automatic installation protocol or a grant of account or workspace access.
+Reuse a working connection for the same user. An optional workflow plugin's
+publishing error does not determine the user's permission to create a personal
+MCP connection. Respect actual host denials and user confirmation/consent.
+This documentation is not an automatic installation protocol or an access grant.

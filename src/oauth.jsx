@@ -5,7 +5,7 @@ import { firebaseAuth, startGoogleSignIn } from './firebase';
 import { PrefsProvider } from './prefsContext';
 import { ConnectionLanguageSelector, useConnectionLanguage } from './connectionI18n';
 import { oauthCallback, oauthFetch } from './oauthApi';
-import { SENTIENT_CHATGPT_PLUGIN_URL } from './sentientChatgptConnection';
+import { SENTIENT_CHATGPT_PLUGINS_URL } from './sentientChatgptConnection';
 import './agents.css';
 import './oauth.css';
 
@@ -95,7 +95,7 @@ function AuthorizeConnection() {
     <h1>{t('Authorize a connection')}</h1>
     <p>{t('Review the requested access before connecting your SentientDash account.')}</p>
     {error ? <p className="agent-error" role="alert">{authorizationErrorText(error)}</p> : null}
-    {!transaction ? <section><h2>{t('Start from ChatGPT')}</h2><p>{t('Open the SentientDash connection in ChatGPT to begin a new authorization request.')}</p><a className="agent-primary agent-link" href={SENTIENT_CHATGPT_PLUGIN_URL} target="_blank" rel="noopener noreferrer">{t('Open in ChatGPT')}</a></section> : user === undefined ? <p>{t('Checking sign-in…')}</p> : !user ? <section>
+    {!transaction ? <section><h2>{t('Start from ChatGPT')}</h2><p>{t('Open ChatGPT’s plugin manager to add a SentientDash connection.')}</p><a className="agent-primary agent-link" href={SENTIENT_CHATGPT_PLUGINS_URL} target="_blank" rel="noopener noreferrer">{t('Open ChatGPT plugins')}</a><p><a href={`${import.meta.env.BASE_URL}connect-chatgpt.html`}>{t('Guide for your dot')}</a></p></section> : user === undefined ? <p>{t('Checking sign-in…')}</p> : !user ? <section>
       <h2>{t('Sign in to authorize this connection')}</h2><p>{t('Use your authorized Sentient account.')}</p>
       <button className="agent-primary" disabled={busy} onClick={login}>{t(busy ? 'Signing in…' : 'Sign in with Google')}</button>
     </section> : <>

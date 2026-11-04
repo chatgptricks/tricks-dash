@@ -6,7 +6,8 @@ import path from "node:path";
 import { build } from "esbuild";
 import { chromium } from "playwright";
 
-const CHATGPT_PLUGIN_URL = "https://chatgpt.com/plugins/Plugin_502d0e5e00e8819197bfa51ca6c7d6f4";
+const CHATGPT_WORKFLOW_PLUGIN_URL = "https://chatgpt.com/plugins/Plugin_502d0e5e00e8819197bfa51ca6c7d6f4";
+const CHATGPT_PLUGINS_URL = 'https://chatgpt.com/plugins';
 const directory = path.resolve("work/agent-connections");
 await mkdir(directory, { recursive: true });
 const authFixture = path.join(directory, 'firebase-auth.js');
@@ -80,9 +81,11 @@ try {
     let storedLanguage = language;
     const ES = {
       'Agent connections': 'Conexiones de agentes', 'No agents connected yet.': 'Todavía no hay agentes conectados.',
-      'Connect ChatGPT': 'Conectar ChatGPT', 'Open in ChatGPT': 'Abrir en ChatGPT',
+      'Connect ChatGPT': 'Conectar ChatGPT', 'Open ChatGPT plugins': 'Abrir plugins de ChatGPT',
       'Guide for your dot': 'Guía para tu dot',
-      'Connection availability depends on your ChatGPT workspace. Check the guide if you cannot connect.': 'La disponibilidad de la conexión depende de tu espacio de trabajo de ChatGPT. Consulta la guía si no puedes conectarte.',
+      'Follow the guide to connect. If your connection already works, keep using it.': 'Sigue la guía para conectarte. Si tu conexión ya funciona, sigue usándola.',
+      'Optional workflow skills': 'Habilidades de trabajo opcionales',
+      'Workflow skills only; account connection is separate.': 'Solo habilidades de trabajo; la conexión de tu cuenta es independiente.',
       'Agent name': 'Nombre del agente', 'Generate connection code': 'Generar código de conexión',
       'Your connection code': 'Tu código de conexión', 'Connection code': 'Código de conexión',
       'I saved the code': 'Ya guardé el código', 'Copy code': 'Copiar código', 'Copied.': 'Copiado.',
@@ -101,16 +104,19 @@ try {
     let saved = null,
       failRevoke = false,
       createdCodes = 0;
-    await page.context().route(CHATGPT_PLUGIN_URL, async route => {
+    await page.context().route(CHATGPT_PLUGINS_URL, async route => {
       assert.equal(route.request().headers().authorization, undefined);
       assert.equal(route.request().headers().referer, undefined);
       await route.fulfill({ contentType: "text/html", body: "<p>SentientDash plugin fixture</p>" });
     });
     const openChatgpt = async () => {
-      const link = page.getByRole("link", { name: t("Open in ChatGPT"), exact: true });
+      const link = page.getByRole("link", { name: t("Open ChatGPT plugins"), exact: true });
       assert.equal(await link.isVisible(), true);
-      assert.equal(await page.getByText(t('Connection availability depends on your ChatGPT workspace. Check the guide if you cannot connect.')).isVisible(), true);
-      assert.equal(await link.getAttribute("href"), CHATGPT_PLUGIN_URL);
+      assert.equal(await page.getByText(t('Follow the guide to connect. If your connection already works, keep using it.')).isVisible(), true);
+      const workflow = page.getByRole('link', { name: t('Optional workflow skills'), exact: true });
+      assert.equal(await workflow.getAttribute('href'), CHATGPT_WORKFLOW_PLUGIN_URL);
+      assert.equal(await page.getByText(t('Workflow skills only; account connection is separate.')).isVisible(), true);
+      assert.equal(await link.getAttribute("href"), CHATGPT_PLUGINS_URL);
       const guide = page.getByRole("link", { name: t("Guide for your dot"), exact: true });
       assert.equal(await guide.isVisible(), true);
       assert.equal(await guide.getAttribute("href"), "/connect-chatgpt.html");
@@ -118,7 +124,7 @@ try {
       await link.click();
       const popup = await opened;
       await popup.waitForLoadState("domcontentloaded");
-      assert.equal(popup.url(), CHATGPT_PLUGIN_URL);
+      assert.equal(popup.url(), CHATGPT_PLUGINS_URL);
       await popup.close();
     };
     const key = "sad_agent_" + "x".repeat(43); // Fabricated test value, never a production credential.
