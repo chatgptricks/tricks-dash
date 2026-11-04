@@ -1,0 +1,13 @@
+# SentientDash
+
+> SentientDash provides research, production queues, and account analytics for
+> authorized Sentient users.
+
+## Connect ChatGPT
+
+- [ChatGPT dot connection guide](https://sentientdash.app/connect-chatgpt.md):
+  Existing plugin link, hosted MCP/OAuth setup, user sign-in and consent,
+  verification, and account/workspace availability limits.
+
+This is documentation for a supported host connection flow. It is not an
+automatic installation protocol or a grant of account or workspace access.

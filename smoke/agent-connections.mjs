@@ -6,6 +6,7 @@ import path from "node:path";
 import { build } from "esbuild";
 import { chromium } from "playwright";
 
+const CHATGPT_PLUGIN_URL = "https://chatgpt.com/plugins/Plugin_502d0e5e00e8819197bfa51ca6c7d6f4";
 const directory = path.resolve("work/agent-connections");
 await mkdir(directory, { recursive: true });
 const authFixture = path.join(directory, 'firebase-auth.js');
@@ -79,6 +80,9 @@ try {
     let storedLanguage = language;
     const ES = {
       'Agent connections': 'Conexiones de agentes', 'No agents connected yet.': 'Todavía no hay agentes conectados.',
+      'Connect ChatGPT': 'Conectar ChatGPT', 'Open in ChatGPT': 'Abrir en ChatGPT',
+      'Guide for your dot': 'Guía para tu dot',
+      'Connection availability depends on your ChatGPT workspace. Check the guide if you cannot connect.': 'La disponibilidad de la conexión depende de tu espacio de trabajo de ChatGPT. Consulta la guía si no puedes conectarte.',
       'Agent name': 'Nombre del agente', 'Generate connection code': 'Generar código de conexión',
       'Your connection code': 'Tu código de conexión', 'Connection code': 'Código de conexión',
       'I saved the code': 'Ya guardé el código', 'Copy code': 'Copiar código', 'Copied.': 'Copiado.',
@@ -95,7 +99,28 @@ try {
     });
     page.on("pageerror", (e) => errors.push(e.message));
     let saved = null,
-      failRevoke = false;
+      failRevoke = false,
+      createdCodes = 0;
+    await page.context().route(CHATGPT_PLUGIN_URL, async route => {
+      assert.equal(route.request().headers().authorization, undefined);
+      assert.equal(route.request().headers().referer, undefined);
+      await route.fulfill({ contentType: "text/html", body: "<p>SentientDash plugin fixture</p>" });
+    });
+    const openChatgpt = async () => {
+      const link = page.getByRole("link", { name: t("Open in ChatGPT"), exact: true });
+      assert.equal(await link.isVisible(), true);
+      assert.equal(await page.getByText(t('Connection availability depends on your ChatGPT workspace. Check the guide if you cannot connect.')).isVisible(), true);
+      assert.equal(await link.getAttribute("href"), CHATGPT_PLUGIN_URL);
+      const guide = page.getByRole("link", { name: t("Guide for your dot"), exact: true });
+      assert.equal(await guide.isVisible(), true);
+      assert.equal(await guide.getAttribute("href"), "/connect-chatgpt.md");
+      const opened = page.waitForEvent("popup");
+      await link.click();
+      const popup = await opened;
+      await popup.waitForLoadState("domcontentloaded");
+      assert.equal(popup.url(), CHATGPT_PLUGIN_URL);
+      await popup.close();
+    };
     const key = "sad_agent_" + "x".repeat(43); // Fabricated test value, never a production credential.
     await page.route("https://api.test/**", async (route) => {
       const req = route.request();
@@ -116,6 +141,7 @@ try {
       }
       assert.equal(new URL(req.url()).pathname.startsWith('/api/dashboard/me/agent-connections'), true);
       if (req.method() === "POST") {
+        createdCodes += 1;
         const payload = req.postDataJSON();
         assert.equal(payload.name, "My Dots");
         saved = {
@@ -158,6 +184,11 @@ try {
     await page.getByText(t("No agents connected yet.")).waitFor();
     assert.equal(await page.evaluate(() => document.documentElement.lang), language);
     assert.equal(await page.title(), `${t('Agent connections')} · Sentient Dash`);
+    await page.getByRole('region', { name: t('Connect ChatGPT'), exact: true }).waitFor();
+    await openChatgpt();
+    assert.equal(createdCodes, 0, 'Opening ChatGPT does not issue an agent credential');
+    assert.equal(saved, null);
+    assert.equal(await page.getByLabel(t('Connection code'), { exact: true }).count(), 0);
     const otherLanguage = language === 'es' ? 'en' : 'es';
     await page.getByRole('button', { name: otherLanguage === 'es' ? 'ES' : 'EN', exact: true }).click();
     await page.waitForFunction(lang => document.documentElement.lang === lang, otherLanguage);
@@ -226,12 +257,14 @@ try {
     await page.getByRole('button', { name: t('Sign out'), exact: true }).click();
     await page.getByRole('heading', { name: t('Sign in to connect an agent'), exact: true }).waitFor();
     assert.equal(await page.getByRole('button', { name: t('Sign in with Google'), exact: true }).count(), 1);
+    await openChatgpt();
+    assert.equal(createdCodes, 1, 'The signed-out ChatGPT link leaves the one explicitly created code unchanged');
     assert.equal(await page.getByLabel(t('Connection code'), { exact: true }).count(), 0);
     assert.deepEqual(errors, []);
     await page.close();
   }
   console.log(
-    "Agent connection EN/ES desktop/mobile preference persistence, create, copy, one-time display, failed revoke and successful revoke checks passed.",
+    "Agent connection EN/ES desktop/mobile ChatGPT links without credential side effects, preference persistence, create, copy, one-time display and revocation checks passed.",
   );
 } finally {
   await browser.close();

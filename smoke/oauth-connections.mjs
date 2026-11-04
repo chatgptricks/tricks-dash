@@ -6,6 +6,7 @@ import path from 'node:path';
 import { build } from 'esbuild';
 import { chromium } from 'playwright';
 
+const CHATGPT_PLUGIN_URL = 'https://chatgpt.com/plugins/Plugin_502d0e5e00e8819197bfa51ca6c7d6f4';
 const directory = path.resolve('work/oauth-connections');
 await mkdir(directory, { recursive: true });
 const authFixture = path.join(directory, 'firebase-auth.js');
@@ -37,7 +38,13 @@ await build({
 const server = createServer(async (req, res) => {
   try {
     const pathname = new URL(req.url, 'http://localhost').pathname;
-    if (pathname === '/oauth.html' || pathname === '/agents.html') {
+    if (pathname === '/') {
+      res.setHeader('Content-Type', 'text/html');
+      res.end(await readFile('index.html'));
+    } else if (pathname === '/connect-chatgpt.md' || pathname === '/llms.txt') {
+      res.setHeader('Content-Type', pathname.endsWith('.md') ? 'text/markdown' : 'text/plain');
+      res.end(await readFile(path.join('public', pathname.slice(1))));
+    } else if (pathname === '/oauth.html' || pathname === '/agents.html') {
       const entry = pathname === '/oauth.html' ? 'oauth' : 'agents';
       res.setHeader('Content-Type', 'text/html');
       res.end(`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/${entry}.css"></head><body><div id="root"></div><script type="module" src="/${entry}.js"></script></body></html>`);
@@ -54,6 +61,7 @@ const browser = await chromium.launch({ headless: true, executablePath: process.
 const transaction = 'fixture_' + 'x'.repeat(43);
 const ES = {
   'Authorize a connection': 'Autorizar una conexión', 'Authorize connection': 'Autorizar conexión',
+  'Start from ChatGPT': 'Comienza desde ChatGPT', 'Open in ChatGPT': 'Abrir en ChatGPT',
   'Read and perform actions': 'Leer y realizar acciones', 'Cancel': 'Cancelar',
   'OAuth connections': 'Conexiones OAuth', 'Revoke': 'Revocar', 'Confirm revoke': 'Confirmar revocación',
   'OAuth connection revoked.': 'Conexión OAuth revocada.', 'Sign in with Google': 'Iniciar sesión con Google',
@@ -61,7 +69,12 @@ const ES = {
 };
 async function fixture({ language = 'en', width = 390, signedOut = false, scopes = ['sentient:read', 'sentient:write'], callback, authorizationStatus = 200, grants = false } = {}) {
   const page = await browser.newPage({ viewport: { width, height: 900 }, timezoneId: 'America/Costa_Rica' });
-  const errors = [], decisions = [], management = [];
+  const errors = [], decisions = [], management = [], credentialWrites = [];
+  await page.context().route(CHATGPT_PLUGIN_URL, async route => {
+    assert.equal(route.request().headers().authorization, undefined);
+    assert.equal(route.request().headers().referer, undefined);
+    await route.fulfill({ contentType: 'text/html', body: '<p>SentientDash plugin fixture</p>' });
+  });
   let loads = 0, grantRevoked = false, failGrantRevoke = false;
   page.on('pageerror', error => errors.push(error.message));
   await page.addInitScript(({ language, signedOut }) => {
@@ -72,6 +85,9 @@ async function fixture({ language = 'en', width = 390, signedOut = false, scopes
   await page.route('https://chatgpt.com/**', route => route.fulfill({ contentType: 'text/html', body: '<p>OAuth callback fixture</p>' }));
   await page.route('https://api.test/**', async route => {
     const request = route.request(), url = new URL(request.url());
+    if (request.method() !== 'GET' && /^\/api\/dashboard\/me\/(?:agent-connections|oauth)/.test(url.pathname)) {
+      credentialWrites.push({ method: request.method(), path: url.pathname });
+    }
     assert.equal(request.headers().authorization, 'Bearer fixture-firebase-token');
     if (url.pathname === '/api/dashboard/me/preferences') {
       await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ preferences: { language } }) });
@@ -115,10 +131,22 @@ async function fixture({ language = 'en', width = 390, signedOut = false, scopes
       id: 'legacy-code', name: 'My existing agent', access_mode: 'read', expires_at: '2099-01-01T00:00:00Z', revoked_at: null, last_used_at: null,
     }] }) });
   });
-  return { page, errors, decisions, management, t: text => language === 'es' ? ES[text] ?? text : text,
+  return { page, errors, decisions, management, credentialWrites, t: text => language === 'es' ? ES[text] ?? text : text,
     loads: () => loads, failRevoke: value => { failGrantRevoke = value; } };
 }
 try {
+  // A dot can discover the public guide without executing the dashboard SPA.
+  const homepage = await (await fetch(origin)).text();
+  const guideLink = homepage.match(/<link rel="help"[^>]+href="([^"]+)"/);
+  assert.equal(guideLink?.[1], '/connect-chatgpt.md');
+  const guideResponse = await fetch(new URL(guideLink[1], origin));
+  assert.equal(guideResponse.status, 200);
+  assert.match(guideResponse.headers.get('content-type'), /text\/markdown/);
+  const guide = await guideResponse.text();
+  assert.ok(guide.includes(CHATGPT_PLUGIN_URL));
+  const llmsResponse = await fetch(`${origin}/llms.txt`);
+  assert.equal(llmsResponse.status, 200);
+  assert.ok((await llmsResponse.text()).includes('https://sentientdash.app/connect-chatgpt.md'));
   for (const [language, width] of [['en', 1280], ['en', 390], ['es', 1280], ['es', 390]]) {
     const f = await fixture({ language, width });
     await f.page.goto(`${origin}/oauth.html?transaction=${transaction}`);
@@ -126,6 +154,7 @@ try {
     assert.equal(await f.page.title(), `${f.t('Authorize a connection')} · Sentient Dash`);
     assert.equal(await f.page.getByText(f.t('Read and perform actions'), { exact: true }).count(), 1);
     assert.equal(f.decisions.length, 0);
+    assert.equal(await f.page.getByRole('link', { name: f.t('Open in ChatGPT'), exact: true }).count(), 0, 'An active consent request keeps its own approve/cancel flow');
     assert.equal(await f.page.evaluate(() => window.__oauthRedirectChecked), true);
     assert.equal(await f.page.evaluate(() => sessionStorage.getItem('sentient.oauthTransaction')), transaction);
     assert.equal(await f.page.evaluate(() => JSON.stringify({ ...localStorage, ...sessionStorage }).includes('fixture-firebase-token')), false);
@@ -177,12 +206,29 @@ try {
   assert.deepEqual(changedAccount.errors, []);
   await changedAccount.page.close();
 
-  for (const suffix of ['', '?transaction=bad']) {
-    const missing = await fixture();
-    await missing.page.goto(`${origin}/oauth.html${suffix}`);
-    await missing.page.getByRole('heading', { name: 'Start from ChatGPT' }).waitFor();
-    assert.equal(missing.loads(), 0); assert.equal(missing.decisions.length, 0);
-    await missing.page.close();
+  for (const language of ['en', 'es']) {
+    for (const signedOut of [false, true]) {
+      for (const suffix of ['', '?transaction=bad']) {
+        const missing = await fixture({ language, signedOut });
+        await missing.page.goto(`${origin}/oauth.html${suffix}`);
+        await missing.page.getByRole('heading', { name: missing.t('Start from ChatGPT') }).waitFor();
+        const link = missing.page.getByRole('link', { name: missing.t('Open in ChatGPT'), exact: true });
+        assert.equal(await link.isVisible(), true);
+        assert.equal(await link.getAttribute('href'), CHATGPT_PLUGIN_URL);
+        const opened = missing.page.waitForEvent('popup');
+        await link.click();
+        const popup = await opened;
+        await popup.waitForLoadState('domcontentloaded');
+        assert.equal(popup.url(), CHATGPT_PLUGIN_URL);
+        await popup.close();
+        assert.equal(missing.loads(), 0); assert.equal(missing.decisions.length, 0);
+        assert.deepEqual(missing.credentialWrites, [], 'The entry link does not create or approve credentials');
+        assert.deepEqual(missing.management, []);
+        assert.equal(await missing.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+        assert.deepEqual(missing.errors, []);
+        await missing.page.close();
+      }
+    }
   }
   const expired = await fixture({ authorizationStatus: 400 });
   await expired.page.goto(`${origin}/oauth.html?transaction=${transaction}`);
@@ -245,5 +291,5 @@ try {
   const manifest = JSON.parse(await readFile('plugins/sentient-dash-chatgpt/plugin.json', 'utf8'));
   assert.equal(manifest.name, 'sentient-dash-chatgpt');
   assert.ok(manifest.extensions['com.openai'].interface.shortDescription.length <= 30);
-  console.log('OAuth consent, callbacks, scopes, account sign-in, isolated revocation, ES/EN, legacy agent coexistence and tracked OAuth package passed.');
+  console.log('OAuth ChatGPT entry links without credential side effects, consent, callbacks, scopes, account sign-in, isolated revocation, ES/EN, legacy coexistence and tracked OAuth package passed.');
 } finally { await browser.close(); server.close(); }

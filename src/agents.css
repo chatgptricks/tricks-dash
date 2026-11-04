@@ -17,6 +17,8 @@ body { margin: 0; }
 .agents-page textarea { font-family: ui-monospace, monospace; resize: vertical; }
 .agents-page button { border: 1px solid #415647; border-radius: 9px; padding: 10px 16px; background: #243229; color: #eaf1eb; cursor: pointer; font: inherit; min-height: 44px; }
 .agents-page button:disabled { opacity: .5; cursor: default; }
+.agents-page .agent-link { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; border: 1px solid #415647; border-radius: 9px; padding: 10px 16px; }
+.agents-page .agent-chatgpt { border-color: #82b85f; }
 .agents-page .agent-primary { background: #c3f78e; color: #12200d; border-color: #c3f78e; font-weight: 600; }
 .agent-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
 .agent-actions { display: flex; gap: 10px; flex-wrap: wrap; }

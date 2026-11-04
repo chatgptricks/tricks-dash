@@ -6,6 +6,7 @@ import { firebaseAuth, startGoogleSignIn } from './firebase';
 import { PrefsProvider } from './prefsContext';
 import { ConnectionLanguageSelector, connectionRequestError, useConnectionLanguage } from './connectionI18n';
 import { oauthFetch } from './oauthApi';
+import { SENTIENT_CHATGPT_PLUGIN_URL } from './sentientChatgptConnection';
 import './agents.css';
 
 const URL = `${API_BASE}/api/dashboard/me/agent-connections`;
@@ -110,7 +111,13 @@ function AgentConnections() {
   return <main className="agents-page">
     <header><a href={import.meta.env.BASE_URL}>Sentient Dash</a><nav className="connection-nav" aria-label={t('Agent navigation')}><ConnectionLanguageSelector {...{ lang, setLang, t }} />{user ? <button onClick={() => signOut(firebaseAuth)}>{t('Sign out')}</button> : null}</nav></header>
     <h1>{t('Agent connections')}</h1>
-    <p>{t('Connect your agent to Sentient Dash with its own access code. For websites and external applications, use')} <a href={`${import.meta.env.BASE_URL}api.html`}>{t('API connections')}</a>.</p>
+    <p>{t('Connect ChatGPT or another agent to Sentient Dash. For websites and external applications, use')} <a href={`${import.meta.env.BASE_URL}api.html`}>{t('API connections')}</a>.</p>
+    <section className="agent-chatgpt" aria-labelledby="chatgpt-connect-heading">
+      <h2 id="chatgpt-connect-heading">{t('Connect ChatGPT')}</h2>
+      <p>{t('Open the SentientDash plugin and follow the connection steps with your authorized Sentient account.')}</p>
+      <a className="agent-primary agent-link" href={SENTIENT_CHATGPT_PLUGIN_URL} target="_blank" rel="noopener noreferrer">{t('Open in ChatGPT')}</a>
+      <p>{t('Connection availability depends on your ChatGPT workspace. Check the guide if you cannot connect.')} <a href={`${import.meta.env.BASE_URL}connect-chatgpt.md`}>{t('Guide for your dot')}</a></p>
+    </section>
     {error ? <p className="agent-error" role="alert">{errorText(error)}</p> : null}
     {notice ? <p className="agent-notice" role="status">{t(notice)}</p> : null}
     {user === undefined ? <p>{t('Checking sign-in…')}</p> : !user ? <section>
