@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="referrer" content="no-referrer" />
+    <meta name="description" content="Connect a ChatGPT dot to SentientDash: plugin availability, authorized OAuth setup, personal consent, and verification." />
+    <link rel="alternate" type="text/markdown" href="/connect-chatgpt.md" title="Markdown connection reference" />
+    <title>Connect ChatGPT · SentientDash</title>
+    <style>
+      :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: #101511; color: #eaf1eb; }
+      * { box-sizing: border-box; }
+      body { margin: 0; }
+      .guide { max-width: 900px; margin: 0 auto; padding: 28px 24px 60px; }
+      header, nav { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+      header { justify-content: space-between; margin-bottom: 48px; }
+      a { color: #c3f78e; text-underline-offset: 3px; }
+      .brand { font-weight: 650; text-decoration: none; }
+      h1 { font-size: clamp(30px, 5vw, 44px); line-height: 1.15; letter-spacing: -.04em; }
+      h2 { font-size: 24px; margin-top: 0; }
+      h3 { font-size: 17px; margin-top: 0; }
+      p, li { color: #b2bfb4; line-height: 1.65; }
+      section { margin-top: 24px; padding: 26px; border: 1px solid #304334; border-radius: 20px; background: #17201a; }
+      ul, ol { padding-left: 24px; }
+      li + li { margin-top: 12px; }
+      code { color: #eaf1eb; font-size: .95em; overflow-wrap: anywhere; }
+      .primary { display: inline-flex; align-items: center; min-height: 44px; padding: 10px 16px; border-radius: 9px; background: #c3f78e; color: #12200d; font-weight: 650; text-decoration: none; }
+      .status { margin-top: 24px; padding: 18px; border-left: 3px solid #c3f78e; background: #101511; border-radius: 8px; }
+      .status p:last-child { margin-bottom: 0; }
+      footer { margin-top: 28px; }
+      :focus-visible { outline: 2px solid #c3f78e; outline-offset: 4px; }
+      @media (max-width: 540px) { .guide { padding: 20px 16px 40px; } header { margin-bottom: 32px; } section { padding: 20px; } nav { gap: 12px; } }
+    </style>
+  </head>
+  <body>
+    <div class="guide">
+      <header>
+        <a class="brand" href="/">SentientDash</a>
+        <nav aria-label="Guide navigation">
+          <a href="/agents.html">Agent connections</a>
+          <a href="/connect-chatgpt.md">Markdown version</a>
+        </nav>
+      </header>
+      <main>
+        <h1>Connect a ChatGPT dot to SentientDash</h1>
+        <p>This guide helps a dot complete an authorized user's connection in its host. The user signs in with their own authorized Sentient Google account and personally reviews and approves the requested access.</p>
+        <p>Reading this guide does not install a plugin, grant workspace access, or authorize a connection.</p>
+
+        <section aria-labelledby="plugin-heading">
+          <h2 id="plugin-heading">Open the existing plugin</h2>
+          <a class="primary" href="https://chatgpt.com/plugins/Plugin_502d0e5e00e8819197bfa51ca6c7d6f4" target="_blank" rel="noopener noreferrer">Open SentientDash in ChatGPT</a>
+          <aside class="status" aria-labelledby="plugin-status">
+            <h3 id="plugin-status">Current plugin status</h3>
+            <p>The current release contains workflow skills only. Adding its OAuth MCP connection is blocked by the publishing workspace's policy, which does not permit plugins with MCPs. The OAuth plugin update is pending; opening the existing plugin page alone does not establish an OAuth connection.</p>
+          </aside>
+          <p>Use this existing plugin when it is available to the user's ChatGPT account and workspace. Availability depends on the host's permissions and workspace policy; this link does not promise access for other users or workspaces. Do not create a different plugin, broaden sharing, or change workspace permissions to connect.</p>
+          <p>Use a working OAuth connection for this same user when the host already provides one; do not create a duplicate connection unnecessarily.</p>
+        </section>
+
+        <section aria-labelledby="host-heading">
+          <h2 id="host-heading">Connection details for an authorized host</h2>
+          <p>These details describe the server's OAuth support for a host and plugin configuration permitted by the user's workspace. They are documentation, not a workaround for a blocked plugin capability or unavailable plugin.</p>
+          <ul>
+            <li>MCP endpoint and OAuth resource: <code>https://cortex-api-db2e.onrender.com/mcp</code></li>
+            <li>Transport: Streamable HTTP over HTTPS.</li>
+            <li>Protected-resource discovery: <code>https://cortex-api-db2e.onrender.com/.well-known/oauth-protected-resource/mcp</code></li>
+            <li>Authorization-server discovery: <code>https://cortex-api-db2e.onrender.com/.well-known/oauth-authorization-server</code></li>
+            <li>Client registration: public Dynamic Client Registration (DCR), token endpoint authentication method <code>none</code>, authorization code with PKCE <code>S256</code>.</li>
+            <li>Base scope: <code>sentient:read</code>. Request <code>sentient:write</code> as well for requested product actions. The owner's current SentientDash roles still apply; write scope does not create an administrator role.</li>
+          </ul>
+          <p>Let the host discover the OAuth endpoints, register its exact supported ChatGPT callback, and manage state, PKCE, tokens, and refresh. No manually supplied client secret or agent connection code is needed for this OAuth flow. Do not construct an authorization URL or share a consent transaction URL as an install link. Never inspect credentials stored by another connection or account.</p>
+        </section>
+
+        <section aria-labelledby="complete-heading">
+          <h2 id="complete-heading">Complete the connection when the host permits it</h2>
+          <ol>
+            <li>Open the plugin in the user's host and use its secure OAuth connection flow. Inspect the actual host UI rather than guessing menu or field names.</li>
+            <li>The user signs in on SentientDash with their own authorized Google account, reviews the requested access, and chooses <strong>Authorize connection</strong> or <strong>Cancel</strong>. The dot must not approve consent or switch identities for them.</li>
+            <li>The browser returns to the host's registered callback. The host completes the exchange and stores credentials securely. Never request, copy, paste, log, or put tokens, authorization codes, or agent codes into chat or documents.</li>
+            <li>Call <code>product_guide</code> and <code>product_me</code> through the connected MCP using empty arguments. Confirm <code>auth_method</code> is <code>oauth</code>, and report the actual owner, access mode, and relevant permissions from successful responses. Do not mutate production to test the connection.</li>
+          </ol>
+          <p>A readable guide, an installed plugin, or an open sign-in page is not proof of a working connection. Report success only after those authenticated checks.</p>
+        </section>
+
+        <section aria-labelledby="blockers-heading">
+          <h2 id="blockers-heading">If the host cannot finish</h2>
+          <ul>
+            <li>If the plugin is unavailable to this account/workspace, or host policy blocks plugins with MCP/OAuth connections, stop at that blocker and report exactly what is unavailable. Do not bypass policy, broaden the audience, or promise that another user's dot can install it.</li>
+            <li>If the host cannot perform DCR/PKCE or asks for a secret for this public-client flow, report that mismatch. Do not substitute someone else's credentials or quietly change to the separate agent-code flow.</li>
+            <li>If a consent request expires, restart the host's connection flow. Do not reuse or share the old transaction.</li>
+            <li>A <code>401</code> lets the host try token refresh; use secure reconnection if refresh fails. A <code>403</code> is a permission restriction, not permission to change identity. A <code>503</code> is a server availability failure, not evidence that consent was lost.</li>
+          </ul>
+          <p>The user can manage or revoke their OAuth grants at <a href="/agents.html">Agent connections</a>. Revocation and connection-code management remain separate operations.</p>
+        </section>
+      </main>
+      <footer><p>This guide is also available as <a href="/connect-chatgpt.md">plain Markdown</a>.</p></footer>
+    </div>
+  </body>
+</html>
