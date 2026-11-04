@@ -43,54 +43,68 @@
       </header>
       <main>
         <h1>Connect a ChatGPT dot to SentientDash</h1>
-        <p>This guide helps a dot complete an authorized user's connection in its host. The user signs in with their own authorized Sentient Google account and personally reviews and approves the requested access.</p>
-        <p>Reading this guide does not install a plugin, grant workspace access, or authorize a connection.</p>
+        <p>Create a personal OAuth connection to SentientDash in ChatGPT's plugin manager. The user signs in with their own authorized Sentient Google account and personally reviews and approves the requested access. Reuse a working connection for this same user when available; do not create duplicates unnecessarily.</p>
+        <aside class="status" aria-labelledby="verified-oauth">
+          <h2 id="verified-oauth">Verified OAuth connection</h2>
+          <p>A separate <strong>SentientDash for Oopart</strong> connection was verified through successful <code>product_guide</code> and <code>product_me</code> calls using <code>auth_method: oauth</code> with <code>sentient:read</code> and <code>sentient:write</code>. This demonstrates a working personal OAuth route. It does not establish permissions for another recipient or provide a public installation link to that connection.</p>
+        </aside>
 
-        <section aria-labelledby="plugin-heading">
-          <h2 id="plugin-heading">Open the existing plugin</h2>
-          <a class="primary" href="https://chatgpt.com/plugins/Plugin_502d0e5e00e8819197bfa51ca6c7d6f4" target="_blank" rel="noopener noreferrer">Open SentientDash in ChatGPT</a>
-          <aside class="status" aria-labelledby="plugin-status">
-            <h3 id="plugin-status">Current plugin status</h3>
-            <p>The current release contains workflow skills only. Adding its OAuth MCP connection is blocked by the publishing workspace's policy, which does not permit plugins with MCPs. The OAuth plugin update is pending; opening the existing plugin page alone does not establish an OAuth connection.</p>
-          </aside>
-          <p>Use this existing plugin when it is available to the user's ChatGPT account and workspace. Availability depends on the host's permissions and workspace policy; this link does not promise access for other users or workspaces. Do not create a different plugin, broaden sharing, or change workspace permissions to connect.</p>
-          <p>Use a working OAuth connection for this same user when the host already provides one; do not create a duplicate connection unnecessarily.</p>
+        <section aria-labelledby="setup-heading">
+          <h2 id="setup-heading">Add your own connection in ChatGPT</h2>
+          <a class="primary" href="https://chatgpt.com/plugins" target="_blank" rel="noopener noreferrer">Open ChatGPT Plugins</a>
+          <ol>
+            <li>Open ChatGPT Plugins. Select <strong>+</strong>, then <strong>Add custom MCP server</strong>, when this action is available in the user's host. Inspect the actual UI; its labels may change.</li>
+            <li>Enter a name such as <strong>SentientDash</strong> and a description such as <strong>SentientDash research, queues, and analytics</strong>. Use these connection values:
+              <ul>
+                <li>Connection URL: <code>https://cortex-api-db2e.onrender.com/mcp</code></li>
+                <li>Transport: Streamable HTTP over HTTPS.</li>
+                <li>Authentication: OAuth with public Dynamic Client Registration (DCR).</li>
+                <li>Client registration/token endpoint authentication: <code>none</code>; the host registers its client automatically and uses authorization code with PKCE <code>S256</code>. No manually supplied client ID or secret is needed.</li>
+                <li>Scope: <code>sentient:read</code>; add <code>sentient:write</code> for requested product actions.</li>
+              </ul>
+            </li>
+            <li>Review the host's risk warning with the user. Obtain their explicit confirmation for this persistent connection before selecting <strong>Create as a plugin</strong>. Do not dismiss warnings or create the connection without that confirmation. Do not change workspace permissions.</li>
+            <li>The user signs in on SentientDash with their own authorized Google account, checks the displayed identity and requested permissions, and chooses <strong>Authorize connection</strong> or <strong>Cancel</strong>. The dot must not approve consent, switch identities, or authorize another person's account on their behalf.</li>
+            <li>Let the host receive its registered callback and complete the exchange. The host manages state, PKCE, tokens, and refresh in secure storage. Never request, copy, paste, log, or put tokens, authorization codes, or agent codes into chat or documents. Never extract another connection's credentials.</li>
+          </ol>
+          <p>These steps follow the <a href="https://developers.openai.com/plugins/deploy/connect-chatgpt">official ChatGPT connection guide</a>. An actual denial of the user's custom MCP action is a blocker; do not use these instructions to bypass it. A separate publishing error for the optional workflow plugin below is not evidence that this custom connection action is denied.</p>
         </section>
 
-        <section aria-labelledby="host-heading">
-          <h2 id="host-heading">Connection details for an authorized host</h2>
-          <p>These details describe the server's OAuth support for a host and plugin configuration permitted by the user's workspace. They are documentation, not a workaround for a blocked plugin capability or unavailable plugin.</p>
+        <section aria-labelledby="oauth-heading">
+          <h2 id="oauth-heading">OAuth discovery and permissions</h2>
           <ul>
             <li>MCP endpoint and OAuth resource: <code>https://cortex-api-db2e.onrender.com/mcp</code></li>
-            <li>Transport: Streamable HTTP over HTTPS.</li>
             <li>Protected-resource discovery: <code>https://cortex-api-db2e.onrender.com/.well-known/oauth-protected-resource/mcp</code></li>
             <li>Authorization-server discovery: <code>https://cortex-api-db2e.onrender.com/.well-known/oauth-authorization-server</code></li>
-            <li>Client registration: public Dynamic Client Registration (DCR), token endpoint authentication method <code>none</code>, authorization code with PKCE <code>S256</code>.</li>
-            <li>Base scope: <code>sentient:read</code>. Request <code>sentient:write</code> as well for requested product actions. The owner's current SentientDash roles still apply; write scope does not create an administrator role.</li>
+            <li>Public DCR client, token endpoint authentication <code>none</code>, PKCE <code>S256</code>.</li>
+            <li>Base scope: <code>sentient:read</code>. Optional action scope: <code>sentient:write</code>.</li>
           </ul>
-          <p>Let the host discover the OAuth endpoints, register its exact supported ChatGPT callback, and manage state, PKCE, tokens, and refresh. No manually supplied client secret or agent connection code is needed for this OAuth flow. Do not construct an authorization URL or share a consent transaction URL as an install link. Never inspect credentials stored by another connection or account.</p>
+          <p>Let the host discover endpoints and register its exact supported ChatGPT callback. The server uses public DCR and does not declare CIMD. If the host requires CIMD or a client secret instead, stop at that authentication mismatch; do not invent a secret, client metadata, or unsupported configuration.</p>
+          <p>The owner's current SentientDash roles apply to every call. Write scope does not create an administrator role; action tools also require <code>confirm: true</code>.</p>
         </section>
 
-        <section aria-labelledby="complete-heading">
-          <h2 id="complete-heading">Complete the connection when the host permits it</h2>
-          <ol>
-            <li>Open the plugin in the user's host and use its secure OAuth connection flow. Inspect the actual host UI rather than guessing menu or field names.</li>
-            <li>The user signs in on SentientDash with their own authorized Google account, reviews the requested access, and chooses <strong>Authorize connection</strong> or <strong>Cancel</strong>. The dot must not approve consent or switch identities for them.</li>
-            <li>The browser returns to the host's registered callback. The host completes the exchange and stores credentials securely. Never request, copy, paste, log, or put tokens, authorization codes, or agent codes into chat or documents.</li>
-            <li>Call <code>product_guide</code> and <code>product_me</code> through the connected MCP using empty arguments. Confirm <code>auth_method</code> is <code>oauth</code>, and report the actual owner, access mode, and relevant permissions from successful responses. Do not mutate production to test the connection.</li>
-          </ol>
-          <p>A readable guide, an installed plugin, or an open sign-in page is not proof of a working connection. Report success only after those authenticated checks.</p>
+        <section aria-labelledby="verify-heading">
+          <h2 id="verify-heading">Verify the connection</h2>
+          <p>Call <code>product_guide</code> and <code>product_me</code> through the connected MCP using empty arguments. Confirm <code>auth_method</code> is <code>oauth</code>, verify the actual owner, and report the returned access mode, scopes, and relevant permissions. A separate agent-code connection is not proof that this OAuth connection is working.</p>
+          <p>Do not mutate production to test a connection. An open guide, an installed plugin, or a visible sign-in page is not proof of authenticated access.</p>
+        </section>
+
+        <section aria-labelledby="workflow-heading">
+          <h2 id="workflow-heading">Optional workflow skills plugin</h2>
+          <a href="https://chatgpt.com/plugins/Plugin_502d0e5e00e8819197bfa51ca6c7d6f4" target="_blank" rel="noopener noreferrer">Optional SentientDash workflow skills</a>
+          <p>This existing plugin currently contains workflow skills only. Updating it to include an MCP connection returned <code>403</code> from the publishing workspace's policy: <strong>You do not have permission to use plugins with MCPs. Contact your workspace admin for access</strong>. That error applies to this publishing update, not to every custom MCP connection. It does not invalidate the separately verified OAuth connection above.</p>
+          <p>Do not retry the denied publishing update or broaden this plugin's audience. Access to its skills depends on the recipient's permissions; it is optional and does not connect their SentientDash account.</p>
         </section>
 
         <section aria-labelledby="blockers-heading">
-          <h2 id="blockers-heading">If the host cannot finish</h2>
+          <h2 id="blockers-heading">If setup cannot finish</h2>
           <ul>
-            <li>If the plugin is unavailable to this account/workspace, or host policy blocks plugins with MCP/OAuth connections, stop at that blocker and report exactly what is unavailable. Do not bypass policy, broaden the audience, or promise that another user's dot can install it.</li>
-            <li>If the host cannot perform DCR/PKCE or asks for a secret for this public-client flow, report that mismatch. Do not substitute someone else's credentials or quietly change to the separate agent-code flow.</li>
-            <li>If a consent request expires, restart the host's connection flow. Do not reuse or share the old transaction.</li>
-            <li>A <code>401</code> lets the host try token refresh; use secure reconnection if refresh fails. A <code>403</code> is a permission restriction, not permission to change identity. A <code>503</code> is a server availability failure, not evidence that consent was lost.</li>
+            <li>If the user's actual host denies custom MCP creation or blocks OAuth, stop there and report that exact denial. Do not bypass policy, change permissions, share someone else's connection, or quietly substitute an agent-code flow.</li>
+            <li>If the optional workflow skills are unavailable, report that separately; their absence does not determine whether the host permits a personal MCP.</li>
+            <li>If a consent request expires, restart the host's flow. Do not reuse or share a consent transaction URL or manually construct an authorization URL.</li>
+            <li>A <code>401</code> lets the host try refresh; use secure reconnection if refresh fails. A <code>403</code> is a permission restriction, not permission to change identity. A <code>503</code> is a server availability failure, not evidence that consent was lost.</li>
           </ul>
-          <p>The user can manage or revoke their OAuth grants at <a href="/agents.html">Agent connections</a>. Revocation and connection-code management remain separate operations.</p>
+          <p>Manage or revoke personal OAuth grants at <a href="/agents.html">Agent connections</a>. OAuth grants and legacy connection codes remain separate operations. Reading this documentation does not install a connection, grant workspace access, or approve consent.</p>
         </section>
       </main>
       <footer><p>This guide is also available as <a href="/connect-chatgpt.md">plain Markdown</a>.</p></footer>
