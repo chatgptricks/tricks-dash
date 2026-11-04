@@ -116,7 +116,7 @@ function AgentConnections() {
       <h2 id="chatgpt-connect-heading">{t('Connect ChatGPT')}</h2>
       <p>{t('Open the SentientDash plugin and follow the connection steps with your authorized Sentient account.')}</p>
       <a className="agent-primary agent-link" href={SENTIENT_CHATGPT_PLUGIN_URL} target="_blank" rel="noopener noreferrer">{t('Open in ChatGPT')}</a>
-      <p>{t('Connection availability depends on your ChatGPT workspace. Check the guide if you cannot connect.')} <a href={`${import.meta.env.BASE_URL}connect-chatgpt.md`}>{t('Guide for your dot')}</a></p>
+      <p>{t('Connection availability depends on your ChatGPT workspace. Check the guide if you cannot connect.')} <a href={`${import.meta.env.BASE_URL}connect-chatgpt.html`}>{t('Guide for your dot')}</a></p>
     </section>
     {error ? <p className="agent-error" role="alert">{errorText(error)}</p> : null}
     {notice ? <p className="agent-notice" role="status">{t(notice)}</p> : null}

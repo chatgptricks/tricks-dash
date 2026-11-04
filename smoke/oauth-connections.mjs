@@ -41,8 +41,8 @@ const server = createServer(async (req, res) => {
     if (pathname === '/') {
       res.setHeader('Content-Type', 'text/html');
       res.end(await readFile('index.html'));
-    } else if (pathname === '/connect-chatgpt.md' || pathname === '/llms.txt') {
-      res.setHeader('Content-Type', pathname.endsWith('.md') ? 'text/markdown' : 'text/plain');
+    } else if (['/connect-chatgpt.html', '/connect-chatgpt.md', '/llms.txt'].includes(pathname)) {
+      res.setHeader('Content-Type', pathname.endsWith('.html') ? 'text/html' : pathname.endsWith('.md') ? 'text/markdown' : 'text/plain');
       res.end(await readFile(path.join('public', pathname.slice(1))));
     } else if (pathname === '/oauth.html' || pathname === '/agents.html') {
       const entry = pathname === '/oauth.html' ? 'oauth' : 'agents';
@@ -138,15 +138,41 @@ try {
   // A dot can discover the public guide without executing the dashboard SPA.
   const homepage = await (await fetch(origin)).text();
   const guideLink = homepage.match(/<link rel="help"[^>]+href="([^"]+)"/);
-  assert.equal(guideLink?.[1], '/connect-chatgpt.md');
+  assert.equal(guideLink?.[1], '/connect-chatgpt.html');
   const guideResponse = await fetch(new URL(guideLink[1], origin));
   assert.equal(guideResponse.status, 200);
-  assert.match(guideResponse.headers.get('content-type'), /text\/markdown/);
+  assert.match(guideResponse.headers.get('content-type'), /text\/html/);
   const guide = await guideResponse.text();
   assert.ok(guide.includes(CHATGPT_PLUGIN_URL));
+  assert.doesNotMatch(guide, /<script\b/i, 'The public guide requires no JavaScript or authentication');
+  const markdownResponse = await fetch(`${origin}/connect-chatgpt.md`);
+  assert.equal(markdownResponse.status, 200);
+  const markdown = await markdownResponse.text();
+  for (const fact of [CHATGPT_PLUGIN_URL, 'workflow skills only', 'publishing workspace',
+    'https://cortex-api-db2e.onrender.com/mcp', '/.well-known/oauth-protected-resource/mcp',
+    '/.well-known/oauth-authorization-server', 'PKCE', 'S256', 'sentient:read', 'sentient:write',
+    'product_guide', 'product_me', 'auth_method', 'Do not bypass policy']) {
+    assert.ok(guide.includes(fact), `HTML guide retains ${fact}`);
+    assert.ok(markdown.includes(fact), `Markdown reference retains ${fact}`);
+  }
+  for (const width of [1280, 390]) {
+    const page = await browser.newPage({ viewport: { width, height: 900 }, javaScriptEnabled: false });
+    await page.goto(`${origin}/connect-chatgpt.html`);
+    await page.getByRole('heading', { level: 1, name: 'Connect a ChatGPT dot to SentientDash', exact: true }).waitFor();
+    assert.equal(await page.getByRole('heading', { name: 'Current plugin status', exact: true }).isVisible(), true);
+    assert.equal(await page.getByRole('link', { name: 'Open SentientDash in ChatGPT', exact: true }).getAttribute('href'), CHATGPT_PLUGIN_URL);
+    assert.equal(await page.getByRole('link', { name: 'Markdown version', exact: true }).getAttribute('href'), '/connect-chatgpt.md');
+    assert.equal(await page.locator('script, form, input').count(), 0);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    await page.screenshot({ path: path.join(directory, `guide-${width}.png`), fullPage: true });
+    await page.close();
+  }
   const llmsResponse = await fetch(`${origin}/llms.txt`);
   assert.equal(llmsResponse.status, 200);
-  assert.ok((await llmsResponse.text()).includes('https://sentientdash.app/connect-chatgpt.md'));
+  const llms = await llmsResponse.text();
+  assert.ok(llms.includes('https://sentientdash.app/connect-chatgpt.html'));
+  assert.ok(llms.includes('https://sentientdash.app/connect-chatgpt.md'));
+  assert.ok(llms.indexOf('connect-chatgpt.html') < llms.indexOf('connect-chatgpt.md'));
   for (const [language, width] of [['en', 1280], ['en', 390], ['es', 1280], ['es', 390]]) {
     const f = await fixture({ language, width });
     await f.page.goto(`${origin}/oauth.html?transaction=${transaction}`);

@@ -113,7 +113,7 @@ try {
       assert.equal(await link.getAttribute("href"), CHATGPT_PLUGIN_URL);
       const guide = page.getByRole("link", { name: t("Guide for your dot"), exact: true });
       assert.equal(await guide.isVisible(), true);
-      assert.equal(await guide.getAttribute("href"), "/connect-chatgpt.md");
+      assert.equal(await guide.getAttribute("href"), "/connect-chatgpt.html");
       const opened = page.waitForEvent("popup");
       await link.click();
       const popup = await opened;
