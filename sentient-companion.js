@@ -9,6 +9,7 @@
   const version = scriptUrl.pathname.match(/sentient-companion-([a-f0-9]+)\.js$/)?.[1] || scriptUrl.searchParams.get('v') || '20261106.1';
   frame.src = '/companion.html?v=' + encodeURIComponent(version);
   frame.setAttribute('aria-label', 'Sentient companion');
+  frame.setAttribute('allow', 'microphone; autoplay');
   frame.style.cssText = 'position:fixed;left:12px;top:12px;width:1px;height:1px;border:0;background:transparent;z-index:2147483647;color-scheme:dark;visibility:hidden;pointer-events:none;';
   frame.tabIndex = -1;
   const backdrop = document.createElement('div');
@@ -144,7 +145,7 @@
     }
     location.assign(target.href);
   }
-  function showResearch(filters) {
+  function showResearch(filters, voice) {
     const fields = ['query', 'min_likes', 'min_comments', 'accounts', 'from_date', 'to_date', 'sort', 'post_type', 'promos_only', 'collabs_only'];
     if (!filters || typeof filters !== 'object' || Object.keys(filters).some(key => !fields.includes(key))) return;
     if (!['All posts', 'Carousel', 'Video', 'Image'].includes(filters.post_type) || !['newest', 'oldest', 'likes-desc', 'comments-desc', 'hot-rate'].includes(filters.sort)) return;
@@ -166,7 +167,23 @@
       const event = new CustomEvent('sentient:research-filters', { detail: filters, cancelable: true });
       if (!window.dispatchEvent(event)) return;
     }
-    location.assign('/index.html?' + params.toString());
+    const destination = '/index.html?' + params.toString();
+    // Only a full automatic navigation needs a one-shot spoken continuation.
+    // This is tab-local and owner-scoped; no token or audio crosses the bridge.
+    if (voice && typeof voice.owner === 'string' && voice.owner.length > 0 && voice.owner.length <= 200
+      && typeof voice.id === 'string' && voice.id.length > 0 && voice.id.length <= 200
+      && typeof voice.text === 'string' && voice.text.trim() && voice.text.length <= 12000
+      && typeof voice.question === 'string' && voice.question.length <= 4000
+      && ['en', 'es'].includes(voice.language) && ['auto', 'filter', 'research', 'next'].includes(voice.mode)) {
+      try {
+        sessionStorage.setItem('sentient.pet.pendingVoice.' + voice.owner, JSON.stringify({
+          version: 1, owner: voice.owner, id: voice.id, text: voice.text, question: voice.question,
+          language: voice.language, mode: voice.mode, expectedDest: new URL(destination, location.origin).href,
+          expiresAt: Date.now() + 90_000,
+        }));
+      } catch { /* Text and result history still survive without voice storage. */ }
+    }
+    location.assign(destination);
   }
   window.addEventListener('message', event => {
     if (event.origin !== location.origin || event.source !== frame.contentWindow || event.data?.source !== 'sentient-companion') return;
@@ -183,7 +200,7 @@
     }
     if (data.type === 'ready') { if (positions.includes(data.dock)) dock = data.dock; resize(); preferences(); }
     if (data.type === 'navigate') navigate(data.url);
-    if (data.type === 'research_filters') showResearch(data.filters);
+    if (data.type === 'research_filters') showResearch(data.filters, data.voiceHandoff);
     if (data.type === 'dock' && positions.includes(data.dock)) { dock = data.dock; drag = null; dismissMenu(); resize(); send({ type: 'docked', dock }); }
     if (data.type === 'drag-start' && geometry && !['hidden', 'launch'].includes(state)) { dismissMenu(); drag = { ...geometry }; }
     if (data.type === 'drag-cancel' && drag) { drag = null; resize(); }
