@@ -25,3 +25,22 @@
 
 /* State markers stay prominent above the 3D body and floating eyes. */
 .pet-character{isolation:isolate}.pet-character canvas{z-index:0}.pet-fallback{z-index:1}.face-anchor{z-index:2}.pet-accents{z-index:3;stroke:none;overflow:visible;filter:drop-shadow(0 1px 0 #ffffff80) drop-shadow(0 2px 2px #30374450)}
+
+/* Post results share the same pills in the transcript and beneath the bot. */
+.pet-results{width:100%;min-width:0;color:var(--text);border:1px solid var(--line);border-radius:13px;background:var(--surface);padding:7px 9px}
+.pet-results-header{display:flex;align-items:center;justify-content:space-between;min-height:18px;gap:8px;margin-bottom:4px}
+.pet-results-count{color:var(--muted);font-size:10px;font-weight:500;letter-spacing:.02em}
+.pet-results-dismiss{display:grid;place-items:center;width:20px;height:18px;padding:0;border:0;border-radius:5px;background:transparent;color:var(--muted);line-height:1}
+.pet-results-dismiss:hover{background:var(--raised);color:var(--text)}
+.pet-results-dismiss svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:1.8}
+.pet-results-links{display:flex;align-items:center;gap:6px;overflow-x:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:var(--line) transparent;padding:1px 1px 5px}
+.pet-result-pill{display:inline-flex;align-items:center;gap:6px;flex-shrink:0;max-width:176px;height:29px;padding:0 9px 0 5px;border:1px solid var(--line);border-radius:999px;background:var(--raised);color:var(--text);text-decoration:none;transition:background .15s,border-color .15s;font-size:11px;line-height:1.2}
+.pet-result-pill:hover{border-color:var(--accent)}
+.pet-result-pill[aria-current="page"]{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,var(--surface))}
+.pet-result-number{display:grid;place-items:center;flex-shrink:0;width:19px;height:19px;border-radius:50%;background:var(--surface);color:var(--muted);font-size:10px;font-variant-numeric:tabular-nums}
+.pet-result-pill[aria-current="page"] .pet-result-number{background:var(--accent);color:var(--accent-ink)}
+.pet-result-account{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}
+.chat-message .pet-results{margin-top:7px}
+.pet-results-floating{position:absolute;bottom:0;left:0;width:360px;max-width:100%;height:72px;z-index:3}
+.pet-results-floating .pet-results{height:100%;box-shadow:0 5px 18px #0002}
+.pet-results-header{font-size:10px;color:var(--muted)}.pet-results-links{padding-bottom:4px}

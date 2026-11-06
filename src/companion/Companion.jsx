@@ -2,6 +2,10 @@ import { validResearchFilters } from '../researchFilterOptions';
 import { useEffect, useRef, useState } from 'react';
 import { Character } from './Character';
 import { loadConversation, saveConversation, listConversations, newConversation, deleteConversation } from './history';
+import { LaunchSplash } from './LaunchSplash';
+import { isLaunchSeen, markLaunchSeen, launchStorageKey } from './launch';
+import { ResultPills } from './ResultPills';
+import { extractPostResults, stripPostResultLinks, loadResults, saveResults, clearResults } from './results';
 
 const COPY = {
   es: { open: 'Hablar con Sentient', close: 'Minimizar chat', title: 'Sentient', subtitle: 'Tu dashboard, en conversación', greet: '¿Qué querés saber?', intro: 'Puedo consultar tus datos de Cortex y ayudarte a entender el dashboard.', placeholder: 'Preguntame sobre el dashboard…', send: 'Enviar pregunta', stop: 'Detener respuesta', thinking: 'Consultando Cortex…', hide: 'Cerrar asistente', show: 'Mostrar mascota', newChat: 'Nueva conversación', sources: 'Datos consultados', error: 'No pude completar la consulta. Intentá de nuevo.', timeout: 'La consulta tardó demasiado. Probá una pregunta más específica.', unsupported: 'Esos filtros no están disponibles en esta página.', unavailable: 'El chat todavía no está disponible. Intentá más tarde.', note: 'Las respuestas pueden contener errores. Revisá las fuentes.', prompts: [{ label: 'Carrusel con más likes · 24 h', question: '¿Cuál es el carrusel con más likes de las últimas 24 horas?' }, { label: 'Reel con más likes · 24 h', question: '¿Cuál es el reel con más likes de las últimas 24 horas?' }, { label: 'Top 3 reels históricos de una cuenta…', draft: '¿Cuáles son los 3 reels con más likes de toda la historia de @' }], partial: 'Muestra parcial', stopped: 'Consulta detenida.' },
@@ -11,6 +15,8 @@ const postHost = data => { if (parent !== window) parent.postMessage({ source: '
 Object.assign(COPY.es, { menu: 'Opciones de Sentient', history: 'Historial de chats', historyNote: 'Guardado en este navegador · Últimas 30 conversaciones', emptyHistory: 'Todavía no hay conversaciones guardadas.', back: 'Volver al chat', resume: 'Abrir conversación', delete: 'Eliminar conversación', confirmDelete: '¿Eliminar esta conversación?', cancel: 'Cancelar', position: 'Posición', current: 'Actual', dock: ['Arriba izquierda', 'Arriba derecha', 'Centro izquierda', 'Centro derecha', 'Abajo izquierda', 'Abajo derecha'], limited: 'Hay otra consulta en curso o alcanzaste el límite temporal. Intentá de nuevo en unos segundos.' });
 Object.assign(COPY.en, { menu: 'Sentient options', history: 'Chat history', historyNote: 'Saved in this browser · Last 30 conversations', emptyHistory: 'No saved conversations yet.', back: 'Back to chat', resume: 'Open conversation', delete: 'Delete conversation', confirmDelete: 'Delete this conversation?', cancel: 'Cancel', position: 'Position', current: 'Current', dock: ['Top left', 'Top right', 'Middle left', 'Middle right', 'Bottom left', 'Bottom right'], limited: 'Another query is running or the temporary limit was reached. Try again in a few seconds.' });
 const DOCKS = ['top-left', 'top-right', 'middle-left', 'middle-right', 'bottom-left', 'bottom-right'];
+COPY.es.aboutBot = 'Conocé a Sentient Bot';
+COPY.en.aboutBot = 'Meet Sentient Bot';
 function safeSource(url) {
   try { const target = new URL(url); return target.origin === 'https://sentientdash.app' && !target.username && !target.password ? target.href : null; } catch { return null; }
 }
@@ -35,7 +41,10 @@ function Icon({ kind }) {
 }
 
 export function Companion({ session, request, apiBase, Avatar = Character }) {
-  const [context, setContext] = useState({ page: '/', language: 'es', theme: 'dark' });
+  const [context, setContext] = useState({ page: '/', pageUrl: '', language: 'es', theme: 'dark' });
+  const [contextReady, setContextReady] = useState(parent === window);
+  const [launchVisible, setLaunchVisible] = useState(() => Boolean(session?.uid && session.configured && !isLaunchSeen(session.uid)));
+  const [activeResults, setActiveResults] = useState(() => loadResults(session?.uid));
   const [open, setOpen] = useState(() => { try { return sessionStorage.getItem('sentient.pet.open.' + session?.uid) === 'true' && localStorage.getItem('sentient.pet.enabled.' + session?.uid) !== 'false'; } catch { return false; } });
   const [geometry, setGeometry] = useState(null);
   const [enabled, setEnabled] = useState(() => { try { return localStorage.getItem('sentient.pet.enabled.' + session?.uid) !== 'false'; } catch { return true; } });
@@ -47,8 +56,18 @@ export function Companion({ session, request, apiBase, Avatar = Character }) {
   const gesture = useRef(null), suppressClick = useRef(false);
   const input = useRef(null), list = useRef(null), controller = useRef(null), sequence = useRef(0), opened = useRef(open), settle = useRef(null), menuElement = useRef(null), launcher = useRef(null);
   const copy = COPY[context.language];
-  useEffect(() => { opened.current = open; try { if (session?.uid) sessionStorage.setItem('sentient.pet.open.' + session.uid, String(open)); } catch { /* optional persistence */ } postHost({ type: 'layout', state: !session ? 'hidden' : open ? 'open' : enabled ? 'closed' : 'compact', menu: { open: menu, width: 244, height: busy ? 380 : 344 } }); if (open) setUnread(0); }, [open, enabled, session, menu, busy]);
-  useEffect(() => { if (open && view === 'chat' && !menu) input.current?.focus(); }, [open, view, menu]);
+  useEffect(() => {
+    opened.current = open;
+    try { if (session?.uid) sessionStorage.setItem('sentient.pet.open.' + session.uid, String(open)); } catch { /* optional persistence */ }
+    postHost({ type: 'layout', state: !session || (launchVisible && !contextReady) ? 'hidden' : launchVisible ? 'launch' : open ? 'open' : enabled ? 'closed' : 'compact', menu: { open: menu && !launchVisible, width: 244, height: busy ? 416 : 380 }, results: { visible: !launchVisible && !open && enabled && !menu && activeResults.length > 0, count: activeResults.length } });
+    if (open) setUnread(0);
+  }, [open, enabled, session, menu, busy, launchVisible, contextReady, activeResults.length]);
+  useEffect(() => { if (open && view === 'chat' && !menu && !launchVisible) input.current?.focus(); }, [open, view, menu, launchVisible]);
+  useEffect(() => {
+    const seenElsewhere = event => { if (event.key === launchStorageKey(session?.uid) && isLaunchSeen(session?.uid)) setLaunchVisible(false); };
+    window.addEventListener('storage', seenElsewhere);
+    return () => window.removeEventListener('storage', seenElsewhere);
+  }, [session?.uid]);
   useEffect(() => {
     if (!menu) return;
     menuElement.current?.querySelector('button:not(:disabled)')?.focus();
@@ -79,7 +98,8 @@ export function Companion({ session, request, apiBase, Avatar = Character }) {
       }
       if (typeof next.font === 'string' && next.font.length < 180 && window.CSS?.supports('font-family', next.font)) document.documentElement.style.fontFamily = next.font;
       if (typeof next.radius === 'string' && window.CSS?.supports('border-radius', next.radius)) document.documentElement.style.setProperty('--chat-radius', next.radius);
-      setContext({ page: typeof next.page === 'string' ? next.page.slice(0, 100) : '/', language: next.language === 'en' ? 'en' : 'es', theme: next.theme === 'light' ? 'light' : 'dark' });
+      setContext({ page: typeof next.page === 'string' ? next.page.slice(0, 100) : '/', pageUrl: typeof next.pageUrl === 'string' ? next.pageUrl.slice(0, 8000) : '', language: next.language === 'en' ? 'en' : 'es', theme: next.theme === 'light' ? 'light' : 'dark' });
+      setContextReady(true);
     };
     window.addEventListener('message', receive);
     return () => { window.removeEventListener('message', receive); sequence.current++; controller.current?.abort(); clearTimeout(settle.current); };
@@ -96,10 +116,11 @@ export function Companion({ session, request, apiBase, Avatar = Character }) {
   function minimize() {
     setMenu(false); setOpen(false); opened.current = false;
     try { sessionStorage.setItem('sentient.pet.open.' + session?.uid, 'false'); } catch { /* persistence optional */ }
-    postHost({ type: 'layout', state: 'closed', menu: { open: false } });
+    postHost({ type: 'layout', state: enabled ? 'closed' : 'compact', menu: { open: false }, results: { visible: enabled && activeResults.length > 0, count: activeResults.length } });
   }
-  function navigate(event) {
+  function navigate(event, resultSet) {
     if (event.type === 'auxclick' && event.button !== 1) return;
+    if (Array.isArray(resultSet) && resultSet.length) { saveResults(session.uid, resultSet); setActiveResults(resultSet); }
     const sameTab = event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
     const savedMessages = sameTab ? cancelledMessages() : messages;
     if (sameTab && busy) { stopPending(); setMessages(savedMessages); }
@@ -113,6 +134,9 @@ export function Companion({ session, request, apiBase, Avatar = Character }) {
     }
   }
   function enable() { setEnabled(true); try { localStorage.setItem('sentient.pet.enabled.' + session.uid, 'true'); } catch { /* preference optional */ } }
+  function dismissResults() { clearResults(session.uid); setActiveResults([]); }
+  function dismissLaunch() { markLaunchSeen(session.uid); setLaunchVisible(false); }
+  function startFromLaunch() { dismissLaunch(); enable(); setMenu(false); setView('chat'); setOpen(true); setReaction('attentive'); }
   function togglePet() { minimize(); setEnabled(false); try { localStorage.setItem('sentient.pet.enabled.' + session.uid, 'false'); } catch { /* preference optional */ } }
   function launch() {
     if (suppressClick.current) { suppressClick.current = false; return; }
@@ -148,6 +172,7 @@ export function Companion({ session, request, apiBase, Avatar = Character }) {
   function cancel() { stopPending(); setMessages(cancelledMessages()); setDraft(messages.at(-1)?.role === 'user' ? messages.at(-1).content : ''); setError(copy.stopped); setMenu(false); }
   function clear() {
     saveConversation(session.uid, { id: conversation.id, messages: cancelledMessages() });
+    dismissResults();
     stopPending(); const next = newConversation(session.uid); setConversation(next); setMessages([]); setDraft(''); setError(''); setView('chat'); setMenu(false); enable(); setOpen(true);
   }
   function showHistory() { setHistory(listConversations(session.uid)); setDeleting(null); setView('history'); setMenu(false); enable(); setOpen(true); }
@@ -190,6 +215,7 @@ export function Companion({ session, request, apiBase, Avatar = Character }) {
       const assistantMessage = { id: crypto.randomUUID(), role: 'assistant', content: result.answer, sources: Array.isArray(result.sources) ? result.sources : [] };
       setMessages(items => [...items, assistantMessage]);
       if (action) {
+        dismissResults();
         minimize(); setUnread(0);
         // Persist before navigation so both the request and answer survive it.
         saveConversation(session.uid, { id: conversation.id, messages: [...messages, { id: userId, role: 'user', content: message }, assistantMessage] });
@@ -204,6 +230,7 @@ export function Companion({ session, request, apiBase, Avatar = Character }) {
     } finally { clearTimeout(timer); if (current === sequence.current) { setBusy(false); controller.current = null; } }
   }
   if (!session) return null;
+  if (launchVisible) return contextReady ? <LaunchSplash locale={context.language} onStart={startFromLaunch} onDismiss={dismissLaunch} Avatar={Avatar}/> : null;
   return <div className={`companion ${open ? 'is-open' : ''} ${enabled ? '' : 'is-compact'}`} onKeyDown={event => { if (event.key === 'Escape' && open && !menu) { event.stopPropagation(); minimize(); launcher.current?.focus(); } }} onPointerDown={event => { if (event.target === event.currentTarget) { if (open) minimize(); else setMenu(false); } }}>
     {open ? <section className="companion-chat" style={boxStyle(geometry?.panel)} role="dialog" aria-modal="false" aria-label={view === 'history' ? copy.history : copy.open} onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); minimize(); launcher.current?.focus(); } }}>
       <header className="chat-header"><div className="chat-identity"><span className="chat-status-dot"/><div><strong>{view === 'history' ? copy.history : copy.title}</strong><small>{copy.subtitle}</small></div></div><div className="chat-header-actions"><button type="button" aria-label={copy.newChat} title={copy.newChat} onClick={clear}><Icon kind="new"/></button><button type="button" aria-label={copy.menu} title={copy.menu} aria-haspopup="menu" aria-expanded={menu} onClick={openMenu}><Icon kind="menu"/></button><button type="button" aria-label={copy.close} title={copy.close} onClick={minimize}><Icon kind="close"/></button></div></header>
@@ -215,7 +242,11 @@ export function Companion({ session, request, apiBase, Avatar = Character }) {
         </div>)}
       </div> : <><div className="chat-transcript" ref={list} role="log" aria-live="polite" aria-relevant="additions text">
         {!messages.length ? <div className="chat-welcome"><span className="welcome-spark">✦</span><h1>{copy.greet}</h1><p>{copy.intro}</p><div className="chat-prompts">{copy.prompts.map(prompt => <button type="button" disabled={busy || !session.configured} key={prompt.label} onClick={() => { if (prompt.draft) { setDraft(prompt.draft); input.current?.focus(); } else ask(prompt.question); }}>{prompt.label}<span aria-hidden="true">↗</span></button>)}</div></div> : null}
-        {messages.map(item => <article key={item.id} className={`chat-message from-${item.role} ${item.failed ? 'is-failed' : ''}`}><span className="sr-only">{item.role === 'assistant' ? 'Sentient' : context.language === 'es' ? 'Vos' : 'You'}: </span><div className="chat-message-text">{item.role === 'assistant' ? <AnswerText text={item.content} onNavigate={navigate}/> : item.content}</div>{item.sources?.length ? <details className="chat-sources"><summary>{copy.sources} · {item.sources.length}</summary>{item.sources.map((source, index) => safeSource(source.url) ? <a key={index} href={safeSource(source.url)} target="_top" onClick={navigate} onAuxClick={navigate}><span>{source.label}</span>{source.partial ? <small>{copy.partial}</small> : null}<code>{source.endpoint}</code></a> : null)}</details> : null}</article>)}
+        {messages.map(item => {
+          const postResults = item.role === 'assistant' ? extractPostResults(item.content) : [];
+          const text = postResults.length ? stripPostResultLinks(item.content) : item.content;
+          return <article key={item.id} className={`chat-message from-${item.role} ${item.failed ? 'is-failed' : ''}`}><span className="sr-only">{item.role === 'assistant' ? 'Sentient' : context.language === 'es' ? 'Vos' : 'You'}: </span>{text ? <div className="chat-message-text">{item.role === 'assistant' ? <AnswerText text={text} onNavigate={navigate}/> : text}</div> : null}{postResults.length ? <ResultPills results={postResults} locale={context.language} currentUrl={context.pageUrl} onNavigate={event => navigate(event, postResults)}/> : null}{item.sources?.length ? <details className="chat-sources"><summary>{copy.sources} · {item.sources.length}</summary>{item.sources.map((source, index) => safeSource(source.url) ? <a key={index} href={safeSource(source.url)} target="_top" onClick={navigate} onAuxClick={navigate}><span>{source.label}</span>{source.partial ? <small>{copy.partial}</small> : null}<code>{source.endpoint}</code></a> : null)}</details> : null}</article>;
+        })}
         {busy ? <div className="chat-thinking" role="status"><span/><span/><span/><small>{copy.thinking}</small></div> : null}
       </div>
       <form className="chat-composer" onSubmit={event => { event.preventDefault(); ask(); }}>
@@ -228,11 +259,13 @@ export function Companion({ session, request, apiBase, Avatar = Character }) {
       <Avatar reaction={open && enabled ? reaction : 'idle'} unread={enabled ? unread : 0} paused={!enabled}/>
       {!enabled && unread ? <span className="compact-count">{unread > 99 ? '99+' : unread}</span> : null}
     </button>
+    {!open && enabled && !menu && activeResults.length ? <div className="pet-results-floating" style={boxStyle(geometry?.results)}><ResultPills results={activeResults} locale={context.language} currentUrl={context.pageUrl} onNavigate={event => navigate(event, activeResults)} onDismiss={dismissResults}/></div> : null}
     {menu ? <div className="pet-menu" ref={menuElement} style={boxStyle(geometry?.menu)} role="menu" aria-label={copy.menu} onKeyDown={menuKeys}>
       <div className="pet-menu-title" aria-hidden="true">Sentient</div>
       <button type="button" role="menuitem" onClick={() => { setMenu(false); if (open) minimize(); else { enable(); setOpen(true); setView('chat'); } }}><Icon kind={open ? 'close' : 'chat'}/>{open ? copy.close : copy.open}</button>
       <button type="button" role="menuitem" onClick={clear}><Icon kind="new"/>{copy.newChat}</button>
       <button type="button" role="menuitem" onClick={showHistory}><Icon kind="history"/>{copy.history}</button>
+      <button type="button" role="menuitem" onClick={() => { setMenu(false); setLaunchVisible(true); }}><Icon kind="chat"/>{copy.aboutBot}</button>
       {busy ? <button type="button" role="menuitem" onClick={cancel}><Icon kind="stop"/>{copy.stop}</button> : null}
       <div className="pet-menu-divider" role="separator"/>
       <div className="pet-menu-label">{copy.position}</div><div className="pet-docks" role="group" aria-label={copy.position}>{DOCKS.map((dock, index) => <button type="button" role="menuitemradio" aria-checked={geometry?.dock === dock} key={dock} aria-label={copy.dock[index]} title={copy.dock[index]} onClick={() => { postHost({ type: 'dock', dock }); setMenu(false); }}><span className={`dock-dot dock-${dock}`}/></button>)}</div>

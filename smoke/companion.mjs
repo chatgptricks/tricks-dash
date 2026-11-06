@@ -7,10 +7,10 @@ for (const key of ['window', 'document', 'navigator', 'HTMLElement', 'Element', 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 const hostMessages = [];
 globalThis.parent = { postMessage: value => hostMessages.push(value) };
-const bundle = await build({ stdin: { contents: `import {act} from 'react'; import {createRoot} from 'react-dom/client'; import {Companion} from './src/companion/Companion.jsx';
-export {act}; let root; const Avatar=({reaction,unread,paused})=><span data-reaction={reaction} data-unread={unread} data-paused={String(paused)}/>;
+const bundle = await build({ stdin: { contents: `import {act} from 'react'; import {createRoot} from 'react-dom/client'; import {Companion} from './src/companion/Companion.jsx'; import {markLaunchSeen} from './src/companion/launch.js';
+export {act,markLaunchSeen}; let root; const Avatar=({reaction,unread,paused})=><span data-reaction={reaction} data-unread={unread} data-paused={String(paused)}/>;
 export function mount(props){root=createRoot(document.getElementById('root'));root.render(<Companion {...props} Avatar={Avatar}/>)}
-export function unmount(){root.unmount()}`, loader: 'jsx', resolveDir: process.cwd() }, bundle: true, write: false, format: 'esm', platform: 'browser', jsx: 'automatic', target: 'es2022' });
+export function unmount(){root.unmount()}`, loader: 'jsx', resolveDir: process.cwd() }, bundle: true, write: false, format: 'esm', platform: 'browser', jsx: 'automatic', target: 'es2022', loader: { '.css': 'empty' } });
 const app = await import('data:text/javascript;base64,' + Buffer.from(bundle.outputFiles[0].text).toString('base64'));
 const button = label => [...document.querySelectorAll('button')].find(node => node.getAttribute('aria-label') === label || node.textContent.includes(label));
 const click = node => app.act(async () => { assert.ok(node, 'Expected control exists'); node.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })); });
@@ -22,6 +22,7 @@ const request = (_url, options) => new Promise((resolve, reject) => {
   options.signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')));
 });
 try {
+  app.markLaunchSeen('one'); app.markLaunchSeen('two');
   await app.act(async () => app.mount({ session: { uid: 'one', configured: true }, request, apiBase: 'https://api.example.test' }));
   assert.ok(button('Hablar con Sentient'));
   assert.equal(document.querySelector('[data-paused]').dataset.paused, 'false');
@@ -38,14 +39,21 @@ try {
   assert.equal(document.querySelectorAll('.chat-transcript script').length, 0);
   assert.match(document.querySelector('.chat-transcript').textContent, /<script>bad/);
   assert.equal(document.querySelectorAll('.chat-sources a').length, 1);
-  assert.equal(document.querySelectorAll('.chat-message-text a').length, 1);
-  assert.equal(document.querySelector('.chat-message-text a').getAttribute('href'), 'https://sentientdash.app/index.html?post=example%3ACODE');
+  assert.equal(document.querySelectorAll('.chat-message-text a').length, 0);
+  assert.equal(document.querySelectorAll('.chat-message .pet-result-pill').length, 1);
+  assert.equal(document.querySelector('.chat-message .pet-result-pill').getAttribute('href'), 'https://sentientdash.app/index.html?post=example%3ACODE');
   assert.equal(document.querySelector('[data-unread]').dataset.unread, '0');
-  await click(document.querySelector('.chat-message-text a'));
+  await click(document.querySelector('.chat-message .pet-result-pill'));
   assert.equal(document.querySelector('.companion-chat'), null, 'Result links minimize before navigating');
   assert.equal(sessionStorage.getItem('sentient.pet.open.one'), 'false');
   assert.match(hostMessages.findLast(item => item.type === 'navigate').url, /post=example%3ACODE/);
   assert.equal(document.querySelector('[data-paused]').dataset.paused, 'false');
+  assert.equal(document.querySelectorAll('.pet-results-floating .pet-result-pill').length, 1, 'Opened result set stays below the animated character');
+  await app.act(async () => app.unmount());
+  await app.act(async () => app.mount({ session: { uid: 'one', configured: true }, request, apiBase: 'https://api.example.test' }));
+  assert.equal(document.querySelectorAll('.pet-results-floating .pet-result-pill').length, 1, 'Result pills survive same-tab post navigation');
+  await app.act(async () => window.dispatchEvent(new MessageEvent('message', { origin: location.origin, source: parent, data: { source: 'sentient-host', type: 'context', language: 'es', theme: 'dark', page: '/index.html', pageUrl: 'https://sentientdash.app/index.html?post=example%3ACODE' } })));
+  assert.equal(document.querySelector('.pet-result-pill').getAttribute('aria-current'), 'page');
   await click(button('Hablar con Sentient'));
   await click(document.querySelector('.chat-sources a'));
   assert.equal(document.querySelector('.companion-chat'), null, 'Source links also minimize');
@@ -61,6 +69,7 @@ try {
   assert.equal(document.querySelector('[data-paused]').dataset.paused, 'false');
   await click(button('Nueva conversación'));
   assert.equal(document.querySelectorAll('.chat-message').length, 0);
+  assert.equal(document.querySelector('.pet-results-floating'), null, 'New conversation clears the previous result tray');
   await contextMenu();
   await click(button('Historial de chats'));
   assert.equal(document.querySelector('.chat-history') !== null, true);

@@ -15,7 +15,7 @@
   backdrop.id = 'sentient-companion-backdrop'; backdrop.setAttribute('aria-hidden', 'true');
   backdrop.style.cssText = 'position:fixed;inset:0;z-index:2147483646;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);background:rgba(0,0,0,.08);pointer-events:none;display:none;';
   document.body.append(backdrop, frame);
-  let state = 'hidden', dock = 'bottom-left', geometry, drag, menu, pendingPointer = false, pointer;
+  let state = 'hidden', dock = 'bottom-left', geometry, drag, menu, resultCount = 0, pendingPointer = false, pointer;
   const clamp = (n, a, b) => Math.max(a, Math.min(Math.max(a, b), n));
   const send = value => frame.contentWindow?.postMessage({ source: 'sentient-host', ...value }, location.origin);
   const viewport = () => ({ w: window.visualViewport?.width || innerWidth, h: window.visualViewport?.height || innerHeight, left: window.visualViewport?.offsetLeft || 0, top: window.visualViewport?.offsetTop || 0, bottom: innerWidth <= 760 && location.pathname.startsWith('/mobile') ? 82 : 12 });
@@ -24,13 +24,27 @@
     frame.style.colorScheme = root.dataset.theme === 'light' ? 'light' : 'dark';
     const style = getComputedStyle(root);
     const tokens = Object.fromEntries(Object.entries({ surface: '--surface-1', raised: '--surface-2', line: '--line', muted: '--muted-strong', text: '--text', accent: '--accent', accentInk: '--accent-ink' }).map(([name, variable]) => [name, style.getPropertyValue(variable).trim()]));
-    send({ type: 'context', page: location.pathname, language: root.lang.startsWith('es') ? 'es' : 'en', theme: root.dataset.theme === 'light' ? 'light' : 'dark', tokens, font: getComputedStyle(document.body).fontFamily, radius: style.getPropertyValue('--radius-xl').trim() });
+    send({ type: 'context', page: location.pathname, pageUrl: location.href, language: root.lang.startsWith('es') ? 'es' : 'en', theme: root.dataset.theme === 'light' ? 'light' : 'dark', tokens, font: getComputedStyle(document.body).fontFamily, radius: style.getPropertyValue('--radius-xl').trim() });
   };
   const resize = () => {
     const { w, h, left, top, bottom } = viewport(), right = dock.endsWith('right');
+    if (state === 'launch') {
+      geometry = { x: left, y: top, width: w, height: h, ax: left, ay: top, aw: 0, ah: 0 };
+      Object.assign(frame.style, { left: left + 'px', top: top + 'px', width: w + 'px', height: h + 'px', visibility: 'visible', pointerEvents: 'auto' });
+      frame.tabIndex = 0; frame.dataset.dock = dock; frame.dataset.state = state;
+      backdrop.style.display = 'block'; backdrop.style.pointerEvents = 'none';
+      send({ type: 'geometry', dock, avatar: { x: 0, y: 0, w: 0, h: 0 }, panel: { x: 0, y: 0, w, h }, menu: null, results: null });
+      return;
+    }
     const aw = state === 'compact' ? 64 : 136, ah = state === 'compact' ? 68 : 146;
     const ax = right ? Math.max(left + 12, left + w - 12 - aw) : left + 12;
-    const ay = dock.startsWith('top') ? top + 12 : dock.startsWith('middle') ? clamp(top + (h - ah) / 2, top + 12, top + h - bottom - ah) : Math.max(top + 12, top + h - bottom - ah);
+    let ay = dock.startsWith('top') ? top + 12 : dock.startsWith('middle') ? clamp(top + (h - ah) / 2, top + 12, top + h - bottom - ah) : Math.max(top + 12, top + h - bottom - ah);
+    const showResults = state === 'closed' && !menu && resultCount > 0;
+    const rw = showResults ? Math.min(384, Math.max(0, w - 24), Math.max(136, resultCount * 118 + 24)) : 0;
+    const rh = showResults ? Math.min(72, Math.max(0, h - bottom - 12 - ah - 8)) : 0;
+    if (showResults) ay = clamp(ay, top + 12, top + h - bottom - ah - rh - 8);
+    const rx = showResults ? clamp(right ? ax + aw - rw : ax, left + 12, left + w - 12 - rw) : ax;
+    const ry = showResults ? ay + ah + 8 : ay;
     let px = ax, py = ay, pw = 0, ph = 0;
     if (state === 'open') {
       pw = Math.max(0, Math.min(420, w - 24));
@@ -62,21 +76,21 @@
         my = clamp(above >= below ? ay - mh - 8 : ay + ah + 8, top + 12, top + h - 12 - mh);
       }
     }
-    const x = Math.min(ax, px, mx), y = Math.min(ay, py, my);
-    const width = Math.max(ax + aw, px + pw, mx + mw) - x, height = Math.max(ay + ah, py + ph, my + mh) - y;
-    geometry = { x, y, width, height, ax, ay, aw, ah };
+    const x = Math.min(ax, px, mx, rx), y = Math.min(ay, py, my, ry);
+    const width = Math.max(ax + aw, px + pw, mx + mw, rx + rw) - x, height = Math.max(ay + ah, py + ph, my + mh, ry + rh) - y;
+    geometry = { x, y, width, height, ax, ay, aw, ah, extraHeight: showResults ? rh + 8 : 0 };
     Object.assign(frame.style, { left: x + 'px', top: y + 'px', width: width + 'px', height: height + 'px', visibility: state === 'hidden' ? 'hidden' : 'visible', pointerEvents: state === 'hidden' ? 'none' : 'auto' });
     frame.tabIndex = state === 'hidden' ? -1 : 0;
     backdrop.style.display = state === 'open' ? 'block' : 'none';
     backdrop.style.pointerEvents = state === 'open' ? 'auto' : 'none';
     frame.dataset.dock = dock; frame.dataset.state = state;
-    send({ type: 'geometry', dock, avatar: { x: ax - x, y: ay - y, w: aw, h: ah }, panel: { x: px - x, y: py - y, w: pw, h: ph }, menu: menu ? { x: mx - x, y: my - y, w: mw, h: mh } : null });
+    send({ type: 'geometry', dock, avatar: { x: ax - x, y: ay - y, w: aw, h: ah }, panel: { x: px - x, y: py - y, w: pw, h: ph }, menu: menu ? { x: mx - x, y: my - y, w: mw, h: mh } : null, results: showResults ? { x: rx - x, y: ry - y, w: rw, h: rh } : null });
   };
   function dismissMenu() {
     if (!menu) return;
     menu = null; resize(); send({ type: 'dismiss-menu' });
   }
-  function minimize() { state = 'closed'; menu = null; drag = null; resize(); }
+  function minimize() { if (state === 'launch') return; state = 'closed'; menu = null; drag = null; resize(); }
   backdrop.addEventListener('click', event => { event.preventDefault(); event.stopPropagation(); minimize(); send({ type: 'minimize' }); });
   function navigate(value) {
     if (typeof value !== 'string' || value.length > 8000) return;
@@ -113,16 +127,18 @@
   window.addEventListener('message', event => {
     if (event.origin !== location.origin || event.source !== frame.contentWindow || event.data?.source !== 'sentient-companion') return;
     const data = event.data;
-    if (data.type === 'layout' && ['hidden', 'closed', 'open', 'compact'].includes(data.state)) {
+    if (data.type === 'layout' && ['hidden', 'closed', 'open', 'compact', 'launch'].includes(data.state)) {
       state = data.state;
-      menu = data.menu?.open && state !== 'hidden' ? { width: clamp(Number(data.menu.width) || 244, 160, 420), height: clamp(Number(data.menu.height) || 344, 100, 640) } : null;
+      menu = data.menu?.open && !['hidden', 'launch'].includes(state) ? { width: clamp(Number(data.menu.width) || 244, 160, 420), height: clamp(Number(data.menu.height) || 344, 100, 640) } : null;
+      resultCount = data.results?.visible === true && Number.isFinite(data.results.count) && data.results.count > 0 ? clamp(Math.floor(data.results.count), 1, 10) : 0;
+      if (state === 'launch') drag = null;
       resize(); preferences();
     }
     if (data.type === 'ready') { if (positions.includes(data.dock)) dock = data.dock; resize(); preferences(); }
     if (data.type === 'navigate') navigate(data.url);
     if (data.type === 'research_filters') showResearch(data.filters);
     if (data.type === 'dock' && positions.includes(data.dock)) { dock = data.dock; drag = null; dismissMenu(); resize(); send({ type: 'docked', dock }); }
-    if (data.type === 'drag-start' && geometry) { dismissMenu(); drag = { ...geometry }; }
+    if (data.type === 'drag-start' && geometry && !['hidden', 'launch'].includes(state)) { dismissMenu(); drag = { ...geometry }; }
     if (data.type === 'drag-cancel' && drag) { drag = null; resize(); }
     if (data.type === 'drag-move' && drag && Number.isFinite(data.dx) && Number.isFinite(data.dy)) {
       const { w, h, left, top } = viewport();
@@ -132,8 +148,9 @@
     if (data.type === 'drag-end' && drag && Number.isFinite(data.dx) && Number.isFinite(data.dy)) {
       const { w, h, left, top, bottom } = viewport();
       const x = drag.ax + drag.aw / 2 + data.dx, y = drag.ay + drag.ah / 2 + data.dy;
-      const ys = [top + 12 + drag.ah / 2, top + h / 2, top + h - bottom - drag.ah / 2];
-      const vertical = ys.reduce((best, v, i) => Math.abs(v - y) < Math.abs(ys[best] - y) ? i : best, 0);
+      const maxTop = top + h - bottom - drag.ah - drag.extraHeight;
+      const ys = [top + 12, clamp(top + (h - drag.ah) / 2, top + 12, maxTop), Math.max(top + 12, maxTop)].map(value => value + drag.ah / 2);
+      const vertical = ys.reduce((best, v, i) => Math.abs(v - y) <= Math.abs(ys[best] - y) ? i : best, 0);
       dock = ['top', 'middle', 'bottom'][vertical] + (x < left + w / 2 ? '-left' : '-right');
       drag = null; resize(); send({ type: 'docked', dock });
     }

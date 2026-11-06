@@ -86,6 +86,48 @@ assert.equal(url.pathname, '/index.html'); assert.equal(url.searchParams.get('li
 navigation = undefined;
 send({ type: 'research_filters', filters: { query: '', text_scope: 'caption', post_type: 'All posts', sort: 'newest' } });
 assert.equal(navigation, undefined, 'Unsupported page controls must not be silently dropped or applied');
+for (const dock of corners) {
+  send({ type: 'ready', dock }); send({ type: 'layout', state: 'closed' });
+  const originalY = parseFloat(frame.style.top) + geometry().avatar.y;
+  send({ type: 'layout', state: 'closed', results: { visible: true, count: 10 } });
+  const resultGeometry = geometry();
+  assert.deepEqual([resultGeometry.avatar.w, resultGeometry.avatar.h], [136, 146], 'Result trays never shrink the character');
+  assert.deepEqual([resultGeometry.results.w, resultGeometry.results.h], [384, 72]);
+  assert.equal(resultGeometry.results.y, resultGeometry.avatar.y + 154, 'Results sit eight pixels below the character');
+  if (dock.startsWith('bottom')) assert.equal(parseFloat(frame.style.top) + resultGeometry.avatar.y, originalY - 80);
+  assert.ok(parseFloat(frame.style.left) >= 0 && parseFloat(frame.style.left) + parseFloat(frame.style.width) <= 1280);
+  assert.ok(parseFloat(frame.style.top) >= 0 && parseFloat(frame.style.top) + parseFloat(frame.style.height) <= 900);
+  send({ type: 'layout', state: 'closed' });
+  assert.equal(geometry().results, null);
+  assert.equal(parseFloat(frame.style.top) + geometry().avatar.y, originalY, 'Hiding results restores the regular dock anchor');
+}
+send({ type: 'layout', state: 'closed', results: { visible: true, count: 2.9 } });
+assert.equal(geometry().results.w, 260, 'Result counts are normalized to bounded integers');
+for (const count of [0, -1, Infinity, NaN, '3']) {
+  send({ type: 'layout', state: 'closed', results: { visible: true, count } });
+  assert.equal(geometry().results, null, 'Invalid result counts cannot expand the frame');
+}
+for (const state of ['open', 'compact', 'hidden']) {
+  send({ type: 'layout', state, results: { visible: true, count: 10 } });
+  assert.equal(geometry().results, null, 'Result trays only appear with the active idle character');
+}
+send({ type: 'layout', state: 'closed', menu: { open: true }, results: { visible: true, count: 10 } });
+assert.equal(geometry().results, null, 'Context menus take precedence over result trays');
+send({ type: 'ready', dock: 'middle-left' });
+send({ type: 'layout', state: 'closed', results: { visible: true, count: 3 } });
+send({ type: 'drag-start' }); send({ type: 'drag-end', dx: 0, dy: 170 });
+assert.equal(frame.dataset.dock, 'bottom-left', 'Snapping uses the actual shifted avatar positions while results are visible');
+send({ type: 'layout', state: 'launch', menu: { open: true }, results: { visible: true, count: 10 } });
+assert.deepEqual([parseFloat(frame.style.left), parseFloat(frame.style.top), parseFloat(frame.style.width), parseFloat(frame.style.height)], [0, 0, 1280, 900]);
+assert.equal(geometry().avatar.w, 0);
+assert.equal(geometry().menu, null); assert.equal(geometry().results, null);
+assert.equal(backdrop.style.display, 'block', 'The parent backdrop blurs the dashboard behind the launch view');
+assert.equal(backdrop.style.pointerEvents, 'none');
+assert.equal(messages.findLast(message => message.type === 'context').pageUrl, w.location.href);
+w.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape' }));
+send({ type: 'drag-start' }); send({ type: 'drag-end', dx: 1000, dy: 1000 });
+assert.equal(frame.dataset.state, 'launch', 'Host dismissal gestures cannot unexpectedly close the launch view');
+assert.equal(frame.dataset.dock, 'bottom-left');
 Object.defineProperty(w, 'innerWidth', { value: 390 }); Object.defineProperty(w, 'innerHeight', { value: 844 });
 for (const height of [844, 260]) {
   Object.defineProperty(w, 'innerHeight', { value: height });
@@ -95,11 +137,20 @@ for (const height of [844, 260]) {
     assert.ok(parseFloat(frame.style.top) >= 0 && parseFloat(frame.style.top) + parseFloat(frame.style.height) <= height, 'Panels remain visible when the software keyboard reduces height');
     assert.deepEqual([geometry().avatar.w, geometry().avatar.h], [136, 146]);
     assert.ok(geometry().menu.h <= height - 24, 'Context menus scroll within the visible viewport');
+    send({ type: 'layout', state: 'closed', results: { visible: true, count: 10 } });
+    assert.equal(geometry().results.w, 366, 'Wide result rows scroll within a narrow viewport');
+    assert.ok(geometry().results.y >= geometry().avatar.y + 154);
+    assert.ok(parseFloat(frame.style.left) >= 0 && parseFloat(frame.style.left) + parseFloat(frame.style.width) <= 390);
+    assert.ok(parseFloat(frame.style.top) >= 0 && parseFloat(frame.style.top) + parseFloat(frame.style.height) <= height);
   }
 }
 Object.defineProperty(w, 'visualViewport', { value: { width: 390, height: 430, offsetLeft: 40, offsetTop: 90 } });
 send({ type: 'ready', dock: 'bottom-right' }); send({ type: 'layout', state: 'open' });
 assert.ok(parseFloat(frame.style.left) >= 40 && parseFloat(frame.style.left) + parseFloat(frame.style.width) <= 430);
 assert.ok(parseFloat(frame.style.top) >= 90 && parseFloat(frame.style.top) + parseFloat(frame.style.height) <= 520);
+send({ type: 'layout', state: 'launch' });
+assert.deepEqual([parseFloat(frame.style.left), parseFloat(frame.style.top), parseFloat(frame.style.width), parseFloat(frame.style.height)], [40, 90, 390, 430], 'Launch covers the current visible viewport including zoom offsets');
+send({ type: 'layout', state: 'closed' });
+assert.deepEqual([geometry().avatar.w, geometry().avatar.h], [136, 146], 'Launch exits back to the normal character size');
 dom.window.close();
-console.log('PASS Companion host: result minimization, outside-click dismissal, context-menu geometry, docking, canceled drags, viewport bounds, and validated navigation/filters.');
+console.log('PASS Companion host: launch viewport, result trays, result minimization, outside-click dismissal, context menus, docking, viewport bounds, and validated navigation/filters.');
