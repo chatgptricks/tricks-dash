@@ -79,12 +79,13 @@ assert.ok(loadConversation('next').messages.every(item => !Object.hasOwn(item, '
 // memory instead of returning the older persisted transcript.
 const bilingualChat = newConversation('bilingual');
 saveConversation('bilingual', { ...bilingualChat, messages: [
-  { ...message('Here is the post.', 'assistant'), language: 'en' },
-  { ...message('Aquí está el post.', 'assistant'), language: 'es' },
-  { ...message('Invalid language.', 'assistant'), language: 'arbitrary-value' },
+  { ...message('Here is the post.', 'assistant'), language: 'en', mode: 'research' },
+  { ...message('Aquí está el post.', 'assistant'), language: 'es', mode: 'next' },
+  { ...message('Invalid language.', 'assistant'), language: 'arbitrary-value', mode: 'delete' },
 ] });
 assert.deepEqual(loadConversation('bilingual').messages.map(item => item.language), ['en', 'es', undefined], 'History retains each reply language independently of the current interface language');
 assert.deepEqual(listConversations('bilingual')[0].messages.map(item => item.language), ['en', 'es', undefined]);
+assert.deepEqual(loadConversation('bilingual').messages.map(item => item.mode), ['research', 'next', undefined], 'Only supported effective reply modes survive history/replay');
 
 const persisted = localStorage;
 globalThis.localStorage = { getItem: persisted.getItem, setItem() { throw new Error('quota'); } };

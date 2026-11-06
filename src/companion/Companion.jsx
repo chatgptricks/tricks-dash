@@ -307,7 +307,9 @@ export function Companion({ session, request, apiBase, Avatar = Character }) {
     const command = parseCommand(message);
     if (!command.query && command.mode !== 'next') { setError(copy.commandRequired); return; }
     const nextContext = command.mode === 'auto' ? pendingNextContext(messages, message) : null;
-    const mode = nextContext ? 'next' : command.mode;
+    // Voice can answer the pending question or start a different request.
+    // Let the server resolve that intent while retaining the bounded slots.
+    const mode = nextContext && !spoken ? 'next' : command.mode;
     if (!session.configured) { setError(copy.unavailable); return; }
     voice.cancelRecording(); voice.stopSpeech(); voice.clearError();
     clearVoiceHandoff(session.uid);
@@ -327,15 +329,17 @@ export function Companion({ session, request, apiBase, Avatar = Character }) {
       const result = await response.json();
       if (current !== sequence.current) return;
       if (!result.answer || typeof result.answer !== 'string') throw new Error('unavailable');
+      const replyMode = result.mode === undefined ? mode : result.mode;
+      if (!['auto', ...COMMANDS].includes(replyMode) || (mode !== 'auto' && replyMode !== mode)) throw new Error('unsupported');
       const action = Array.isArray(result.ui_actions) ? result.ui_actions.find(item => item.type === 'research_filters') : null;
-      if (action && (['research', 'next'].includes(mode) || !validResearchFilters(action.filters))) throw new Error('unsupported');
+      if (action && (['research', 'next'].includes(replyMode) || !validResearchFilters(action.filters))) throw new Error('unsupported');
       const replyLanguage = ['en', 'es'].includes(result.language) ? result.language : context.language;
-      const assistantMessage = { id: crypto.randomUUID(), role: 'assistant', content: result.answer, language: replyLanguage, sources: Array.isArray(result.sources) ? result.sources : [] };
-      const pendingNext = mode === 'next' ? sanitizeNextContext(result.pending_next) : null;
+      const assistantMessage = { id: crypto.randomUUID(), role: 'assistant', content: result.answer, language: replyLanguage, mode: replyMode, sources: Array.isArray(result.sources) ? result.sources : [] };
+      const pendingNext = replyMode === 'next' ? sanitizeNextContext(result.pending_next) : null;
       if (pendingNext) assistantMessage.pending_next = pendingNext;
       setMessages(items => [...items, assistantMessage]);
       const wantsSpeech = (spoken || readAloud) && voice.permit() === speechPermit;
-      const spokenReply = { id: assistantMessage.id, text: result.answer.slice(0, 12000), question: message, language: replyLanguage, mode };
+      const spokenReply = { id: assistantMessage.id, text: result.answer.slice(0, 12000), question: message, language: replyLanguage, mode: replyMode };
       if (action) {
         dismissResults();
         minimize(undefined, { preserveVoice: true }); setUnread(0);
@@ -362,7 +366,7 @@ export function Companion({ session, request, apiBase, Avatar = Character }) {
     voice.unlock();
     const question = messages.slice(0, index).findLast(message => message.role === 'user')?.content || '';
     const command = parseCommand(question);
-    const mode = command.mode === 'auto' && pendingNextContext(messages.slice(0, index - 1), question) ? 'next' : command.mode;
+    const mode = item.mode || (command.mode === 'auto' && pendingNextContext(messages.slice(0, index - 1), question) ? 'next' : command.mode);
     void voice.speak({ id: item.id, text: item.content, question, language: item.language || context.language, mode });
   }
   if (!session) return null;

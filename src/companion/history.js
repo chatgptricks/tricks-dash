@@ -1,5 +1,5 @@
 // Conversations stay on this device, scoped to the signed-in dashboard user.
-import { sanitizeNextContext } from './commands.js';
+import { COMMANDS, sanitizeNextContext } from './commands.js';
 // The active ID is tab-local; writing history merges the latest device history
 // so starting a chat in another tab does not replace an unrelated conversation.
 const MAX_CONVERSATIONS = 30, MAX_MESSAGES = 60, MAX_CONTENT = 8000;
@@ -27,6 +27,7 @@ function sanitizeMessages(values) {
     const clean = { id: validId(item.id) ? item.id : 'message-' + index, role: item.role, content: item.content.slice(0, MAX_CONTENT) };
     if (item.failed === true) clean.failed = true;
     if (item.role === 'assistant' && ['en', 'es'].includes(item.language)) clean.language = item.language;
+    if (item.role === 'assistant' && ['auto', ...COMMANDS].includes(item.mode)) clean.mode = item.mode;
     const pendingNext = item.role === 'assistant' ? sanitizeNextContext(item.pending_next) : null;
     if (pendingNext) clean.pending_next = pendingNext;
     if (item.role === 'assistant' && Array.isArray(item.sources)) {
