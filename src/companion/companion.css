@@ -46,3 +46,7 @@
 .companion[data-dock$="right"] .pet-results-floating .pet-results{margin-left:auto;padding-right:0;padding-left:28px}
 .companion[data-dock$="right"] .pet-results-floating .pet-results-links{align-items:flex-end}
 .companion[data-dock$="right"] .pet-results-floating .pet-results-dismiss{right:auto;left:0}
+
+/* Bottom docks grow upward from the character; other docks grow downward. */
+.companion[data-dock^="bottom"] .pet-results-floating .pet-results-links{flex-direction:column-reverse}
+.companion[data-dock^="bottom"] .pet-results-floating .pet-results-dismiss{top:auto;bottom:4px}
