@@ -18,7 +18,13 @@ export default defineConfig(({ command }) => ({
   // Lets CI/local validation skip the 61MB static archive; normal production
   // builds retain Vite's default public-directory copy behavior.
   publicDir: process.env.VITE_SKIP_PUBLIC === '1' ? false : 'public',
-  plugins: [react()],
+  plugins: [react(), {
+    name: 'sentient-companion-host',
+    transformIndexHtml(html, context) {
+      if (context.path === '/companion.html' || /\/(?:agents|oauth|api)\.html$/.test(context.path)) return html;
+      return [{ tag: 'script', attrs: { src: '/sentient-companion.js', defer: true }, injectTo: 'body' }];
+    },
+  }],
   server: {
     // Firebase authorizes localhost, not the literal 127.0.0.1 hostname.
     host: 'localhost',
@@ -32,6 +38,7 @@ export default defineConfig(({ command }) => ({
     rollupOptions: {
       input: {
         dashboard: resolve(__dirname, 'index.html'),
+        companion: resolve(__dirname, 'companion.html'),
         queue: resolve(__dirname, 'queue.html'),
         settings: resolve(__dirname, 'settings.html'),
         agents: resolve(__dirname, 'agents.html'),

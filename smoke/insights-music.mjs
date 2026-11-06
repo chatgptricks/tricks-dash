@@ -84,7 +84,7 @@ const intercept = async route=>{
         await pending.release.promise;
       }
       if(musicFailure){await route.fulfill({status:503,json:{detail:'Fixture music service unavailable'}});return;}
-      data = {posts:activePosts,accounts,coverage:{total:activePosts.length}};
+      data = {posts:activePosts,accounts,coverage:{total:activePosts.length,generated_at:'2026-10-25T17:55:00+00:00'},cache:{stale:false,refreshing:false,age_seconds:300}};
     }else if(url.pathname==='/api/insights/posts')data={posts,accounts:overviewAccounts};
     else if(url.pathname==='/api/insights/follower-growth')data={accounts:[],peaks:[]};
     else if(url.pathname==='/api/dashboard/me')data={is_admin:false,is_dev:false,operating_roles:['vc'],email:'fixture@example.test'};
@@ -120,6 +120,7 @@ try{
   await page.locator('#musicRanking').waitFor();
   await page.locator('#authGate.hidden').waitFor({state:'attached'});
   assert.equal(await page.locator('#insightsMusic').getAttribute('aria-pressed'),'true');
+  assert.match(await page.locator('#musicFreshness').innerText(), /Data updated/);
   assert.ok(requests.some(request=>request.path==='/api/insights/music'),'The Music tab loads its dedicated endpoint');
   for(const [key,value] of Object.entries({total:14,detected:12,named:8,original:3,unknown:2}))await countIs(key,value);
   assert.equal(await page.locator('#musicKinds').getAttribute('role'),'tablist');
@@ -237,6 +238,7 @@ try{
   await page.locator('#settingsPanel [data-lang="es"]').click();
   await page.waitForFunction(()=>document.documentElement.lang==='es'&&document.querySelector('#insightsMusic')?.textContent.trim()==='Música');
   assert.equal(await page.locator('#insightsOverview').innerText(),'Resumen');
+  assert.match(await page.locator('#musicFreshness').innerText(), /Datos actualizados/);
   assert.equal(await page.locator('#musicMinUses option[value="1"]').innerText(),'1 publicación');
   assert.equal(await page.locator('#musicRankingTitle').innerText(),'Canciones');
   assert.match(await rowFor('Views').innerText(),/Views/,'Song titles retain their source language');

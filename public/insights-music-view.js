@@ -5,7 +5,7 @@
   const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
   const url = value => { try { const parsed=new URL(value);return parsed.protocol==='https:'?parsed.href:''; } catch { return ''; } };
 
-  function mount(container, {posts,selectedAccounts,state,onChange,translate,locale}) {
+  function mount(container, {posts,selectedAccounts,state,onChange,translate,locale,freshness=''}) {
     const categories=[['named','Songs'],['original','Original audio']];
     if(!categories.some(([kind])=>kind===state.kind)) state.kind='named';
     const categoryLabel=()=>categories.find(([kind])=>kind===state.kind)[1];
@@ -27,6 +27,7 @@
     container.innerHTML=`
       <section id="musicCoverage" aria-label="${t('Music coverage')}">
         <h2>${t('Music')}</h2><p class="sub">${t('Discover the sounds behind your best-performing posts.')}</p>
+        <p id="musicFreshness" class="sub" data-i18n-skip aria-live="polite"${freshness?'':' hidden'}>${escape(freshness)}</p>
         <div class="kpis music-kpis">
           ${kpi('Unique posts',c.totalPosts,'total','Selected accounts and dates')}
           ${kpi('Audio identified',c.detectedAudio,'detected','Posts with stored audio metadata')}

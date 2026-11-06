@@ -6,12 +6,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <script src="/mobile-redirect.js?v=20261026-music3"></script>
 <script src="/user-preferences.js?v=20261009-i18n1"></script>
-<script src="/tool-translations.js?v=20261026-music3"></script>
+<script src="/tool-translations.js?v=20261026-music-freshness"></script>
 <script src="/insights-music.js?v=20261026-music3"></script>
-<script src="/insights-music-view.js?v=20261026-music3"></script>
+<script src="/insights-music-view.js?v=20261026-music-freshness"></script>
 <link rel="stylesheet" href="/insights-music.css?v=20261026-music3">
 <script src="/viewer-access.js?v=20261026-startup" defer></script>
 <script src="/role-preview.js?v=20261026-startup" defer></script>
+<script src="/sentient-companion.js" defer></script>
 <script src="/context-menu.js?v=20260901-context1" defer></script>
 <title>Insights · sentientdash.app</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext x='50' y='54' font-size='84' text-anchor='middle' dominant-baseline='central'%3E%F0%9F%93%8A%3C/text%3E%3C/svg%3E" />
@@ -351,6 +352,7 @@ const safeUrl = value => { try { const url = new URL(String(value || '')); retur
 
 let RAW=[], MUSIC_RAW=[], MUSIC_READY=false, OVERVIEW_READY=false, VIEW='overview';
 let MUSIC_ACCOUNTS=[], OVERVIEW_ACCOUNTS=[];
+let MUSIC_FRESHNESS={generatedAt:'',stale:false,refreshing:false}, MUSIC_REFRESH=null, MUSIC_REFRESH_PAUSED=false;
 const MUSIC_STATE={search:'',kind:'named',sort:'total',minUses:'1'};
 let ACCOUNTS=[], SEL=new Set(), CHARTS=[], FOLLOWER_GROWTH=null, FOLLOWER_GROWTH_ERROR='';
 let INSIGHTS_SESSION=0, INSIGHTS_BOOT=0, FOLLOWER_GROWTH_RUN=0;
@@ -358,9 +360,11 @@ const INSIGHTS_READS=new Set();
 window.__resetToolSession = () => {
   INSIGHTS_SESSION += 1;
   INSIGHTS_BOOT += 1;
+  stopMusicRefresh();
   for(const controller of INSIGHTS_READS) controller.abort();
   RAW=[]; MUSIC_RAW=[]; MUSIC_READY=false; OVERVIEW_READY=false;
   MUSIC_ACCOUNTS=[]; OVERVIEW_ACCOUNTS=[];
+  MUSIC_FRESHNESS={generatedAt:'',stale:false,refreshing:false}; MUSIC_REFRESH_PAUSED=false;
   ACCOUNTS=[]; SEL=new Set(); FOLLOWER_GROWTH=null; FOLLOWER_GROWTH_ERROR='';
   NAME_WORDS_BY_ACCOUNT={}; BASE={};
   destroyCharts();
@@ -572,7 +576,95 @@ function insightsAccountSelection(state, accounts){
   return state.selection==='none' ? new Set() : wanted.length ? new Set(wanted.filter(handle=>known.has(handle))) : known;
 }
 
+function normalizeInsightsPosts(posts){
+  return posts.map(p=>{
+    const t=p.d ? new Date(p.d).getTime() : NaN;
+    const dt=new Date(t);
+    return {...p,ts:t,hour:isNaN(t)?null:dt.getUTCHours(),dow:isNaN(t)?null:dt.getUTCDay()};
+  });
+}
+
+function readMusicFreshness(data){
+  MUSIC_FRESHNESS={generatedAt:data.coverage?.generated_at || '',stale:data.cache?.stale===true,refreshing:data.cache?.refreshing===true};
+  MUSIC_REFRESH_PAUSED=false;
+}
+
+function musicFreshnessText(){
+  const parts=[];
+  const date=new Date(MUSIC_FRESHNESS.generatedAt);
+  if(MUSIC_FRESHNESS.generatedAt && Number.isFinite(date.getTime())){
+    parts.push(toolText('Data updated')+' '+new Intl.DateTimeFormat(toolLocale(),{dateStyle:'medium',timeStyle:'short'}).format(date));
+  }
+  if(MUSIC_FRESHNESS.stale) parts.push(toolText(MUSIC_FRESHNESS.refreshing && !MUSIC_REFRESH_PAUSED ? 'Updating…' : 'Showing saved data'));
+  return parts.join(' · ');
+}
+
+function renderMusicFreshness(){
+  const label=$('#musicFreshness');
+  if(!label) return;
+  label.textContent=musicFreshnessText();
+  label.hidden=!label.textContent;
+}
+
+function stopMusicRefresh(paused=false){
+  const refresh=MUSIC_REFRESH;
+  MUSIC_REFRESH=null;
+  if(refresh){ clearTimeout(refresh.timer); refresh.controller?.abort(); }
+  if(paused){ MUSIC_REFRESH_PAUSED=true; renderMusicFreshness(); }
+}
+
+function startMusicRefresh(){
+  stopMusicRefresh();
+  if(VIEW!=='music' || !MUSIC_READY || !MUSIC_FRESHNESS.stale) return;
+  const refresh={session:INSIGHTS_SESSION,boot:INSIGHTS_BOOT,deadline:Date.now()+5*60*1000,timer:null,controller:null};
+  MUSIC_REFRESH=refresh;
+  const current=()=>MUSIC_REFRESH===refresh && refresh.session===INSIGHTS_SESSION && refresh.boot===INSIGHTS_BOOT && VIEW==='music';
+  const schedule=()=>{
+    if(!current()) return;
+    const remaining=refresh.deadline-Date.now();
+    if(remaining<=0){ stopMusicRefresh(true); return; }
+    refresh.timer=setTimeout(poll,Math.min(10000,remaining));
+  };
+  const poll=async()=>{
+    refresh.timer=null;
+    if(!current()) return;
+    const remaining=refresh.deadline-Date.now();
+    if(remaining<=0){ stopMusicRefresh(true); return; }
+    if(document.visibilityState==='hidden'){ schedule(); return; }
+    refresh.controller=new AbortController();
+    try{
+      const known=MUSIC_FRESHNESS.generatedAt;
+      const path='/api/insights/music'+(known?'?known_generated_at='+encodeURIComponent(known):'');
+      const data=await insightsGet(path,{signal:refresh.controller.signal,timeoutMs:Math.min(30000,remaining)});
+      if(!current()) return;
+      if(data.not_modified===true){
+        if(!known || data.coverage?.generated_at!==known) throw new Error('Insights returned an unexpected report version.');
+        readMusicFreshness(data);
+        renderMusicFreshness();
+      }else{
+        if(!Array.isArray(data.posts) || !Array.isArray(data.accounts)) throw new Error('Insights returned incomplete data. Please retry.');
+        const selection=readUrl();
+        readMusicFreshness(data);
+        MUSIC_RAW=normalizeInsightsPosts(data.posts);
+        MUSIC_ACCOUNTS=data.accounts; ACCOUNTS=MUSIC_ACCOUNTS;
+        SEL=insightsAccountSelection(selection,ACCOUNTS);
+        buildNameWords(); buildChips(); render();
+      }
+      if(!MUSIC_FRESHNESS.stale){ stopMusicRefresh(); return; }
+    }catch(error){
+      if(!current()) return;
+      MUSIC_REFRESH_PAUSED=true;
+      renderMusicFreshness();
+      if(error?.status===403 || error?.message==='unauthorized'){ stopMusicRefresh(true); return; }
+      // Keep the complete visible report and filters through a failed check.
+    }finally{ refresh.controller=null; }
+    schedule();
+  };
+  schedule();
+}
+
 async function boot(){
+  stopMusicRefresh();
   const route=readUrl();
   VIEW=route.view==='music'?'music':'overview';
   syncInsightsView();
@@ -580,6 +672,9 @@ async function boot(){
   const session=INSIGHTS_SESSION, request=++INSIGHTS_BOOT;
   const current=()=>session===INSIGHTS_SESSION && request===INSIGHTS_BOOT && VIEW===requestedView;
   $('#app').setAttribute('aria-busy','true');
+  if(!(requestedView==='music'?MUSIC_READY:OVERVIEW_READY)){
+    $('#app').innerHTML='<div class="empty" role="status">'+escapeHtml(toolText('Loading Insights data…'))+'</div>';
+  }
   FOLLOWER_GROWTH_ERROR='';
   if(requestedView==='overview'){
     FOLLOWER_GROWTH=null;
@@ -593,12 +688,8 @@ async function boot(){
     const data = await insightsGet(requestedView==='music'?'/api/insights/music':'/api/insights/posts',{timeoutMs:90000});
     if(!current()) return;
     if(!Array.isArray(data.posts) || !Array.isArray(data.accounts)) throw new Error('Insights returned incomplete data. Please retry.');
-    const normalized = data.posts.map(p=>{
-      const t = p.d ? new Date(p.d).getTime() : NaN;
-      const dt = new Date(t);
-      return {...p, ts:t, hour:isNaN(t)?null:dt.getUTCHours(), dow:isNaN(t)?null:dt.getUTCDay()};
-    });
-    if(VIEW==='music'){ MUSIC_RAW=normalized; MUSIC_READY=true; }
+    const normalized = normalizeInsightsPosts(data.posts);
+    if(VIEW==='music'){ MUSIC_RAW=normalized; MUSIC_READY=true; readMusicFreshness(data); }
     else{ RAW=normalized.filter(p=>!isNaN(p.ts)); OVERVIEW_READY=true; }
     ACCOUNTS = data.accounts;
     if(VIEW==='music') MUSIC_ACCOUNTS=ACCOUNTS; else OVERVIEW_ACCOUNTS=ACCOUNTS;
@@ -626,6 +717,7 @@ async function boot(){
     // applyPreset would recompute them off today's date and quietly shift the
     // window a shared link was pointing at.
     render();
+    if(requestedView==='music') startMusicRefresh();
   }catch(e){
     if(!current()) return;
     $('#app').innerHTML = '<div class="empty" role="alert">Could not load the data.<br><small>'+escapeHtml(e.message || 'Connection failed.')+'</small><br><button class="linkbtn" id="retryInsights">Retry</button></div>';
@@ -760,7 +852,7 @@ function render(){
   }
   if(VIEW==='music'){
     const posts=filtered(MUSIC_RAW);
-    const analysis=window.InsightsMusicView.mount($('#app'),{posts,selectedAccounts:SEL,state:MUSIC_STATE,onChange:writeUrl,translate:toolText,locale:toolLocale()});
+    const analysis=window.InsightsMusicView.mount($('#app'),{posts,selectedAccounts:SEL,state:MUSIC_STATE,onChange:writeUrl,translate:toolText,locale:toolLocale(),freshness:musicFreshnessText()});
     $('#scope').textContent=analysis.coverage.totalPosts.toLocaleString(toolLocale())+' posts · '+SEL.size+' accounts';
     return;
   }
@@ -792,6 +884,7 @@ function syncInsightsView(){
 }
 function switchInsightsView(view){
   if(VIEW===view) return;
+  stopMusicRefresh();
   VIEW=view; syncInsightsView();
   if(!ACCOUNTS.length){ const p=new URLSearchParams(location.search);p.set('view',view);history.replaceState(null,'',location.pathname+'?'+p);boot();return; }
   writeUrl();
@@ -801,6 +894,7 @@ function switchInsightsView(view){
     SEL=insightsAccountSelection(readUrl(),ACCOUNTS);
     buildNameWords();buildChips();
     $('#app').setAttribute('aria-busy','false');render();
+    if(view==='music') startMusicRefresh();
     if(view==='overview' && !FOLLOWER_GROWTH) void retryFollowerGrowth();
   }
   else{

@@ -46,6 +46,22 @@ React entry points live in `src/`; Tracker and Insights remain standalone
 pages in `public/`. The backend is the separate Cortex project
 (`chatgptricks/cortex`), not part of this frontend repository.
 
+## Sentient companion
+
+Signed-in users can open the floating 3D companion at the bottom left of every
+dashboard tool. Its chat discovers Cortex read operations and answers with
+source links using the user's existing permissions and role preview. The
+header can hide the character while retaining a compact chat button; that
+preference is per user. Conversation history is scoped to the signed-in user
+and this browser tab. Sign-out clears that user's conversation.
+
+`public/sentient-companion.js` hosts the same-origin `companion.html` frame.
+The frame shares Firebase persistence without sending credentials through
+postMessage. Three.js loads separately from the main dashboard bundle. UI
+copy follows the host language and theme; reduced motion and a non-WebGL
+fallback are supported. `npm run test:companion` covers chat, cancellation,
+safe rendering, unread replies, visibility preferences and session isolation.
+
 Research stacks expose their persisted **Stack ID** in the expanded stack and
 each member's details, with a copy button. Pasting that ID into Research search
 finds its members; opening the stack includes all members in the loaded catalogue,

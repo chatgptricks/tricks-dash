@@ -6,7 +6,7 @@ const reply = (status, body) => ({ ok: status >= 200 && status < 300, status, js
 const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; };
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
 
-function fixture(tool) {
+function fixture(tool, { music = false } = {}) {
   const source = fs.readFileSync(`public/${tool}.html`, 'utf8');
   const dom = new JSDOM(source, { runScripts: 'outside-only', url: `http://localhost:4175/${tool}.html`, pretendToBeVisual: true });
   const w = dom.window;
@@ -26,11 +26,12 @@ function fixture(tool) {
   w.__refreshFirebaseIdToken = async () => 'fixture';
   w.__sentientRolePreviewHeaders = () => ({ 'X-Queue-Role-Preview': 'vc' });
   if(tool === 'tracker') w.eval(fs.readFileSync('public/tracker-refresh.js', 'utf8'));
+  if(music) for(const file of ['tool-translations.js','insights-music.js','insights-music-view.js']) w.eval(fs.readFileSync(`public/${file}`, 'utf8'));
   const main = [...w.document.scripts].find(script => script.textContent.includes("const API = 'https://cortex-api-db2e.onrender.com'"));
   const settings = 'const settingsMenu' + source.split('const settingsMenu')[1].split('</script>')[0];
   const bridge = tool === 'tracker'
     ? 'window.__test={boot,loadSummary,render,renderDetail,writeAcc,get:authedFetch,setSummary:value=>{SUMMARY=value},state:()=>({summary:SUMMARY,cache:DETAIL_CACHE,session:TRACKER_SESSION})};'
-    : 'window.__test={boot,get:insightsGet,render,readUrl,writeUrl,buildChips,retryFollowerGrowth,filtered,state:()=>({raw:RAW,accounts:ACCOUNTS,selected:[...SEL],growth:FOLLOWER_GROWTH,error:FOLLOWER_GROWTH_ERROR}),select:values=>{SEL=new Set(values)},format:sectionTop};';
+    : 'window.__test={boot,get:insightsGet,render,readUrl,writeUrl,buildChips,retryFollowerGrowth,filtered,state:()=>({raw:RAW,musicRaw:MUSIC_RAW,accounts:ACCOUNTS,selected:[...SEL],growth:FOLLOWER_GROWTH,error:FOLLOWER_GROWTH_ERROR}),select:values=>{SEL=new Set(values)},format:sectionTop};';
   w.eval(main.textContent + '\n' + settings + '\n' + bridge);
   return { dom, w, source, test: w.__test };
 }
@@ -238,6 +239,124 @@ const growth = { accounts: [], peaks: [] };
   } finally { dom.window.close(); }
 }
 
+{
+  const { dom, w, test } = fixture('insights', { music: true });
+  try {
+    const timers = new Map();
+    let timerId = 0, now = Date.parse('2026-10-26T18:00:00Z');
+    const later = w.setTimeout, cancel = w.clearTimeout.bind(w);
+    w.setTimeout = (fn, delay) => {
+      if(delay !== 10000) return later(fn, delay);
+      const id = --timerId; timers.set(id, fn); return id;
+    };
+    w.clearTimeout = id => { if(!timers.delete(id)) cancel(id); };
+    w.Date.now = () => now;
+    const poll = () => {
+      assert.equal(timers.size, 1, 'A stale report has at most one pending refresh check');
+      const [id, fn] = timers.entries().next().value; timers.delete(id);
+      now += 10000; return fn();
+    };
+    const generated = '2026-10-26T17:00:00+00:00';
+    const report = {
+      ...posts,
+      posts: [{ a:'alpha',sc:'retained',d:'2026-10-01T12:00:00Z',l:200,c:5,v:1000,t:'Video',pt:'clips',u:'https://instagram.com/p/retained/',ms:'Retained song',ma:'Fixture artist',ai:'60001',oa:false }],
+      coverage: { generated_at: generated }, cache: { stale:true,refreshing:true,age_seconds:3600 },
+    };
+    const metadata = refreshing => ({ not_modified:true,coverage:report.coverage,cache:{stale:true,refreshing,age_seconds:3610} });
+    w.history.replaceState(null, '', '/insights.html?view=music');
+    const requests = [];
+    w.fetch = async url => { requests.push(String(url)); return reply(200, report); };
+    await test.boot();
+    assert.match(w.document.querySelector('#musicFreshness').textContent, /Data updated.*Updating…/);
+    assert.match(w.document.querySelector('#musicRanking').textContent, /Retained song/);
+    assert.equal(requests[0], 'https://cortex-api-db2e.onrender.com/api/insights/music', 'The first load requests a complete report');
+    assert.equal(w.document.querySelector('#app').getAttribute('aria-busy'), 'false');
+    w.document.documentElement.lang = 'es'; test.render();
+    assert.match(w.document.querySelector('#musicFreshness').textContent, /Datos actualizados.*Actualizando…/);
+    w.document.documentElement.lang = 'en'; test.render();
+    const search = w.document.querySelector('#musicSearch'); search.value = 'Retained'; search.dispatchEvent(new w.Event('input'));
+    const sort = w.document.querySelector('#musicSort'); sort.value = 'mean'; sort.dispatchEvent(new w.Event('change'));
+    const table = w.document.querySelector('#musicRanking');
+    w.fetch = async url => {
+      assert.equal(new URL(url).searchParams.get('known_generated_at'), generated, 'Refresh checks send the displayed report version');
+      return reply(200, metadata(false));
+    };
+    await poll();
+    assert.equal(w.document.querySelector('#musicRanking'), table, 'Metadata-only responses do not remount or analyze the complete catalogue');
+    assert.match(w.document.querySelector('#musicFreshness').textContent, /Data updated.*Showing saved data/);
+    w.fetch = async () => reply(404, {});
+    await poll();
+    assert.equal(w.document.querySelector('#musicRanking'), table, 'A failed refresh preserves the usable report');
+    assert.equal(w.document.querySelector('#musicSearch').value, 'Retained');
+    assert.equal(w.document.querySelector('#musicSort').value, 'mean');
+    assert.equal(w.document.querySelector('#app [role="alert"]'), null);
+    w.fetch = async () => reply(200, { ...metadata(true),coverage:{generated_at:'wrong-version'} });
+    await poll();
+    assert.equal(w.document.querySelector('#musicRanking'), table, 'Metadata from a different generation cannot replace or relabel the report');
+    const fresh = { ...report,posts:[{...report.posts[0],l:900}],coverage:{generated_at:'2026-10-26T18:00:00+00:00'},cache:{stale:false,refreshing:false,age_seconds:0} };
+    w.fetch = async () => reply(200, fresh);
+    await poll();
+    assert.notEqual(w.document.querySelector('#musicRanking'), table, 'A new complete generation replaces the old data');
+    assert.match(w.document.querySelector('#musicRanking').textContent, /900/);
+    assert.equal(w.document.querySelector('#musicSearch').value, 'Retained');
+    assert.equal(w.document.querySelector('#musicSort').value, 'mean');
+    assert.doesNotMatch(w.document.querySelector('#musicFreshness').textContent, /Updating|Showing saved/);
+    assert.equal(timers.size, 0, 'A fresh report stops polling');
+
+    w.fetch = async () => reply(200, report); await test.boot();
+    let calls = 0;
+    w.fetch = async () => { calls++; return reply(200, metadata(true)); };
+    Object.defineProperty(w.document, 'visibilityState', { configurable:true,value:'hidden' });
+    await poll();
+    assert.equal(calls, 0, 'Hidden tabs do not download refresh checks');
+    Object.defineProperty(w.document, 'visibilityState', { configurable:true,value:'visible' });
+    now += 5 * 60 * 1000;
+    await poll();
+    assert.equal(calls, 0, 'The five-minute background budget stops further requests');
+    assert.equal(timers.size, 0);
+    assert.match(w.document.querySelector('#musicFreshness').textContent, /Showing saved data/);
+
+    w.fetch = async () => reply(200, report); await test.boot();
+    const pending = deferred(); let pendingSignal;
+    w.fetch = async (_url, options) => { pendingSignal=options.signal; return pending.promise; };
+    const checking = poll(); await tick();
+    w.fetch = async url => reply(200, String(url).includes('follower-growth') ? growth : posts);
+    w.document.querySelector('#insightsOverview').click(); await tick();
+    assert.equal(pendingSignal.aborted, true, 'Leaving Music cancels an in-flight refresh');
+    pending.resolve(reply(200, fresh)); await checking;
+    assert.equal(w.document.querySelector('#musicCoverage'), null, 'A late Music report cannot replace Overview');
+    assert.equal(timers.size, 0);
+    w.document.querySelector('#insightsMusic').click();
+    const signedOut = deferred();
+    w.fetch = async (_url, options) => { pendingSignal=options.signal; return signedOut.promise; };
+    const oldSession = poll(); await tick();
+    w.__resetToolSession();
+    assert.equal(pendingSignal.aborted, true, 'Sign-out cancels refresh transport');
+    signedOut.resolve(reply(200, fresh)); await oldSession;
+    assert.equal(test.state().musicRaw.length, 0, 'A late poll cannot restore the prior session catalogue');
+    assert.equal(w.document.querySelector('#musicCoverage'), null);
+    assert.equal(timers.size, 0);
+
+    w.fetch = async () => reply(404, {}); await test.boot();
+    assert.ok(w.document.querySelector('#retryInsights'));
+    const retry = deferred(); w.fetch = () => retry.promise;
+    const retrying = w.document.querySelector('#retryInsights').onclick();
+    assert.match(w.document.querySelector('#app [role="status"]').textContent, /Loading Insights/);
+    assert.equal(w.document.querySelector('#retryInsights'), null, 'Retry replaces the old error with visible loading status');
+    retry.resolve(reply(200, fresh)); await retrying;
+    assert.ok(w.document.querySelector('#musicCoverage'));
+    w.__resetToolSession();
+    w.fetch = async () => reply(404, {}); await test.boot();
+    const overview = deferred();
+    w.fetch = url => String(url).includes('follower-growth') ? Promise.resolve(reply(200,growth)) : overview.promise;
+    w.document.querySelector('#insightsOverview').click();
+    assert.match(w.document.querySelector('#app [role="status"]').textContent, /Loading Insights/);
+    assert.equal(w.document.querySelector('#retryInsights'), null, 'Changing from a failed Music load to an unloaded Overview clears the old error');
+    overview.resolve(reply(200, posts)); await tick();
+    assert.equal(w.document.querySelector('#app').getAttribute('aria-busy'), 'false');
+  } finally { dom.window.close(); }
+}
+
 // Exercise each actual auth callback with two distinct fixture identities. No
 // Firebase SDK or remote API is loaded by this test.
 for (const tool of ['tracker', 'insights']) {
@@ -293,4 +412,4 @@ for (const tool of ['tracker', 'insights']) {
   } finally { dom.window.close(); }
 }
 
-console.log('PASS Tracker and Insights: stale navigation/session reads, direct account switches, token races, permission vs auth errors, retry recovery, empty-selection links, keyboard chips and partial follower recovery');
+console.log('PASS Tracker and Insights: stale navigation/session reads, direct account switches, token races, permission vs auth errors, retry recovery, empty-selection links, keyboard chips, partial follower recovery, lightweight Music freshness polling and cancellation');
