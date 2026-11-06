@@ -6,6 +6,7 @@ import { LaunchSplash } from './LaunchSplash';
 import { isLaunchSuppressed, setLaunchSuppressed, launchStorageKey } from './launch';
 import { ResultPill, ResultPills } from './ResultPills';
 import { extractPostResults, postKeyFromUrl, loadResults, saveResults, clearResults } from './results';
+import { parseCommand, suggestCommands } from './commands';
 import './position.css';
 
 const COPY = {
@@ -18,6 +19,8 @@ Object.assign(COPY.en, { menu: 'Sentient options', history: 'Chat history', hist
 const DOCKS = ['top-left', 'top-right', 'middle-left', 'middle-right', 'bottom-left', 'bottom-right'];
 COPY.es.aboutBot = 'Conocé a Sentient Bot';
 COPY.en.aboutBot = 'Meet Sentient Bot';
+Object.assign(COPY.es, { commands: 'Comandos', useCommand: 'Usar', filterCommand: 'Aplicar filtros en el dashboard', researchCommand: 'Buscar datos y responder en el chat', commandRequired: 'Escribí una consulta después del comando.' });
+Object.assign(COPY.en, { commands: 'Commands', useCommand: 'Use', filterCommand: 'Apply dashboard filters', researchCommand: 'Search data and answer in chat', commandRequired: 'Write a query after the command.' });
 function safeSource(url) {
   try { const target = new URL(url); return target.origin === 'https://sentientdash.app' && !target.username && !target.password ? target.href : null; } catch { return null; }
 }
@@ -77,10 +80,13 @@ export function Companion({ session, request, apiBase, Avatar = Character }) {
   const [view, setView] = useState('chat'), [menu, setMenu] = useState(false), [history, setHistory] = useState([]), [deleting, setDeleting] = useState(null);
   const [menuAnchor, setMenuAnchor] = useState(null);
   const [draft, setDraft] = useState(''), [busy, setBusy] = useState(false), [error, setError] = useState('');
+  const [commandIndex, setCommandIndex] = useState(0), [commandMenuDismissed, setCommandMenuDismissed] = useState(false);
   const [reaction, setReaction] = useState('idle'), [unread, setUnread] = useState(0);
   const gesture = useRef(null), suppressClick = useRef(false);
   const input = useRef(null), list = useRef(null), controller = useRef(null), sequence = useRef(0), opened = useRef(open), settle = useRef(null), menuElement = useRef(null), launcher = useRef(null), menuTrigger = useRef(null);
   const copy = COPY[context.language];
+  const draftCommand = parseCommand(draft);
+  const commandSuggestions = commandMenuDismissed ? [] : suggestCommands(draft);
   const currentVisual = useRef({ enabled, activeResults });
   currentVisual.current = { enabled, activeResults };
   useLayoutEffect(() => {
@@ -254,26 +260,49 @@ export function Companion({ session, request, apiBase, Avatar = Character }) {
     event.preventDefault(); const buttons = [...menuElement.current.querySelectorAll('button:not(:disabled)')], index = buttons.indexOf(document.activeElement);
     buttons[event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1 : (index + (event.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length]?.focus();
   }
+  function chooseCommand(mode) {
+    const query = suggestCommands(draft).length ? '' : parseCommand(draft).query;
+    setDraft(`/${mode} ${query}`.slice(0, 4000));
+    setCommandMenuDismissed(true); setCommandIndex(0); setError('');
+    input.current?.focus();
+  }
+  function composerKeys(event) {
+    if (event.nativeEvent.isComposing) return;
+    if (commandSuggestions.length) {
+      if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); setCommandMenuDismissed(true); return; }
+      if (['ArrowDown', 'ArrowUp'].includes(event.key)) {
+        event.preventDefault();
+        setCommandIndex(index => (index + (event.key === 'ArrowDown' ? 1 : -1) + commandSuggestions.length) % commandSuggestions.length);
+        return;
+      }
+      if ((event.key === 'Enter' || event.key === 'Tab') && !event.shiftKey) {
+        event.preventDefault(); chooseCommand(commandSuggestions[commandIndex] || commandSuggestions[0]); return;
+      }
+    }
+    if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); ask(); }
+  }
   async function ask(value = draft) {
     const message = value.trim();
     if (!message || busy || controller.current || !session) return;
+    const command = parseCommand(message);
+    if (!command.query) { setError(copy.commandRequired); return; }
     if (!session.configured) { setError(copy.unavailable); return; }
     const current = ++sequence.current;
     const abort = new AbortController(); controller.current = abort;
     const timer = setTimeout(() => abort.abort('timeout'), 125_000);
-    clearTimeout(settle.current); setDraft(''); setError(''); setBusy(true); setReaction('thinking');
+    clearTimeout(settle.current); setDraft(''); setCommandMenuDismissed(false); setCommandIndex(0); setError(''); setBusy(true); setReaction('thinking');
     const history = messages.filter(item => !item.failed).slice(-10).map(({ role, content }) => ({ role, content: content.slice(0, 8000) }));
     const userId = crypto.randomUUID();
     setMessages(items => [...items, { id: userId, role: 'user', content: message }]);
     try {
-      const response = await request(apiBase + '/api/dashboard/assistant/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: abort.signal, body: JSON.stringify({ message, history, language: context.language, page: context.page }) });
+      const response = await request(apiBase + '/api/dashboard/assistant/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: abort.signal, body: JSON.stringify({ message, history, language: context.language, page: context.page, ...(command.mode !== 'auto' ? { mode: command.mode } : {}) }) });
       if (current !== sequence.current) return;
       if (!response.ok) throw new Error(response.status === 504 ? 'timeout' : response.status === 429 ? 'limited' : 'unavailable');
       const result = await response.json();
       if (current !== sequence.current) return;
       if (!result.answer || typeof result.answer !== 'string') throw new Error('unavailable');
       const action = Array.isArray(result.ui_actions) ? result.ui_actions.find(item => item.type === 'research_filters') : null;
-      if (action && !validResearchFilters(action.filters)) throw new Error('unsupported');
+      if (action && (command.mode === 'research' || !validResearchFilters(action.filters))) throw new Error('unsupported');
       const assistantMessage = { id: crypto.randomUUID(), role: 'assistant', content: result.answer, sources: Array.isArray(result.sources) ? result.sources : [] };
       setMessages(items => [...items, assistantMessage]);
       if (action) {
@@ -314,7 +343,12 @@ export function Companion({ session, request, apiBase, Avatar = Character }) {
       <form className="chat-composer" onSubmit={event => { event.preventDefault(); ask(); }}>
         {error ? <p className="chat-error" role="alert">{error}</p> : null}
         {!session.configured ? <p className="chat-error" role="status">{copy.unavailable}</p> : null}
-        <div className="chat-input-row"><textarea ref={input} aria-label={copy.placeholder} placeholder={copy.placeholder} maxLength={4000} rows={2} value={draft} disabled={!session.configured} onChange={event => setDraft(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); ask(); } }}/>{busy ? <button className="chat-submit" type="button" aria-label={copy.stop} onClick={cancel}><Icon kind="stop"/></button> : <button className="chat-submit" type="submit" aria-label={copy.send} disabled={!draft.trim() || !session.configured}><Icon kind="send"/></button>}</div><p className="chat-note">{copy.note}</p>
+        <div className="chat-command-bar" aria-label={copy.commands}>
+          {['filter', 'research'].map(mode => <button type="button" key={mode} aria-label={`${copy.useCommand} /${mode}`} aria-pressed={draftCommand.mode === mode} title={copy[mode + 'Command']} disabled={!session.configured || busy} onClick={() => chooseCommand(mode)}><span>/{mode}</span></button>)}
+          <span className="chat-command-hint">{draftCommand.mode === 'auto' ? '/' : copy[draftCommand.mode + 'Command']}</span>
+        </div>
+        {commandSuggestions.length ? <div className="chat-command-menu" id="chat-commands" role="listbox" aria-label={copy.commands}>{commandSuggestions.map((mode, index) => <button type="button" role="option" id={`chat-command-${mode}`} aria-selected={index === commandIndex} key={mode} onMouseEnter={() => setCommandIndex(index)} onMouseDown={event => event.preventDefault()} onClick={() => chooseCommand(mode)}><strong>/{mode}</strong><span>{copy[mode + 'Command']}</span><kbd aria-hidden="true">↵</kbd></button>)}</div> : null}
+        <div className="chat-input-row"><textarea ref={input} aria-label={copy.placeholder} placeholder={copy.placeholder} aria-controls={commandSuggestions.length ? 'chat-commands' : undefined} aria-activedescendant={commandSuggestions.length ? `chat-command-${commandSuggestions[commandIndex] || commandSuggestions[0]}` : undefined} maxLength={4000} rows={2} value={draft} disabled={!session.configured} onChange={event => { setDraft(event.target.value); setCommandIndex(0); setCommandMenuDismissed(false); }} onKeyDown={composerKeys}/>{busy ? <button className="chat-submit" type="button" aria-label={copy.stop} onClick={cancel}><Icon kind="stop"/></button> : <button className="chat-submit" type="submit" aria-label={copy.send} disabled={!draftCommand.query || !session.configured}><Icon kind="send"/></button>}</div><p className="chat-note">{copy.note}</p>
       </form></>}
     </section> : null}
     <button ref={launcher} type="button" className={`pet-launcher ${!enabled ? 'mini-launcher' : ''}`} aria-label={open ? copy.close : copy.open} aria-expanded={open} aria-haspopup="menu" style={boxStyle(geometry?.avatar)} title={context.language === 'es' ? 'Arrastrá para mover · Clic derecho para opciones' : 'Drag to move · Right-click for options'} onClick={launch} onContextMenu={openMenu} onKeyDown={event => { if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) openMenu(event); }} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={pointerUp}>

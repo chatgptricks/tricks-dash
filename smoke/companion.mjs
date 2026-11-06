@@ -16,6 +16,13 @@ const button = label => [...document.querySelectorAll('button')].find(node => no
 const click = node => app.act(async () => { assert.ok(node, 'Expected control exists'); node.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })); });
 const contextMenu = () => app.act(async () => document.querySelector('.pet-launcher').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2 })));
 const flush = () => app.act(async () => { await new Promise(resolve => setTimeout(resolve, 10)); });
+const typeDraft = value => app.act(async () => {
+  const textarea = document.querySelector('textarea');
+  Object.getOwnPropertyDescriptor(dom.window.HTMLTextAreaElement.prototype, 'value').set.call(textarea, value);
+  textarea.dispatchEvent(new Event('input', { bubbles: true }));
+});
+const pressDraft = key => app.act(async () => document.querySelector('textarea').dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })));
+
 let pending, calls = [];
 const request = (_url, options) => new Promise((resolve, reject) => {
   calls.push(JSON.parse(options.body)); pending = resolve;
@@ -132,6 +139,69 @@ try {
   assert.equal(document.querySelector('.chat-error'), null);
   assert.equal(document.querySelector('.companion-chat') !== null, true);
 
+  // Slash shortcuts explicitly select this request's behavior without making
+  // the mode sticky in the conversation or changing the original message.
+  await app.act(async () => window.dispatchEvent(new MessageEvent('message', { origin: location.origin, source: parent, data: { source: 'sentient-host', type: 'context', language: 'es', theme: 'dark', page: '/index.html' } })));
+  assert.ok(button('Usar /filter'));
+  assert.ok(button('Usar /research'));
+  const beforeCompletion = calls.length;
+  await typeDraft('/');
+  assert.equal(document.querySelector('[role="listbox"]').getAttribute('aria-label'), 'Comandos');
+  assert.equal(document.querySelectorAll('[role="listbox"] [role="option"]').length, 2);
+  await pressDraft('Escape');
+  assert.equal(document.querySelector('[role="listbox"]'), null);
+  assert.ok(document.querySelector('.companion-chat'), 'Escape dismisses command suggestions without minimizing the chat');
+  assert.equal(document.querySelector('textarea').value, '/');
+  await typeDraft('/f'); await pressDraft('Tab');
+  assert.equal(document.querySelector('textarea').value, '/filter ');
+  assert.equal(calls.length, beforeCompletion, 'Completing a shortcut does not issue a request');
+  assert.equal(button('Enviar pregunta').disabled, true, 'A shortcut without a query cannot be sent');
+  await app.act(async () => document.querySelector('.chat-composer').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })));
+  assert.equal(calls.length, beforeCompletion, 'Even form submission rejects an empty shortcut query');
+  await typeDraft('posts about Elon Musk');
+  await click(button('Usar /research'));
+  assert.equal(document.querySelector('textarea').value, '/research posts about Elon Musk');
+  await click(button('Usar /filter'));
+  assert.equal(document.querySelector('textarea').value, '/filter posts about Elon Musk', 'Switching commands preserves the typed query');
+  await click(button('Enviar pregunta'));
+  assert.equal(calls.at(-1).mode, 'filter');
+  assert.equal(calls.at(-1).message, '/filter posts about Elon Musk');
+  assert.equal(document.querySelector('.from-user:last-of-type')?.textContent.includes('/filter') || document.querySelector('.chat-transcript').textContent.includes('/filter posts about Elon Musk'), true);
+  const shortcutFilters = { query: 'Elon Musk', min_likes: null, min_comments: null, accounts: [], from_date: null, to_date: null, sort: 'newest', post_type: 'All posts', promos_only: false, collabs_only: false };
+  await app.act(async () => pending(Response.json({ answer: 'Filtros aplicados.', ui_actions: [{ type: 'research_filters', filters: shortcutFilters }] })));
+  assert.equal(document.querySelector('.companion-chat'), null, '/filter applies the dashboard action and minimizes');
+  assert.deepEqual(hostMessages.findLast(item => item.type === 'research_filters').filters, shortcutFilters);
+  await click(button('Hablar con Sentient'));
+  await typeDraft('/re'); await pressDraft('Enter');
+  assert.equal(document.querySelector('textarea').value, '/research ', 'Enter completes an unambiguous shortcut');
+  await typeDraft('/research latest post from evolving.ai');
+  await pressDraft('Enter');
+  assert.equal(calls.at(-1).mode, 'research');
+  assert.equal(calls.at(-1).message, '/research latest post from evolving.ai');
+  const actionsBeforeResearch = hostMessages.filter(item => item.type === 'research_filters').length;
+  await app.act(async () => pending(Response.json({ answer: '[Ver post](https://sentientdash.app/index.html?post=evolving.ai%3ATEST_RESEARCH)', ui_actions: [] })));
+  assert.ok(document.querySelector('.companion-chat'), '/research keeps its answer in the chat');
+  assert.equal(hostMessages.filter(item => item.type === 'research_filters').length, actionsBeforeResearch);
+  await typeDraft('What is the newest post?'); await pressDraft('Enter');
+  assert.equal(Object.hasOwn(calls.at(-1), 'mode'), false, 'A normal follow-up returns to automatic behavior');
+  assert.ok(calls.at(-1).history.some(item => item.content.startsWith('/research ')), 'History may contain shortcuts without making the next mode sticky');
+  await app.act(async () => pending(Response.json({ answer: 'Latest post found.', ui_actions: [] })));
+  await typeDraft('/research show Elon Musk posts'); await pressDraft('Enter');
+  const guardedActions = hostMessages.filter(item => item.type === 'research_filters').length;
+  await app.act(async () => pending(Response.json({ answer: 'Filters applied.', ui_actions: [{ type: 'research_filters', filters: shortcutFilters }] })));
+  assert.equal(hostMessages.filter(item => item.type === 'research_filters').length, guardedActions, '/research rejects an unexpected filter action even if returned by the API');
+  assert.ok(document.querySelector('.companion-chat'));
+  assert.match(document.querySelector('.chat-error').textContent, /filtros/);
+  assert.equal(document.querySelector('textarea').value, '/research show Elon Musk posts');
+  await click(button('Nueva conversación'));
+  await app.act(async () => window.dispatchEvent(new MessageEvent('message', { origin: location.origin, source: parent, data: { source: 'sentient-host', type: 'context', language: 'en', theme: 'light', page: '/' } })));
+  assert.ok(button('Use /filter')); assert.ok(button('Use /research'));
+  await typeDraft('/'); assert.equal(document.querySelector('[role="listbox"]').getAttribute('aria-label'), 'Commands');
+  await typeDraft('/researcher latest post'); await pressDraft('Enter');
+  assert.equal(Object.hasOwn(calls.at(-1), 'mode'), false, 'A longer slash word is not mistaken for a recognized command');
+  assert.equal(calls.at(-1).message, '/researcher latest post');
+  await app.act(async () => pending(Response.json({ answer: 'Please clarify.', ui_actions: [] })));
+
   await app.act(async () => app.unmount());
   await app.act(async () => app.mount({ session: { uid: 'two', configured: true }, request, apiBase: 'https://api.example.test' }));
   assert.equal(document.querySelectorAll('.chat-message').length, 0);
@@ -139,7 +209,7 @@ try {
   await app.act(async () => app.mount({ session: null, request, apiBase: '' }));
   assert.equal(document.querySelector('.companion'), null);
   await app.act(async () => app.unmount()); await flush();
-  console.log('Companion: chat, safe text, sources, unread count, hide/show, abort, i18n and session isolation passed.');
+  console.log('Companion: chat, slash shortcuts, mode isolation, guarded research actions, inline results, history, cancellation and localization passed.');
 } catch (error) { console.error(error.message); process.exitCode = 1; }
 finally { dom.window.close(); }
 process.exit(process.exitCode || 0);
