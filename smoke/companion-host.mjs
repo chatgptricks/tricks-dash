@@ -7,8 +7,9 @@ Object.defineProperty(w, 'innerWidth', { value: 1280, configurable: true });
 Object.defineProperty(w, 'innerHeight', { value: 900, configurable: true });
 let navigation;
 w.__navigate = url => { navigation = url; };
-w.eval((await fs.readFile('public/sentient-companion.js', 'utf8')).replace("location.assign('/index.html?' + params.toString())", "window.__navigate('/index.html?' + params.toString())"));
+w.eval((await fs.readFile('public/sentient-companion.js', 'utf8')).replaceAll('location.assign(', 'window.__navigate('));
 const frame = w.document.getElementById('sentient-companion-frame');
+const backdrop = w.document.getElementById('sentient-companion-backdrop');
 const messages = [];
 frame.contentWindow.postMessage = message => messages.push(message);
 function send(data, source = frame.contentWindow, origin = w.location.origin) { w.dispatchEvent(new w.MessageEvent('message', { origin, source, data: { source: 'sentient-companion', ...data } })); }
@@ -35,6 +36,48 @@ send({ type: 'drag-start' }); send({ type: 'drag-end', dx: 1100, dy: -700 });
 assert.equal(frame.dataset.dock, 'top-right');
 assert.equal(frame.style.zIndex, '2147483647');
 assert.equal(frame.style.colorScheme, 'light');
+send({ type: 'layout', state: 'open' });
+send({ type: 'navigate', url: 'https://other.example/index.html?post=unsafe' });
+send({ type: 'navigate', url: 'https://user:password@sentientdash.app/index.html?post=unsafe' });
+send({ type: 'navigate', url: 'javascript:alert(1)' });
+send({ type: 'navigate', url: '/api/dashboard/assistant/chat' });
+assert.equal(navigation, undefined, 'Only public same-origin dashboard pages can be opened');
+assert.equal(frame.dataset.state, 'open', 'Rejected destinations leave the current chat intact');
+send({ type: 'navigate', url: '/index.html?post=evolving.ai%3Atest' }, w);
+assert.equal(navigation, undefined, 'A different frame cannot use the navigation bridge');
+send({ type: 'navigate', url: '/index.html?post=evolving.ai%3Atest' });
+assert.equal(navigation, 'https://sentientdash.app/index.html?post=evolving.ai%3Atest');
+assert.equal(frame.dataset.state, 'closed', 'Opening a result minimizes before navigation');
+assert.equal(backdrop.style.display, 'none');
+assert.equal(backdrop.style.pointerEvents, 'none');
+navigation = undefined;
+send({ type: 'layout', state: 'open' });
+assert.equal(backdrop.style.pointerEvents, 'auto', 'The blur intercepts the dismissing click');
+let underlyingClicks = 0;
+w.document.body.addEventListener('click', () => underlyingClicks++);
+backdrop.dispatchEvent(new w.MouseEvent('click', { bubbles: true, cancelable: true }));
+assert.equal(underlyingClicks, 0, 'Dismissing chat does not click a dashboard control beneath it');
+assert.equal(frame.dataset.state, 'closed');
+assert.equal(backdrop.style.display, 'none');
+assert.equal(messages.at(-1).type, 'minimize', 'The child persists the closed state after outside-click');
+send({ type: 'layout', state: 'closed', menu: { open: true, width: 244, height: 344 } });
+assert.deepEqual([geometry().menu.w, geometry().menu.h], [244, 344]);
+assert.equal(backdrop.style.display, 'none', 'The context menu alone does not blur the dashboard');
+w.dispatchEvent(new w.Event('pointerdown'));
+assert.equal(geometry().menu, null);
+assert.equal(messages.at(-1).type, 'dismiss-menu');
+for (const dock of corners) {
+  send({ type: 'dock', dock });
+  assert.equal(frame.dataset.dock, dock);
+  assert.equal(messages.at(-1).type, 'docked'); assert.equal(messages.at(-1).dock, dock);
+}
+send({ type: 'dock', dock: 'invalid' });
+assert.equal(frame.dataset.dock, 'bottom-right');
+const stablePosition = [frame.style.left, frame.style.top];
+send({ type: 'drag-start' }); send({ type: 'drag-move', dx: -400, dy: -400 });
+assert.notDeepEqual([frame.style.left, frame.style.top], stablePosition);
+send({ type: 'drag-cancel' });
+assert.deepEqual([frame.style.left, frame.style.top], stablePosition, 'Canceled gestures restore the remembered dock');
 send({ type: 'research_filters', filters: { query: 'Elon Musk', min_likes: 5001, accounts: [], sort: 'newest', post_type: 'Carousel' } }, w);
 assert.equal(navigation, undefined, 'Untrusted frames cannot navigate the dashboard');
 send({ type: 'research_filters', filters: { query: 'Elon Musk', min_likes: 5001, accounts: [], sort: 'newest', post_type: 'Carousel' } });
@@ -44,6 +87,19 @@ navigation = undefined;
 send({ type: 'research_filters', filters: { query: '', text_scope: 'caption', post_type: 'All posts', sort: 'newest' } });
 assert.equal(navigation, undefined, 'Unsupported page controls must not be silently dropped or applied');
 Object.defineProperty(w, 'innerWidth', { value: 390 }); Object.defineProperty(w, 'innerHeight', { value: 844 });
-for (const dock of corners) { send({ type: 'ready', dock }); send({ type: 'layout', state: 'open' }); assert.ok(parseFloat(frame.style.left) >= 0 && parseFloat(frame.style.left) + parseFloat(frame.style.width) <= 390); }
+for (const height of [844, 260]) {
+  Object.defineProperty(w, 'innerHeight', { value: height });
+  for (const dock of corners) {
+    send({ type: 'ready', dock }); send({ type: 'layout', state: 'open', menu: { open: true, width: 244, height: 344 } });
+    assert.ok(parseFloat(frame.style.left) >= 0 && parseFloat(frame.style.left) + parseFloat(frame.style.width) <= 390);
+    assert.ok(parseFloat(frame.style.top) >= 0 && parseFloat(frame.style.top) + parseFloat(frame.style.height) <= height, 'Panels remain visible when the software keyboard reduces height');
+    assert.deepEqual([geometry().avatar.w, geometry().avatar.h], [136, 146]);
+    assert.ok(geometry().menu.h <= height - 24, 'Context menus scroll within the visible viewport');
+  }
+}
+Object.defineProperty(w, 'visualViewport', { value: { width: 390, height: 430, offsetLeft: 40, offsetTop: 90 } });
+send({ type: 'ready', dock: 'bottom-right' }); send({ type: 'layout', state: 'open' });
+assert.ok(parseFloat(frame.style.left) >= 40 && parseFloat(frame.style.left) + parseFloat(frame.style.width) <= 430);
+assert.ok(parseFloat(frame.style.top) >= 90 && parseFloat(frame.style.top) + parseFloat(frame.style.height) <= 520);
 dom.window.close();
-console.log('PASS Companion host: six positions, constant size, viewport bounds, dragging, theme, foreground, and validated visible filters.');
+console.log('PASS Companion host: result minimization, outside-click dismissal, context-menu geometry, docking, canceled drags, viewport bounds, and validated navigation/filters.');

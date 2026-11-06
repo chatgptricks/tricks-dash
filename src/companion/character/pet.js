@@ -404,9 +404,13 @@ export class SentientPet {
     this.face.style.width=size+'px';this.face.style.height=size*.75+'px';
     this.accentPoint.getWorldPosition(this.projection);
     this.projection.project(this.camera);
-    const accentSize=1.28/this.viewHeight*this.height;
-    const accentX=THREE.MathUtils.clamp((this.projection.x*.5+.5)*this.width,accentSize*.6,this.width-accentSize*.6);
-    const accentY=THREE.MathUtils.clamp((-this.projection.y*.5+.5)*this.height,Math.max(90,accentSize*.65),this.height-accentSize*.65);
+    const accentSize=1.9/this.viewHeight*this.height;
+    // Keep the marker above the eyes at every canvas size. The old 90px floor
+    // put it below the face when the character was only 146px tall.
+    const accentMargin=accentSize*.7;
+    const accentX=THREE.MathUtils.clamp((this.projection.x*.5+.5)*this.width,accentMargin,this.width-accentMargin);
+    const aboveEyes=y-size*.32-accentSize*.58-3;
+    const accentY=THREE.MathUtils.clamp(Math.min((-this.projection.y*.5+.5)*this.height,aboveEyes),accentMargin,this.height-accentMargin);
     this.accents.render(accentX,accentY,accentSize,this.width,this.height);
     this.renderer.render(this.scene,this.camera);
   }

@@ -5,13 +5,16 @@ import { JSDOM } from 'jsdom';
 const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', { url: 'https://sentientdash.app/companion.html', pretendToBeVisual: true });
 for (const key of ['window', 'document', 'navigator', 'HTMLElement', 'Element', 'Node', 'Event', 'MouseEvent', 'KeyboardEvent', 'MessageEvent', 'localStorage', 'sessionStorage', 'location', 'parent']) Object.defineProperty(globalThis, key, { value: dom.window[key], configurable: true, writable: true });
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+const hostMessages = [];
+globalThis.parent = { postMessage: value => hostMessages.push(value) };
 const bundle = await build({ stdin: { contents: `import {act} from 'react'; import {createRoot} from 'react-dom/client'; import {Companion} from './src/companion/Companion.jsx';
 export {act}; let root; const Avatar=({reaction,unread,paused})=><span data-reaction={reaction} data-unread={unread} data-paused={String(paused)}/>;
 export function mount(props){root=createRoot(document.getElementById('root'));root.render(<Companion {...props} Avatar={Avatar}/>)}
 export function unmount(){root.unmount()}`, loader: 'jsx', resolveDir: process.cwd() }, bundle: true, write: false, format: 'esm', platform: 'browser', jsx: 'automatic', target: 'es2022' });
 const app = await import('data:text/javascript;base64,' + Buffer.from(bundle.outputFiles[0].text).toString('base64'));
 const button = label => [...document.querySelectorAll('button')].find(node => node.getAttribute('aria-label') === label || node.textContent.includes(label));
-const click = node => app.act(async () => node.dispatchEvent(new MouseEvent('click', { bubbles: true })));
+const click = node => app.act(async () => { assert.ok(node, 'Expected control exists'); node.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })); });
+const contextMenu = () => app.act(async () => document.querySelector('.pet-launcher').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2 })));
 const flush = () => app.act(async () => { await new Promise(resolve => setTimeout(resolve, 10)); });
 let pending, calls = [];
 const request = (_url, options) => new Promise((resolve, reject) => {
@@ -38,6 +41,17 @@ try {
   assert.equal(document.querySelectorAll('.chat-message-text a').length, 1);
   assert.equal(document.querySelector('.chat-message-text a').getAttribute('href'), 'https://sentientdash.app/index.html?post=example%3ACODE');
   assert.equal(document.querySelector('[data-unread]').dataset.unread, '0');
+  await click(document.querySelector('.chat-message-text a'));
+  assert.equal(document.querySelector('.companion-chat'), null, 'Result links minimize before navigating');
+  assert.equal(sessionStorage.getItem('sentient.pet.open.one'), 'false');
+  assert.match(hostMessages.findLast(item => item.type === 'navigate').url, /post=example%3ACODE/);
+  assert.equal(document.querySelector('[data-paused]').dataset.paused, 'false');
+  await click(button('Hablar con Sentient'));
+  await click(document.querySelector('.chat-sources a'));
+  assert.equal(document.querySelector('.companion-chat'), null, 'Source links also minimize');
+  await contextMenu();
+  assert.equal(document.querySelector('[role="menu"]').getAttribute('aria-label'), 'Opciones de Sentient');
+  assert.equal(document.querySelectorAll('[role="menuitemradio"]').length, 6);
   await click(button('Cerrar asistente'));
   assert.equal(document.querySelector('[data-paused]').dataset.paused, 'true');
   assert.equal(document.querySelector('.companion-chat'), null);
@@ -45,6 +59,13 @@ try {
   await click(button('Hablar con Sentient'));
   assert.equal(localStorage.getItem('sentient.pet.enabled.one'), 'true');
   assert.equal(document.querySelector('[data-paused]').dataset.paused, 'false');
+  await click(button('Nueva conversación'));
+  assert.equal(document.querySelectorAll('.chat-message').length, 0);
+  await contextMenu();
+  await click(button('Historial de chats'));
+  assert.equal(document.querySelector('.chat-history') !== null, true);
+  await click(document.querySelector('.history-resume'));
+  assert.equal(document.querySelectorAll('.chat-message').length, 2, 'History resumes original conversation');
   await click(button('Nueva conversación'));
   await click(button('Reel con más likes · 24 h'));
   await click(button('Detener respuesta'));
@@ -65,6 +86,24 @@ try {
   assert.equal(document.querySelector('[data-paused]').dataset.paused, 'false', 'The character remains animated');
   assert.equal(document.querySelector('[data-unread]').dataset.unread, '0');
   assert.equal(sessionStorage.getItem('sentient.pet.open.one'), 'false', 'Navigation preserves the minimized state');
+
+  await click(button('Chat with Sentient'));
+  await app.act(async () => window.dispatchEvent(new MessageEvent('message', { origin: location.origin, source: parent, data: { source: 'sentient-host', type: 'minimize' } })));
+  assert.equal(document.querySelector('.companion-chat'), null, 'Backdrop minimizes and persists');
+  assert.equal(sessionStorage.getItem('sentient.pet.open.one'), 'false');
+  await contextMenu();
+  await app.act(async () => document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
+  assert.equal(document.querySelector('[role="menu"]'), null);
+  assert.equal(document.activeElement, document.querySelector('.pet-launcher'));
+  await click(button('Chat with Sentient'));
+  await click(button('New conversation'));
+  await click(button('Most liked reel · 24h'));
+  const staleResponse = pending;
+  await click(button('New conversation'));
+  await app.act(async () => staleResponse(Response.json({ answer: 'Old answer', ui_actions: [{ type: 'research_filters', filters: {} }] })));
+  assert.equal(document.querySelectorAll('.chat-message').length, 0, 'A cancelled answer cannot leak into a new conversation');
+  assert.equal(document.querySelector('.chat-error'), null);
+  assert.equal(document.querySelector('.companion-chat') !== null, true);
 
   await app.act(async () => app.unmount());
   await app.act(async () => app.mount({ session: { uid: 'two', configured: true }, request, apiBase: 'https://api.example.test' }));
