@@ -29,7 +29,8 @@ export function AnswerText({ text, onNavigate }) {
 }
 function Icon({ kind }) {
   const paths = { close: 'M5 12h14', send: 'm5 12 14-7-5 14-3-6-6-1Z M11 13l8-8', new: 'M12 5v14 M5 12h14', stop: 'M7 7h10v10H7Z', chat: 'M5 4h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9l-6 4V6a2 2 0 0 1 2-2Z', hide: 'M3 3l18 18 M10 5h9a2 2 0 0 1 2 2v9 M7 7H5a2 2 0 0 0-2 2v9l6-4h5' };
-  Object.assign(paths, { menu: 'M5 12h.01 M12 12h.01 M19 12h.01', history: 'M3 11a9 9 0 1 1 2 7 M3 4v7h7 M12 7v5l3 2', back: 'm12 5-7 7 7 7 M5 12h14', trash: 'M3 6h18 M9 6V3h6v3 M5 6l1 15h12l1-15 M10 10v7 M14 10v7' });
+  Object.assign(paths, { history: 'M3 11a9 9 0 1 1 2 7 M3 4v7h7 M12 7v5l3 2', back: 'm12 5-7 7 7 7 M5 12h14', trash: 'M3 6h18 M9 6V3h6v3 M5 6l1 15h12l1-15 M10 10v7 M14 10v7' });
+  if (kind === 'menu') return <svg viewBox="0 0 24 24" aria-hidden="true">{[5, 12, 19].map(x => <circle key={x} cx={x} cy="12" r="1.5" fill="currentColor" stroke="none"/>)}</svg>;
   return <svg viewBox="0 0 24 24" aria-hidden="true"><path d={paths[kind] || paths.chat}/></svg>;
 }
 
@@ -203,7 +204,7 @@ export function Companion({ session, request, apiBase, Avatar = Character }) {
     } finally { clearTimeout(timer); if (current === sequence.current) { setBusy(false); controller.current = null; } }
   }
   if (!session) return null;
-  return <div className={`companion ${open ? 'is-open' : ''} ${enabled ? '' : 'is-compact'}`} onPointerDown={event => { if (event.target === event.currentTarget) { if (open) minimize(); else setMenu(false); } }}>
+  return <div className={`companion ${open ? 'is-open' : ''} ${enabled ? '' : 'is-compact'}`} onKeyDown={event => { if (event.key === 'Escape' && open && !menu) { event.stopPropagation(); minimize(); launcher.current?.focus(); } }} onPointerDown={event => { if (event.target === event.currentTarget) { if (open) minimize(); else setMenu(false); } }}>
     {open ? <section className="companion-chat" style={boxStyle(geometry?.panel)} role="dialog" aria-modal="false" aria-label={view === 'history' ? copy.history : copy.open} onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); minimize(); launcher.current?.focus(); } }}>
       <header className="chat-header"><div className="chat-identity"><span className="chat-status-dot"/><div><strong>{view === 'history' ? copy.history : copy.title}</strong><small>{copy.subtitle}</small></div></div><div className="chat-header-actions"><button type="button" aria-label={copy.newChat} title={copy.newChat} onClick={clear}><Icon kind="new"/></button><button type="button" aria-label={copy.menu} title={copy.menu} aria-haspopup="menu" aria-expanded={menu} onClick={openMenu}><Icon kind="menu"/></button><button type="button" aria-label={copy.close} title={copy.close} onClick={minimize}><Icon kind="close"/></button></div></header>
       {view === 'history' ? <div className="chat-history">
