@@ -56,7 +56,7 @@ await app.act(async () => document.querySelector('button').click()); assert.equa
 await app.act(async () => app.unmount());
 await app.act(async () => app.mount({ results: three, locale: 'en' }));
 assert.equal(document.querySelector('button'), null, 'Inline pills do not render dismissal without a callback');
-assert.match(document.querySelector('nav').textContent, /Results/);
+assert.equal(document.querySelector('nav').getAttribute('aria-label'), 'Your query results');
 await app.act(async () => app.unmount());
 dom.window.close();
 console.log('Companion results: internal post extraction, deduplication, 10-result cap, route selection, user isolation, persistence, dismissal and accessible pills passed.');

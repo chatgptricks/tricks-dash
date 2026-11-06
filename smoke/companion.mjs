@@ -27,6 +27,14 @@ try {
   assert.ok(button('Hablar con Sentient'));
   assert.equal(document.querySelector('[data-paused]').dataset.paused, 'false');
   await click(button('Hablar con Sentient'));
+  const headerMenu = button('Opciones de Sentient');
+  document.querySelector('.companion-chat').getBoundingClientRect = () => ({ right: 420, top: 12 });
+  headerMenu.getBoundingClientRect = () => ({ right: 360, top: 24, width: 32, height: 34 });
+  await click(headerMenu);
+  assert.deepEqual(hostMessages.findLast(item => item.type === 'layout').menu.anchor, { source: 'chat', right: 60, top: 12, w: 32, h: 34 }, 'Header menu is anchored to its own trigger within the chat panel');
+  assert.equal(document.querySelectorAll('.pet-position-screen [role="menuitemradio"]').length, 6, 'All six positions share a single screen diagram');
+  await app.act(async () => document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
+  assert.equal(document.activeElement === headerMenu, true, 'Escape restores focus to the menu trigger');
   await click(button('Carrusel con más likes · 24 h'));
   assert.equal(calls.length, 1); assert.equal(calls[0].language, 'es');
   assert.equal(document.querySelector('[data-reaction]').dataset.reaction, 'thinking');
@@ -59,6 +67,7 @@ try {
   assert.equal(document.querySelector('.companion-chat'), null, 'Source links also minimize');
   await contextMenu();
   assert.equal(document.querySelector('[role="menu"]').getAttribute('aria-label'), 'Opciones de Sentient');
+  assert.equal(hostMessages.findLast(item => item.type === 'layout').menu.anchor, null, 'Bot context menu clears the chat trigger anchor');
   assert.equal(document.querySelectorAll('[role="menuitemradio"]').length, 6);
   await click(button('Cerrar asistente'));
   assert.equal(document.querySelector('[data-paused]').dataset.paused, 'true');

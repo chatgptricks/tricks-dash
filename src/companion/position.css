@@ -1,0 +1,24 @@
+/* One miniature dashboard, with the six available docking areas. */
+.pet-position-screen{position:relative;height:77px;margin:0 10px;border:1px solid var(--line);border-radius:8px;background:var(--raised);overflow:hidden}
+.pet-position-chrome{position:absolute;inset:0 0 auto;height:9px;display:flex;align-items:center;gap:3px;padding-left:6px;border-bottom:1px solid var(--line);pointer-events:none}
+.pet-position-chrome i{width:2px;height:2px;border-radius:50%;background:var(--muted);opacity:.5}
+.pet-position-content{position:absolute;left:50%;top:31px;width:46px;transform:translateX(-50%);display:grid;gap:5px;pointer-events:none;opacity:.45}
+.pet-position-content i{height:3px;border-radius:2px;background:var(--line)}
+.pet-position-content i:last-child{width:65%}
+.pet-position-zone{position:absolute;display:grid;place-items:center;width:42px;height:20px;margin:0;padding:0;border:0;border-radius:5px;background:transparent;color:var(--muted);transition:background .16s,color .16s}
+.pet-position-zone:hover{background:color-mix(in srgb,var(--accent) 8%,transparent);color:var(--text)}
+.pet-position-zone:focus-visible{outline-offset:-2px}
+.pet-position-zone[aria-checked="true"]{color:var(--accent)}
+.pet-position-dot{display:block;width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.65;transition:box-shadow .16s,opacity .16s}
+.pet-position-zone[aria-checked="true"] .pet-position-dot{opacity:1;box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 18%,transparent)}
+.zone-top-left,.zone-middle-left,.zone-bottom-left{left:2px}
+.zone-top-right,.zone-middle-right,.zone-bottom-right{right:2px}
+.zone-top-left,.zone-top-right{top:10px}
+.zone-middle-left,.zone-middle-right{top:32px}
+.zone-bottom-left,.zone-bottom-right{bottom:1px}
+
+/* Wait for the host's final bounds, then unfold once from the bot-facing edge. */
+.pet-menu[data-positioned="false"]{visibility:hidden}
+.pet-menu[data-positioned="true"]{transform-origin:var(--pet-menu-origin,50% 100%);animation:pet-menu-emerge .22s cubic-bezier(.2,.8,.2,1) both}
+@keyframes pet-menu-emerge{from{opacity:0;transform:translate(var(--pet-menu-enter-x,0),var(--pet-menu-enter-y,10px)) scale(.88)}to{opacity:1;transform:translate(0,0) scale(1)}}
+@media(prefers-reduced-motion:reduce){.pet-menu[data-positioned="true"]{animation:none}.pet-position-zone,.pet-position-dot{transition:none}}

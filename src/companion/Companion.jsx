@@ -6,6 +6,7 @@ import { LaunchSplash } from './LaunchSplash';
 import { isLaunchSeen, markLaunchSeen, launchStorageKey } from './launch';
 import { ResultPills } from './ResultPills';
 import { extractPostResults, stripPostResultLinks, loadResults, saveResults, clearResults } from './results';
+import './position.css';
 
 const COPY = {
   es: { open: 'Hablar con Sentient', close: 'Minimizar chat', title: 'Sentient', subtitle: 'Tu dashboard, en conversación', greet: '¿Qué querés saber?', intro: 'Puedo consultar tus datos de Cortex y ayudarte a entender el dashboard.', placeholder: 'Preguntame sobre el dashboard…', send: 'Enviar pregunta', stop: 'Detener respuesta', thinking: 'Consultando Cortex…', hide: 'Cerrar asistente', show: 'Mostrar mascota', newChat: 'Nueva conversación', sources: 'Datos consultados', error: 'No pude completar la consulta. Intentá de nuevo.', timeout: 'La consulta tardó demasiado. Probá una pregunta más específica.', unsupported: 'Esos filtros no están disponibles en esta página.', unavailable: 'El chat todavía no está disponible. Intentá más tarde.', note: 'Las respuestas pueden contener errores. Revisá las fuentes.', prompts: [{ label: 'Carrusel con más likes · 24 h', question: '¿Cuál es el carrusel con más likes de las últimas 24 horas?' }, { label: 'Reel con más likes · 24 h', question: '¿Cuál es el reel con más likes de las últimas 24 horas?' }, { label: 'Top 3 reels históricos de una cuenta…', draft: '¿Cuáles son los 3 reels con más likes de toda la historia de @' }], partial: 'Muestra parcial', stopped: 'Consulta detenida.' },
@@ -51,18 +52,19 @@ export function Companion({ session, request, apiBase, Avatar = Character }) {
   const [conversation, setConversation] = useState(() => loadConversation(session?.uid));
   const [messages, setMessages] = useState(() => conversation.messages);
   const [view, setView] = useState('chat'), [menu, setMenu] = useState(false), [history, setHistory] = useState([]), [deleting, setDeleting] = useState(null);
+  const [menuAnchor, setMenuAnchor] = useState(null);
   const [draft, setDraft] = useState(''), [busy, setBusy] = useState(false), [error, setError] = useState('');
   const [reaction, setReaction] = useState('idle'), [unread, setUnread] = useState(0);
   const gesture = useRef(null), suppressClick = useRef(false);
-  const input = useRef(null), list = useRef(null), controller = useRef(null), sequence = useRef(0), opened = useRef(open), settle = useRef(null), menuElement = useRef(null), launcher = useRef(null);
+  const input = useRef(null), list = useRef(null), controller = useRef(null), sequence = useRef(0), opened = useRef(open), settle = useRef(null), menuElement = useRef(null), launcher = useRef(null), menuTrigger = useRef(null);
   const copy = COPY[context.language];
   useEffect(() => {
     opened.current = open;
     try { if (session?.uid) sessionStorage.setItem('sentient.pet.open.' + session.uid, String(open)); } catch { /* optional persistence */ }
-    postHost({ type: 'layout', state: !session || (launchVisible && !contextReady) ? 'hidden' : launchVisible ? 'launch' : open ? 'open' : enabled ? 'closed' : 'compact', menu: { open: menu && !launchVisible, width: 244, height: busy ? 416 : 380 }, results: { visible: !launchVisible && !open && enabled && !menu && activeResults.length > 0, count: activeResults.length } });
+    postHost({ type: 'layout', state: !session || (launchVisible && !contextReady) ? 'hidden' : launchVisible ? 'launch' : open ? 'open' : enabled ? 'closed' : 'compact', menu: { open: menu && !launchVisible, width: 244, height: busy ? 416 : 380, anchor: menuAnchor }, results: { visible: !launchVisible && !open && enabled && !menu && activeResults.length > 0, count: activeResults.length } });
     if (open) setUnread(0);
-  }, [open, enabled, session, menu, busy, launchVisible, contextReady, activeResults.length]);
-  useEffect(() => { if (open && view === 'chat' && !menu && !launchVisible) input.current?.focus(); }, [open, view, menu, launchVisible]);
+  }, [open, enabled, session, menu, menuAnchor, busy, launchVisible, contextReady, activeResults.length]);
+  useEffect(() => { if (open && view === 'chat' && !menu && !launchVisible && document.activeElement !== menuTrigger.current) input.current?.focus(); }, [open, view, menu, launchVisible]);
   useEffect(() => {
     const seenElsewhere = event => { if (event.key === launchStorageKey(session?.uid) && isLaunchSeen(session?.uid)) setLaunchVisible(false); };
     window.addEventListener('storage', seenElsewhere);
@@ -71,10 +73,12 @@ export function Companion({ session, request, apiBase, Avatar = Character }) {
   useEffect(() => {
     if (!menu) return;
     menuElement.current?.querySelector('button:not(:disabled)')?.focus();
-    const dismiss = event => { if (!menuElement.current?.contains(event.target) && !launcher.current?.contains(event.target)) setMenu(false); };
+    const dismiss = event => { if (!menuElement.current?.contains(event.target) && !launcher.current?.contains(event.target) && !menuTrigger.current?.contains(event.target)) setMenu(false); };
     document.addEventListener('pointerdown', dismiss);
     return () => document.removeEventListener('pointerdown', dismiss);
   }, [menu]);
+  const menuPositioned = Boolean(geometry?.menu);
+  useEffect(() => { if (menu && menuPositioned) menuElement.current?.querySelector('button:not(:disabled)')?.focus(); }, [menu, menuPositioned]);
   useEffect(() => {
     let dock; try { dock = localStorage.getItem('sentient.pet.position.' + session?.uid); } catch { /* optional preference */ }
     postHost({ type: 'ready', dock });
@@ -167,6 +171,17 @@ export function Companion({ session, request, apiBase, Avatar = Character }) {
     event.currentTarget.releasePointerCapture?.(event.pointerId);
   }
   const boxStyle = box => box ? { left: box.x, top: box.y, width: box.w, height: box.h, right: 'auto', bottom: 'auto' } : undefined;
+  const menuStyle = boxStyle(geometry?.menu);
+  if (menuStyle && geometry?.avatar) {
+    const { menu: box, avatar } = geometry;
+    const originX = Math.max(0, Math.min(box.w, Number.isFinite(box.origin?.x) ? box.origin.x : avatar.x + avatar.w / 2 - box.x));
+    const originY = Math.max(0, Math.min(box.h, Number.isFinite(box.origin?.y) ? box.origin.y : avatar.y + avatar.h / 2 - box.y));
+    Object.assign(menuStyle, {
+      '--pet-menu-origin': `${originX}px ${originY}px`,
+      '--pet-menu-enter-x': `${(originX / Math.max(1, box.w) - .5) * 20}px`,
+      '--pet-menu-enter-y': `${(originY / Math.max(1, box.h) - .5) * 20}px`,
+    });
+  }
   function stopPending() { sequence.current++; controller.current?.abort(); controller.current = null; clearTimeout(settle.current); setBusy(false); setReaction('idle'); }
   function cancelledMessages() { return messages.map((item, i) => busy && i === messages.length - 1 && item.role === 'user' ? { ...item, failed: true } : item); }
   function cancel() { stopPending(); setMessages(cancelledMessages()); setDraft(messages.at(-1)?.role === 'user' ? messages.at(-1).content : ''); setError(copy.stopped); setMenu(false); }
@@ -185,9 +200,18 @@ export function Companion({ session, request, apiBase, Avatar = Character }) {
     setHistory(deleteConversation(session.uid, id)); setDeleting(null);
     if (id === conversation.id) { stopPending(); setConversation(newConversation(session.uid)); setMessages([]); setDraft(''); setError(''); }
   }
-  function openMenu(event) { event.preventDefault(); event.stopPropagation(); setMenu(value => !value); }
+  function openMenu(event, source) {
+    event.preventDefault(); event.stopPropagation();
+    menuTrigger.current = event.currentTarget;
+    if (source === 'chat') {
+      const trigger = event.currentTarget.getBoundingClientRect();
+      const panel = event.currentTarget.closest('.companion-chat')?.getBoundingClientRect();
+      setMenuAnchor(panel ? { source: 'chat', right: panel.right - trigger.right, top: trigger.top - panel.top, w: trigger.width, h: trigger.height } : null);
+    } else setMenuAnchor(null);
+    setMenu(value => !value);
+  }
   function menuKeys(event) {
-    if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); setMenu(false); launcher.current?.focus(); return; }
+    if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); setMenu(false); (menuTrigger.current || launcher.current)?.focus(); return; }
     if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
     event.preventDefault(); const buttons = [...menuElement.current.querySelectorAll('button:not(:disabled)')], index = buttons.indexOf(document.activeElement);
     buttons[event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1 : (index + (event.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length]?.focus();
@@ -233,7 +257,7 @@ export function Companion({ session, request, apiBase, Avatar = Character }) {
   if (launchVisible) return contextReady ? <LaunchSplash locale={context.language} onStart={startFromLaunch} onDismiss={dismissLaunch} Avatar={Avatar}/> : null;
   return <div className={`companion ${open ? 'is-open' : ''} ${enabled ? '' : 'is-compact'}`} onKeyDown={event => { if (event.key === 'Escape' && open && !menu) { event.stopPropagation(); minimize(); launcher.current?.focus(); } }} onPointerDown={event => { if (event.target === event.currentTarget) { if (open) minimize(); else setMenu(false); } }}>
     {open ? <section className="companion-chat" style={boxStyle(geometry?.panel)} role="dialog" aria-modal="false" aria-label={view === 'history' ? copy.history : copy.open} onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); minimize(); launcher.current?.focus(); } }}>
-      <header className="chat-header"><div className="chat-identity"><span className="chat-status-dot"/><div><strong>{view === 'history' ? copy.history : copy.title}</strong><small>{copy.subtitle}</small></div></div><div className="chat-header-actions"><button type="button" aria-label={copy.newChat} title={copy.newChat} onClick={clear}><Icon kind="new"/></button><button type="button" aria-label={copy.menu} title={copy.menu} aria-haspopup="menu" aria-expanded={menu} onClick={openMenu}><Icon kind="menu"/></button><button type="button" aria-label={copy.close} title={copy.close} onClick={minimize}><Icon kind="close"/></button></div></header>
+      <header className="chat-header"><div className="chat-identity"><span className="chat-status-dot"/><div><strong>{view === 'history' ? copy.history : copy.title}</strong><small>{copy.subtitle}</small></div></div><div className="chat-header-actions"><button type="button" aria-label={copy.newChat} title={copy.newChat} onClick={clear}><Icon kind="new"/></button><button type="button" aria-label={copy.menu} title={copy.menu} aria-haspopup="menu" aria-expanded={menu} onClick={event => openMenu(event, 'chat')}><Icon kind="menu"/></button><button type="button" aria-label={copy.close} title={copy.close} onClick={minimize}><Icon kind="close"/></button></div></header>
       {view === 'history' ? <div className="chat-history">
         <button className="history-back" type="button" onClick={() => setView('chat')}><Icon kind="back"/>{copy.back}</button>
         <p className="history-note">{copy.historyNote}</p>
@@ -260,7 +284,7 @@ export function Companion({ session, request, apiBase, Avatar = Character }) {
       {!enabled && unread ? <span className="compact-count">{unread > 99 ? '99+' : unread}</span> : null}
     </button>
     {!open && enabled && !menu && activeResults.length ? <div className="pet-results-floating" style={boxStyle(geometry?.results)}><ResultPills results={activeResults} locale={context.language} currentUrl={context.pageUrl} onNavigate={event => navigate(event, activeResults)} onDismiss={dismissResults}/></div> : null}
-    {menu ? <div className="pet-menu" ref={menuElement} style={boxStyle(geometry?.menu)} role="menu" aria-label={copy.menu} onKeyDown={menuKeys}>
+    {menu ? <div className="pet-menu" ref={menuElement} style={menuStyle} data-positioned={Boolean(geometry?.menu)} role="menu" aria-label={copy.menu} onKeyDown={menuKeys}>
       <div className="pet-menu-title" aria-hidden="true">Sentient</div>
       <button type="button" role="menuitem" onClick={() => { setMenu(false); if (open) minimize(); else { enable(); setOpen(true); setView('chat'); } }}><Icon kind={open ? 'close' : 'chat'}/>{open ? copy.close : copy.open}</button>
       <button type="button" role="menuitem" onClick={clear}><Icon kind="new"/>{copy.newChat}</button>
@@ -268,7 +292,12 @@ export function Companion({ session, request, apiBase, Avatar = Character }) {
       <button type="button" role="menuitem" onClick={() => { setMenu(false); setLaunchVisible(true); }}><Icon kind="chat"/>{copy.aboutBot}</button>
       {busy ? <button type="button" role="menuitem" onClick={cancel}><Icon kind="stop"/>{copy.stop}</button> : null}
       <div className="pet-menu-divider" role="separator"/>
-      <div className="pet-menu-label">{copy.position}</div><div className="pet-docks" role="group" aria-label={copy.position}>{DOCKS.map((dock, index) => <button type="button" role="menuitemradio" aria-checked={geometry?.dock === dock} key={dock} aria-label={copy.dock[index]} title={copy.dock[index]} onClick={() => { postHost({ type: 'dock', dock }); setMenu(false); }}><span className={`dock-dot dock-${dock}`}/></button>)}</div>
+      <div className="pet-menu-label">{copy.position}</div>
+      <div className="pet-position-screen" role="group" aria-label={copy.position}>
+        <span className="pet-position-chrome" aria-hidden="true"><i/><i/><i/></span>
+        <span className="pet-position-content" aria-hidden="true"><i/><i/><i/></span>
+        {DOCKS.map((dock, index) => <button className={`pet-position-zone zone-${dock}`} type="button" role="menuitemradio" aria-checked={geometry?.dock === dock} key={dock} aria-label={copy.dock[index]} title={copy.dock[index]} onClick={() => { postHost({ type: 'dock', dock }); setMenu(false); }}><span className="pet-position-dot" aria-hidden="true"/></button>)}
+      </div>
       <div className="pet-menu-divider" role="separator"/>
       <button type="button" role="menuitem" onClick={togglePet}><Icon kind="hide"/>{copy.hide}</button>
     </div> : null}

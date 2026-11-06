@@ -66,6 +66,35 @@ assert.equal(backdrop.style.display, 'none', 'The context menu alone does not bl
 w.dispatchEvent(new w.Event('pointerdown'));
 assert.equal(geometry().menu, null);
 assert.equal(messages.at(-1).type, 'dismiss-menu');
+const headerAnchor = { source: 'chat', right: 46, top: 12, w: 28, h: 28 };
+for (const dock of corners) {
+  send({ type: 'ready', dock }); send({ type: 'layout', state: 'open' });
+  const panelBefore = geometry().panel;
+  const triggerRight = parseFloat(frame.style.left) + panelBefore.x + panelBefore.w - headerAnchor.right;
+  const triggerBottom = parseFloat(frame.style.top) + panelBefore.y + headerAnchor.top + headerAnchor.h;
+  send({ type: 'layout', state: 'open', menu: { open: true, width: 244, height: 380, anchor: headerAnchor } });
+  const anchored = geometry();
+  assert.equal(parseFloat(frame.style.left) + anchored.menu.x + anchored.menu.w, triggerRight, 'The header menu aligns to its trigger, not the character');
+  assert.equal(parseFloat(frame.style.top) + anchored.menu.y, triggerBottom + 6, 'The menu opens just below the header button');
+  assert.deepEqual([anchored.menu.origin.x, anchored.menu.origin.y], [230, 0], 'Header menus animate from the trigger at their top edge');
+  const stableMenu = JSON.stringify(anchored.menu);
+  send({ type: 'layout', state: 'open', menu: { open: true, width: 244, height: 380, anchor: headerAnchor } });
+  assert.equal(JSON.stringify(geometry().menu), stableMenu, 'Repeated layouts cannot translate the anchor a second time');
+  send({ type: 'layout', state: 'open', menu: { open: true, width: 244, height: 416, anchor: headerAnchor } });
+  assert.equal(parseFloat(frame.style.top) + geometry().menu.y, triggerBottom + 6, 'Busy-state height changes preserve the menu trigger');
+}
+send({ type: 'ready', dock: 'bottom-left' }); send({ type: 'layout', state: 'open' });
+const lowAnchor = { ...headerAnchor, top: geometry().panel.h - 40 };
+send({ type: 'layout', state: 'open', menu: { open: true, width: 244, height: 380, anchor: lowAnchor } });
+assert.equal(geometry().menu.y + geometry().menu.h + 6, geometry().panel.y + lowAnchor.top, 'Menus flip above a trigger when there is not enough room below');
+assert.equal(geometry().menu.origin.y, geometry().menu.h, 'A flipped menu animates from its bottom edge');
+send({ type: 'ready', dock: 'bottom-left' }); send({ type: 'layout', state: 'open', menu: { open: true } });
+const botMenu = geometry().menu;
+send({ type: 'layout', state: 'open', menu: { open: true, anchor: { ...headerAnchor, right: NaN } } });
+assert.deepEqual(geometry().menu, botMenu, 'Invalid header coordinates fall back to the bot anchor');
+send({ type: 'layout', state: 'closed', menu: { open: true, anchor: headerAnchor } });
+assert.equal(geometry().menu.origin.x, 0, 'Closed-chat context menus stay anchored beside the bot');
+send({ type: 'layout', state: 'closed' });
 for (const dock of corners) {
   send({ type: 'dock', dock });
   assert.equal(frame.dataset.dock, dock);
@@ -92,17 +121,23 @@ for (const dock of corners) {
   send({ type: 'layout', state: 'closed', results: { visible: true, count: 10 } });
   const resultGeometry = geometry();
   assert.deepEqual([resultGeometry.avatar.w, resultGeometry.avatar.h], [136, 146], 'Result trays never shrink the character');
-  assert.deepEqual([resultGeometry.results.w, resultGeometry.results.h], [384, 72]);
+  assert.deepEqual([resultGeometry.results.w, resultGeometry.results.h], [216, 344]);
+  assert.equal(frame.style.clipPath, `path("M${resultGeometry.avatar.x} ${resultGeometry.avatar.y}h136v146h-136Z M${resultGeometry.results.x} ${resultGeometry.results.y}h216v344h-216Z")`, 'Only avatar and tray rectangles intercept dashboard clicks');
   assert.equal(resultGeometry.results.y, resultGeometry.avatar.y + 154, 'Results sit eight pixels below the character');
-  if (dock.startsWith('bottom')) assert.equal(parseFloat(frame.style.top) + resultGeometry.avatar.y, originalY - 80);
+  if (dock.startsWith('bottom')) assert.equal(parseFloat(frame.style.top) + resultGeometry.avatar.y, originalY - 352);
   assert.ok(parseFloat(frame.style.left) >= 0 && parseFloat(frame.style.left) + parseFloat(frame.style.width) <= 1280);
   assert.ok(parseFloat(frame.style.top) >= 0 && parseFloat(frame.style.top) + parseFloat(frame.style.height) <= 900);
   send({ type: 'layout', state: 'closed' });
   assert.equal(geometry().results, null);
+  assert.equal(frame.style.clipPath, 'none', 'Hiding results clears the tray hit-test clip');
   assert.equal(parseFloat(frame.style.top) + geometry().avatar.y, originalY, 'Hiding results restores the regular dock anchor');
 }
 send({ type: 'layout', state: 'closed', results: { visible: true, count: 2.9 } });
-assert.equal(geometry().results.w, 260, 'Result counts are normalized to bounded integers');
+assert.deepEqual([geometry().results.w, geometry().results.h], [216, 64], 'Result counts are normalized to bounded integers');
+for (const count of [1, 3, 10, 100]) {
+  send({ type: 'layout', state: 'closed', results: { visible: true, count } });
+  assert.equal(geometry().results.h, Math.min(count, 10) * 35 - 6, 'The stack reserves one 29px row per result with six-pixel gaps');
+}
 for (const count of [0, -1, Infinity, NaN, '3']) {
   send({ type: 'layout', state: 'closed', results: { visible: true, count } });
   assert.equal(geometry().results, null, 'Invalid result counts cannot expand the frame');
@@ -110,17 +145,23 @@ for (const count of [0, -1, Infinity, NaN, '3']) {
 for (const state of ['open', 'compact', 'hidden']) {
   send({ type: 'layout', state, results: { visible: true, count: 10 } });
   assert.equal(geometry().results, null, 'Result trays only appear with the active idle character');
+  assert.equal(frame.style.clipPath, 'none', 'Chat, compact, and hidden states do not retain a stale clip');
 }
 send({ type: 'layout', state: 'closed', menu: { open: true }, results: { visible: true, count: 10 } });
 assert.equal(geometry().results, null, 'Context menus take precedence over result trays');
+assert.equal(frame.style.clipPath, 'none', 'The context menu remains fully clickable');
 send({ type: 'ready', dock: 'middle-left' });
 send({ type: 'layout', state: 'closed', results: { visible: true, count: 3 } });
-send({ type: 'drag-start' }); send({ type: 'drag-end', dx: 0, dy: 170 });
+const resultClip = frame.style.clipPath;
+send({ type: 'drag-start' }); send({ type: 'drag-move', dx: 10, dy: 80 });
+assert.equal(frame.style.clipPath, resultClip, 'Drag moves preserve the clip relative to the frame');
+send({ type: 'drag-end', dx: 0, dy: 170 });
 assert.equal(frame.dataset.dock, 'bottom-left', 'Snapping uses the actual shifted avatar positions while results are visible');
 send({ type: 'layout', state: 'launch', menu: { open: true }, results: { visible: true, count: 10 } });
 assert.deepEqual([parseFloat(frame.style.left), parseFloat(frame.style.top), parseFloat(frame.style.width), parseFloat(frame.style.height)], [0, 0, 1280, 900]);
 assert.equal(geometry().avatar.w, 0);
 assert.equal(geometry().menu, null); assert.equal(geometry().results, null);
+assert.equal(frame.style.clipPath, 'none', 'Launch covers the full viewport without a stale tray clip');
 assert.equal(backdrop.style.display, 'block', 'The parent backdrop blurs the dashboard behind the launch view');
 assert.equal(backdrop.style.pointerEvents, 'none');
 assert.equal(messages.findLast(message => message.type === 'context').pageUrl, w.location.href);
@@ -137,8 +178,13 @@ for (const height of [844, 260]) {
     assert.ok(parseFloat(frame.style.top) >= 0 && parseFloat(frame.style.top) + parseFloat(frame.style.height) <= height, 'Panels remain visible when the software keyboard reduces height');
     assert.deepEqual([geometry().avatar.w, geometry().avatar.h], [136, 146]);
     assert.ok(geometry().menu.h <= height - 24, 'Context menus scroll within the visible viewport');
+    send({ type: 'layout', state: 'open', menu: { open: true, width: 244, height: 380, anchor: headerAnchor } });
+    const mobileMenu = geometry().menu;
+    assert.ok(parseFloat(frame.style.left) + mobileMenu.x >= 12 && parseFloat(frame.style.left) + mobileMenu.x + mobileMenu.w <= 378, 'Header menus stay horizontally visible on mobile');
+    assert.ok(parseFloat(frame.style.top) + mobileMenu.y >= 12 && parseFloat(frame.style.top) + mobileMenu.y + mobileMenu.h <= height - 12, 'Header menus scroll below their trigger when a keyboard reduces height');
     send({ type: 'layout', state: 'closed', results: { visible: true, count: 10 } });
-    assert.equal(geometry().results.w, 366, 'Wide result rows scroll within a narrow viewport');
+    assert.equal(geometry().results.w, 216, 'Vertical result stacks keep their compact width on mobile');
+    assert.equal(geometry().results.h, Math.min(344, height - 178), 'Tall result stacks scroll within the visible height');
     assert.ok(geometry().results.y >= geometry().avatar.y + 154);
     assert.ok(parseFloat(frame.style.left) >= 0 && parseFloat(frame.style.left) + parseFloat(frame.style.width) <= 390);
     assert.ok(parseFloat(frame.style.top) >= 0 && parseFloat(frame.style.top) + parseFloat(frame.style.height) <= height);
