@@ -51,8 +51,8 @@ pages in `public/`. The backend is the separate Cortex project
 Signed-in users can open the floating 3D companion at the bottom left of every
 dashboard tool. Its chat discovers Cortex read operations and answers with
 source links using the user's existing permissions and role preview. The
-header can hide the character while retaining a compact chat button; that
-preference is per user. Conversation history is scoped to the signed-in user
+header can hide the animation while retaining a static character thumbnail; that
+preference is per user. Minimizing the chat leaves a small static character in the same corner. Colors and typography inherit the dashboard theme. Conversation history is scoped to the signed-in user
 and this browser tab. Sign-out clears that user's conversation.
 
 `public/sentient-companion.js` hosts the same-origin `companion.html` frame.

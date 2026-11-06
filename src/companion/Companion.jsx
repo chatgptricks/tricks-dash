@@ -34,6 +34,13 @@ export function Companion({ session, request, apiBase, Avatar = Character }) {
     const receive = event => {
       if (event.origin !== location.origin || event.source !== parent || event.data?.source !== 'sentient-host' || event.data.type !== 'context') return;
       const next = event.data;
+      const variables = { surface: '--surface', raised: '--raised', line: '--line', muted: '--muted', text: '--text', accent: '--accent', accentInk: '--accent-ink' };
+      for (const [name, variable] of Object.entries(variables)) {
+        const value = next.tokens?.[name];
+        if (typeof value === 'string' && value.length < 150 && window.CSS?.supports('color', value)) document.documentElement.style.setProperty(variable, value);
+      }
+      if (typeof next.font === 'string' && next.font.length < 180 && window.CSS?.supports('font-family', next.font)) document.documentElement.style.fontFamily = next.font;
+      if (typeof next.radius === 'string' && window.CSS?.supports('border-radius', next.radius)) document.documentElement.style.setProperty('--chat-radius', next.radius);
       setContext({ page: typeof next.page === 'string' ? next.page.slice(0, 100) : '/', language: next.language === 'en' ? 'en' : 'es', theme: next.theme === 'light' ? 'light' : 'dark' });
     };
     window.addEventListener('message', receive);
@@ -92,9 +99,9 @@ export function Companion({ session, request, apiBase, Avatar = Character }) {
         <div className="chat-input-row"><textarea ref={input} aria-label={copy.placeholder} placeholder={copy.placeholder} maxLength={4000} rows={2} value={draft} disabled={!session.configured} onChange={event => setDraft(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); ask(); } }}/>{busy ? <button className="chat-submit" type="button" aria-label={copy.stop} onClick={cancel}><Icon kind="stop"/></button> : <button className="chat-submit" type="submit" aria-label={copy.send} disabled={!draft.trim() || !session.configured}><Icon kind="send"/></button>}</div><p className="chat-note">{copy.note}</p>
       </form>
     </section> : null}
-    <button type="button" className={`pet-launcher ${enabled ? '' : 'compact-launcher'}`} aria-label={open ? copy.close : copy.open} aria-expanded={open} onClick={() => { setOpen(value => !value); if (!open && !busy) setReaction('attentive'); }}>
-      {enabled ? <Avatar reaction={reaction} unread={unread}/> : <Icon kind="chat"/>}
-      {!enabled && unread ? <span className="compact-count">{unread > 99 ? '99+' : unread}</span> : null}
+    <button type="button" className={`pet-launcher ${!open || !enabled ? 'mini-launcher' : ''}`} aria-label={open ? copy.close : copy.open} aria-expanded={open} onClick={() => { setOpen(value => !value); if (!open && !busy) setReaction('attentive'); }}>
+      <Avatar reaction={open && enabled ? reaction : 'idle'} unread={open && enabled ? unread : 0} paused={!open || !enabled}/>
+      {(!open || !enabled) && unread ? <span className="compact-count">{unread > 99 ? '99+' : unread}</span> : null}
     </button>
   </div>;
 }

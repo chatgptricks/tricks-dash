@@ -6,7 +6,7 @@ const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></
 for (const key of ['window', 'document', 'navigator', 'HTMLElement', 'Element', 'Node', 'Event', 'MouseEvent', 'KeyboardEvent', 'MessageEvent', 'localStorage', 'sessionStorage', 'location', 'parent']) Object.defineProperty(globalThis, key, { value: dom.window[key], configurable: true, writable: true });
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 const bundle = await build({ stdin: { contents: `import {act} from 'react'; import {createRoot} from 'react-dom/client'; import {Companion} from './src/companion/Companion.jsx';
-export {act}; let root; const Avatar=({reaction,unread})=><span data-reaction={reaction} data-unread={unread}/>;
+export {act}; let root; const Avatar=({reaction,unread,paused})=><span data-reaction={reaction} data-unread={unread} data-paused={String(paused)}/>;
 export function mount(props){root=createRoot(document.getElementById('root'));root.render(<Companion {...props} Avatar={Avatar}/>)}
 export function unmount(){root.unmount()}`, loader: 'jsx', resolveDir: process.cwd() }, bundle: true, write: false, format: 'esm', platform: 'browser', jsx: 'automatic', target: 'es2022' });
 const app = await import('data:text/javascript;base64,' + Buffer.from(bundle.outputFiles[0].text).toString('base64'));
@@ -21,13 +21,16 @@ const request = (_url, options) => new Promise((resolve, reject) => {
 try {
   await app.act(async () => app.mount({ session: { uid: 'one', configured: true }, request, apiBase: 'https://api.example.test' }));
   assert.ok(button('Hablar con Sentient'));
+  assert.equal(document.querySelector('[data-paused]').dataset.paused, 'true');
   await click(button('Hablar con Sentient'));
   await click(button('¿Qué tengo pendiente hoy?'));
   assert.equal(calls.length, 1); assert.equal(calls[0].language, 'es');
   assert.equal(document.querySelector('[data-reaction]').dataset.reaction, 'thinking');
+  assert.equal(document.querySelector('[data-paused]').dataset.paused, 'false');
   await click(button('Minimizar chat'));
   await app.act(async () => pending(new Response(JSON.stringify({ answer: '<script>bad()</script> Tres tareas pendientes.', sources: [{ label: 'Queue', endpoint: '/api/queue/requests', url: 'https://sentientdash.app/queue.html' }, { label: 'unsafe', url: 'javascript:alert(1)' }] }), { headers: { 'Content-Type': 'application/json' } })));
-  assert.equal(document.querySelector('[data-unread]').dataset.unread, '1');
+  assert.equal(document.querySelector('.compact-count').textContent, '1');
+  assert.equal(document.querySelector('[data-paused]').dataset.paused, 'true');
   await click(button('Hablar con Sentient'));
   assert.equal(document.querySelectorAll('.chat-transcript script').length, 0);
   assert.match(document.querySelector('.chat-transcript').textContent, /<script>bad/);
