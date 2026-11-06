@@ -51,3 +51,6 @@
 /* Bottom docks grow upward from the character; other docks grow downward. */
 .companion[data-dock^="bottom"] .pet-results-floating .pet-results-links{flex-direction:column-reverse}
 .companion[data-dock^="bottom"] .pet-results-floating .pet-results-dismiss{top:auto;bottom:4px}
+
+.chat-message-text .pet-result-pill{color:var(--text);text-decoration:none;vertical-align:middle;margin:4px 5px 4px 0;white-space:nowrap}
+.chat-message-text .pet-result-pill:hover{opacity:1}

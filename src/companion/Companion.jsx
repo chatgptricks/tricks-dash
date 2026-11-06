@@ -4,8 +4,8 @@ import { Character } from './Character';
 import { loadConversation, saveConversation, listConversations, newConversation, deleteConversation } from './history';
 import { LaunchSplash } from './LaunchSplash';
 import { isLaunchSuppressed, setLaunchSuppressed, launchStorageKey } from './launch';
-import { ResultPills } from './ResultPills';
-import { extractPostResults, stripPostResultLinks, loadResults, saveResults, clearResults } from './results';
+import { ResultPill, ResultPills } from './ResultPills';
+import { extractPostResults, postKeyFromUrl, loadResults, saveResults, clearResults } from './results';
 import './position.css';
 
 const COPY = {
@@ -21,17 +21,39 @@ COPY.en.aboutBot = 'Meet Sentient Bot';
 function safeSource(url) {
   try { const target = new URL(url); return target.origin === 'https://sentientdash.app' && !target.username && !target.password ? target.href : null; } catch { return null; }
 }
-export function AnswerText({ text, onNavigate }) {
-  // Text stays escaped by React; only verified dashboard destinations become links.
-  const chunks = [], pattern = /\[([^\]\n]{1,200})\]\((https?:\/\/[^\s)]+)\)|(https:\/\/sentientdash\.app\/[^\s<>]*)/g;
+export function AnswerText({ text, onNavigate, results = [], currentUrl, locale = 'en' }) {
+  // Replace a post link in place, keeping its likes beside it in the answer.
+  // Ordinary prose and source links remain escaped, safe React text/anchors.
+  const byPost = new Map(results.map((result, index) => [result.postKey, { result, index }]));
+  const pattern = () => /\[([^\]\n]{1,200})\]\((https?:\/\/[^\s)]+)\)|(https:\/\/sentientdash\.app\/[^\s<>\])"'`]+)/g;
+  const source = String(text || '').split('\n').map(line => {
+    const hasPill = [...line.matchAll(pattern())].some(match => byPost.has(postKeyFromUrl((match[2] || match[3]).replace(/[.,!?;:]+$/, ''))));
+    return hasPill ? line.replace(/^\s*(?:[-*•]|\d+[.)])\s+/, '') : line;
+  }).join('\n');
+  const chunks = [], rendered = new Set();
   let end = 0;
-  for (const match of text.matchAll(pattern)) {
-    chunks.push(text.slice(end, match.index));
-    const url = safeSource(match[2] || match[3]);
-    chunks.push(url ? <a key={match.index} href={url} target="_top" onClick={onNavigate} onAuxClick={onNavigate}>{match[1] || url}</a> : match[0]);
+  for (const match of source.matchAll(pattern())) {
+    chunks.push(source.slice(end, match.index));
+    const rawUrl = match[2] || match[3], cleanUrl = match[3] ? rawUrl.replace(/[.,!?;:]+$/, '') : rawUrl;
+    const url = safeSource(cleanUrl), post = byPost.get(postKeyFromUrl(url));
+    if (url && post) {
+      if (!rendered.has(post.result.postKey)) {
+        rendered.add(post.result.postKey);
+        chunks.push(<ResultPill key={match.index} {...post} currentUrl={currentUrl} locale={locale} onNavigate={event => onNavigate?.(event, results)}/>);
+        // Some answers put the count inside the link label itself.
+        const metric = match[1]?.match(/\b\d[\d.,\u00a0 ]*(?:[kmb])?\s*(?:likes?|me gusta)\b/i)?.[0];
+        if (metric) {
+          const lineStart = source.lastIndexOf('\n', match.index - 1) + 1;
+          const nextBreak = source.indexOf('\n', match.index + match[0].length);
+          const surroundings = source.slice(lineStart, match.index) + source.slice(match.index + match[0].length, nextBreak === -1 ? source.length : nextBreak);
+          if (!surroundings.includes(metric)) chunks.push(' ' + metric);
+        }
+      }
+    } else chunks.push(url ? <a key={match.index} href={url} target="_top" onClick={onNavigate} onAuxClick={onNavigate}>{match[1] || url}</a> : match[0]);
+    if (match[3]) chunks.push(rawUrl.slice(cleanUrl.length));
     end = match.index + match[0].length;
   }
-  chunks.push(text.slice(end));
+  chunks.push(source.slice(end));
   return chunks;
 }
 function Icon({ kind }) {
@@ -284,8 +306,8 @@ export function Companion({ session, request, apiBase, Avatar = Character }) {
         {!messages.length ? <div className="chat-welcome"><span className="welcome-spark">✦</span><h1>{copy.greet}</h1><p>{copy.intro}</p><div className="chat-prompts">{copy.prompts.map(prompt => <button type="button" disabled={busy || !session.configured} key={prompt.label} onClick={() => { if (prompt.draft) { setDraft(prompt.draft); input.current?.focus(); } else ask(prompt.question); }}>{prompt.label}<span aria-hidden="true">↗</span></button>)}</div></div> : null}
         {messages.map(item => {
           const postResults = item.role === 'assistant' ? extractPostResults(item.content) : [];
-          const text = postResults.length ? stripPostResultLinks(item.content) : item.content;
-          return <article key={item.id} className={`chat-message from-${item.role} ${item.failed ? 'is-failed' : ''}`}><span className="sr-only">{item.role === 'assistant' ? 'Sentient' : context.language === 'es' ? 'Vos' : 'You'}: </span>{text ? <div className="chat-message-text">{item.role === 'assistant' ? <AnswerText text={text} onNavigate={navigate}/> : text}</div> : null}{postResults.length ? <ResultPills results={postResults} locale={context.language} currentUrl={context.pageUrl} onNavigate={event => navigate(event, postResults)}/> : null}{item.sources?.length ? <details className="chat-sources"><summary>{copy.sources} · {item.sources.length}</summary>{item.sources.map((source, index) => safeSource(source.url) ? <a key={index} href={safeSource(source.url)} target="_top" onClick={navigate} onAuxClick={navigate}><span>{source.label}</span>{source.partial ? <small>{copy.partial}</small> : null}<code>{source.endpoint}</code></a> : null)}</details> : null}</article>;
+          const text = item.content;
+          return <article key={item.id} className={`chat-message from-${item.role} ${item.failed ? 'is-failed' : ''}`}><span className="sr-only">{item.role === 'assistant' ? 'Sentient' : context.language === 'es' ? 'Vos' : 'You'}: </span>{text ? <div className="chat-message-text">{item.role === 'assistant' ? <AnswerText text={text} onNavigate={navigate} results={postResults} currentUrl={context.pageUrl} locale={context.language}/> : text}</div> : null}{item.sources?.length ? <details className="chat-sources"><summary>{copy.sources} · {item.sources.length}</summary>{item.sources.map((source, index) => safeSource(source.url) ? <a key={index} href={safeSource(source.url)} target="_top" onClick={navigate} onAuxClick={navigate}><span>{source.label}</span>{source.partial ? <small>{copy.partial}</small> : null}<code>{source.endpoint}</code></a> : null)}</details> : null}</article>;
         })}
         {busy ? <div className="chat-thinking" role="status"><span/><span/><span/><small>{copy.thinking}</small></div> : null}
       </div>

@@ -56,27 +56,6 @@ export function extractPostResults(text) {
   return normalizeResults(values);
 }
 
-// The same linked results are rendered as pills in both the answer and dock.
-// Retain surrounding facts and source links; only remove the represented links
-// and list markers that would otherwise be left on empty lines.
-export function stripPostResultLinks(text) {
-  if (typeof text !== 'string') return '';
-  const represented = new Set(extractPostResults(text).map(item => item.postKey));
-  if (!represented.size) return text;
-  return text.split('\n').map(line => {
-    let removed = false;
-    const next = line.replace(linkPattern(), (match, label, markdownUrl, bareUrl) => {
-      const url = (markdownUrl || bareUrl).replace(/[.,!?;:]+$/, '');
-      if (!represented.has(postKeyFromUrl(url))) return match;
-      removed = true;
-      return bareUrl?.match(/[.,!?;:]+$/)?.[0] || '';
-    });
-    if (!removed) return next;
-    if (/^\s*(?:[-*•]|\d+[.)])?\s*[-—–·,:;.!?]*\s*$/.test(next)) return '';
-    return next.replace(/^(\s*(?:[-*•]|\d+[.)])\s*)[—–·-]\s*/, '$1').replace(/[ \t]{2,}/g, ' ').replace(/[ \t]+([.,;!?])/g, '$1').trimEnd();
-  }).join('\n').replace(/\n{3,}/g, '\n\n').trim();
-}
-
 export function saveResults(uid, results) {
   if (!validUid(uid)) return [];
   const next = normalizeResults(results);
