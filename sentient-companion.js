@@ -28,6 +28,7 @@
   };
   const resize = () => {
     const { w, h, left, top, bottom } = viewport(), right = dock.endsWith('right');
+    frame.style.clipPath = 'none';
     if (state === 'launch') {
       geometry = { x: left, y: top, width: w, height: h, ax: left, ay: top, aw: 0, ah: 0 };
       Object.assign(frame.style, { left: left + 'px', top: top + 'px', width: w + 'px', height: h + 'px', visibility: 'visible', pointerEvents: 'auto' });
@@ -40,8 +41,10 @@
     const ax = right ? Math.max(left + 12, left + w - 12 - aw) : left + 12;
     let ay = dock.startsWith('top') ? top + 12 : dock.startsWith('middle') ? clamp(top + (h - ah) / 2, top + 12, top + h - bottom - ah) : Math.max(top + 12, top + h - bottom - ah);
     const showResults = state === 'closed' && !menu && resultCount > 0;
-    const rw = showResults ? Math.min(384, Math.max(0, w - 24), Math.max(136, resultCount * 118 + 24)) : 0;
-    const rh = showResults ? Math.min(72, Math.max(0, h - bottom - 12 - ah - 8)) : 0;
+    const rw = showResults ? Math.min(216, Math.max(0, w - 24)) : 0;
+    // The same 29px pills and 6px spacing are used in the chat transcript.
+    // Cap the stack so its own scrolling keeps all ten results reachable.
+    const rh = showResults ? Math.min(resultCount * 35 - 6, Math.max(0, h - bottom - 12 - ah - 8)) : 0;
     if (showResults) ay = clamp(ay, top + 12, top + h - bottom - ah - rh - 8);
     const rx = showResults ? clamp(right ? ax + aw - rw : ax, left + 12, left + w - 12 - rw) : ax;
     const ry = showResults ? ay + ah + 8 : ay;
@@ -62,29 +65,47 @@
         py = clamp(above ? ay - ph - 10 : ay + ah + 10, top + 12, top + h - bottom - ph);
       }
     }
-    let mx = ax, my = ay, mw = 0, mh = 0;
+    let mx = ax, my = ay, mw = 0, mh = 0, menuOrigin;
     if (menu) {
       mw = Math.min(menu.width, Math.max(0, w - 24)); mh = Math.min(menu.height, Math.max(0, h - 24));
-      const besideRoom = right ? ax - left - 20 : left + w - 12 - ax - aw - 8;
-      if (besideRoom >= 200) {
-        mw = Math.min(mw, besideRoom);
-        mx = right ? ax - mw - 8 : ax + aw + 8;
-        my = clamp(ay + ah / 2 - mh / 2, top + 12, top + h - 12 - mh);
+      if (menu.anchor && state === 'open') {
+        // Header offsets are relative to the chat panel's top/right edges, so
+        // expanding the iframe or resizing the viewport cannot move the anchor.
+        const triggerWidth = Math.min(menu.anchor.w, pw), triggerHeight = Math.min(menu.anchor.h, ph);
+        const tx = px + clamp(pw - menu.anchor.right - triggerWidth, 0, pw - triggerWidth);
+        const ty = py + clamp(menu.anchor.top, 0, ph - triggerHeight);
+        const above = Math.max(0, ty - top - 18), below = Math.max(0, top + h - 18 - ty - triggerHeight);
+        const placeBelow = below >= mh || below >= above;
+        mh = Math.min(mh, placeBelow ? below : above);
+        mx = clamp(tx + triggerWidth - mw, left + 12, left + w - 12 - mw);
+        my = placeBelow ? ty + triggerHeight + 6 : ty - mh - 6;
+        menuOrigin = { x: clamp(tx + triggerWidth / 2 - mx, 0, mw), y: placeBelow ? 0 : mh };
       } else {
-        mx = clamp(ax, left + 12, left + w - 12 - mw);
-        const above = ay - top - 20, below = top + h - 12 - ay - ah - 8;
-        my = clamp(above >= below ? ay - mh - 8 : ay + ah + 8, top + 12, top + h - 12 - mh);
+        const besideRoom = right ? ax - left - 20 : left + w - 12 - ax - aw - 8;
+        if (besideRoom >= 200) {
+          mw = Math.min(mw, besideRoom);
+          mx = right ? ax - mw - 8 : ax + aw + 8;
+          my = clamp(ay + ah / 2 - mh / 2, top + 12, top + h - 12 - mh);
+        } else {
+          mx = clamp(ax, left + 12, left + w - 12 - mw);
+          const above = ay - top - 20, below = top + h - 12 - ay - ah - 8;
+          my = clamp(above >= below ? ay - mh - 8 : ay + ah + 8, top + 12, top + h - 12 - mh);
+        }
+        menuOrigin = { x: clamp(ax + aw / 2 - mx, 0, mw), y: clamp(ay + ah / 2 - my, 0, mh) };
       }
     }
     const x = Math.min(ax, px, mx, rx), y = Math.min(ay, py, my, ry);
     const width = Math.max(ax + aw, px + pw, mx + mw, rx + rw) - x, height = Math.max(ay + ah, py + ph, my + mh, ry + rh) - y;
     geometry = { x, y, width, height, ax, ay, aw, ah, extraHeight: showResults ? rh + 8 : 0 };
     Object.assign(frame.style, { left: x + 'px', top: y + 'px', width: width + 'px', height: height + 'px', visibility: state === 'hidden' ? 'hidden' : 'visible', pointerEvents: state === 'hidden' ? 'none' : 'auto' });
+    // Clip hit testing as well as painting: transparent space beside the avatar
+    // must leave dashboard controls clickable while a wider result tray is shown.
+    if (showResults) frame.style.clipPath = 'path("M' + (ax - x) + ' ' + (ay - y) + 'h' + aw + 'v' + ah + 'h-' + aw + 'Z M' + (rx - x) + ' ' + (ry - y) + 'h' + rw + 'v' + rh + 'h-' + rw + 'Z")';
     frame.tabIndex = state === 'hidden' ? -1 : 0;
     backdrop.style.display = state === 'open' ? 'block' : 'none';
     backdrop.style.pointerEvents = state === 'open' ? 'auto' : 'none';
     frame.dataset.dock = dock; frame.dataset.state = state;
-    send({ type: 'geometry', dock, avatar: { x: ax - x, y: ay - y, w: aw, h: ah }, panel: { x: px - x, y: py - y, w: pw, h: ph }, menu: menu ? { x: mx - x, y: my - y, w: mw, h: mh } : null, results: showResults ? { x: rx - x, y: ry - y, w: rw, h: rh } : null });
+    send({ type: 'geometry', dock, avatar: { x: ax - x, y: ay - y, w: aw, h: ah }, panel: { x: px - x, y: py - y, w: pw, h: ph }, menu: menu ? { x: mx - x, y: my - y, w: mw, h: mh, origin: menuOrigin } : null, results: showResults ? { x: rx - x, y: ry - y, w: rw, h: rh } : null });
   };
   function dismissMenu() {
     if (!menu) return;
@@ -130,6 +151,8 @@
     if (data.type === 'layout' && ['hidden', 'closed', 'open', 'compact', 'launch'].includes(data.state)) {
       state = data.state;
       menu = data.menu?.open && !['hidden', 'launch'].includes(state) ? { width: clamp(Number(data.menu.width) || 244, 160, 420), height: clamp(Number(data.menu.height) || 344, 100, 640) } : null;
+      const anchor = data.menu?.anchor;
+      if (menu && state === 'open' && anchor?.source === 'chat' && ['right', 'top', 'w', 'h'].every(key => Number.isFinite(anchor[key]) && anchor[key] >= 0 && anchor[key] < 10000) && anchor.w > 0 && anchor.h > 0) menu.anchor = { right: anchor.right, top: anchor.top, w: Math.min(anchor.w, 120), h: Math.min(anchor.h, 120) };
       resultCount = data.results?.visible === true && Number.isFinite(data.results.count) && data.results.count > 0 ? clamp(Math.floor(data.results.count), 1, 10) : 0;
       if (state === 'launch') drag = null;
       resize(); preferences();
