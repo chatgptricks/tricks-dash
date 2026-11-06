@@ -252,6 +252,8 @@ const ES = {
   'Viewing hidden': 'Viendo ocultos',
 
   // grid + rail
+  'Caption search is unavailable. Try again.': 'La búsqueda en captions no está disponible. Intentá de nuevo.',
+  'Caption only': 'Solo caption',
   'Caption': 'Texto',
   'Copy': 'Copiar',
   'Copied': 'Copiado',

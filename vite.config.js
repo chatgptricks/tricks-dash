@@ -2,8 +2,21 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createHash } from 'node:crypto';
+import { readFileSync, readdirSync, writeFileSync, existsSync } from 'node:fs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const companionHash = createHash('sha256');
+function hashCompanion(directory) {
+  for (const entry of readdirSync(directory, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+    const path = resolve(directory, entry.name);
+    if (entry.isDirectory()) hashCompanion(path);
+    else companionHash.update(readFileSync(path));
+  }
+}
+hashCompanion(resolve(__dirname, 'src/companion'));
+companionHash.update(readFileSync(resolve(__dirname, 'public/sentient-companion.js')));
+const companionScript = '/sentient-companion.js?v=' + companionHash.digest('hex').slice(0, 12);
 
 export default defineConfig(({ command }) => ({
   // A developer .env.local may point Hooks at a local server. Production
@@ -22,7 +35,14 @@ export default defineConfig(({ command }) => ({
     name: 'sentient-companion-host',
     transformIndexHtml(html, context) {
       if (context.path === '/companion.html' || /\/(?:agents|oauth|api)\.html$/.test(context.path)) return html;
-      return [{ tag: 'script', attrs: { src: '/sentient-companion.js', defer: true }, injectTo: 'body' }];
+      return [{ tag: 'script', attrs: { src: companionScript, defer: true }, injectTo: 'body' }];
+    },
+    closeBundle() {
+      if (command !== 'build') return;
+      for (const name of ['tracker.html', 'insights.html']) {
+        const target = resolve(__dirname, 'dist', name);
+        if (existsSync(target)) writeFileSync(target, readFileSync(target, 'utf8').replace(/src="\/sentient-companion\.js(?:\?v=[^"]*)?"/g, `src="${companionScript}"`));
+      }
     },
   }],
   server: {

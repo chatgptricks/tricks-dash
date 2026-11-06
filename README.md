@@ -50,9 +50,7 @@ pages in `public/`. The backend is the separate Cortex project
 
 Signed-in users can open the floating 3D companion at the bottom left of every
 dashboard tool. Its chat discovers Cortex read operations and answers with
-source links using the user's existing permissions and role preview. The
-header can hide the animation while retaining a static character thumbnail; that
-preference is per user. Minimizing the chat leaves a small static character in the same corner. Colors and typography inherit the dashboard theme. Conversation history is scoped to the signed-in user
+clickable internal post links using the user's existing permissions and role preview. Dragging snaps to any of six positions: the four corners and the middle of either side. The position and visibility preference are per user. Minimizing the chat returns the full character to animated idle. Closing the assistant leaves a small static character in the same corner; clicking it restores the full character and chat. Colors and typography inherit the dashboard theme. Conversation history is scoped to the signed-in user
 and this browser tab. Sign-out clears that user's conversation.
 
 `public/sentient-companion.js` hosts the same-origin `companion.html` frame.
@@ -60,7 +58,7 @@ The frame shares Firebase persistence without sending credentials through
 postMessage. Three.js loads separately from the main dashboard bundle. UI
 copy follows the host language and theme; reduced motion and a non-WebGL
 fallback are supported. `npm run test:companion` covers chat, cancellation,
-safe rendering, unread replies, visibility preferences and session isolation.
+safe links, unread replies, visibility preferences, six-position docking, session isolation and visible Research filters. Requests to show filtered posts apply the page controls and preserve the conversation. Caption-only searches use complete server captions rather than truncated card previews. Cortex supports catalogue discovery and full-response analysis across product areas, plus complete stored-metric rankings for exact rolling publication windows.
 
 Research stacks expose their persisted **Stack ID** in the expanded stack and
 each member's details, with a copy button. Pasting that ID into Research search

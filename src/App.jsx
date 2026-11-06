@@ -126,6 +126,7 @@ const HOT_TAB_WINDOW_HOURS = 30;
 // ---------------------------------------------------------------------------
 const URL_DEFAULTS = {
   q: '',
+  scope: 'all',
   tab: 'all',
   acc: '',
   cat: '',
@@ -1403,7 +1404,30 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
   // and from then on the app writes to it rather than reading back.
   const initialUrl = useRef(readUrlState()).current;
   const [query, setQuery] = useState(initialUrl.q);
+  const [textScope, setTextScope] = useState(initialUrl.scope === 'caption' ? 'caption' : 'all');
   const deferredQuery = useDeferredValue(query);
+  const [captionSearch, setCaptionSearch] = useState({ query: '', keys: null, error: false });
+  useEffect(() => {
+    if (textScope !== 'caption' || !deferredQuery.trim()) return;
+    const abort = new AbortController();
+    const term = deferredQuery.trim();
+    const timer = setTimeout(async () => {
+      try {
+        const params = new URLSearchParams({ q: term, text_scope: 'caption', include_keys: 'true', limit: '1' });
+        const response = await apiFetch(`${API_BASE}/api/dashboard/posts/search?${params}`, { signal: abort.signal });
+        if (!response.ok) throw new Error('search');
+        const data = await response.json();
+        if (!Array.isArray(data.matching_post_keys)) throw new Error('search');
+        if (!abort.signal.aborted) setCaptionSearch({ query: term, keys: new Set(data.matching_post_keys), error: false });
+      } catch { if (!abort.signal.aborted) setCaptionSearch({ query: term, keys: null, error: true }); }
+    }, 180);
+    return () => { clearTimeout(timer); abort.abort(); };
+  }, [deferredQuery, textScope]);
+  const captionSearchActive = textScope === 'caption' && Boolean(deferredQuery.trim());
+  const captionSearchReady = captionSearch.query === deferredQuery.trim();
+  const captionSearching = captionSearchActive && (!captionSearchReady || (!captionSearch.keys && !captionSearch.error));
+  const captionSearchFailed = captionSearchActive && captionSearchReady && captionSearch.error;
+
   const searchTerms = useMemo(() => parseSearchQuery(deferredQuery), [deferredQuery]);
   const [activeGroup, setActiveGroup] = useState(initialUrl.tab);
   const groupScopedPosts = useMemo(
@@ -1591,6 +1615,7 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
     if (homeView) return;
     writeUrlState({
       q: query,
+      scope: textScope,
       tab: activeGroup,
       acc: isEveryAccount ? '' : [...selectedAccounts].join(','),
       cat: [...selectedCategories].join(','),
@@ -1617,7 +1642,7 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
     });
     try { sessionStorage.setItem('sentient.research.return', '/index.html' + window.location.search); } catch {}
   }, [
-    query, activeGroup, selectedAccounts, selectedCategories, accountsInScope, activeType, mediaFilter,
+    query, textScope, activeGroup, selectedAccounts, selectedCategories, accountsInScope, activeType, mediaFilter,
     sortBy, minLikes, minComments, dateFrom, dateTo, datePreset, promoOnly, collabOnly, selectedKey,
     isSidebarOpen, ranges.likesMin, ranges.commentsMin,
   ]);
@@ -1686,7 +1711,7 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
       if (post.comments < minComments) continue;
       if (minDate && (!Number.isFinite(post.timestamp) || post.timestamp < minDate)) continue;
       if (maxDate && (!Number.isFinite(post.timestamp) || post.timestamp > maxDate)) continue;
-      if (!matchesSearch(post, searchTerms)) continue;
+      if (captionSearchActive ? !captionSearchReady || !captionSearch.keys?.has(post.postKey || `${post.account}:${post.shortcode}`) : !matchesSearch(post, searchTerms)) continue;
       output.push(post);
     }
 
@@ -1719,7 +1744,7 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
     });
 
     return output;
-  }, [posts, activeGroup, effectiveAccounts, selectedCategories, accountCategoryByHandle, activeType, mediaFilter, minLikes, minComments, dateFrom, dateTo, searchTerms, sortBy, showHidden, promoOnly, collabOnly, activeList, showHotHistory]);
+  }, [posts, activeGroup, effectiveAccounts, selectedCategories, accountCategoryByHandle, activeType, mediaFilter, minLikes, minComments, dateFrom, dateTo, searchTerms, captionSearchActive, captionSearchReady, captionSearch, sortBy, showHidden, promoOnly, collabOnly, activeList, showHotHistory]);
 
   // Leaving the HOT tab collapses history again, so coming back always
   // opens on "what's hot now" rather than a stale expanded state.
@@ -1729,7 +1754,7 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
 
   useEffect(() => {
     setVisibleStackCount(STACKS_PER_BATCH);
-  }, [deferredQuery, activeGroup, selectedAccounts, selectedCategories, activeType, mediaFilter, minLikes, minComments, dateFrom, dateTo, sortBy, showHidden, promoOnly, collabOnly, showHotHistory]);
+  }, [deferredQuery, textScope, activeGroup, selectedAccounts, selectedCategories, activeType, mediaFilter, minLikes, minComments, dateFrom, dateTo, sortBy, showHidden, promoOnly, collabOnly, showHotHistory]);
 
   const { groups: topics, loading: grouping } = useTopicGroups(filtered, posts, sortBy);
   const visibleTopics = topics.slice(0, visibleStackCount);
@@ -1768,7 +1793,7 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
   const activeFilterChips = useMemo(() => {
     const chips = [];
     if (query.trim()) {
-      chips.push({ key: 'q', label: `“${query.trim()}”`, clear: () => setQuery('') });
+      chips.push({ key: 'q', label: `${textScope === 'caption' ? t('Caption only') + ' · ' : ''}“${query.trim()}”`, clear: () => { setQuery(''); setTextScope('all'); } });
     }
     if (selectedAccounts.size < accountsInScope.length) {
       const label =
@@ -1806,7 +1831,7 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
       });
     }
     if (minLikes > 0) {
-      chips.push({ key: 'likes', label: `${compactFormatter.format(minLikes)}+ likes`, clear: () => setMinLikes(0) });
+      chips.push({ key: 'likes', label: `${minLikes.toLocaleString()}+ likes`, clear: () => setMinLikes(0) });
     }
     if (minComments > 0) {
       chips.push({
@@ -1821,7 +1846,7 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
     }
     return chips;
   }, [
-    query, selectedAccounts, selectedCategories, accountsInScope, activeType, mediaFilter,
+    query, textScope, t, selectedAccounts, selectedCategories, accountsInScope, activeType, mediaFilter,
     datePreset, dateFrom, dateTo, datePresets, minLikes, minComments, sortBy,
   ]);
 
@@ -1861,6 +1886,7 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
 
   const onReset = useCallback(() => {
     setQuery('');
+    setTextScope('all');
     startTransition(() => {
       setSelectedAccounts(new Set(accountsInScope.map((account) => account.handle)));
       setSelectedCategories(new Set());
@@ -2125,13 +2151,13 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
                   placeholder={t('Captions, songs, or text inside a cover')}
                 />
                 {query ? (
-                  <button className="search-clear" type="button" aria-label={t('Clear search')} onClick={() => setQuery('')}>
+                  <button className="search-clear" type="button" aria-label={t('Clear search')} onClick={() => { setQuery(''); setTextScope('all'); }}>
                     <X size={15} />
                   </button>
                 ) : <kbd className="search-kbd">{t("⌘K")}</kbd>}
               </div>
-              <p className={loading ? 'results-count results-count-loading' : 'results-count'}>
-                {loading ? <><LoaderCircle className="spin" size={14} /><strong>{t("Loading")}</strong></> : <><strong>{displayedPostCount.toLocaleString(readLang() === 'es' ? 'es-CR' : 'en-US')}</strong> {t('posts')}</>}
+              <p className={loading || captionSearching ? 'results-count results-count-loading' : 'results-count'}>
+                {loading || captionSearching ? <><LoaderCircle className="spin" size={14} /><strong>{t("Loading")}</strong></> : <><strong>{displayedPostCount.toLocaleString(readLang() === 'es' ? 'es-CR' : 'en-US')}</strong> {t('posts')}</>}
               </p>
             </> : null}
           </ProductHeader>
@@ -2142,6 +2168,7 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
 
           {loading && !posts.length ? <DashboardSkeleton label={t('Loading the post library')} /> : null}
           {loadError ? <section className="dash-state dash-state-error">{loadError}</section> : null}
+          {captionSearchFailed ? <section className="dash-state dash-state-error" role="alert">{t("Caption search is unavailable. Try again.")}</section> : null}
 
           {!loadError && (!loading || posts.length > 0) ? <div className="research-dashboard" aria-busy={databaseLoading}>
           {/* Filters share this row with the group tabs: same height,
@@ -2414,6 +2441,7 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
                   {shareCopied ? <Check size={15} /> : <Link2 size={15} />}
                 </button>
               </div>
+              {textScope === 'caption' && query.trim() ? <div className="caption-filter-chips">{activeFilterChips.map(chip => <button type="button" key={chip.key} onClick={chip.clear} title={t('Clear')}><span>{chip.label}</span><X size={12}/></button>)}</div> : null}
           </div>
 
           <section className="panel gallery">
