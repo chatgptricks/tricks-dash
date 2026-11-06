@@ -3,6 +3,7 @@ import { waitForRetry } from '../retry';
 const SILENCE = 'data:audio/wav;base64,UklGRiYAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQIAAACAgA==';
 const MAX_CACHE_BYTES = 16 * 1024 * 1024;
 const MAX_CACHE_ENTRIES = 20;
+export const previewKey = ({ voice, language, sample, style = '' }) => JSON.stringify([voice, language, sample, style.trim()]);
 
 // One player and a bounded, owner-lifetime RAM cache. Nothing is generated
 // until Play is clicked, and no preview audio is written to browser storage.
@@ -30,9 +31,10 @@ export function createPreviewPlayer({ request, apiBase, onChange }) {
       else { stop(); publish({ key: item.key, status: 'error' }); }
     }
   }
-  async function play({ voice, language, sample }) {
+  async function play({ voice, language, sample, style = '' }) {
     if (disposed) return;
-    const key = [voice, language, sample].join(':');
+    style = style.trim();
+    const key = previewKey({ voice, language, sample, style });
     if (current?.key === key && objectUrl) { await playAudio(current); return; }
     stop();
     audio ||= new Audio();
@@ -48,7 +50,7 @@ export function createPreviewPlayer({ request, apiBase, onChange }) {
       let blob = cache.get(key);
       if (blob) { cache.delete(key); cache.set(key, blob); }
       else {
-        const options = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ voice, language, sample }), signal: item.controller.signal };
+        const options = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ voice, language, sample, style }), signal: item.controller.signal };
         let response = await request(apiBase + '/api/dashboard/assistant/voice-preview', options);
         // A cancelled provider request can take a moment to release the
         // per-user slot. Retry that precise busy response once, then stop.

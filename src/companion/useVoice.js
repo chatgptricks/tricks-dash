@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { readVoicePreference } from './voicePreference';
+import { readVoiceSettings } from './voicePreference';
 
 export const MAX_VOICE_SECONDS = 60;
 export const MAX_VOICE_BYTES = 10 * 1024 * 1024;
@@ -142,10 +142,10 @@ export function useVoice({ request, apiBase, uid, language, onTranscript }) {
   }
   async function speak(message, { permit } = {}) {
     if (permit !== undefined && permit !== speechVersion.current) return;
-    const chosenVoice = readVoicePreference(callbacks.current.uid);
-    if (playback.current?.id === message.id && playback.current.voice === chosenVoice && audioUrl.current) { await playLoaded(playback.current); return; }
+    const { voice: chosenVoice, style: chosenStyle } = readVoiceSettings(callbacks.current.uid);
+    if (playback.current?.id === message.id && playback.current.voice === chosenVoice && playback.current.style === chosenStyle && audioUrl.current) { await playLoaded(playback.current); return; }
     stopSpeech(); setError('');
-    const current = { id: message.id, voice: chosenVoice, message, controller: new AbortController() };
+    const current = { id: message.id, voice: chosenVoice, style: chosenStyle, message, controller: new AbortController() };
     playback.current = current;
     updateSpeech({ id: current.id, status: 'loading' });
     const valid = () => active.current && playback.current === current;
@@ -155,7 +155,7 @@ export function useVoice({ request, apiBase, uid, language, onTranscript }) {
       // next reply without remounting the bot or changing an ongoing clip.
       const response = await callbacks.current.request(callbacks.current.apiBase + '/api/dashboard/assistant/speech', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: current.controller.signal,
-        body: JSON.stringify({ text: message.text.slice(0, 12000), question: message.question.slice(0, 4000), language: message.language, mode: message.mode, ...(chosenVoice ? { voice: chosenVoice } : {}) }),
+        body: JSON.stringify({ text: message.text.slice(0, 12000), question: message.question.slice(0, 4000), language: message.language, mode: message.mode, ...(chosenVoice ? { voice: chosenVoice } : {}), ...(chosenStyle ? { style: chosenStyle } : {}) }),
       });
       if (!valid()) return;
       if (!response.ok || !response.headers.get('Content-Type')?.startsWith('audio/')) throw new Error('speech');
