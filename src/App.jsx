@@ -867,6 +867,7 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
   const dashboardMetricsCursorRef = useRef(null);
   const dashboardCheckpointRef = useRef({});
   const dashboardFlightRef = useRef(null);
+  const dashboardCacheRestoreRef = useRef(null);
   const dashboardAliveRef = useRef(true);
   const dashboardUserRef = useRef(firebaseAuth.currentUser);
   const ownsDashboardSession = useCallback(() => dashboardAliveRef.current
@@ -1068,6 +1069,15 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
     let pendingSnapshot = null;
     let accountRoster = null;
     let readBasePosts = dashboardPostsRef.current;
+    const getCachedCatalogue = () => {
+      if (!ownsDashboardSession() || !dashboardPostsRef.current.length || !dashboardSourcesRef.current.length) return null;
+      // A cache restored after this read began becomes the edit baseline too.
+      // Otherwise metric catchup could overwrite changes made to those cards.
+      if (!readBasePosts.length) readBasePosts = dashboardPostsRef.current;
+      return { posts: dashboardPostsRef.current, summary: dashboardSummaryRef.current, sources: dashboardSourcesRef.current,
+        revision: dashboardCatalogueRevisionRef.current, projectionGeneration: dashboardProjectionGenerationRef.current,
+        metricsAvailable: true, metricsAt: dashboardMetricsAtRef.current, metricsCursor: dashboardMetricsCursorRef.current };
+    };
     const persistSnapshot = () => {
       void writeDashboardSnapshot({
         posts: dashboardPostsRef.current,
@@ -1172,11 +1182,8 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
             if (accountRoster) publishCatalogue(catalogue, accountRoster);
           },
           etag: dashboardEtagRef.current,
-          cachedCatalogue: dashboardPostsRef.current.length && dashboardSourcesRef.current.length
-            ? { posts: dashboardPostsRef.current, sources: dashboardSourcesRef.current,
-                revision: dashboardCatalogueRevisionRef.current, projectionGeneration: dashboardProjectionGenerationRef.current,
-                metricsAvailable: true, metricsAt: dashboardMetricsAtRef.current, metricsCursor: dashboardMetricsCursorRef.current }
-            : null,
+          cacheRestored: dashboardCacheRestoreRef.current,
+          getCachedCatalogue,
         }),
         apiFetch(`${API_BASE}/api/dashboard/accounts`, { signal: readSignal }).then(async (accountsResponse) => {
           if (accountsResponse.status === 401 || accountsResponse.status === 403) {
@@ -1250,28 +1257,30 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
         // prerequisite for the live library: fall through to the API quickly
         // instead of leaving the entire page on Loading indefinitely.
         const restore = readDashboardSnapshot(userEmail).then((snapshot) => {
-        const isCompleteSnapshot = snapshot?.catalogueComplete
-          && Array.isArray(snapshot.posts)
-          && snapshot.posts.length > 0
-          && Array.isArray(snapshot.accounts);
-        if (active && ownsDashboardSession() && isCompleteSnapshot && !dashboardPostsRef.current.length) {
-          dashboardPostsRef.current = snapshot.posts;
-          dashboardSourcesRef.current = Array.isArray(snapshot.catalogueSources) ? snapshot.catalogueSources : [];
-          dashboardSummaryRef.current = snapshot.summary || {};
-          dashboardAccountsRef.current = snapshot.accounts;
-          dashboardCatalogueRevisionRef.current = snapshot.catalogueRevision || '';
-          dashboardProjectionGenerationRef.current = Number(snapshot.projectionGeneration) || 0;
-          dashboardMetricsAtRef.current = snapshot.metricsAt || '';
-          dashboardMetricsCursorRef.current = snapshot.metricsCursor || null;
-          setDashboard({ posts: snapshot.posts, summary: snapshot.summary || {} });
-          setAccounts(snapshot.accounts);
-          setLoading(false);
-          if (snapshot.catalogueRevision) dashboardEtagRef.current = `"${snapshot.catalogueRevision}"`;
-        }
+          const isCompleteSnapshot = snapshot?.catalogueComplete
+            && Array.isArray(snapshot.posts)
+            && snapshot.posts.length > 0
+            && Array.isArray(snapshot.accounts);
+          if (active && ownsDashboardSession() && isCompleteSnapshot && !dashboardPostsRef.current.length) {
+            dashboardPostsRef.current = snapshot.posts;
+            dashboardSourcesRef.current = Array.isArray(snapshot.catalogueSources) ? snapshot.catalogueSources : [];
+            dashboardSummaryRef.current = snapshot.summary || {};
+            dashboardAccountsRef.current = snapshot.accounts;
+            dashboardCatalogueRevisionRef.current = snapshot.catalogueRevision || '';
+            dashboardProjectionGenerationRef.current = Number(snapshot.projectionGeneration) || 0;
+            dashboardMetricsAtRef.current = snapshot.metricsAt || '';
+            dashboardMetricsCursorRef.current = snapshot.metricsCursor || null;
+            setDashboard({ posts: snapshot.posts, summary: snapshot.summary || {} });
+            setAccounts(snapshot.accounts);
+            setLoading(false);
+            if (snapshot.catalogueRevision) dashboardEtagRef.current = `"${snapshot.catalogueRevision}"`;
+          }
         });
+        dashboardCacheRestoreRef.current = restore;
         // A slow cache read remains useful after the network fallback starts.
         // Give fast storage a brief head start without adding seconds to a
-        // cold load. A later complete snapshot can still populate the view.
+        // cold load. The loader also stops redundant cold pagination when a
+        // later complete snapshot populates the view.
         await Promise.race([
           restore,
           new Promise((resolve) => window.setTimeout(resolve, 250)),

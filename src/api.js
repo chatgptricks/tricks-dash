@@ -60,10 +60,11 @@ export async function apiFetch(url, options = {}) {
       window.__firebaseIdToken = token;
       return true;
     } catch (error) {
-      if (error?.name === 'AbortError') throw error;
-      // Fall through and let the request go out unauthenticated -- the
-      // backend will bounce it with a 401 and the login gate will catch it.
-      return false;
+      assertCurrentSession();
+      // A token refresh can fail while Google is temporarily unreachable.
+      // Sending this request without its token would turn a connection error
+      // into a 401 and make callers delete a valid private catalogue cache.
+      throw error;
     }
   };
   await refreshAuthToken();
@@ -86,22 +87,36 @@ export async function apiFetch(url, options = {}) {
   const canRetryMutation = isIdempotentUserUpsert || isIdempotentPostRefresh;
   const retryAttempts = isIdempotentUserUpsert ? USER_UPSERT_RETRY_ATTEMPTS : (isIdempotentPostRefresh ? POST_REFRESH_RETRY_ATTEMPTS : (canRetry ? SAFE_READ_RETRY_ATTEMPTS : 1));
   let lastError;
-  for (let attempt = 0; attempt < retryAttempts; attempt += 1) {
+  let refreshedUnauthorizedRead = false;
+  let attempt = 0;
+  while (attempt < retryAttempts) {
     assertCurrentSession();
+    let response;
     try {
-      const response = await window.fetch(url, { ...options, headers });
+      response = await window.fetch(url, { ...options, headers });
       assertCurrentSession();
-      const refreshMayRecoverUnauthorizedMutation = canRetryMutation && response.status === 401;
-      if ((!canRetry && !canRetryMutation) || (!TRANSIENT_GATEWAY_STATUSES.has(response.status) && !refreshMayRecoverUnauthorizedMutation) || attempt === retryAttempts - 1) return response;
-      lastError = new Error(`HTTP ${response.status}`);
     } catch (error) {
       if ((!canRetry && !canRetryMutation) || error?.name === 'AbortError' || attempt === retryAttempts - 1) throw error;
       lastError = error;
+    }
+    if (response) {
+      // Recover a stale token once before the access gate treats a read as a
+      // confirmed denial. Keep refresh errors outside the network retry catch
+      // so a failed refresh never replays the request with the old token.
+      if (canRetry && requestUser && response.status === 401 && !refreshedUnauthorizedRead) {
+        refreshedUnauthorizedRead = true;
+        await refreshAuthToken(true);
+        continue;
+      }
+      const refreshMayRecoverUnauthorizedMutation = canRetryMutation && response.status === 401;
+      if ((!canRetry && !canRetryMutation) || (!TRANSIENT_GATEWAY_STATUSES.has(response.status) && !refreshMayRecoverUnauthorizedMutation) || attempt === retryAttempts - 1) return response;
+      lastError = new Error(`HTTP ${response.status}`);
     }
     if (canRetryMutation) await refreshAuthToken(true);
     // Keep the final waits bounded: they give Render enough time to accept a
     // request after a handoff without trapping the Settings control forever.
     await waitForRetry(retryDelay(attempt), options.signal);
+    attempt += 1;
   }
   throw lastError || new Error('Request failed.');
 }

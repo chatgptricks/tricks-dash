@@ -30,14 +30,19 @@ let releaseLastPage;
 let releaseMetrics;
 let holdLastPage = true;
 let holdMetrics = true;
+let holdManifest = false;
+let releaseManifest;
 let catchupPage = null;
 const response = (body) => Response.json(body);
 window.fetch = globalThis.fetch = async (input, options = {}) => {
   const url = new URL(input);
   requests.push({ url, options });
-  if (url.pathname.endsWith('/manifest')) return new Headers(options.headers).get('If-None-Match') === '"research-startup"'
-    ? new Response(null, { status: 304 })
-    : response({ revision: 'research-startup', sources: [{ source: 'canonical', upperBound: 4 }, { source: 'dashboard', upperBound: 4 }], metricsAvailable: true });
+  if (url.pathname.endsWith('/manifest')) {
+    if (new Headers(options.headers).get('If-None-Match') === '"research-startup"') return new Response(null, { status: 304 });
+    const body = { revision: 'research-startup', sources: [{ source: 'canonical', upperBound: 4 }, { source: 'dashboard', upperBound: 4 }], metricsAvailable: true };
+    if (holdManifest) return new Promise(resolve => { releaseManifest = () => resolve(response(body)); });
+    return response(body);
+  }
   if (url.pathname.endsWith('/page')) {
     const body = { revision: 'research-startup', posts: url.searchParams.get('source') === 'canonical' ? posts.slice(0, 4) : posts.slice(4), nextCursor: 4, done: true };
     if (holdLastPage && url.searchParams.get('source') === 'dashboard') return new Promise((resolve) => { releaseLastPage = () => resolve(response(body)); });
@@ -62,7 +67,7 @@ window.fetch = globalThis.fetch = async (input, options = {}) => {
 };
 
 const bundle = await build({
-  stdin: { contents: "export { default as React, act } from 'react'; export { createRoot } from 'react-dom/client'; export { default as App } from './src/App.jsx'; export { DashboardView, Prefs } from './src/mobile/main.jsx';", resolveDir: process.cwd(), loader: 'jsx' },
+  stdin: { contents: "export { default as React, act } from 'react'; export { createRoot } from 'react-dom/client'; export { default as App } from './src/App.jsx'; export { DashboardView, Prefs } from './src/mobile/main.jsx'; export { clearDashboardSnapshot } from './src/dashboardCache.js';", resolveDir: process.cwd(), loader: 'jsx' },
   bundle: true, write: false, format: 'esm', platform: 'browser', jsx: 'automatic', target: 'es2022',
   loader: { '.jpg': 'dataurl', '.png': 'dataurl', '.svg': 'dataurl', '.css': 'empty' },
   define: { 'import.meta.env.BASE_URL': '"/"', 'import.meta.env.VITE_API_BASE': '"https://api.test"', 'import.meta.env.MODE': '"test"', 'import.meta.env.DEV': 'false', 'import.meta.env.PROD': 'true' },
@@ -74,7 +79,7 @@ const bundle = await build({
     }));
   } }],
 });
-const { React, act, createRoot, App, DashboardView, Prefs } = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString('base64')}`);
+const { React, act, createRoot, App, DashboardView, Prefs, clearDashboardSnapshot } = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString('base64')}`);
 const settle = () => new Promise((resolve) => setTimeout(resolve, 30));
 const run = (action) => act(async () => { action(); await settle(); });
 const calls = (endpoint) => requests.filter(({ url }) => url.pathname.endsWith(`/${endpoint}`));
@@ -90,6 +95,45 @@ globalThis.setTimeout = (callback, delay, ...args) => {
 };
 
 try {
+  for (const cacheTiming of ['during manifest', 'during cold pages']) {
+    const owner = 'developer@example.test';
+    await clearDashboardSnapshot(owner);
+    stored.set(`/__sentient_complete_library_v2__/${encodeURIComponent(owner)}`, JSON.stringify({
+      owner, cachedAt: 1, catalogueComplete: true, posts,
+      accounts: [{ handle: 'chatgptricks', label: 'ChatGPTricks', group: 'sentient', active: true }],
+      catalogueRevision: 'research-startup', projectionGeneration: 0,
+      catalogueSources: [{ source: 'canonical', upperBound: 4 }, { source: 'dashboard', upperBound: 4 }],
+    }));
+    let releaseCacheRead;
+    beforeCacheRead = () => new Promise(resolve => { releaseCacheRead = resolve; });
+    holdManifest = cacheTiming === 'during manifest';
+    holdLastPage = true;
+    holdMetrics = true;
+    requests.length = 0;
+    const root = createRoot(document.getElementById('root'));
+    await run(() => root.render(React.createElement(App)));
+    await run(() => continueWithoutCache());
+    assert.equal(calls('manifest').length, 1, `${cacheTiming}: a blocked cache still permits network startup`);
+    assert.equal(calls('page').length, holdManifest ? 0 : 2);
+    beforeCacheRead = null;
+    await run(() => releaseCacheRead());
+    assert.equal(document.querySelectorAll('.gallery-grid .post-card[data-context-shortcode]').length, posts.length, `${cacheTiming}: all cached cards appear immediately, even with an old cachedAt`);
+    assert.equal(document.querySelector('.topbar-search input').disabled, false, `${cacheTiming}: a complete restored library is usable during background refresh`);
+    if (holdManifest) {
+      holdManifest = false;
+      await run(() => releaseManifest());
+      assert.equal(calls('page').length, 0, 'Storage finishing during the manifest prevents all historical page downloads');
+    } else {
+      assert.ok(calls('page').every(({ options }) => options.signal.aborted), 'Storage finishing during pagination cancels the redundant historical requests');
+      assert.equal(calls('manifest').at(-1).options.headers.get('If-None-Match'), '"research-startup"');
+      await run(() => releaseLastPage());
+      assert.equal(document.querySelectorAll('.gallery-grid .post-card[data-context-shortcode]').length, posts.length, 'Late cancelled pages cannot replace the cached view');
+    }
+    assert.equal(calls('metrics').length, 1, 'The restored library only needs incremental metrics');
+    await run(() => releaseMetrics());
+    await run(() => root.unmount());
+    await clearDashboardSnapshot(owner);
+  }
   for (const mobile of [false, true]) {
     requests.length = 0;
     holdLastPage = true;

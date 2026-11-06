@@ -45,6 +45,83 @@ assert.equal((await apiFetch('https://api.test/read')).status, 200);
 assert.equal(calls, 1, 'blocked preference storage must not prevent API requests');
 Object.defineProperty(window, 'sessionStorage', { configurable: true, value: { getItem: () => null } });
 
+const tokenNetworkError = Object.assign(new Error('Google is temporarily unreachable.'), { code: 'auth/network-request-failed' });
+firebaseAuth.currentUser = { getIdToken: async () => { throw tokenNetworkError; } };
+calls = 0;
+window.fetch = async () => { calls += 1; return new Response('', { status: 401 }); };
+await assert.rejects(apiFetch('https://api.test/read'), (error) => error === tokenNetworkError);
+assert.equal(calls, 0, 'a token connection failure must not become an unauthenticated 401 that clears the catalogue');
+
+for (const method of ['GET', 'HEAD']) {
+  const tokenCalls = [];
+  firebaseAuth.currentUser = { getIdToken: async (force) => {
+    tokenCalls.push(force);
+    return force ? 'fresh-token' : 'stale-token';
+  } };
+  const sentTokens = [];
+  window.fetch = async (_url, options) => {
+    sentTokens.push(options.headers.get('Authorization'));
+    return new Response(null, { status: sentTokens.length === 1 ? 401 : 200 });
+  };
+  assert.equal((await apiFetch('https://api.test/read', { method })).status, 200);
+  assert.deepEqual(tokenCalls, [false, true]);
+  assert.deepEqual(sentTokens, ['Bearer stale-token', 'Bearer fresh-token'], 'safe reads retry a 401 with a fresh token');
+}
+
+let tokenCalls = [];
+firebaseAuth.currentUser = { getIdToken: async (force) => { tokenCalls.push(force); return 'token'; } };
+calls = 0;
+window.fetch = async () => { calls += 1; return new Response('', { status: 401 }); };
+assert.equal((await apiFetch('https://api.test/read')).status, 401);
+assert.equal(calls, 2, 'a confirmed 401 must reach the access gate after one refresh');
+assert.deepEqual(tokenCalls, [false, true]);
+
+tokenCalls = [];
+firebaseAuth.currentUser = { getIdToken: async (force) => { tokenCalls.push(force); return 'token'; } };
+calls = 0;
+window.fetch = async () => new Response('', { status: [401, 503, 401][calls++] });
+assert.equal((await apiFetch('https://api.test/read')).status, 401);
+assert.equal(calls, 3);
+assert.deepEqual(tokenCalls, [false, true], 'gateway recovery must not reset the single authentication retry');
+
+tokenCalls = [];
+firebaseAuth.currentUser = { getIdToken: async (force) => {
+  tokenCalls.push(force);
+  if (force) throw tokenNetworkError;
+  return 'stale-token';
+} };
+calls = 0;
+window.fetch = async () => { calls += 1; return new Response('', { status: 401 }); };
+await assert.rejects(apiFetch('https://api.test/read'), (error) => error === tokenNetworkError);
+assert.equal(calls, 1, 'a failed refresh must preserve the connection error, without replaying a stale token');
+assert.deepEqual(tokenCalls, [false, true]);
+
+for (const status of [400, 403, 404]) {
+  tokenCalls = [];
+  firebaseAuth.currentUser = { getIdToken: async (force) => { tokenCalls.push(force); return 'token'; } };
+  calls = 0;
+  window.fetch = async () => { calls += 1; return new Response('', { status }); };
+  assert.equal((await apiFetch('https://api.test/read')).status, status);
+  assert.equal(calls, 1, 'other client errors must not trigger authentication recovery');
+  assert.deepEqual(tokenCalls, [false]);
+}
+
+for (const method of ['POST', 'PUT', 'PATCH', 'DELETE']) {
+  tokenCalls = [];
+  firebaseAuth.currentUser = { getIdToken: async (force) => { tokenCalls.push(force); return 'token'; } };
+  calls = 0;
+  window.fetch = async () => { calls += 1; return new Response('', { status: 401 }); };
+  assert.equal((await apiFetch('https://api.test/assign', { method })).status, 401);
+  assert.equal(calls, 1, 'authentication recovery must not replay writes');
+  assert.deepEqual(tokenCalls, [false]);
+}
+
+firebaseAuth.currentUser = null;
+calls = 0;
+window.fetch = async () => { calls += 1; return new Response('', { status: 401 }); };
+assert.equal((await apiFetch('https://api.test/read')).status, 401);
+assert.equal(calls, 1, 'a signed-out request must still reach the existing unauthorized gate');
+
 let resolveToken;
 firebaseAuth.currentUser = { getIdToken: () => new Promise((resolve) => { resolveToken = resolve; }) };
 window.__firebaseIdToken = null;
@@ -101,4 +178,4 @@ assert.equal(calls, 4);
 assert.equal(events[0].revision, 7);
 assert.equal(delays.length, 3);
 assert.ok(delays[1] > delays[0] && delays[2] > delays[1], 'empty streams must back off');
-console.log('API safe retries, mutation protection, cancellation and stream recovery checks passed.');
+console.log('API auth recovery, safe retries, mutation protection, cancellation and stream recovery checks passed.');

@@ -11,7 +11,11 @@ globalThis.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} 
 globalThis.IntersectionObserver = class { observe() {} unobserve() {} disconnect() {} takeRecords() { return []; } };
 globalThis.matchMedia = () => ({ matches: false, addListener() {}, removeListener() {}, addEventListener() {}, removeEventListener() {} });
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
-const makeUser = (email) => ({ uid: email, email, getIdToken: async () => email });
+const tokenErrors = new Map();
+const makeUser = (email) => ({ uid: email, email, getIdToken: async () => {
+  if (tokenErrors.has(email)) throw tokenErrors.get(email);
+  return email;
+} });
 globalThis.__authCacheTest = { auth: { currentUser: makeUser('denied@example.test') }, listeners: new Set(), failSignOut: false };
 const authStub = `
 export function getAuth() { return globalThis.__authCacheTest.auth; }
@@ -173,6 +177,20 @@ try {
   await click(button('Try again'));
   await flush();
   assert.ok(card('ERROR_PRIVATE'), 'a transient access failure recovers on retry');
+
+  await app.writeDashboardSnapshot(snapshot('TOKEN_PRIVATE'), 'token@example.test');
+  tokenErrors.set('token@example.test', Object.assign(new Error('Google is temporarily unreachable.'), { code: 'auth/network-request-failed' }));
+  const accessRequestsBeforeTokenFailure = requestCounts.get('/api/dashboard/me');
+  await switchTo('token@example.test');
+  await flush();
+  assert.match(view.textContent, /could not connect/);
+  assert.equal(requestCounts.get('/api/dashboard/me'), accessRequestsBeforeTokenFailure, 'token failure must not send an unauthorized request');
+  assert.equal(card('TOKEN_PRIVATE'), null, 'token recovery must not bypass server authorization');
+  assert.ok(await app.readDashboardSnapshot('token@example.test'), 'a temporary token failure must preserve the private catalogue cache');
+  tokenErrors.delete('token@example.test');
+  await click(button('Try again'));
+  await flush();
+  assert.ok(card('TOKEN_PRIVATE'), 'token recovery restores the retained cache after server authorization');
 
   const capabilityEmail = 'capabilities@example.test';
   const deniedCapabilities = { is_dev: false, is_admin: false, can_role_switch: false, operating_role: 'sales', operating_roles: ['sales'] };

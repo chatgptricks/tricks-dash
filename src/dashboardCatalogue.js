@@ -269,23 +269,62 @@ async function refreshCatalogueMetrics(catalogue, signal, unchanged = false) {
   };
 }
 
-export async function loadCompleteDashboardCatalogue({ signal, etag = '', onProgress, onSnapshot, cachedCatalogue = null, checkpoint = {} } = {}) {
+// Storage can finish after the cold network fallback has already begun. Stop
+// that pagination as soon as a usable complete cache becomes available; the
+// next manifest check can verify it or fetch just newer IDs instead.
+async function fetchRevisionUntilCache(manifest, signal, onProgress, startingBounds, checkpoint, cacheRestored, getCachedCatalogue) {
+  const controller = new AbortController();
+  const onAbort = () => controller.abort(signal.reason);
+  if (signal?.aborted) onAbort();
+  else signal?.addEventListener('abort', onAbort, { once: true });
+  const pages = fetchRevision(manifest, controller.signal, onProgress, startingBounds, checkpoint)
+    .then(catalogue => ({ catalogue }));
+  try {
+    if (!cacheRestored) return await pages;
+    const restored = Promise.resolve(cacheRestored).catch(() => {}).then(() => {
+      const cache = getCachedCatalogue();
+      return hasCollaborationMetadata(cache) && normaliseSources(cache.sources)?.size
+        ? { restored: true } : pages;
+    });
+    const result = await Promise.race([pages, restored]);
+    if (controller.signal.aborted) throw controller.signal.reason || new DOMException('Request aborted.', 'AbortError');
+    return result;
+  } finally {
+    controller.abort();
+    signal?.removeEventListener('abort', onAbort);
+  }
+}
+
+export async function loadCompleteDashboardCatalogue({ signal, etag = '', onProgress, onSnapshot, cachedCatalogue = null, getCachedCatalogue = () => cachedCatalogue, cacheRestored, checkpoint = {} } = {}) {
   // A persisted full library remains complete after an ID-bounded delta is
   // merged in. Normal reloads should not pull all historical posts again just
   // because the scheduler inserted one newer row.
   // Older persisted libraries have no coauthor projection. Refill them once,
   // including existing IDs, before resuming conditional and append-only reads.
-  const collaborationReady = hasCollaborationMetadata(cachedCatalogue);
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    const manifestResult = await fetchManifest(signal, attempt === 0 && collaborationReady ? etag : '');
+  let attempt = 0;
+  while (attempt < 2) {
+    cachedCatalogue = getCachedCatalogue();
+    const conditionalEtag = cachedCatalogue?.revision ? `"${cachedCatalogue.revision}"` : etag;
+    const manifestResult = await fetchManifest(signal, attempt === 0 && hasCollaborationMetadata(cachedCatalogue) ? conditionalEtag : '');
+    // The 250 ms startup fallback can beat Cache Storage/JSON parsing. Read
+    // live refs again before deciding whether any history needs downloading.
+    cachedCatalogue = getCachedCatalogue();
+    const collaborationReady = hasCollaborationMetadata(cachedCatalogue);
     if (manifestResult.notModified) {
       checkpoint.current = null;
-      return refreshCatalogueMetrics({ ...cachedCatalogue, etag }, signal, true);
+      return refreshCatalogueMetrics({ ...cachedCatalogue, etag: conditionalEtag }, signal, true);
     }
     try {
       const cachedSources = normaliseSources(cachedCatalogue?.sources);
       const currentSources = normaliseSources(manifestResult.manifest.sources);
       if (!currentSources) throw new DashboardCatalogueError('The post catalogue named an invalid source.');
+      if (collaborationReady && cachedCatalogue.revision === manifestResult.manifest.revision
+        && (Number(cachedCatalogue.projectionGeneration) || 0) === (Number(manifestResult.manifest.projectionGeneration) || 0)
+        && cachedSources?.size === currentSources.size
+        && [...currentSources].every(([source, upperBound]) => cachedSources.get(source) === upperBound)) {
+        checkpoint.current = null;
+        return refreshCatalogueMetrics({ ...cachedCatalogue, metricsAvailable: Boolean(manifestResult.manifest.metricsAvailable), etag: manifestResult.etag }, signal, true);
+      }
       const canDelta = collaborationReady && Array.isArray(cachedCatalogue?.posts)
         && cachedCatalogue.posts.length > 0
         && cachedSources
@@ -300,13 +339,21 @@ export async function loadCompleteDashboardCatalogue({ signal, etag = '', onProg
         // A changed revision without new IDs cannot be satisfied by an empty
         // delta: it may represent updated decorations or a server generation.
         && [...currentSources].some(([source, upperBound]) => upperBound > cachedSources.get(source));
-      const catalogue = await fetchRevision(
+      const result = await fetchRevisionUntilCache(
         manifestResult.manifest,
         signal,
         onProgress,
         canDelta ? cachedSources : new Map(),
         checkpoint,
+        !collaborationReady ? cacheRestored : null,
+        getCachedCatalogue,
       );
+      if (result.restored) {
+        checkpoint.current = null;
+        cacheRestored = null;
+        continue;
+      }
+      const { catalogue } = result;
       const posts = canDelta ? mergeCompleteCatalogue(cachedCatalogue.posts, catalogue.posts) : catalogue.posts;
       const snapshot = {
         ...catalogue,
@@ -325,6 +372,7 @@ export async function loadCompleteDashboardCatalogue({ signal, etag = '', onProg
     } catch (error) {
       if (error instanceof DashboardCatalogueError && [401, 403, 409].includes(error.status)) checkpoint.current = null;
       if (!(error instanceof DashboardCatalogueError) || error.status !== 409 || attempt === 1) throw error;
+      attempt += 1;
     }
   }
   throw new DashboardCatalogueError('The complete post catalogue could not be verified.', 409);

@@ -55,6 +55,61 @@ try {
   assert.equal(pageCalls().length, 1);
   assert.equal(pageCalls()[0].params.get('after_id'), '5', 'Pure growth should keep the bounded delta path');
 
+  const warmCatalogue = { ...cachedCatalogue, revision: 'warm-revision', projectionGeneration: 3 };
+  let liveCache = null;
+  let warmPages = 0;
+  globalThis.fetch = async (input) => {
+    if (input.endsWith('/manifest')) {
+      // A real Cache Storage read can complete while the manifest is in flight.
+      liveCache = warmCatalogue;
+      return Response.json({ revision: 'warm-revision', sources: sources(5), projectionGeneration: 3 });
+    }
+    warmPages += 1;
+    throw new Error('A matching cache restored during the manifest needs no history');
+  };
+  assert.deepEqual(await loadCompleteDashboardCatalogue({ getCachedCatalogue: () => liveCache }), { notModified: true });
+  assert.equal(warmPages, 0, 'Late storage is reconsidered before cold pagination starts');
+
+  liveCache = null;
+  let releaseRestore;
+  let firstPage;
+  let lateManifestCalls = 0;
+  let publishedCold = 0;
+  const latePages = [];
+  const pageStarted = new Promise(resolve => { firstPage = resolve; });
+  const restored = new Promise(resolve => { releaseRestore = resolve; });
+  globalThis.fetch = async (input, options) => {
+    const url = new URL(input);
+    if (url.pathname.endsWith('/manifest')) {
+      lateManifestCalls += 1;
+      if (options.headers?.['If-None-Match'] === '"warm-revision"') return new Response(null, { status: 304 });
+      return Response.json({ revision: 'warm-revision', sources: sources(5), projectionGeneration: 3 });
+    }
+    return new Promise(resolve => {
+      latePages.push({ signal: options.signal, release: () => resolve(Response.json({ revision: 'warm-revision', posts: [post('discarded')], nextCursor: Number(url.searchParams.get('until_id')), done: true })) });
+      firstPage();
+    });
+  };
+  const lateCheckpoint = {};
+  const lateRead = loadCompleteDashboardCatalogue({
+    getCachedCatalogue: () => liveCache, cacheRestored: restored, checkpoint: lateCheckpoint,
+    onSnapshot: () => { publishedCold += 1; },
+  });
+  await pageStarted;
+  liveCache = warmCatalogue;
+  releaseRestore();
+  assert.deepEqual(await lateRead, { notModified: true });
+  assert.equal(lateManifestCalls, 2, 'A late complete cache gets a conditional manifest check');
+  assert.ok(latePages.every(page => page.signal.aborted), 'A restored cache cancels redundant cold pages');
+  latePages.forEach(page => page.release());
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(publishedCold, 0, 'Cancelled cold data never replaces the complete cached library');
+  assert.equal(lateCheckpoint.current, null, 'Late responses cannot resurrect the discarded cold checkpoint');
+
+  serve(sources(5), refreshed);
+  const blockedCache = await loadCompleteDashboardCatalogue({ getCachedCatalogue: () => null, cacheRestored: new Promise(() => {}) });
+  assert.deepEqual(ids(blockedCache), ['updated-canonical', 'updated-dashboard'], 'Blocked storage must not hold a cold network read open');
+
   // A cached catalogue from before collaboration metadata shipped cannot use
   // an unchanged ETag or a growing watermark to skip older source records.
   for (const [label, legacyPosts] of [
