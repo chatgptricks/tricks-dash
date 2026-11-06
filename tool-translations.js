@@ -2,6 +2,7 @@
    captions, OCR and hashtags are source data and are deliberately excluded. */
 (function () {
   const es = {
+    'Data updated':'Datos actualizados', 'Updating…':'Actualizando…', 'Showing saved data':'Mostrando datos guardados',
     'Music':'Música', 'Insights views':'Vistas de Insights', 'Music coverage':'Cobertura de música', '1 post':'1 publicación',
     'Discover the sounds behind your best-performing posts.':'Descubre los sonidos de tus publicaciones con mejor rendimiento.',
     'Unique posts':'Publicaciones únicas', 'Selected accounts and dates':'Cuentas y fechas seleccionadas',
