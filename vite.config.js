@@ -16,7 +16,7 @@ function hashCompanion(directory) {
 }
 hashCompanion(resolve(__dirname, 'src/companion'));
 companionHash.update(readFileSync(resolve(__dirname, 'public/sentient-companion.js')));
-const companionScript = '/sentient-companion.js?v=' + companionHash.digest('hex').slice(0, 12);
+const companionScript = '/sentient-companion-' + companionHash.digest('hex').slice(0, 12) + '.js';
 
 export default defineConfig(({ command }) => ({
   // A developer .env.local may point Hooks at a local server. Production
@@ -33,6 +33,7 @@ export default defineConfig(({ command }) => ({
   publicDir: process.env.VITE_SKIP_PUBLIC === '1' ? false : 'public',
   plugins: [react(), {
     name: 'sentient-companion-host',
+    generateBundle() { this.emitFile({ type: 'asset', fileName: companionScript.slice(1), source: readFileSync(resolve(__dirname, 'public/sentient-companion.js')) }); },
     transformIndexHtml(html, context) {
       if (context.path === '/companion.html' || /\/(?:agents|oauth|api)\.html$/.test(context.path)) return html;
       return [{ tag: 'script', attrs: { src: companionScript, defer: true }, injectTo: 'body' }];
@@ -41,7 +42,7 @@ export default defineConfig(({ command }) => ({
       if (command !== 'build') return;
       for (const name of ['tracker.html', 'insights.html']) {
         const target = resolve(__dirname, 'dist', name);
-        if (existsSync(target)) writeFileSync(target, readFileSync(target, 'utf8').replace(/src="\/sentient-companion\.js(?:\?v=[^"]*)?"/g, `src="${companionScript}"`));
+        if (existsSync(target)) writeFileSync(target, readFileSync(target, 'utf8').replace(/src="\/sentient-companion(?:-[a-f0-9]+)?\.js(?:\?v=[^"]*)?"/g, `src="${companionScript}"`));
       }
     },
   }],

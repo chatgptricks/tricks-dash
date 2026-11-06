@@ -5,7 +5,8 @@
   const positions = ['top-left', 'middle-left', 'bottom-left', 'top-right', 'middle-right', 'bottom-right'];
   const frame = document.createElement('iframe');
   frame.id = 'sentient-companion-frame'; frame.title = 'Sentient';
-  const version = new URL(document.currentScript?.src || location.href).searchParams.get('v') || '20261106.1';
+  const scriptUrl = new URL(document.currentScript?.src || location.href);
+  const version = scriptUrl.pathname.match(/sentient-companion-([a-f0-9]+)\.js$/)?.[1] || scriptUrl.searchParams.get('v') || '20261106.1';
   frame.src = '/companion.html?v=' + encodeURIComponent(version);
   frame.setAttribute('aria-label', 'Sentient companion');
   frame.style.cssText = 'position:fixed;left:12px;top:12px;width:1px;height:1px;border:0;background:transparent;z-index:2147483647;color-scheme:dark;visibility:hidden;pointer-events:none;';
