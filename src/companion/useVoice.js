@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { readVoicePreference } from './voicePreference';
 
 export const MAX_VOICE_SECONDS = 60;
 export const MAX_VOICE_BYTES = 10 * 1024 * 1024;
@@ -12,8 +13,8 @@ export function useVoice({ request, apiBase, uid, language, onTranscript }) {
   const [speech, setSpeech] = useState({ id: null, status: 'idle' }), [error, setError] = useState('');
   const active = useRef(true), recording = useRef(null), recordVersion = useRef(0);
   const audio = useRef(null), audioUrl = useRef(null), playback = useRef(null), speechVersion = useRef(0);
-  const callbacks = useRef({ request, apiBase, language, onTranscript });
-  callbacks.current = { request, apiBase, language, onTranscript };
+  const callbacks = useRef({ request, apiBase, language, onTranscript, uid });
+  callbacks.current = { request, apiBase, language, onTranscript, uid };
   const supported = typeof MediaRecorder !== 'undefined' && Boolean(navigator.mediaDevices?.getUserMedia);
   const updateSpeech = value => { if (active.current) setSpeech(value); };
   const fail = code => { if (active.current) setError(code); };
@@ -141,17 +142,20 @@ export function useVoice({ request, apiBase, uid, language, onTranscript }) {
   }
   async function speak(message, { permit } = {}) {
     if (permit !== undefined && permit !== speechVersion.current) return;
-    if (playback.current?.id === message.id && audioUrl.current) { await playLoaded(playback.current); return; }
+    const chosenVoice = readVoicePreference(callbacks.current.uid);
+    if (playback.current?.id === message.id && playback.current.voice === chosenVoice && audioUrl.current) { await playLoaded(playback.current); return; }
     stopSpeech(); setError('');
-    const current = { id: message.id, controller: new AbortController() };
+    const current = { id: message.id, voice: chosenVoice, message, controller: new AbortController() };
     playback.current = current;
     updateSpeech({ id: current.id, status: 'loading' });
     const valid = () => active.current && playback.current === current;
     const timeout = current.timeout = setTimeout(() => current.controller.abort('timeout'), 60_000);
     try {
+      // Read at request time so a choice in another open tab applies to the
+      // next reply without remounting the bot or changing an ongoing clip.
       const response = await callbacks.current.request(callbacks.current.apiBase + '/api/dashboard/assistant/speech', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: current.controller.signal,
-        body: JSON.stringify({ text: message.text.slice(0, 12000), question: message.question.slice(0, 4000), language: message.language, mode: message.mode }),
+        body: JSON.stringify({ text: message.text.slice(0, 12000), question: message.question.slice(0, 4000), language: message.language, mode: message.mode, ...(chosenVoice ? { voice: chosenVoice } : {}) }),
       });
       if (!valid()) return;
       if (!response.ok || !response.headers.get('Content-Type')?.startsWith('audio/')) throw new Error('speech');
@@ -174,6 +178,6 @@ export function useVoice({ request, apiBase, uid, language, onTranscript }) {
     return () => { active.current = false; cancelAll(); };
   }, [uid]);
   return { phase, seconds, speech, error, supported, start, stopAndSend, cancelRecording, stopSpeech, cancelAll, unlock, speak,
-    resumeSpeech: () => { if (playback.current && audioUrl.current) void playLoaded(playback.current); },
+    resumeSpeech: () => { if (playback.current && audioUrl.current) void speak(playback.current.message); },
     permit: () => speechVersion.current, clearError: () => setError('') };
 }

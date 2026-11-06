@@ -189,6 +189,20 @@ try {
   assert.equal(callsTo('speech').length, speechBeforeNavigation + 1, 'The floating Listen button reuses the downloaded audio');
   await click('Stop audio');
   assert.equal(document.querySelector('.pet-voice-playback'), null, 'The compact audio control disappears after stopping');
+  await click('Chat with Sentient');
+  localStorage.setItem('sentient.pet.voice-choice.voice', 'cedar'); blockPlayback = true;
+  await click('Listen to reply');
+  assert.equal(callsTo('speech').at(-1).body.voice, 'cedar', 'The bot reads the current owner’s saved voice on its next speech request');
+  const beforeChangedVoice = callsTo('speech').length;
+  localStorage.setItem('sentient.pet.voice-choice.voice', 'ash');
+  await click('Listen to reply');
+  assert.equal(callsTo('speech').length, beforeChangedVoice + 1, 'Changing the preference cannot resume a blocked clip generated with the old voice');
+  assert.equal(callsTo('speech').at(-1).body.voice, 'ash');
+  await click('Stop audio');
+  localStorage.removeItem('sentient.pet.voice-choice.voice');
+  localStorage.setItem('sentient.pet.voice-choice.someone-else', 'cedar');
+  await click('Listen to reply');
+  assert.equal(Object.hasOwn(callsTo('speech').at(-1).body, 'voice'), false, 'Reset delegates to the server default without inheriting another owner’s choice');
   await run(() => app.unmount());
   console.log('PASS companion voice: permissions, cancellation, delayed grants, shared chat/pills, pending /next, localization, audio toggles, autoplay fallback, minimized replies, history and teardown');
 } finally {

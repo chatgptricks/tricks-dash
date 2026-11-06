@@ -36,7 +36,7 @@ export default defineConfig(({ command }) => ({
     name: 'sentient-companion-host',
     generateBundle() { this.emitFile({ type: 'asset', fileName: companionScript.slice(1), source: readFileSync(resolve(__dirname, 'public/sentient-companion.js')) }); },
     transformIndexHtml(html, context) {
-      if (context.path === '/companion.html' || /\/(?:agents|oauth|api)\.html$/.test(context.path)) return html;
+      if (context.path === '/companion.html' || /\/(?:agents|oauth|api|voice-lab)\.html$/.test(context.path)) return html;
       return [{ tag: 'script', attrs: { src: companionScript, defer: true }, injectTo: 'body' }];
     },
     closeBundle() {
@@ -61,6 +61,7 @@ export default defineConfig(({ command }) => ({
       input: {
         dashboard: resolve(__dirname, 'index.html'),
         companion: resolve(__dirname, 'companion.html'),
+        voiceLab: resolve(__dirname, 'voice-lab.html'),
         queue: resolve(__dirname, 'queue.html'),
         settings: resolve(__dirname, 'settings.html'),
         agents: resolve(__dirname, 'agents.html'),
