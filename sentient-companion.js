@@ -9,7 +9,11 @@
   frame.src = '/companion.html?v=' + encodeURIComponent(version);
   frame.setAttribute('aria-label', 'Sentient companion');
   frame.style.cssText = 'position:fixed;left:12px;top:12px;width:1px;height:1px;border:0;background:transparent;z-index:2147483647;color-scheme:dark;visibility:hidden;pointer-events:none;';
-  frame.tabIndex = -1; document.body.append(frame);
+  frame.tabIndex = -1;
+  const backdrop = document.createElement('div');
+  backdrop.id = 'sentient-companion-backdrop'; backdrop.setAttribute('aria-hidden', 'true');
+  backdrop.style.cssText = 'position:fixed;inset:0;z-index:2147483646;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);background:rgba(0,0,0,.08);pointer-events:none;display:none;';
+  document.body.append(backdrop, frame);
   let state = 'hidden', dock = 'bottom-left', geometry, drag, pendingPointer = false, pointer;
   const clamp = (n, a, b) => Math.max(a, Math.min(Math.max(a, b), n));
   const send = value => frame.contentWindow?.postMessage({ source: 'sentient-host', ...value }, location.origin);
@@ -46,6 +50,7 @@
     geometry = { x, y, width, height, ax, ay, aw, ah };
     Object.assign(frame.style, { left: x + 'px', top: y + 'px', width: width + 'px', height: height + 'px', visibility: state === 'hidden' ? 'hidden' : 'visible', pointerEvents: state === 'hidden' ? 'none' : 'auto' });
     frame.tabIndex = state === 'hidden' ? -1 : 0;
+    backdrop.style.display = state === 'open' ? 'block' : 'none';
     frame.dataset.dock = dock; frame.dataset.state = state;
     send({ type: 'geometry', dock, avatar: { x: ax - x, y: ay - y, w: aw, h: ah }, panel: { x: px - x, y: py - y, w: pw, h: ph } });
   };
