@@ -15,10 +15,10 @@
   backdrop.id = 'sentient-companion-backdrop'; backdrop.setAttribute('aria-hidden', 'true');
   backdrop.style.cssText = 'position:fixed;inset:0;z-index:2147483646;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);background:rgba(0,0,0,.08);pointer-events:none;display:none;';
   document.body.append(backdrop, frame);
-  let state = 'hidden', dock = 'bottom-left', geometry, drag, pendingPointer = false, pointer;
+  let state = 'hidden', dock = 'bottom-left', geometry, drag, menu, pendingPointer = false, pointer;
   const clamp = (n, a, b) => Math.max(a, Math.min(Math.max(a, b), n));
   const send = value => frame.contentWindow?.postMessage({ source: 'sentient-host', ...value }, location.origin);
-  const viewport = () => ({ w: window.visualViewport?.width || innerWidth, h: window.visualViewport?.height || innerHeight, bottom: innerWidth <= 760 && location.pathname.startsWith('/mobile') ? 82 : 12 });
+  const viewport = () => ({ w: window.visualViewport?.width || innerWidth, h: window.visualViewport?.height || innerHeight, left: window.visualViewport?.offsetLeft || 0, top: window.visualViewport?.offsetTop || 0, bottom: innerWidth <= 760 && location.pathname.startsWith('/mobile') ? 82 : 12 });
   const preferences = () => {
     const root = document.documentElement;
     frame.style.colorScheme = root.dataset.theme === 'light' ? 'light' : 'dark';
@@ -27,38 +27,70 @@
     send({ type: 'context', page: location.pathname, language: root.lang.startsWith('es') ? 'es' : 'en', theme: root.dataset.theme === 'light' ? 'light' : 'dark', tokens, font: getComputedStyle(document.body).fontFamily, radius: style.getPropertyValue('--radius-xl').trim() });
   };
   const resize = () => {
-    const { w, h, bottom } = viewport(), right = dock.endsWith('right');
+    const { w, h, left, top, bottom } = viewport(), right = dock.endsWith('right');
     const aw = state === 'compact' ? 64 : 136, ah = state === 'compact' ? 68 : 146;
-    const ax = right ? w - 12 - aw : 12;
-    const ay = dock.startsWith('top') ? 12 : dock.startsWith('middle') ? clamp((h - ah) / 2, 12, h - bottom - ah) : Math.max(12, h - bottom - ah);
+    const ax = right ? Math.max(left + 12, left + w - 12 - aw) : left + 12;
+    const ay = dock.startsWith('top') ? top + 12 : dock.startsWith('middle') ? clamp(top + (h - ah) / 2, top + 12, top + h - bottom - ah) : Math.max(top + 12, top + h - bottom - ah);
     let px = ax, py = ay, pw = 0, ph = 0;
     if (state === 'open') {
-      pw = Math.min(420, w - 24);
+      pw = Math.max(0, Math.min(420, w - 24));
       if (dock.startsWith('middle') && w >= 620) {
         pw = Math.min(pw, w - aw - 36); ph = Math.min(540, h - bottom - 12);
         px = right ? ax - pw - 10 : ax + aw + 10;
-        py = clamp(ay + ah / 2 - ph / 2, 12, h - bottom - ph);
+        py = clamp(ay + ah / 2 - ph / 2, top + 12, top + h - bottom - ph);
       } else {
-        px = right ? w - 12 - pw : 12;
+        px = right ? left + w - 12 - pw : left + 12;
         const above = !dock.startsWith('top');
-        ph = Math.min(540, above ? ay - 22 : h - bottom - ay - ah - 10);
-        ph = Math.max(100, ph);
-        py = above ? ay - ph - 10 : ay + ah + 10;
+        const available = above ? ay - top - 22 : top + h - bottom - ay - ah - 10;
+        // A software keyboard can leave less room than the avatar plus a panel.
+        // Keep the panel inside the visible viewport rather than forcing it above it.
+        ph = Math.max(0, Math.min(540, available >= 200 ? available : h - bottom - 12));
+        py = clamp(above ? ay - ph - 10 : ay + ah + 10, top + 12, top + h - bottom - ph);
       }
     }
-    const x = Math.min(ax, px), y = Math.min(ay, py);
-    const width = Math.max(ax + aw, px + pw) - x, height = Math.max(ay + ah, py + ph) - y;
+    let mx = ax, my = ay, mw = 0, mh = 0;
+    if (menu) {
+      mw = Math.min(menu.width, Math.max(0, w - 24)); mh = Math.min(menu.height, Math.max(0, h - 24));
+      const besideRoom = right ? ax - left - 20 : left + w - 12 - ax - aw - 8;
+      if (besideRoom >= 200) {
+        mw = Math.min(mw, besideRoom);
+        mx = right ? ax - mw - 8 : ax + aw + 8;
+        my = clamp(ay + ah / 2 - mh / 2, top + 12, top + h - 12 - mh);
+      } else {
+        mx = clamp(ax, left + 12, left + w - 12 - mw);
+        const above = ay - top - 20, below = top + h - 12 - ay - ah - 8;
+        my = clamp(above >= below ? ay - mh - 8 : ay + ah + 8, top + 12, top + h - 12 - mh);
+      }
+    }
+    const x = Math.min(ax, px, mx), y = Math.min(ay, py, my);
+    const width = Math.max(ax + aw, px + pw, mx + mw) - x, height = Math.max(ay + ah, py + ph, my + mh) - y;
     geometry = { x, y, width, height, ax, ay, aw, ah };
     Object.assign(frame.style, { left: x + 'px', top: y + 'px', width: width + 'px', height: height + 'px', visibility: state === 'hidden' ? 'hidden' : 'visible', pointerEvents: state === 'hidden' ? 'none' : 'auto' });
     frame.tabIndex = state === 'hidden' ? -1 : 0;
     backdrop.style.display = state === 'open' ? 'block' : 'none';
+    backdrop.style.pointerEvents = state === 'open' ? 'auto' : 'none';
     frame.dataset.dock = dock; frame.dataset.state = state;
-    send({ type: 'geometry', dock, avatar: { x: ax - x, y: ay - y, w: aw, h: ah }, panel: { x: px - x, y: py - y, w: pw, h: ph } });
+    send({ type: 'geometry', dock, avatar: { x: ax - x, y: ay - y, w: aw, h: ah }, panel: { x: px - x, y: py - y, w: pw, h: ph }, menu: menu ? { x: mx - x, y: my - y, w: mw, h: mh } : null });
   };
+  function dismissMenu() {
+    if (!menu) return;
+    menu = null; resize(); send({ type: 'dismiss-menu' });
+  }
+  function minimize() { state = 'closed'; menu = null; drag = null; resize(); }
+  backdrop.addEventListener('click', event => { event.preventDefault(); event.stopPropagation(); minimize(); send({ type: 'minimize' }); });
+  function navigate(value) {
+    if (typeof value !== 'string' || value.length > 8000) return;
+    let target;
+    try { target = new URL(value, location.origin); } catch { return; }
+    if (target.origin !== location.origin || target.username || target.password || !allowed.test(target.pathname)) return;
+    minimize();
+    location.assign(target.href);
+  }
   function showResearch(filters) {
     const fields = ['query', 'min_likes', 'min_comments', 'accounts', 'from_date', 'to_date', 'sort', 'post_type', 'promos_only', 'collabs_only'];
     if (!filters || typeof filters !== 'object' || Object.keys(filters).some(key => !fields.includes(key))) return;
     if (!['All posts', 'Carousel', 'Video', 'Image'].includes(filters.post_type) || !['newest', 'oldest', 'likes-desc', 'comments-desc', 'hot-rate'].includes(filters.sort)) return;
+    minimize();
     const params = new URLSearchParams();
     if (typeof filters.query === 'string') params.set('q', filters.query.slice(0, 200));
     for (const [field, param] of [['min_likes', 'likes'], ['min_comments', 'comments']]) {
@@ -81,25 +113,38 @@
   window.addEventListener('message', event => {
     if (event.origin !== location.origin || event.source !== frame.contentWindow || event.data?.source !== 'sentient-companion') return;
     const data = event.data;
-    if (data.type === 'layout' && ['hidden', 'closed', 'open', 'compact'].includes(data.state)) { state = data.state; resize(); preferences(); }
+    if (data.type === 'layout' && ['hidden', 'closed', 'open', 'compact'].includes(data.state)) {
+      state = data.state;
+      menu = data.menu?.open && state !== 'hidden' ? { width: clamp(Number(data.menu.width) || 244, 160, 420), height: clamp(Number(data.menu.height) || 344, 100, 640) } : null;
+      resize(); preferences();
+    }
     if (data.type === 'ready') { if (positions.includes(data.dock)) dock = data.dock; resize(); preferences(); }
+    if (data.type === 'navigate') navigate(data.url);
     if (data.type === 'research_filters') showResearch(data.filters);
-    if (data.type === 'drag-start' && geometry) drag = { ...geometry };
+    if (data.type === 'dock' && positions.includes(data.dock)) { dock = data.dock; drag = null; dismissMenu(); resize(); send({ type: 'docked', dock }); }
+    if (data.type === 'drag-start' && geometry) { dismissMenu(); drag = { ...geometry }; }
+    if (data.type === 'drag-cancel' && drag) { drag = null; resize(); }
     if (data.type === 'drag-move' && drag && Number.isFinite(data.dx) && Number.isFinite(data.dy)) {
-      const { w, h } = viewport();
-      frame.style.left = clamp(drag.x + data.dx, 0, w - drag.width) + 'px';
-      frame.style.top = clamp(drag.y + data.dy, 0, h - drag.height) + 'px';
+      const { w, h, left, top } = viewport();
+      frame.style.left = clamp(drag.x + data.dx, left, left + w - drag.width) + 'px';
+      frame.style.top = clamp(drag.y + data.dy, top, top + h - drag.height) + 'px';
     }
     if (data.type === 'drag-end' && drag && Number.isFinite(data.dx) && Number.isFinite(data.dy)) {
-      const { w, h, bottom } = viewport();
+      const { w, h, left, top, bottom } = viewport();
       const x = drag.ax + drag.aw / 2 + data.dx, y = drag.ay + drag.ah / 2 + data.dy;
-      const ys = [12 + drag.ah / 2, h / 2, h - bottom - drag.ah / 2];
+      const ys = [top + 12 + drag.ah / 2, top + h / 2, top + h - bottom - drag.ah / 2];
       const vertical = ys.reduce((best, v, i) => Math.abs(v - y) < Math.abs(ys[best] - y) ? i : best, 0);
-      dock = ['top', 'middle', 'bottom'][vertical] + (x < w / 2 ? '-left' : '-right');
+      dock = ['top', 'middle', 'bottom'][vertical] + (x < left + w / 2 ? '-left' : '-right');
       drag = null; resize(); send({ type: 'docked', dock });
     }
   });
-  window.addEventListener('resize', resize); window.visualViewport?.addEventListener('resize', resize);
+  window.addEventListener('resize', resize); window.visualViewport?.addEventListener('resize', resize); window.visualViewport?.addEventListener('scroll', resize);
+  window.addEventListener('pointerdown', dismissMenu);
+  window.addEventListener('keydown', event => {
+    if (event.key !== 'Escape') return;
+    if (menu) dismissMenu();
+    else if (state === 'open') { minimize(); send({ type: 'minimize' }); }
+  });
   frame.addEventListener('load', () => { resize(); preferences(); });
   new MutationObserver(preferences).observe(document.documentElement, { attributes: true, attributeFilter: ['lang', 'data-theme', 'style', 'class'] });
   window.addEventListener('pointermove', event => {
