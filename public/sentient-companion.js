@@ -7,13 +7,14 @@
   frame.title = 'Sentient';
   frame.src = '/companion.html';
   frame.setAttribute('aria-label', 'Sentient companion');
-  frame.style.cssText = 'position:fixed;left:12px;bottom:12px;width:1px;height:1px;border:0;background:transparent;z-index:850;color-scheme:normal;visibility:hidden;pointer-events:none;';
+  frame.style.cssText = 'position:fixed;left:12px;bottom:12px;width:1px;height:1px;border:0;background:transparent;z-index:850;color-scheme:dark;visibility:hidden;pointer-events:none;';
   frame.tabIndex = -1;
   document.body.append(frame);
   let state = 'hidden', pendingPointer = false, pointer;
   const send = value => frame.contentWindow?.postMessage({ source: 'sentient-host', ...value }, location.origin);
   const preferences = () => {
     const root = document.documentElement;
+    frame.style.colorScheme = root.dataset.theme === 'light' ? 'light' : 'dark';
     send({ type: 'context', page: location.pathname, language: root.lang.startsWith('es') ? 'es' : 'en', theme: root.dataset.theme === 'light' ? 'light' : 'dark' });
   };
   const resize = () => {
@@ -21,8 +22,8 @@
     const bottom = mobile && location.pathname.startsWith('/mobile') ? 82 : 12;
     const viewportHeight = window.visualViewport?.height || innerHeight;
     frame.style.bottom = bottom + 'px';
-    frame.style.width = (state === 'open' ? Math.min(440, innerWidth - 24) : state === 'compact' ? 64 : state === 'hidden' ? 1 : 172) + 'px';
-    frame.style.height = (state === 'open' ? Math.min(690, viewportHeight - bottom - 12) : state === 'compact' ? 64 : state === 'hidden' ? 1 : 184) + 'px';
+    frame.style.width = (state === 'open' ? Math.min(440, innerWidth - 24) : state === 'compact' ? 64 : state === 'hidden' ? 1 : 136) + 'px';
+    frame.style.height = (state === 'open' ? Math.min(690, viewportHeight - bottom - 12) : state === 'compact' ? 64 : state === 'hidden' ? 1 : 146) + 'px';
     frame.style.visibility = state === 'hidden' ? 'hidden' : 'visible';
     frame.style.pointerEvents = state === 'hidden' ? 'none' : 'auto';
     frame.tabIndex = state === 'hidden' ? -1 : 0;
@@ -39,7 +40,7 @@
   frame.addEventListener('load', preferences);
   new MutationObserver(preferences).observe(document.documentElement, { attributes: true, attributeFilter: ['lang', 'data-theme'] });
   window.addEventListener('pointermove', event => {
-    pointer = { x: Math.max(-1, Math.min(1, (event.clientX - 98) / 380)), y: Math.max(-1, Math.min(1, (event.clientY - (innerHeight - 105)) / 320)) };
+    pointer = { x: Math.max(-1, Math.min(1, (event.clientX - 80) / 380)), y: Math.max(-1, Math.min(1, (event.clientY - (innerHeight - 85)) / 320)) };
     if (pendingPointer || state === 'hidden' || state === 'compact') return;
     pendingPointer = true;
     requestAnimationFrame(() => { pendingPointer = false; send({ type: 'pointer', ...pointer }); });
