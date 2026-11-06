@@ -4,6 +4,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { firebaseAuth } from '../firebase';
 import { API_BASE, apiFetch } from '../api';
 import { Companion } from './Companion';
+import { clearVoiceHandoff } from './voiceHandoff';
 import './companion.css';
 
 function Bootstrap() {
@@ -14,6 +15,7 @@ function Bootstrap() {
       const current = ++generation;
       setSession(null);
       if (previousUid && previousUid !== user?.uid) {
+        clearVoiceHandoff(previousUid);
         try { sessionStorage.removeItem('sentient.pet.chat.' + previousUid); } catch { /* storage optional */ }
       }
       previousUid = user?.uid || '';

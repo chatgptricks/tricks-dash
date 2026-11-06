@@ -7,6 +7,8 @@ import { isLaunchSuppressed, setLaunchSuppressed, launchStorageKey } from './lau
 import { ResultPill, ResultPills } from './ResultPills';
 import { extractPostResults, postKeyFromUrl, loadResults, saveResults, clearResults } from './results';
 import { COMMANDS, parseCommand, suggestCommands, pendingNextContext, sanitizeNextContext } from './commands';
+import { useVoice } from './useVoice';
+import { claimVoiceHandoff, clearVoiceHandoff } from './voiceHandoff';
 import './position.css';
 
 const COPY = {
@@ -21,6 +23,8 @@ COPY.es.aboutBot = 'Conocé a Sentient Bot';
 COPY.en.aboutBot = 'Meet Sentient Bot';
 Object.assign(COPY.es, { commands: 'Comandos', useCommand: 'Usar', filterCommand: 'Aplicar filtros en el dashboard', researchCommand: 'Buscar datos y responder en el chat', nextCommand: 'Recomendar qué post recrear', commandRequired: 'Escribí una consulta después del comando.' });
 Object.assign(COPY.en, { commands: 'Commands', useCommand: 'Use', filterCommand: 'Apply dashboard filters', researchCommand: 'Search data and answer in chat', nextCommand: 'Recommend the next post to recreate', commandRequired: 'Write a query after the command.' });
+Object.assign(COPY.es, { voiceStart: 'Hablar por voz', voiceSend: 'Terminar y enviar audio', voiceCancel: 'Cancelar audio', voiceRequesting: 'Esperando permiso del micrófono…', voiceRecording: 'Te escucho', voiceTranscribing: 'Transcribiendo…', voiceRead: 'Leer respuestas de texto en voz alta', voicePlay: 'Escuchar respuesta', voiceStop: 'Detener audio', voiceLoading: 'Preparando audio…', voiceBlocked: 'Tocá para escuchar', voiceDisclosure: 'Voz generada por IA.', voicePermission: 'Permití el micrófono en tu navegador para hablar. También podés escribir.', voiceUnsupported: 'Este navegador no permite grabar audio. Podés escribir tu pregunta.', voiceRecordError: 'No pude grabar el audio. Revisá el micrófono e intentá de nuevo.', voiceTranscribeError: 'No pude transcribir el audio. Intentá de nuevo o escribí tu pregunta.', voiceEmpty: 'No detecté palabras. Intentá hablar de nuevo.', voiceTooLarge: 'El audio supera 10 MB. Grabá un mensaje más corto.', voicePlaybackError: 'No pude reproducir el audio. Podés volver a escucharlo con el botón de la respuesta.' });
+Object.assign(COPY.en, { voiceStart: 'Ask by voice', voiceSend: 'Finish and send audio', voiceCancel: 'Cancel audio', voiceRequesting: 'Waiting for microphone permission…', voiceRecording: 'Listening', voiceTranscribing: 'Transcribing…', voiceRead: 'Read text replies aloud', voicePlay: 'Listen to reply', voiceStop: 'Stop audio', voiceLoading: 'Preparing audio…', voiceBlocked: 'Tap to listen', voiceDisclosure: 'AI-generated voice.', voicePermission: 'Allow microphone access in your browser to speak. You can also type.', voiceUnsupported: 'This browser cannot record audio. You can type your question.', voiceRecordError: 'I couldn’t record audio. Check your microphone and try again.', voiceTranscribeError: 'I couldn’t transcribe this audio. Try again or type your question.', voiceEmpty: 'No words were detected. Please try speaking again.', voiceTooLarge: 'The audio exceeds 10 MB. Record a shorter message.', voicePlaybackError: 'I couldn’t play this audio. Try the reply’s play button again.' });
 function safeSource(url) {
   try { const target = new URL(url); return target.origin === 'https://sentientdash.app' && !target.username && !target.password ? target.href : null; } catch { return null; }
 }
@@ -62,6 +66,7 @@ export function AnswerText({ text, onNavigate, results = [], currentUrl, locale 
 function Icon({ kind }) {
   const paths = { close: 'M5 12h14', send: 'm5 12 14-7-5 14-3-6-6-1Z M11 13l8-8', new: 'M12 5v14 M5 12h14', stop: 'M7 7h10v10H7Z', chat: 'M5 4h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9l-6 4V6a2 2 0 0 1 2-2Z', hide: 'M3 3l18 18 M10 5h9a2 2 0 0 1 2 2v9 M7 7H5a2 2 0 0 0-2 2v9l6-4h5' };
   Object.assign(paths, { history: 'M3 11a9 9 0 1 1 2 7 M3 4v7h7 M12 7v5l3 2', back: 'm12 5-7 7 7 7 M5 12h14', trash: 'M3 6h18 M9 6V3h6v3 M5 6l1 15h12l1-15 M10 10v7 M14 10v7' });
+  Object.assign(paths, { mic: 'M9 5a3 3 0 0 1 6 0v7a3 3 0 0 1-6 0V5Z M5 10v2a7 7 0 0 0 14 0v-2 M12 19v3 M9 22h6', audio: 'M11 4 6 8H3v8h3l5 4V4Z M15 8a6 6 0 0 1 0 8 M18 5a10 10 0 0 1 0 14', cancel: 'm6 6 12 12 M18 6 6 18' });
   if (kind === 'menu') return <svg viewBox="0 0 24 24" aria-hidden="true">{[5, 12, 19].map(x => <circle key={x} cx={x} cy="12" r="1.5" fill="currentColor" stroke="none"/>)}</svg>;
   return <svg viewBox="0 0 24 24" aria-hidden="true"><path d={paths[kind] || paths.chat}/></svg>;
 }
@@ -82,14 +87,27 @@ export function Companion({ session, request, apiBase, Avatar = Character }) {
   const [draft, setDraft] = useState(''), [busy, setBusy] = useState(false), [error, setError] = useState('');
   const [commandIndex, setCommandIndex] = useState(0), [commandMenuDismissed, setCommandMenuDismissed] = useState(false);
   const [reaction, setReaction] = useState('idle'), [unread, setUnread] = useState(0);
+  const [readAloud, setReadAloud] = useState(() => { try { return localStorage.getItem('sentient.pet.voice.' + session?.uid) === 'true'; } catch { return false; } });
   const gesture = useRef(null), suppressClick = useRef(false);
   const input = useRef(null), list = useRef(null), controller = useRef(null), sequence = useRef(0), opened = useRef(open), settle = useRef(null), menuElement = useRef(null), launcher = useRef(null), menuTrigger = useRef(null);
   const copy = COPY[context.language];
+  const voice = useVoice({ request, apiBase, uid: session?.uid, language: context.language, onTranscript: (text, meta) => {
+    const mode = parseCommand(text).mode === 'auto' ? meta.mode : 'auto';
+    ask((mode && mode !== 'auto' ? `/${mode} ${text}` : text).slice(0, 4000), { spoken: true });
+  } });
+  const voiceBusy = voice.phase !== 'idle';
   const draftCommand = parseCommand(draft);
   const composerMode = draftCommand.mode === 'auto' && pendingNextContext(messages, draft) ? 'next' : draftCommand.mode;
   const commandSuggestions = commandMenuDismissed ? [] : suggestCommands(draft);
   const currentVisual = useRef({ enabled, activeResults });
   currentVisual.current = { enabled, activeResults };
+  useEffect(() => {
+    if (!session?.uid || !session.configured || !contextReady || !context.pageUrl) return;
+    const pending = claimVoiceHandoff(session.uid, context.pageUrl);
+    if (!pending) return;
+    setLaunchVisible(false); setOpen(false); setEnabled(true);
+    void voice.speak(pending);
+  }, [session?.uid, session?.configured, contextReady, context.pageUrl]);
   useLayoutEffect(() => {
     opened.current = open;
     try { if (session?.uid) sessionStorage.setItem('sentient.pet.open.' + session.uid, String(open)); } catch { /* optional persistence */ }
@@ -155,7 +173,8 @@ export function Companion({ session, request, apiBase, Avatar = Character }) {
   }, [messages, session, conversation.id]);
   useEffect(() => { if (busy) list.current?.scrollTo?.({ top: list.current.scrollHeight, behavior: 'smooth' }); }, [busy]);
 
-  function minimize(resultSet) {
+  function minimize(resultSet, { preserveVoice = false } = {}) {
+    if (!preserveVoice) { voice.cancelAll(); clearVoiceHandoff(session?.uid); }
     const visual = currentVisual.current;
     const results = Array.isArray(resultSet) ? resultSet : visual.activeResults;
     setMenu(false); setOpen(false); opened.current = false;
@@ -227,7 +246,7 @@ export function Companion({ session, request, apiBase, Avatar = Character }) {
       '--pet-menu-enter-y': `${(originY / Math.max(1, box.h) - .5) * 20}px`,
     });
   }
-  function stopPending() { sequence.current++; controller.current?.abort(); controller.current = null; clearTimeout(settle.current); setBusy(false); setReaction('idle'); }
+  function stopPending() { voice.cancelAll(); clearVoiceHandoff(session?.uid); sequence.current++; controller.current?.abort(); controller.current = null; clearTimeout(settle.current); setBusy(false); setReaction('idle'); }
   function cancelledMessages() { return messages.map((item, i) => busy && i === messages.length - 1 && item.role === 'user' ? { ...item, failed: true } : item); }
   function cancel() { stopPending(); setMessages(cancelledMessages()); setDraft(messages.at(-1)?.role === 'user' ? messages.at(-1).content : ''); setError(copy.stopped); setMenu(false); }
   function clear() {
@@ -235,7 +254,7 @@ export function Companion({ session, request, apiBase, Avatar = Character }) {
     dismissResults();
     stopPending(); const next = newConversation(session.uid); setConversation(next); setMessages([]); setDraft(''); setError(''); setView('chat'); setMenu(false); enable(); setOpen(true);
   }
-  function showHistory() { setHistory(listConversations(session.uid)); setDeleting(null); setView('history'); setMenu(false); enable(); setOpen(true); }
+  function showHistory() { voice.cancelAll(); setHistory(listConversations(session.uid)); setDeleting(null); setView('history'); setMenu(false); enable(); setOpen(true); }
   function resume(entry) {
     const selected = entry.id === conversation.id ? { ...entry, messages: cancelledMessages() } : entry;
     saveConversation(session.uid, { id: conversation.id, messages: cancelledMessages() });
@@ -282,7 +301,7 @@ export function Companion({ session, request, apiBase, Avatar = Character }) {
     }
     if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); ask(); }
   }
-  async function ask(value = draft) {
+  async function ask(value = draft, { spoken = false } = {}) {
     const message = value.trim();
     if (!message || busy || controller.current || !session) return;
     const command = parseCommand(message);
@@ -290,6 +309,10 @@ export function Companion({ session, request, apiBase, Avatar = Character }) {
     const nextContext = command.mode === 'auto' ? pendingNextContext(messages, message) : null;
     const mode = nextContext ? 'next' : command.mode;
     if (!session.configured) { setError(copy.unavailable); return; }
+    voice.cancelRecording(); voice.stopSpeech(); voice.clearError();
+    clearVoiceHandoff(session.uid);
+    if (!spoken && readAloud) voice.unlock();
+    const speechPermit = voice.permit();
     const current = ++sequence.current;
     const abort = new AbortController(); controller.current = abort;
     const timer = setTimeout(() => abort.abort('timeout'), 125_000);
@@ -310,20 +333,36 @@ export function Companion({ session, request, apiBase, Avatar = Character }) {
       const pendingNext = mode === 'next' ? sanitizeNextContext(result.pending_next) : null;
       if (pendingNext) assistantMessage.pending_next = pendingNext;
       setMessages(items => [...items, assistantMessage]);
+      const wantsSpeech = (spoken || readAloud) && voice.permit() === speechPermit;
+      const narration = { id: assistantMessage.id, text: result.answer.slice(0, 12000), question: message, language: context.language, mode };
       if (action) {
         dismissResults();
-        minimize(); setUnread(0);
+        minimize(undefined, { preserveVoice: true }); setUnread(0);
         // Persist before navigation so both the request and answer survive it.
         saveConversation(session.uid, { id: conversation.id, messages: [...messages, { id: userId, role: 'user', content: message }, assistantMessage] });
-        postHost({ type: 'research_filters', filters: action.filters });
+        postHost({ type: 'research_filters', filters: action.filters, ...(wantsSpeech ? { voiceHandoff: { ...narration, owner: session.uid } } : {}) });
       }
       setReaction('celebrate'); settle.current = setTimeout(() => setReaction('idle'), 2500);
+      if (wantsSpeech && (!action || /^\/(?:index\.html)?$/.test(context.page))) void voice.speak(narration, { permit: speechPermit });
       if (!opened.current && !action) setUnread(number => number + 1);
     } catch (reason) {
       if (current !== sequence.current) return;
       setMessages(items => items.map(item => item.id === userId ? { ...item, failed: true } : item));
       setDraft(message); setReaction('error'); setError(abort.signal.aborted || reason.message === 'timeout' ? copy.timeout : ['limited', 'unsupported'].includes(reason.message) ? copy[reason.message] : copy.error);
     } finally { clearTimeout(timer); if (current === sequence.current) { setBusy(false); controller.current = null; } }
+  }
+  function toggleReadAloud() {
+    const next = !readAloud; setReadAloud(next);
+    try { localStorage.setItem('sentient.pet.voice.' + session.uid, String(next)); } catch { /* Optional preference. */ }
+    if (next) voice.unlock(); else voice.stopSpeech();
+  }
+  function playReply(item, index) {
+    if (voice.speech.id === item.id && ['playing', 'loading'].includes(voice.speech.status)) { voice.stopSpeech(); return; }
+    voice.unlock();
+    const question = messages.slice(0, index).findLast(message => message.role === 'user')?.content || '';
+    const command = parseCommand(question);
+    const mode = command.mode === 'auto' && pendingNextContext(messages.slice(0, index - 1), question) ? 'next' : command.mode;
+    void voice.speak({ id: item.id, text: item.content, question, language: context.language, mode });
   }
   if (!session) return null;
   if (launchVisible) return contextReady ? <LaunchSplash locale={context.language} dontShowAgain={launchSuppressed} onDontShowAgainChange={changeLaunchPreference} onStart={startFromLaunch} onDismiss={dismissLaunch} Avatar={Avatar}/> : null;
@@ -337,36 +376,46 @@ export function Companion({ session, request, apiBase, Avatar = Character }) {
           {deleting === entry.id ? <div className="history-confirm"><span>{copy.confirmDelete}</span><button type="button" onClick={() => removeHistory(entry.id)}>{copy.delete}</button><button type="button" onClick={() => setDeleting(null)}>{copy.cancel}</button></div> : <><button className="history-resume" type="button" onClick={() => resume(entry)} aria-label={`${copy.resume}: ${entry.title}`}><strong>{entry.title}</strong><small>{new Date(entry.updatedAt).toLocaleDateString(context.language, { month: 'short', day: 'numeric' })}{entry.id === conversation.id ? ` · ${copy.current}` : ''}</small></button><button className="history-delete" type="button" aria-label={`${copy.delete}: ${entry.title}`} onClick={() => setDeleting(entry.id)}><Icon kind="trash"/></button></>}
         </div>)}
       </div> : <><div className="chat-transcript" ref={list} role="log" aria-live="polite" aria-relevant="additions text">
-        {!messages.length ? <div className="chat-welcome"><span className="welcome-spark">✦</span><h1>{copy.greet}</h1><p>{copy.intro}</p><div className="chat-prompts">{copy.prompts.map(prompt => <button type="button" disabled={busy || !session.configured} key={prompt.label} onClick={() => { if (prompt.draft) { setDraft(prompt.draft); input.current?.focus(); } else ask(prompt.question); }}>{prompt.label}<span aria-hidden="true">↗</span></button>)}</div></div> : null}
-        {messages.map(item => {
+        {!messages.length ? <div className="chat-welcome"><span className="welcome-spark">✦</span><h1>{copy.greet}</h1><p>{copy.intro}</p><div className="chat-prompts">{copy.prompts.map(prompt => <button type="button" disabled={busy || voiceBusy || !session.configured} key={prompt.label} onClick={() => { if (prompt.draft) { setDraft(prompt.draft); input.current?.focus(); } else ask(prompt.question); }}>{prompt.label}<span aria-hidden="true">↗</span></button>)}</div></div> : null}
+        {messages.map((item, index) => {
           const postResults = item.role === 'assistant' ? extractPostResults(item.content) : [];
           const text = item.content;
-          return <article key={item.id} className={`chat-message from-${item.role} ${item.failed ? 'is-failed' : ''}`}><span className="sr-only">{item.role === 'assistant' ? 'Sentient' : context.language === 'es' ? 'Vos' : 'You'}: </span>{text ? <div className="chat-message-text">{item.role === 'assistant' ? <AnswerText text={text} onNavigate={navigate} results={postResults} currentUrl={context.pageUrl} locale={context.language}/> : text}</div> : null}{item.sources?.length ? <details className="chat-sources"><summary>{copy.sources} · {item.sources.length}</summary>{item.sources.map((source, index) => safeSource(source.url) ? <a key={index} href={safeSource(source.url)} target="_top" onClick={navigate} onAuxClick={navigate}><span>{source.label}</span>{source.partial ? <small>{copy.partial}</small> : null}<code>{source.endpoint}</code></a> : null)}</details> : null}</article>;
+          const playing = voice.speech.id === item.id;
+          const audioActive = playing && ['loading', 'playing'].includes(voice.speech.status);
+          return <article key={item.id} className={`chat-message from-${item.role} ${item.failed ? 'is-failed' : ''}`}><span className="sr-only">{item.role === 'assistant' ? 'Sentient' : context.language === 'es' ? 'Vos' : 'You'}: </span>{text ? <div className="chat-message-text">{item.role === 'assistant' ? <AnswerText text={text} onNavigate={navigate} results={postResults} currentUrl={context.pageUrl} locale={context.language}/> : text}</div> : null}{item.sources?.length ? <details className="chat-sources"><summary>{copy.sources} · {item.sources.length}</summary>{item.sources.map((source, index) => safeSource(source.url) ? <a key={index} href={safeSource(source.url)} target="_top" onClick={navigate} onAuxClick={navigate}><span>{source.label}</span>{source.partial ? <small>{copy.partial}</small> : null}<code>{source.endpoint}</code></a> : null)}</details> : null}{item.role === 'assistant' ? <div className="chat-audio-reply"><button type="button" disabled={voiceBusy || busy} aria-label={audioActive ? copy.voiceStop : copy.voicePlay} title={audioActive ? copy.voiceStop : copy.voicePlay} onClick={() => playReply(item, index)}><Icon kind={audioActive ? 'stop' : 'audio'}/></button>{playing && voice.speech.status === 'loading' ? <span role="status">{copy.voiceLoading}</span> : playing && voice.speech.status === 'blocked' ? <span role="status">{copy.voiceBlocked}</span> : null}</div> : null}</article>;
         })}
         {busy ? <div className="chat-thinking" role="status"><span/><span/><span/><small>{copy.thinking}</small></div> : null}
       </div>
       <form className="chat-composer" onSubmit={event => { event.preventDefault(); ask(); }}>
         {error ? <p className="chat-error" role="alert">{error}</p> : null}
+        {voice.error ? <p className="chat-error" role="alert">{copy[voice.error]}</p> : null}
         {!session.configured ? <p className="chat-error" role="status">{copy.unavailable}</p> : null}
         <div className="chat-command-bar" aria-label={copy.commands}>
-          {COMMANDS.map(mode => <button type="button" key={mode} aria-label={`${copy.useCommand} /${mode}`} aria-pressed={composerMode === mode} title={copy[mode + 'Command']} disabled={!session.configured || busy} onClick={() => chooseCommand(mode)}><span>/{mode}</span></button>)}
+          {COMMANDS.map(mode => <button type="button" key={mode} aria-label={`${copy.useCommand} /${mode}`} aria-pressed={composerMode === mode} title={copy[mode + 'Command']} disabled={!session.configured || busy || voiceBusy} onClick={() => chooseCommand(mode)}><span>/{mode}</span></button>)}
           <span className="chat-command-hint">{composerMode === 'auto' ? '/' : copy[composerMode + 'Command']}</span>
         </div>
-        {commandSuggestions.length ? <div className="chat-command-menu" id="chat-commands" role="listbox" aria-label={copy.commands}>{commandSuggestions.map((mode, index) => <button type="button" role="option" tabIndex={-1} id={`chat-command-${mode}`} aria-selected={index === commandIndex} key={mode} onMouseEnter={() => setCommandIndex(index)} onMouseDown={event => event.preventDefault()} onClick={() => chooseCommand(mode)}><strong>/{mode}</strong><span>{copy[mode + 'Command']}</span><kbd aria-hidden="true">↵</kbd></button>)}</div> : null}
-        <div className="chat-input-row"><textarea ref={input} aria-label={copy.placeholder} placeholder={copy.placeholder} aria-controls={commandSuggestions.length ? 'chat-commands' : undefined} aria-activedescendant={commandSuggestions.length ? `chat-command-${commandSuggestions[commandIndex] || commandSuggestions[0]}` : undefined} maxLength={4000} rows={2} value={draft} disabled={!session.configured} onChange={event => { setDraft(event.target.value); setCommandIndex(0); setCommandMenuDismissed(false); }} onKeyDown={composerKeys}/>{busy ? <button className="chat-submit" type="button" aria-label={copy.stop} onClick={cancel}><Icon kind="stop"/></button> : <button className="chat-submit" type="submit" aria-label={copy.send} disabled={(!draftCommand.query && draftCommand.mode !== 'next') || !session.configured}><Icon kind="send"/></button>}</div><p className="chat-note">{copy.note}</p>
+        {commandSuggestions.length && !voiceBusy ? <div className="chat-command-menu" id="chat-commands" role="listbox" aria-label={copy.commands}>{commandSuggestions.map((mode, index) => <button type="button" role="option" tabIndex={-1} id={`chat-command-${mode}`} aria-selected={index === commandIndex} key={mode} onMouseEnter={() => setCommandIndex(index)} onMouseDown={event => event.preventDefault()} onClick={() => chooseCommand(mode)}><strong>/{mode}</strong><span>{copy[mode + 'Command']}</span><kbd aria-hidden="true">↵</kbd></button>)}</div> : null}
+        <div className="chat-input-row">{voiceBusy ? <>
+          <div className="chat-voice-status" role="status"><span className={voice.phase === 'recording' ? 'voice-record-dot' : ''}/><div><strong>{copy[voice.phase === 'recording' ? 'voiceRecording' : voice.phase === 'requesting' ? 'voiceRequesting' : 'voiceTranscribing']}</strong>{voice.phase === 'recording' ? <small>{Math.floor(voice.seconds / 60)}:{String(voice.seconds % 60).padStart(2, '0')} / 1:00</small> : null}</div></div>
+          <button className="chat-voice-button" type="button" aria-label={copy.voiceCancel} title={copy.voiceCancel} onClick={voice.cancelRecording}><Icon kind="cancel"/></button>
+          {voice.phase === 'recording' ? <button className="chat-submit" type="button" aria-label={copy.voiceSend} title={copy.voiceSend} onClick={voice.stopAndSend}><Icon kind="send"/></button> : null}
+        </> : <><textarea ref={input} aria-label={copy.placeholder} placeholder={copy.placeholder} aria-controls={commandSuggestions.length ? 'chat-commands' : undefined} aria-activedescendant={commandSuggestions.length ? `chat-command-${commandSuggestions[commandIndex] || commandSuggestions[0]}` : undefined} maxLength={4000} rows={2} value={draft} disabled={!session.configured} onChange={event => { setDraft(event.target.value); setCommandIndex(0); setCommandMenuDismissed(false); }} onKeyDown={composerKeys}/><button className="chat-voice-button" type="button" aria-label={copy.voiceStart} title={voice.supported ? copy.voiceStart : copy.voiceUnsupported} disabled={busy || !session.configured} onClick={() => voice.start({ mode: draftCommand.mode })}><Icon kind="mic"/></button>{busy ? <button className="chat-submit" type="button" aria-label={copy.stop} onClick={cancel}><Icon kind="stop"/></button> : <button className="chat-submit" type="submit" aria-label={copy.send} disabled={(!draftCommand.query && draftCommand.mode !== 'next') || !session.configured}><Icon kind="send"/></button>}</>}</div>
+        <div className="chat-voice-options"><button type="button" aria-label={copy.voiceRead} aria-pressed={readAloud} onClick={toggleReadAloud}><Icon kind="audio"/><span>{copy.voiceRead}</span></button><small>{copy.voiceDisclosure}</small></div>
+        <p className="chat-note">{copy.note}</p>
       </form></>}
     </section> : null}
     <button ref={launcher} type="button" className={`pet-launcher ${!enabled ? 'mini-launcher' : ''}`} aria-label={open ? copy.close : copy.open} aria-expanded={open} aria-haspopup="menu" style={boxStyle(geometry?.avatar)} title={context.language === 'es' ? 'Arrastrá para mover · Clic derecho para opciones' : 'Drag to move · Right-click for options'} onClick={launch} onContextMenu={openMenu} onKeyDown={event => { if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) openMenu(event); }} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={pointerUp}>
-      <Avatar reaction={open && enabled ? reaction : 'idle'} unread={enabled ? unread : 0} paused={!enabled}/>
+      <Avatar reaction={enabled ? voice.speech.status === 'playing' ? 'greeting' : voice.phase === 'recording' ? 'attentive' : voice.phase === 'transcribing' ? 'working' : open ? reaction : 'idle' : 'idle'} unread={enabled ? unread : 0} paused={!enabled}/>
       {!enabled && unread ? <span className="compact-count">{unread > 99 ? '99+' : unread}</span> : null}
     </button>
+    {!open && enabled && !menu && voice.speech.id ? <button className="pet-voice-playback" style={geometry?.avatar ? { left: geometry.avatar.x + 8, top: geometry.avatar.y + geometry.avatar.h - 25, width: geometry.avatar.w - 16 } : undefined} type="button" aria-label={['loading', 'playing'].includes(voice.speech.status) ? copy.voiceStop : copy.voicePlay} onClick={() => { if (['loading', 'playing'].includes(voice.speech.status)) voice.stopSpeech(); else { voice.unlock(); voice.resumeSpeech(); } }}><Icon kind={['loading', 'playing'].includes(voice.speech.status) ? 'stop' : 'audio'}/><span>{voice.speech.status === 'loading' ? copy.voiceLoading : voice.speech.status === 'playing' ? copy.voiceStop : copy.voiceBlocked}</span></button> : null}
     {!open && enabled && !menu && activeResults.length ? <div className="pet-results-floating" style={{ ...boxStyle(geometry?.results), visibility: parent === window || geometry?.results ? undefined : 'hidden' }}><ResultPills results={activeResults} locale={context.language} currentUrl={context.pageUrl} onNavigate={event => navigate(event, activeResults)} onDismiss={dismissResults}/></div> : null}
     {menu ? <div className="pet-menu" ref={menuElement} style={menuStyle} data-positioned={Boolean(geometry?.menu)} role="menu" aria-label={copy.menu} onKeyDown={menuKeys}>
       <div className="pet-menu-title" aria-hidden="true">Sentient</div>
       <button type="button" role="menuitem" onClick={() => { setMenu(false); if (open) minimize(); else { enable(); setOpen(true); setView('chat'); } }}><Icon kind={open ? 'close' : 'chat'}/>{open ? copy.close : copy.open}</button>
       <button type="button" role="menuitem" onClick={clear}><Icon kind="new"/>{copy.newChat}</button>
       <button type="button" role="menuitem" onClick={showHistory}><Icon kind="history"/>{copy.history}</button>
-      <button type="button" role="menuitem" onClick={() => { setMenu(false); setLaunchVisible(true); }}><Icon kind="chat"/>{copy.aboutBot}</button>
+      <button type="button" role="menuitem" onClick={() => { voice.cancelAll(); setMenu(false); setLaunchVisible(true); }}><Icon kind="chat"/>{copy.aboutBot}</button>
       {busy ? <button type="button" role="menuitem" onClick={cancel}><Icon kind="stop"/>{copy.stop}</button> : null}
       <div className="pet-menu-divider" role="separator"/>
       <div className="pet-menu-label">{copy.position}</div>
