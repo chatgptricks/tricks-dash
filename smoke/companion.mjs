@@ -58,6 +58,14 @@ try {
   assert.equal(calls.at(-1).page, '/tracker.html');
   await app.act(async () => pending(new Response('{}', { status: 503 })));
   assert.match(document.querySelector('[role="alert"]').textContent, /couldn’t finish/);
+  await click(button('New conversation'));
+  await click(button('Most liked carousel · 24h'));
+  await app.act(async () => pending(Response.json({ answer: 'Filters applied.', ui_actions: [{ type: 'research_filters', filters: { query: 'Elon Musk', min_likes: 5001, min_comments: null, accounts: [], from_date: null, to_date: null, sort: 'likes-desc', post_type: 'All posts', promos_only: false, collabs_only: false } }] })));
+  assert.equal(document.querySelector('.companion-chat'), null, 'Applying filters minimizes the chat');
+  assert.equal(document.querySelector('[data-paused]').dataset.paused, 'false', 'The character remains animated');
+  assert.equal(document.querySelector('[data-unread]').dataset.unread, '0');
+  assert.equal(sessionStorage.getItem('sentient.pet.open.one'), 'false', 'Navigation preserves the minimized state');
+
   await app.act(async () => app.unmount());
   await app.act(async () => app.mount({ session: { uid: 'two', configured: true }, request, apiBase: 'https://api.example.test' }));
   assert.equal(document.querySelectorAll('.chat-message').length, 0);

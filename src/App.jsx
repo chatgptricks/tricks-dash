@@ -1,4 +1,4 @@
-import { RESEARCH_POST_TYPES as TYPE_OPTIONS, RESEARCH_SORT_OPTIONS as SORT_OPTIONS } from './researchFilterOptions';
+import { RESEARCH_POST_TYPES as TYPE_OPTIONS, RESEARCH_SORT_OPTIONS as SORT_OPTIONS, validResearchFilters } from './researchFilterOptions';
 import { useInspectorModal } from './use-inspector-modal';
 import { returnCardFromSide } from './card-flight';
 import { ACCOUNT_PROFILE_IMAGES, PROMO_HASHTAG, PROMO_HASHTAG_RE, InspectorCardSlot, PostCard, PostCardLayer, QuickAddButton } from './PostCard';
@@ -1869,6 +1869,33 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
       setVisibleStackCount(STACKS_PER_BATCH);
     });
   }, [accountsInScope]);
+
+  const [assistantAccounts, setAssistantAccounts] = useState(null);
+  useEffect(() => {
+    if (assistantAccounts === null || activeGroup !== 'all' || !accounts.length) return;
+    const handles = new Set(accounts.map(account => account.handle));
+    setSelectedAccounts(new Set(assistantAccounts.length ? assistantAccounts.filter(handle => handles.has(handle)) : handles));
+    setAssistantAccounts(null);
+  }, [assistantAccounts, activeGroup, accounts]);
+  useEffect(() => {
+    const apply = event => {
+      const filters = event.detail;
+      if (!validResearchFilters(filters)) return;
+      event.preventDefault(); // Tell the host the mounted page handled this action.
+      urlAccountsPending.current = false;
+      setActiveGroup('all'); setAssistantAccounts(filters.accounts);
+      setQuery(filters.query); setSelectedCategories(new Set());
+      setActiveType(filters.post_type); setMediaFilter('all'); setSortBy(filters.sort);
+      setMinLikes(filters.min_likes ?? 0); setMinComments(filters.min_comments ?? 0);
+      setDateFrom(filters.from_date || ''); setDateTo(filters.to_date || '');
+      setDatePreset(filters.from_date || filters.to_date ? 'custom' : 'all');
+      setPromoOnly(filters.promos_only); setCollabOnly(filters.collabs_only);
+      setShowHidden(false); setShowHotHistory(false); setIsSidebarOpen(false);
+      setVisibleStackCount(STACKS_PER_BATCH);
+    };
+    window.addEventListener('sentient:research-filters', apply);
+    return () => window.removeEventListener('sentient:research-filters', apply);
+  }, []);
 
   const applyDatePreset = useCallback((value) => {
     const preset = datePresets.find((option) => option.value === value);

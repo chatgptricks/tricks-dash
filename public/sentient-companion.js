@@ -70,7 +70,12 @@
     params.set('type', filters.post_type);
     if (filters.promos_only === true) params.set('promo', '1');
     if (filters.collabs_only === true) params.set('collab', '1');
-    // The Research page already restores all its real controls from shared URLs.
+    // Use the mounted controls without reloading the post library. Other tools
+    // navigate to Research, whose controls restore the same shared URL values.
+    if (/^\/(?:index\.html)?$/.test(location.pathname)) {
+      const event = new CustomEvent('sentient:research-filters', { detail: filters, cancelable: true });
+      if (!window.dispatchEvent(event)) return;
+    }
     location.assign('/index.html?' + params.toString());
   }
   window.addEventListener('message', event => {

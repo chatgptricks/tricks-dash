@@ -94,6 +94,13 @@ try {
   assert.ok(validResearchFilters(filters));
   assert.ok(RESEARCH_POST_TYPES.includes(filters.post_type));
   for (const extra of [{ text_scope: 'caption' }, { media: 'static' }, { post_type: 'Reel' }, { sort: 'most-views' }, { audio_id: '1234' }]) assert.equal(validResearchFilters({ ...filters, ...extra }), false);
+  const pageReads = calls('page').length;
+  const action = new window.CustomEvent('sentient:research-filters', { cancelable: true, detail: { ...filters, query: '', min_likes: 6001, post_type: 'All posts' } });
+  await run(() => window.dispatchEvent(action));
+  assert.ok(action.defaultPrevented, 'The mounted page acknowledges supported filter actions');
+  assert.equal(document.querySelectorAll('.gallery-grid .post-card[data-context-shortcode]').length, 0);
+  assert.equal(calls('page').length, pageReads, 'Changing filters reuses the loaded catalogue');
+  await run(() => window.dispatchEvent(new window.CustomEvent('sentient:research-filters', { cancelable: true, detail: { ...filters, post_type: 'All posts' } })));
   await run(() => document.querySelector('.search-clear').click());
   assert.equal(document.querySelectorAll('.gallery-grid .post-card[data-context-shortcode]').length, 7, 'Clearing search preserves the independent likes filter');
   await run(() => root.unmount());

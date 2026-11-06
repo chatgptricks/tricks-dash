@@ -132,12 +132,14 @@ export function Companion({ session, request, apiBase, Avatar = Character }) {
       const assistantMessage = { id: crypto.randomUUID(), role: 'assistant', content: result.answer, sources: Array.isArray(result.sources) ? result.sources : [] };
       setMessages(items => [...items, assistantMessage]);
       if (action) {
+        setOpen(false); opened.current = false; setUnread(0);
+        try { sessionStorage.setItem('sentient.pet.open.' + session.uid, 'false'); } catch { /* optional persistence */ }
         // Persist before navigation so both the request and answer survive it.
         try { sessionStorage.setItem(storageKey(session.uid), JSON.stringify([...messages, { id: userId, role: 'user', content: message }, assistantMessage].slice(-12))); } catch { /* memory-only conversation */ }
         postHost({ type: 'research_filters', filters: action.filters });
       }
       setReaction('celebrate'); settle.current = setTimeout(() => setReaction('idle'), 2500);
-      if (!opened.current) setUnread(number => number + 1);
+      if (!opened.current && !action) setUnread(number => number + 1);
     } catch (reason) {
       if (current !== sequence.current) return;
       setMessages(items => items.map(item => item.id === userId ? { ...item, failed: true } : item));
