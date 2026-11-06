@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
-import { parseCommand, suggestCommands } from '../src/companion/commands.js';
+import { parseCommand, suggestCommands, sanitizeNextContext, pendingNextContext } from '../src/companion/commands.js';
 
 const parsed = [
+  ['/next', { mode: 'next', query: '' }],
+  [' /NEXT  reel para @chatgptricks ', { mode: 'next', query: 'reel para @chatgptricks' }],
+  ['/nextish posts', { mode: 'auto', query: '/nextish posts' }],
+  ['/next/post', { mode: 'auto', query: '/next/post' }],
   ['/filter posts about Elon Musk', { mode: 'filter', query: 'posts about Elon Musk' }],
   ['  /FILTER  posts with more than 5000 likes  ', { mode: 'filter', query: 'posts with more than 5000 likes' }],
   ['/research latest post from evolving.ai', { mode: 'research', query: 'latest post from evolving.ai' }],
@@ -25,10 +29,13 @@ const parsed = [
 for (const [value, expected] of parsed) assert.deepEqual(parseCommand(value), expected, `Parse ${JSON.stringify(value)}`);
 
 const suggestions = [
-  ['/', ['filter', 'research']],
-  ['  /', ['filter', 'research']],
+  ['/', ['filter', 'research', 'next']],
+  ['  /', ['filter', 'research', 'next']],
   ['\n\t /f', ['filter']],
   ['/RE', ['research']],
+  ['/n', ['next']],
+  ['/NEXT', ['next']],
+  ['/next ', []],
   ['/filter', ['filter']],
   ['/RESEARCH', ['research']],
   ['/filter ', []],
@@ -45,5 +52,18 @@ const suggestions = [
   [undefined, []],
 ];
 for (const [value, expected] of suggestions) assert.deepEqual(suggestCommands(value), expected, `Suggest ${JSON.stringify(value)}`);
+
+const clarification = { post_format: null, target_account: 'ChatGPT Tricks' };
+const nextMessages = [{ role: 'user', content: '/next' }, { role: 'assistant', content: 'Which format?', pending_next: clarification }];
+assert.deepEqual(sanitizeNextContext(clarification), clarification);
+assert.deepEqual(sanitizeNextContext({ ...clarification, extra: 'ignored' }), clarification);
+for (const invalid of [null, [], {}, { post_format: 'video', target_account: null }, { post_format: null, target_account: 'x'.repeat(65) }, { post_format: 'image', target_account: 5 }, { post_format: null, target_account: '' }]) assert.equal(sanitizeNextContext(invalid), null);
+assert.deepEqual(pendingNextContext(nextMessages, 'reel'), clarification);
+assert.deepEqual(pendingNextContext([...nextMessages, { role: 'user', content: 'reel', failed: true }], 'reel'), clarification, 'Failed replies can retry');
+assert.equal(pendingNextContext(nextMessages, '/research newest post'), null);
+assert.equal(pendingNextContext(nextMessages, '/unknown'), null);
+assert.equal(pendingNextContext(nextMessages, '/next'), null, 'Explicit next starts fresh');
+assert.equal(pendingNextContext([...nextMessages, { role: 'assistant', content: 'Here is your recommendation' }], 'another one'), null, 'Completed responses cannot revive old slots');
+assert.equal(pendingNextContext([...nextMessages, { role: 'user', content: '/research newest post', failed: true }], 'reel'), null, 'A newer explicit shortcut leaves the old clarification even when it fails');
 
 console.log('PASS Companion commands: explicit per-message modes, exact boundaries, whitespace, unknown commands and command suggestions.');

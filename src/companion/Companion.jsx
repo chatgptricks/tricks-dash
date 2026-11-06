@@ -6,12 +6,12 @@ import { LaunchSplash } from './LaunchSplash';
 import { isLaunchSuppressed, setLaunchSuppressed, launchStorageKey } from './launch';
 import { ResultPill, ResultPills } from './ResultPills';
 import { extractPostResults, postKeyFromUrl, loadResults, saveResults, clearResults } from './results';
-import { parseCommand, suggestCommands } from './commands';
+import { COMMANDS, parseCommand, suggestCommands, pendingNextContext, sanitizeNextContext } from './commands';
 import './position.css';
 
 const COPY = {
-  es: { open: 'Hablar con Sentient', close: 'Minimizar chat', title: 'Sentient', subtitle: 'Tu dashboard, en conversación', greet: '¿Qué querés saber?', intro: 'Puedo consultar tus datos de Cortex y ayudarte a entender el dashboard.', placeholder: 'Preguntame sobre el dashboard…', send: 'Enviar pregunta', stop: 'Detener respuesta', thinking: 'Consultando Cortex…', hide: 'Cerrar asistente', show: 'Mostrar mascota', newChat: 'Nueva conversación', sources: 'Datos consultados', error: 'No pude completar la consulta. Intentá de nuevo.', timeout: 'La consulta tardó demasiado. Probá una pregunta más específica.', unsupported: 'Esos filtros no están disponibles en esta página.', unavailable: 'El chat todavía no está disponible. Intentá más tarde.', note: 'Las respuestas pueden contener errores. Revisá las fuentes.', prompts: [{ label: 'Carrusel con más likes · 24 h', question: '¿Cuál es el carrusel con más likes de las últimas 24 horas?' }, { label: 'Reel con más likes · 24 h', question: '¿Cuál es el reel con más likes de las últimas 24 horas?' }, { label: 'Top 3 reels históricos de una cuenta…', draft: '¿Cuáles son los 3 reels con más likes de toda la historia de @' }], partial: 'Muestra parcial', stopped: 'Consulta detenida.' },
-  en: { open: 'Chat with Sentient', close: 'Minimize chat', title: 'Sentient', subtitle: 'Your dashboard, in conversation', greet: 'What would you like to know?', intro: 'I can query your Cortex data and help you understand the dashboard.', placeholder: 'Ask me about the dashboard…', send: 'Send question', stop: 'Stop response', thinking: 'Checking Cortex…', hide: 'Close assistant', show: 'Show companion', newChat: 'New conversation', sources: 'Data consulted', error: 'I couldn’t finish this query. Please try again.', timeout: 'This query took too long. Try a more specific question.', unsupported: 'Those filters are not available on this page.', unavailable: 'Chat is not available yet. Please try later.', note: 'Answers may contain mistakes. Check the sources.', prompts: [{ label: 'Most liked carousel · 24h', question: 'What is the most liked carousel in the last 24 hours?' }, { label: 'Most liked reel · 24h', question: 'What is the most liked reel in the last 24 hours?' }, { label: 'Top 3 reels ever from a page…', draft: 'What are the 3 most liked reels ever from @' }], partial: 'Partial sample', stopped: 'Query stopped.' },
+  es: { open: 'Hablar con Sentient', close: 'Minimizar chat', title: 'Sentient', subtitle: 'Tu dashboard, en conversación', greet: '¿Qué querés saber?', intro: 'Busco primero en los datos de tu dashboard para ayudarte a encontrar posts y decidir qué publicar.', placeholder: 'Preguntame sobre el dashboard…', send: 'Enviar pregunta', stop: 'Detener respuesta', thinking: 'Buscando en el dashboard…', hide: 'Cerrar asistente', show: 'Mostrar mascota', newChat: 'Nueva conversación', sources: 'Datos consultados', error: 'No pude completar la consulta. Intentá de nuevo.', timeout: 'La consulta tardó demasiado. Probá una pregunta más específica.', unsupported: 'Esos filtros no están disponibles en esta página.', unavailable: 'El chat todavía no está disponible. Intentá más tarde.', note: 'Las respuestas pueden contener errores. Revisá las fuentes.', prompts: [{ label: 'Carrusel con más likes · 24 h', question: '¿Cuál es el carrusel con más likes de las últimas 24 horas?' }, { label: 'Reel con más likes · 24 h', question: '¿Cuál es el reel con más likes de las últimas 24 horas?' }, { label: 'Top 3 reels históricos de una cuenta…', draft: '¿Cuáles son los 3 reels con más likes de toda la historia de @' }], partial: 'Muestra parcial', stopped: 'Consulta detenida.' },
+  en: { open: 'Chat with Sentient', close: 'Minimize chat', title: 'Sentient', subtitle: 'Your dashboard, in conversation', greet: 'What would you like to know?', intro: 'I search your dashboard data first to help you find posts and decide what to publish.', placeholder: 'Ask me about the dashboard…', send: 'Send question', stop: 'Stop response', thinking: 'Searching the dashboard…', hide: 'Close assistant', show: 'Show companion', newChat: 'New conversation', sources: 'Data consulted', error: 'I couldn’t finish this query. Please try again.', timeout: 'This query took too long. Try a more specific question.', unsupported: 'Those filters are not available on this page.', unavailable: 'Chat is not available yet. Please try later.', note: 'Answers may contain mistakes. Check the sources.', prompts: [{ label: 'Most liked carousel · 24h', question: 'What is the most liked carousel in the last 24 hours?' }, { label: 'Most liked reel · 24h', question: 'What is the most liked reel in the last 24 hours?' }, { label: 'Top 3 reels ever from a page…', draft: 'What are the 3 most liked reels ever from @' }], partial: 'Partial sample', stopped: 'Query stopped.' },
 };
 const postHost = data => { if (parent !== window) parent.postMessage({ source: 'sentient-companion', ...data }, location.origin); };
 Object.assign(COPY.es, { menu: 'Opciones de Sentient', history: 'Historial de chats', historyNote: 'Guardado en este navegador · Últimas 30 conversaciones', emptyHistory: 'Todavía no hay conversaciones guardadas.', back: 'Volver al chat', resume: 'Abrir conversación', delete: 'Eliminar conversación', confirmDelete: '¿Eliminar esta conversación?', cancel: 'Cancelar', position: 'Posición', current: 'Actual', dock: ['Arriba izquierda', 'Arriba derecha', 'Centro izquierda', 'Centro derecha', 'Abajo izquierda', 'Abajo derecha'], limited: 'Hay otra consulta en curso o alcanzaste el límite temporal. Intentá de nuevo en unos segundos.' });
@@ -19,8 +19,8 @@ Object.assign(COPY.en, { menu: 'Sentient options', history: 'Chat history', hist
 const DOCKS = ['top-left', 'top-right', 'middle-left', 'middle-right', 'bottom-left', 'bottom-right'];
 COPY.es.aboutBot = 'Conocé a Sentient Bot';
 COPY.en.aboutBot = 'Meet Sentient Bot';
-Object.assign(COPY.es, { commands: 'Comandos', useCommand: 'Usar', filterCommand: 'Aplicar filtros en el dashboard', researchCommand: 'Buscar datos y responder en el chat', commandRequired: 'Escribí una consulta después del comando.' });
-Object.assign(COPY.en, { commands: 'Commands', useCommand: 'Use', filterCommand: 'Apply dashboard filters', researchCommand: 'Search data and answer in chat', commandRequired: 'Write a query after the command.' });
+Object.assign(COPY.es, { commands: 'Comandos', useCommand: 'Usar', filterCommand: 'Aplicar filtros en el dashboard', researchCommand: 'Buscar datos y responder en el chat', nextCommand: 'Recomendar qué post recrear', commandRequired: 'Escribí una consulta después del comando.' });
+Object.assign(COPY.en, { commands: 'Commands', useCommand: 'Use', filterCommand: 'Apply dashboard filters', researchCommand: 'Search data and answer in chat', nextCommand: 'Recommend the next post to recreate', commandRequired: 'Write a query after the command.' });
 function safeSource(url) {
   try { const target = new URL(url); return target.origin === 'https://sentientdash.app' && !target.username && !target.password ? target.href : null; } catch { return null; }
 }
@@ -86,6 +86,7 @@ export function Companion({ session, request, apiBase, Avatar = Character }) {
   const input = useRef(null), list = useRef(null), controller = useRef(null), sequence = useRef(0), opened = useRef(open), settle = useRef(null), menuElement = useRef(null), launcher = useRef(null), menuTrigger = useRef(null);
   const copy = COPY[context.language];
   const draftCommand = parseCommand(draft);
+  const composerMode = draftCommand.mode === 'auto' && pendingNextContext(messages, draft) ? 'next' : draftCommand.mode;
   const commandSuggestions = commandMenuDismissed ? [] : suggestCommands(draft);
   const currentVisual = useRef({ enabled, activeResults });
   currentVisual.current = { enabled, activeResults };
@@ -285,7 +286,9 @@ export function Companion({ session, request, apiBase, Avatar = Character }) {
     const message = value.trim();
     if (!message || busy || controller.current || !session) return;
     const command = parseCommand(message);
-    if (!command.query) { setError(copy.commandRequired); return; }
+    if (!command.query && command.mode !== 'next') { setError(copy.commandRequired); return; }
+    const nextContext = command.mode === 'auto' ? pendingNextContext(messages, message) : null;
+    const mode = nextContext ? 'next' : command.mode;
     if (!session.configured) { setError(copy.unavailable); return; }
     const current = ++sequence.current;
     const abort = new AbortController(); controller.current = abort;
@@ -295,15 +298,17 @@ export function Companion({ session, request, apiBase, Avatar = Character }) {
     const userId = crypto.randomUUID();
     setMessages(items => [...items, { id: userId, role: 'user', content: message }]);
     try {
-      const response = await request(apiBase + '/api/dashboard/assistant/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: abort.signal, body: JSON.stringify({ message, history, language: context.language, page: context.page, ...(command.mode !== 'auto' ? { mode: command.mode } : {}) }) });
+      const response = await request(apiBase + '/api/dashboard/assistant/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: abort.signal, body: JSON.stringify({ message, history, language: context.language, page: context.page, ...(mode !== 'auto' ? { mode } : {}), ...(nextContext ? { next_context: nextContext } : {}) }) });
       if (current !== sequence.current) return;
       if (!response.ok) throw new Error(response.status === 504 ? 'timeout' : response.status === 429 ? 'limited' : 'unavailable');
       const result = await response.json();
       if (current !== sequence.current) return;
       if (!result.answer || typeof result.answer !== 'string') throw new Error('unavailable');
       const action = Array.isArray(result.ui_actions) ? result.ui_actions.find(item => item.type === 'research_filters') : null;
-      if (action && (command.mode === 'research' || !validResearchFilters(action.filters))) throw new Error('unsupported');
+      if (action && (['research', 'next'].includes(mode) || !validResearchFilters(action.filters))) throw new Error('unsupported');
       const assistantMessage = { id: crypto.randomUUID(), role: 'assistant', content: result.answer, sources: Array.isArray(result.sources) ? result.sources : [] };
+      const pendingNext = mode === 'next' ? sanitizeNextContext(result.pending_next) : null;
+      if (pendingNext) assistantMessage.pending_next = pendingNext;
       setMessages(items => [...items, assistantMessage]);
       if (action) {
         dismissResults();
@@ -344,11 +349,11 @@ export function Companion({ session, request, apiBase, Avatar = Character }) {
         {error ? <p className="chat-error" role="alert">{error}</p> : null}
         {!session.configured ? <p className="chat-error" role="status">{copy.unavailable}</p> : null}
         <div className="chat-command-bar" aria-label={copy.commands}>
-          {['filter', 'research'].map(mode => <button type="button" key={mode} aria-label={`${copy.useCommand} /${mode}`} aria-pressed={draftCommand.mode === mode} title={copy[mode + 'Command']} disabled={!session.configured || busy} onClick={() => chooseCommand(mode)}><span>/{mode}</span></button>)}
-          <span className="chat-command-hint">{draftCommand.mode === 'auto' ? '/' : copy[draftCommand.mode + 'Command']}</span>
+          {COMMANDS.map(mode => <button type="button" key={mode} aria-label={`${copy.useCommand} /${mode}`} aria-pressed={composerMode === mode} title={copy[mode + 'Command']} disabled={!session.configured || busy} onClick={() => chooseCommand(mode)}><span>/{mode}</span></button>)}
+          <span className="chat-command-hint">{composerMode === 'auto' ? '/' : copy[composerMode + 'Command']}</span>
         </div>
         {commandSuggestions.length ? <div className="chat-command-menu" id="chat-commands" role="listbox" aria-label={copy.commands}>{commandSuggestions.map((mode, index) => <button type="button" role="option" tabIndex={-1} id={`chat-command-${mode}`} aria-selected={index === commandIndex} key={mode} onMouseEnter={() => setCommandIndex(index)} onMouseDown={event => event.preventDefault()} onClick={() => chooseCommand(mode)}><strong>/{mode}</strong><span>{copy[mode + 'Command']}</span><kbd aria-hidden="true">↵</kbd></button>)}</div> : null}
-        <div className="chat-input-row"><textarea ref={input} aria-label={copy.placeholder} placeholder={copy.placeholder} aria-controls={commandSuggestions.length ? 'chat-commands' : undefined} aria-activedescendant={commandSuggestions.length ? `chat-command-${commandSuggestions[commandIndex] || commandSuggestions[0]}` : undefined} maxLength={4000} rows={2} value={draft} disabled={!session.configured} onChange={event => { setDraft(event.target.value); setCommandIndex(0); setCommandMenuDismissed(false); }} onKeyDown={composerKeys}/>{busy ? <button className="chat-submit" type="button" aria-label={copy.stop} onClick={cancel}><Icon kind="stop"/></button> : <button className="chat-submit" type="submit" aria-label={copy.send} disabled={!draftCommand.query || !session.configured}><Icon kind="send"/></button>}</div><p className="chat-note">{copy.note}</p>
+        <div className="chat-input-row"><textarea ref={input} aria-label={copy.placeholder} placeholder={copy.placeholder} aria-controls={commandSuggestions.length ? 'chat-commands' : undefined} aria-activedescendant={commandSuggestions.length ? `chat-command-${commandSuggestions[commandIndex] || commandSuggestions[0]}` : undefined} maxLength={4000} rows={2} value={draft} disabled={!session.configured} onChange={event => { setDraft(event.target.value); setCommandIndex(0); setCommandMenuDismissed(false); }} onKeyDown={composerKeys}/>{busy ? <button className="chat-submit" type="button" aria-label={copy.stop} onClick={cancel}><Icon kind="stop"/></button> : <button className="chat-submit" type="submit" aria-label={copy.send} disabled={(!draftCommand.query && draftCommand.mode !== 'next') || !session.configured}><Icon kind="send"/></button>}</div><p className="chat-note">{copy.note}</p>
       </form></>}
     </section> : null}
     <button ref={launcher} type="button" className={`pet-launcher ${!enabled ? 'mini-launcher' : ''}`} aria-label={open ? copy.close : copy.open} aria-expanded={open} aria-haspopup="menu" style={boxStyle(geometry?.avatar)} title={context.language === 'es' ? 'Arrastrá para mover · Clic derecho para opciones' : 'Drag to move · Right-click for options'} onClick={launch} onContextMenu={openMenu} onKeyDown={event => { if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) openMenu(event); }} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={pointerUp}>

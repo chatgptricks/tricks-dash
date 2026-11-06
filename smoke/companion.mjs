@@ -144,10 +144,11 @@ try {
   await app.act(async () => window.dispatchEvent(new MessageEvent('message', { origin: location.origin, source: parent, data: { source: 'sentient-host', type: 'context', language: 'es', theme: 'dark', page: '/index.html' } })));
   assert.ok(button('Usar /filter'));
   assert.ok(button('Usar /research'));
+  assert.ok(button('Usar /next'));
   const beforeCompletion = calls.length;
   await typeDraft('/');
   assert.equal(document.querySelector('[role="listbox"]').getAttribute('aria-label'), 'Comandos');
-  assert.equal(document.querySelectorAll('[role="listbox"] [role="option"]').length, 2);
+  assert.equal(document.querySelectorAll('[role="listbox"] [role="option"]').length, 3);
   assert.ok([...document.querySelectorAll('[role="listbox"] [role="option"]')].every(option => option.tabIndex === -1), 'Autocomplete keeps keyboard focus in the composer');
   await pressDraft('Escape');
   assert.equal(document.querySelector('[role="listbox"]'), null);
@@ -202,6 +203,56 @@ try {
   assert.equal(Object.hasOwn(calls.at(-1), 'mode'), false, 'A longer slash word is not mistaken for a recognized command');
   assert.equal(calls.at(-1).message, '/researcher latest post');
   await app.act(async () => pending(Response.json({ answer: 'Please clarify.', ui_actions: [] })));
+
+  // /next may start empty, then only its current clarification carries the
+  // requested format/account into ordinary replies. Completed or replaced
+  // conversations do not leave a sticky recommendation mode behind.
+  assert.ok(button('Use /next'));
+  await typeDraft('/n'); await pressDraft('Enter');
+  assert.equal(document.querySelector('textarea').value, '/next ');
+  assert.equal(button('Send question').disabled, false, 'Bare /next is a valid request for format and account');
+  await click(button('Send question'));
+  assert.equal(calls.at(-1).message, '/next');
+  assert.equal(calls.at(-1).mode, 'next');
+  assert.equal(Object.hasOwn(calls.at(-1), 'next_context'), false);
+  await app.act(async () => pending(Response.json({ answer: 'Reel, image or carousel, and for which account?', pending_next: { post_format: null, target_account: null }, ui_actions: [] })));
+  assert.ok(document.querySelector('.companion-chat'));
+  assert.equal(button('Use /next').getAttribute('aria-pressed'), 'true');
+  await typeDraft('carousel'); await pressDraft('Enter');
+  assert.equal(calls.at(-1).mode, 'next');
+  assert.deepEqual(calls.at(-1).next_context, { post_format: null, target_account: null });
+  await app.act(async () => pending(Response.json({ answer: 'For which account?', pending_next: { post_format: 'carousel', target_account: null }, ui_actions: [] })));
+  await typeDraft('@chatgptricks'); await pressDraft('Enter');
+  assert.deepEqual(calls.at(-1).next_context, { post_format: 'carousel', target_account: null });
+  await app.act(async () => pending(new Response('{}', { status: 503 })));
+  await pressDraft('Enter');
+  assert.equal(calls.at(-1).mode, 'next', 'Retry keeps the latest clarification');
+  assert.deepEqual(calls.at(-1).next_context, { post_format: 'carousel', target_account: null });
+  await app.act(async () => pending(Response.json({ answer: '[View post](https://sentientdash.app/index.html?post=evolving.ai%3ANEXT_CAROUSEL) — strong recent engagement.', ui_actions: [] })));
+  assert.ok(document.querySelector('.pet-result-pill'), 'Recommendation uses the existing result pill');
+  await typeDraft('What is the newest post?'); await pressDraft('Enter');
+  assert.equal(Object.hasOwn(calls.at(-1), 'mode'), false);
+  assert.equal(Object.hasOwn(calls.at(-1), 'next_context'), false, 'A completed recommendation clears its pending context');
+  await app.act(async () => pending(Response.json({ answer: 'Latest post found.', ui_actions: [] })));
+  await typeDraft('/next for @chatgptricks'); await pressDraft('Enter');
+  await app.act(async () => pending(Response.json({ answer: 'Reel, image or carousel?', pending_next: { post_format: null, target_account: 'chatgptricks' }, ui_actions: [] })));
+  await typeDraft('/next'); await click(button('Send question'));
+  assert.equal(Object.hasOwn(calls.at(-1), 'next_context'), false, 'Explicit /next starts a fresh request');
+  await app.act(async () => pending(Response.json({ answer: 'Which format and account?', pending_next: { post_format: null, target_account: null }, ui_actions: [] })));
+  await typeDraft('/research latest post from evolving.ai'); await pressDraft('Enter');
+  assert.equal(calls.at(-1).mode, 'research');
+  assert.equal(Object.hasOwn(calls.at(-1), 'next_context'), false, 'Another slash command leaves the clarification flow');
+  await app.act(async () => pending(Response.json({ answer: 'Latest post found.', ui_actions: [] })));
+  await typeDraft('/next reel for chatgptricks'); await pressDraft('Enter');
+  const actionsBeforeNext = hostMessages.filter(item => item.type === 'research_filters').length;
+  await app.act(async () => pending(Response.json({ answer: 'Filters applied.', ui_actions: [{ type: 'research_filters', filters: shortcutFilters }] })));
+  assert.equal(hostMessages.filter(item => item.type === 'research_filters').length, actionsBeforeNext, '/next never applies unexpected dashboard filters');
+  assert.ok(document.querySelector('.companion-chat'));
+  await click(button('New conversation'));
+  await typeDraft('hello'); await pressDraft('Enter');
+  assert.equal(Object.hasOwn(calls.at(-1), 'next_context'), false, 'New conversation clears continuation state');
+  assert.equal(Object.hasOwn(calls.at(-1), 'mode'), false);
+  await app.act(async () => pending(Response.json({ answer: 'Hello.', ui_actions: [] })));
 
   await app.act(async () => app.unmount());
   await app.act(async () => app.mount({ session: { uid: 'two', configured: true }, request, apiBase: 'https://api.example.test' }));

@@ -66,6 +66,15 @@ assert.equal(loadConversation('one').messages.length, 0);
 assert.notEqual(loadConversation('one').id, active.id);
 assert.equal(listConversations('two').length, 0);
 
+// Pending /next slots survive navigation and history restoration without
+// retaining arbitrary metadata or accepting an unsupported format.
+const nextChat = newConversation('next');
+saveConversation('next', { ...nextChat, messages: [message('/next'), { ...message('Reel, image or carousel?', 'assistant'), pending_next: { post_format: null, target_account: 'ChatGPT Tricks', ignored: 'not retained' } }] });
+assert.deepEqual(loadConversation('next').messages.at(-1).pending_next, { post_format: null, target_account: 'ChatGPT Tricks' });
+assert.deepEqual(listConversations('next')[0].messages.at(-1).pending_next, { post_format: null, target_account: 'ChatGPT Tricks' });
+saveConversation('next', { ...nextChat, messages: [{ ...message('Wrong slots', 'assistant'), pending_next: { post_format: 'video', target_account: null } }, { ...message('User cannot set slots'), pending_next: { post_format: 'reel', target_account: null } }] });
+assert.ok(loadConversation('next').messages.every(item => !Object.hasOwn(item, 'pending_next')));
+
 // A quota failure can leave storage readable but stale; keep the new reply in
 // memory instead of returning the older persisted transcript.
 const persisted = localStorage;
