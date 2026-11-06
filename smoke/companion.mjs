@@ -148,6 +148,7 @@ try {
   await typeDraft('/');
   assert.equal(document.querySelector('[role="listbox"]').getAttribute('aria-label'), 'Comandos');
   assert.equal(document.querySelectorAll('[role="listbox"] [role="option"]').length, 2);
+  assert.ok([...document.querySelectorAll('[role="listbox"] [role="option"]')].every(option => option.tabIndex === -1), 'Autocomplete keeps keyboard focus in the composer');
   await pressDraft('Escape');
   assert.equal(document.querySelector('[role="listbox"]'), null);
   assert.ok(document.querySelector('.companion-chat'), 'Escape dismisses command suggestions without minimizing the chat');
