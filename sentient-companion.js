@@ -39,18 +39,16 @@
     }
     const aw = state === 'compact' ? 64 : 136, ah = state === 'compact' ? 68 : 146;
     const ax = right ? Math.max(left + 12, left + w - 12 - aw) : left + 12;
-    let ay = dock.startsWith('top') ? top + 12 : dock.startsWith('middle') ? clamp(top + (h - ah) / 2, top + 12, top + h - bottom - ah) : Math.max(top + 12, top + h - bottom - ah);
-    const reserveResults = state === 'closed' && resultCount > 0;
-    const showResults = reserveResults && !menu && resultsVisible;
+    const ay = dock.startsWith('top') ? top + 12 : dock.startsWith('middle') ? clamp(top + (h - ah) / 2, top + 12, top + h - bottom - ah) : Math.max(top + 12, top + h - bottom - ah);
+    const resultsAbove = dock.startsWith('bottom');
+    const showResults = state === 'closed' && resultCount > 0 && !menu && resultsVisible;
     const rw = showResults ? Math.min(216, Math.max(0, w - 24)) : 0;
-    // The same 29px pills and 10px spacing are used in the chat transcript.
-    // Cap the stack so its own scrolling keeps all ten results reachable.
-    const reservedHeight = reserveResults ? Math.min(resultCount * 39 - 10, Math.max(0, h - bottom - 12 - ah - 8)) : 0;
-    const rh = showResults ? reservedHeight : 0;
-    // Opening a menu hides the pills without making their character jump.
-    if (reserveResults) ay = clamp(ay, top + 12, top + h - bottom - ah - reservedHeight - 8);
+    // Keep the character at its dock. Bottom stacks grow upward; top and
+    // middle stacks grow downward and scroll inside the remaining space.
+    const resultSpace = resultsAbove ? ay - top - 12 - 8 : top + h - bottom - ay - ah - 8;
+    const rh = showResults ? Math.min(resultCount * 39 - 10, Math.max(0, resultSpace)) : 0;
     const rx = showResults ? clamp(right ? ax + aw - rw : ax, left + 12, left + w - 12 - rw) : ax;
-    const ry = showResults ? ay + ah + 8 : ay;
+    const ry = showResults ? (resultsAbove ? ay - rh - 8 : ay + ah + 8) : ay;
     let px = ax, py = ay, pw = 0, ph = 0;
     if (state === 'open') {
       pw = Math.max(0, Math.min(420, w - 24));
@@ -99,7 +97,7 @@
     }
     const x = Math.min(ax, px, mx, rx), y = Math.min(ay, py, my, ry);
     const width = Math.max(ax + aw, px + pw, mx + mw, rx + rw) - x, height = Math.max(ay + ah, py + ph, my + mh, ry + rh) - y;
-    geometry = { x, y, width, height, ax, ay, aw, ah, extraHeight: reserveResults ? reservedHeight + 8 : 0 };
+    geometry = { x, y, width, height, ax, ay, aw, ah };
     Object.assign(frame.style, { left: x + 'px', top: y + 'px', width: width + 'px', height: height + 'px', visibility: state === 'hidden' ? 'hidden' : 'visible', pointerEvents: state === 'hidden' ? 'none' : 'auto' });
     // Clip hit testing as well as painting: transparent space beside the avatar
     // must leave dashboard controls clickable while a wider result tray is shown.
@@ -197,7 +195,7 @@
     if (data.type === 'drag-end' && drag && Number.isFinite(data.dx) && Number.isFinite(data.dy)) {
       const { w, h, left, top, bottom } = viewport();
       const x = drag.ax + drag.aw / 2 + data.dx, y = drag.ay + drag.ah / 2 + data.dy;
-      const maxTop = top + h - bottom - drag.ah - drag.extraHeight;
+      const maxTop = top + h - bottom - drag.ah;
       const ys = [top + 12, clamp(top + (h - drag.ah) / 2, top + 12, maxTop), Math.max(top + 12, maxTop)].map(value => value + drag.ah / 2);
       const vertical = ys.reduce((best, v, i) => Math.abs(v - y) <= Math.abs(ys[best] - y) ? i : best, 0);
       dock = ['top', 'middle', 'bottom'][vertical] + (x < left + w / 2 ? '-left' : '-right');
