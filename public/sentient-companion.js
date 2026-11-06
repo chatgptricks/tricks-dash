@@ -15,7 +15,7 @@
   backdrop.id = 'sentient-companion-backdrop'; backdrop.setAttribute('aria-hidden', 'true');
   backdrop.style.cssText = 'position:fixed;inset:0;z-index:2147483646;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);background:rgba(0,0,0,.08);pointer-events:none;display:none;';
   document.body.append(backdrop, frame);
-  let state = 'hidden', dock = 'bottom-left', geometry, drag, menu, resultCount = 0, pendingPointer = false, pointer;
+  let state = 'hidden', dock = 'bottom-left', geometry, drag, menu, resultCount = 0, resultsVisible = false, pendingPointer = false, pointer;
   const clamp = (n, a, b) => Math.max(a, Math.min(Math.max(a, b), n));
   const send = value => frame.contentWindow?.postMessage({ source: 'sentient-host', ...value }, location.origin);
   const viewport = () => ({ w: window.visualViewport?.width || innerWidth, h: window.visualViewport?.height || innerHeight, left: window.visualViewport?.offsetLeft || 0, top: window.visualViewport?.offsetTop || 0, bottom: innerWidth <= 760 && location.pathname.startsWith('/mobile') ? 82 : 12 });
@@ -34,18 +34,21 @@
       Object.assign(frame.style, { left: left + 'px', top: top + 'px', width: w + 'px', height: h + 'px', visibility: 'visible', pointerEvents: 'auto' });
       frame.tabIndex = 0; frame.dataset.dock = dock; frame.dataset.state = state;
       backdrop.style.display = 'block'; backdrop.style.pointerEvents = 'none';
-      send({ type: 'geometry', dock, avatar: { x: 0, y: 0, w: 0, h: 0 }, panel: { x: 0, y: 0, w, h }, menu: null, results: null });
+      send({ type: 'geometry', state, dock, avatar: { x: 0, y: 0, w: 0, h: 0 }, panel: { x: 0, y: 0, w, h }, menu: null, results: null });
       return;
     }
     const aw = state === 'compact' ? 64 : 136, ah = state === 'compact' ? 68 : 146;
     const ax = right ? Math.max(left + 12, left + w - 12 - aw) : left + 12;
     let ay = dock.startsWith('top') ? top + 12 : dock.startsWith('middle') ? clamp(top + (h - ah) / 2, top + 12, top + h - bottom - ah) : Math.max(top + 12, top + h - bottom - ah);
-    const showResults = state === 'closed' && !menu && resultCount > 0;
+    const reserveResults = state === 'closed' && resultCount > 0;
+    const showResults = reserveResults && !menu && resultsVisible;
     const rw = showResults ? Math.min(216, Math.max(0, w - 24)) : 0;
-    // The same 29px pills and 6px spacing are used in the chat transcript.
+    // The same 29px pills and 10px spacing are used in the chat transcript.
     // Cap the stack so its own scrolling keeps all ten results reachable.
-    const rh = showResults ? Math.min(resultCount * 35 - 6, Math.max(0, h - bottom - 12 - ah - 8)) : 0;
-    if (showResults) ay = clamp(ay, top + 12, top + h - bottom - ah - rh - 8);
+    const reservedHeight = reserveResults ? Math.min(resultCount * 39 - 10, Math.max(0, h - bottom - 12 - ah - 8)) : 0;
+    const rh = showResults ? reservedHeight : 0;
+    // Opening a menu hides the pills without making their character jump.
+    if (reserveResults) ay = clamp(ay, top + 12, top + h - bottom - ah - reservedHeight - 8);
     const rx = showResults ? clamp(right ? ax + aw - rw : ax, left + 12, left + w - 12 - rw) : ax;
     const ry = showResults ? ay + ah + 8 : ay;
     let px = ax, py = ay, pw = 0, ph = 0;
@@ -96,7 +99,7 @@
     }
     const x = Math.min(ax, px, mx, rx), y = Math.min(ay, py, my, ry);
     const width = Math.max(ax + aw, px + pw, mx + mw, rx + rw) - x, height = Math.max(ay + ah, py + ph, my + mh, ry + rh) - y;
-    geometry = { x, y, width, height, ax, ay, aw, ah, extraHeight: showResults ? rh + 8 : 0 };
+    geometry = { x, y, width, height, ax, ay, aw, ah, extraHeight: reserveResults ? reservedHeight + 8 : 0 };
     Object.assign(frame.style, { left: x + 'px', top: y + 'px', width: width + 'px', height: height + 'px', visibility: state === 'hidden' ? 'hidden' : 'visible', pointerEvents: state === 'hidden' ? 'none' : 'auto' });
     // Clip hit testing as well as painting: transparent space beside the avatar
     // must leave dashboard controls clickable while a wider result tray is shown.
@@ -105,7 +108,7 @@
     backdrop.style.display = state === 'open' ? 'block' : 'none';
     backdrop.style.pointerEvents = state === 'open' ? 'auto' : 'none';
     frame.dataset.dock = dock; frame.dataset.state = state;
-    send({ type: 'geometry', dock, avatar: { x: ax - x, y: ay - y, w: aw, h: ah }, panel: { x: px - x, y: py - y, w: pw, h: ph }, menu: menu ? { x: mx - x, y: my - y, w: mw, h: mh, origin: menuOrigin } : null, results: showResults ? { x: rx - x, y: ry - y, w: rw, h: rh } : null });
+    send({ type: 'geometry', state, dock, avatar: { x: ax - x, y: ay - y, w: aw, h: ah }, panel: { x: px - x, y: py - y, w: pw, h: ph }, menu: menu ? { x: mx - x, y: my - y, w: mw, h: mh, origin: menuOrigin } : null, results: showResults ? { x: rx - x, y: ry - y, w: rw, h: rh } : null });
   };
   function dismissMenu() {
     if (!menu) return;
@@ -113,12 +116,34 @@
   }
   function minimize() { if (state === 'launch') return; state = 'closed'; menu = null; drag = null; resize(); }
   backdrop.addEventListener('click', event => { event.preventDefault(); event.stopPropagation(); minimize(); send({ type: 'minimize' }); });
+  function postKeyFor(target) {
+    if (!/^\/(?:index\.html|mobile\/(?:index\.html)?)?$/.test(target.pathname)) return null;
+    try {
+      let key = target.searchParams.get('post');
+      const route = target.searchParams.get('r');
+      if (key === null && route && route.length <= 4000) {
+        const normalized = route.replace(/-/g, '+').replace(/_/g, '/');
+        const padded = normalized + '='.repeat((4 - normalized.length % 4) % 4);
+        key = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(padded), char => char.charCodeAt(0))))?.post;
+      }
+      if (typeof key !== 'string' || !/^[a-z\d_.]{1,64}:[a-z\d_-]{1,100}$/i.test(key)) return null;
+      const [account, code] = key.split(':');
+      return account.toLowerCase() + ':' + code;
+    } catch { return null; }
+  }
   function navigate(value) {
     if (typeof value !== 'string' || value.length > 8000) return;
     let target;
     try { target = new URL(value, location.origin); } catch { return; }
     if (target.origin !== location.origin || target.username || target.password || !allowed.test(target.pathname)) return;
     minimize();
+    const postKey = postKeyFor(target);
+    if (postKey && /^\/(?:index\.html|mobile\/(?:index\.html)?)?$/.test(location.pathname)) {
+      // Research accepts posts in its authorized catalogue and switches its
+      // existing inspector. Other pages or unhandled posts keep normal routing.
+      const event = new CustomEvent('sentient:open-post', { detail: { postKey }, cancelable: true });
+      if (!window.dispatchEvent(event)) return;
+    }
     location.assign(target.href);
   }
   function showResearch(filters) {
@@ -153,7 +178,8 @@
       menu = data.menu?.open && !['hidden', 'launch'].includes(state) ? { width: clamp(Number(data.menu.width) || 244, 160, 420), height: clamp(Number(data.menu.height) || 344, 100, 640) } : null;
       const anchor = data.menu?.anchor;
       if (menu && state === 'open' && anchor?.source === 'chat' && ['right', 'top', 'w', 'h'].every(key => Number.isFinite(anchor[key]) && anchor[key] >= 0 && anchor[key] < 10000) && anchor.w > 0 && anchor.h > 0) menu.anchor = { right: anchor.right, top: anchor.top, w: Math.min(anchor.w, 120), h: Math.min(anchor.h, 120) };
-      resultCount = data.results?.visible === true && Number.isFinite(data.results.count) && data.results.count > 0 ? clamp(Math.floor(data.results.count), 1, 10) : 0;
+      resultCount = Number.isFinite(data.results?.count) && data.results.count > 0 ? clamp(Math.floor(data.results.count), 1, 10) : 0;
+      resultsVisible = data.results?.visible === true;
       if (state === 'launch') drag = null;
       resize(); preferences();
     }
@@ -179,6 +205,8 @@
     }
   });
   window.addEventListener('resize', resize); window.visualViewport?.addEventListener('resize', resize); window.visualViewport?.addEventListener('scroll', resize);
+  window.addEventListener('sentient:page-context', preferences);
+  window.addEventListener('popstate', preferences);
   window.addEventListener('pointerdown', dismissMenu);
   window.addEventListener('keydown', event => {
     if (event.key !== 'Escape') return;

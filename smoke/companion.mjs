@@ -51,12 +51,18 @@ try {
   assert.equal(document.querySelectorAll('.chat-message .pet-result-pill').length, 1);
   assert.equal(document.querySelector('.chat-message .pet-result-pill').getAttribute('href'), 'https://sentientdash.app/index.html?post=example%3ACODE');
   assert.equal(document.querySelector('[data-unread]').dataset.unread, '0');
+  const beforePostNavigation = hostMessages.length;
   await click(document.querySelector('.chat-message .pet-result-pill'));
+  assert.equal(hostMessages.slice(beforePostNavigation).find(item => item.type === 'layout' && item.state === 'closed').results.count, 1, 'First minimized layout already reserves the newly opened result set');
   assert.equal(document.querySelector('.companion-chat'), null, 'Result links minimize before navigating');
   assert.equal(sessionStorage.getItem('sentient.pet.open.one'), 'false');
   assert.match(hostMessages.findLast(item => item.type === 'navigate').url, /post=example%3ACODE/);
   assert.equal(document.querySelector('[data-paused]').dataset.paused, 'false');
   assert.equal(document.querySelectorAll('.pet-results-floating .pet-result-pill').length, 1, 'Opened result set stays below the animated character');
+  await click(button('Hablar con Sentient'));
+  const beforeHostMinimize = hostMessages.length;
+  await app.act(async () => window.dispatchEvent(new MessageEvent('message', { origin: location.origin, source: parent, data: { source: 'sentient-host', type: 'minimize' } })));
+  assert.equal(hostMessages.slice(beforeHostMinimize).find(item => item.type === 'layout' && item.state === 'closed').results.count, 1, 'Host minimize uses current results rather than the listener initial state');
   await app.act(async () => app.unmount());
   await app.act(async () => app.mount({ session: { uid: 'one', configured: true }, request, apiBase: 'https://api.example.test' }));
   assert.equal(document.querySelectorAll('.pet-results-floating .pet-result-pill').length, 1, 'Result pills survive same-tab post navigation');

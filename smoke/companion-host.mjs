@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import { JSDOM } from 'jsdom';
 const dom = new JSDOM('<html lang="en" data-theme="light"><body></body></html>', { url: 'https://sentientdash.app/', runScripts: 'outside-only', pretendToBeVisual: true });
 const w = dom.window;
+w.TextDecoder = TextDecoder;
 Object.defineProperty(w, 'innerWidth', { value: 1280, configurable: true });
 Object.defineProperty(w, 'innerHeight', { value: 900, configurable: true });
 let navigation;
@@ -50,6 +51,49 @@ assert.equal(navigation, 'https://sentientdash.app/index.html?post=evolving.ai%3
 assert.equal(frame.dataset.state, 'closed', 'Opening a result minimizes before navigation');
 assert.equal(backdrop.style.display, 'none');
 assert.equal(backdrop.style.pointerEvents, 'none');
+navigation = undefined;
+const openedPosts = [];
+const openPost = event => {
+  assert.equal(frame.dataset.state, 'closed', 'The chat minimizes before the current post switches');
+  assert.equal(backdrop.style.display, 'none', 'In-place post navigation never leaves the dashboard blurred');
+  openedPosts.push(event.detail.postKey);
+  event.preventDefault();
+};
+w.addEventListener('sentient:open-post', openPost);
+const packedPost = Buffer.from(JSON.stringify({ q: 'tecnología', post: 'Evolving.AI:second_Code' })).toString('base64url');
+for (const destination of ['/index.html?post=evolving.ai%3Afirst_Code', '/?r=' + packedPost]) {
+  send({ type: 'layout', state: 'open' });
+  send({ type: 'navigate', url: destination });
+  assert.equal(navigation, undefined, 'A handled post switches in place without reloading the dashboard');
+}
+assert.deepEqual(openedPosts, ['evolving.ai:first_Code', 'evolving.ai:second_Code']);
+const changedUrl = '/index.html?r=' + packedPost;
+w.history.replaceState({}, '', changedUrl);
+w.dispatchEvent(new w.Event('sentient:page-context'));
+assert.equal(messages.at(-1).pageUrl, 'https://sentientdash.app' + changedUrl, 'Canonical post URL changes update the selected pill');
+w.history.replaceState({}, '', '/');
+w.dispatchEvent(new w.PopStateEvent('popstate'));
+assert.equal(messages.at(-1).pageUrl, 'https://sentientdash.app/', 'Browser history changes also refresh the current-page context');
+for (const destination of ['/index.html?post=invalid', '/index.html?r=invalid', '/insights.html?post=evolving.ai:first_Code']) {
+  send({ type: 'navigate', url: destination });
+  assert.ok(navigation, 'Unrecognized post routes retain ordinary navigation');
+  navigation = undefined;
+}
+assert.equal(openedPosts.length, 2, 'Only real validated Research post routes reach the mounted inspector');
+send({ type: 'navigate', url: '/index.html?post=evolving.ai:first_Code' }, w);
+assert.equal(openedPosts.length, 2, 'An unrelated frame cannot trigger in-place post navigation');
+for (const path of ['/mobile/', '/mobile/index.html']) {
+  w.history.replaceState({}, '', path);
+  for (const destination of ['/index.html?post=evolving.ai:desktop_link', '/mobile/?post=evolving.ai:mobile_link', '/mobile/index.html?r=' + packedPost]) {
+    send({ type: 'navigate', url: destination });
+    assert.equal(navigation, undefined, 'Mobile Research also switches desktop and mobile result links in place');
+  }
+}
+assert.equal(openedPosts.length, 8, 'Both mobile entry routes dispatch every supported result URL');
+w.history.replaceState({}, '', '/');
+w.removeEventListener('sentient:open-post', openPost);
+send({ type: 'navigate', url: '/index.html?post=evolving.ai:unloaded_Code' });
+assert.equal(navigation, 'https://sentientdash.app/index.html?post=evolving.ai:unloaded_Code', 'Unhandled catalogue results retain the normal navigation fallback');
 navigation = undefined;
 send({ type: 'layout', state: 'open' });
 assert.equal(backdrop.style.pointerEvents, 'auto', 'The blur intercepts the dismissing click');
@@ -121,22 +165,34 @@ for (const dock of corners) {
   send({ type: 'layout', state: 'closed', results: { visible: true, count: 10 } });
   const resultGeometry = geometry();
   assert.deepEqual([resultGeometry.avatar.w, resultGeometry.avatar.h], [136, 146], 'Result trays never shrink the character');
-  assert.deepEqual([resultGeometry.results.w, resultGeometry.results.h], [216, 344]);
-  assert.equal(frame.style.clipPath, `path("M${resultGeometry.avatar.x} ${resultGeometry.avatar.y}h136v146h-136Z M${resultGeometry.results.x} ${resultGeometry.results.y}h216v344h-216Z")`, 'Only avatar and tray rectangles intercept dashboard clicks');
+  assert.deepEqual([resultGeometry.results.w, resultGeometry.results.h], [216, 380]);
+  assert.equal(frame.style.clipPath, `path("M${resultGeometry.avatar.x} ${resultGeometry.avatar.y}h136v146h-136Z M${resultGeometry.results.x} ${resultGeometry.results.y}h216v380h-216Z")`, 'Only avatar and tray rectangles intercept dashboard clicks');
   assert.equal(resultGeometry.results.y, resultGeometry.avatar.y + 154, 'Results sit eight pixels below the character');
-  if (dock.startsWith('bottom')) assert.equal(parseFloat(frame.style.top) + resultGeometry.avatar.y, originalY - 352);
+  if (dock.endsWith('right')) assert.equal(resultGeometry.results.x + resultGeometry.results.w, resultGeometry.avatar.x + resultGeometry.avatar.w, 'Right-docked stacks align their right edge with the bot');
+  else assert.equal(resultGeometry.results.x, resultGeometry.avatar.x, 'Left-docked stacks align their left edge with the bot');
+  if (dock.startsWith('bottom')) assert.equal(parseFloat(frame.style.top) + resultGeometry.avatar.y, originalY - 388);
   assert.ok(parseFloat(frame.style.left) >= 0 && parseFloat(frame.style.left) + parseFloat(frame.style.width) <= 1280);
   assert.ok(parseFloat(frame.style.top) >= 0 && parseFloat(frame.style.top) + parseFloat(frame.style.height) <= 900);
+  const resultAnchor = [parseFloat(frame.style.left) + resultGeometry.avatar.x, parseFloat(frame.style.top) + resultGeometry.avatar.y];
+  send({ type: 'layout', state: 'closed', menu: { open: true, width: 244, height: 100 }, results: { visible: false, count: 10 } });
+  assert.equal(geometry().state, 'closed', 'Geometry carries its layout state so the child can reject stale panel positions');
+  assert.equal(geometry().results, null, 'Menus hide the result pills');
+  assert.deepEqual([parseFloat(frame.style.left) + geometry().avatar.x, parseFloat(frame.style.top) + geometry().avatar.y], resultAnchor, 'Opening the menu preserves the character position above its results');
+  assert.equal(parseFloat(frame.style.height), 146, 'Hidden results do not expand the menu iframe bounds');
+  w.dispatchEvent(new w.Event('pointerdown'));
+  assert.deepEqual([parseFloat(frame.style.left) + geometry().avatar.x, parseFloat(frame.style.top) + geometry().avatar.y], resultAnchor, 'Dismissal keeps the anchor stable while the child restores the pills');
+  send({ type: 'layout', state: 'closed', results: { visible: true, count: 10 } });
+  assert.deepEqual([parseFloat(frame.style.left) + geometry().avatar.x, parseFloat(frame.style.top) + geometry().avatar.y], resultAnchor, 'Restoring pills never shifts the character');
   send({ type: 'layout', state: 'closed' });
   assert.equal(geometry().results, null);
   assert.equal(frame.style.clipPath, 'none', 'Hiding results clears the tray hit-test clip');
   assert.equal(parseFloat(frame.style.top) + geometry().avatar.y, originalY, 'Hiding results restores the regular dock anchor');
 }
 send({ type: 'layout', state: 'closed', results: { visible: true, count: 2.9 } });
-assert.deepEqual([geometry().results.w, geometry().results.h], [216, 64], 'Result counts are normalized to bounded integers');
+assert.deepEqual([geometry().results.w, geometry().results.h], [216, 68], 'Result counts are normalized to bounded integers');
 for (const count of [1, 3, 10, 100]) {
   send({ type: 'layout', state: 'closed', results: { visible: true, count } });
-  assert.equal(geometry().results.h, Math.min(count, 10) * 35 - 6, 'The stack reserves one 29px row per result with six-pixel gaps');
+  assert.equal(geometry().results.h, Math.min(count, 10) * 39 - 10, 'The stack reserves one 29px row per result with ten-pixel gaps');
 }
 for (const count of [0, -1, Infinity, NaN, '3']) {
   send({ type: 'layout', state: 'closed', results: { visible: true, count } });
@@ -160,6 +216,7 @@ assert.equal(frame.dataset.dock, 'bottom-left', 'Snapping uses the actual shifte
 send({ type: 'layout', state: 'launch', menu: { open: true }, results: { visible: true, count: 10 } });
 assert.deepEqual([parseFloat(frame.style.left), parseFloat(frame.style.top), parseFloat(frame.style.width), parseFloat(frame.style.height)], [0, 0, 1280, 900]);
 assert.equal(geometry().avatar.w, 0);
+assert.equal(geometry().state, 'launch');
 assert.equal(geometry().menu, null); assert.equal(geometry().results, null);
 assert.equal(frame.style.clipPath, 'none', 'Launch covers the full viewport without a stale tray clip');
 assert.equal(backdrop.style.display, 'block', 'The parent backdrop blurs the dashboard behind the launch view');
@@ -184,7 +241,7 @@ for (const height of [844, 260]) {
     assert.ok(parseFloat(frame.style.top) + mobileMenu.y >= 12 && parseFloat(frame.style.top) + mobileMenu.y + mobileMenu.h <= height - 12, 'Header menus scroll below their trigger when a keyboard reduces height');
     send({ type: 'layout', state: 'closed', results: { visible: true, count: 10 } });
     assert.equal(geometry().results.w, 216, 'Vertical result stacks keep their compact width on mobile');
-    assert.equal(geometry().results.h, Math.min(344, height - 178), 'Tall result stacks scroll within the visible height');
+    assert.equal(geometry().results.h, Math.min(380, height - 178), 'Tall result stacks scroll within the visible height');
     assert.ok(geometry().results.y >= geometry().avatar.y + 154);
     assert.ok(parseFloat(frame.style.left) >= 0 && parseFloat(frame.style.left) + parseFloat(frame.style.width) <= 390);
     assert.ok(parseFloat(frame.style.top) >= 0 && parseFloat(frame.style.top) + parseFloat(frame.style.height) <= height);

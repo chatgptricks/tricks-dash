@@ -1,5 +1,5 @@
 import { validResearchFilters } from '../researchFilterOptions';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Character } from './Character';
 import { loadConversation, saveConversation, listConversations, newConversation, deleteConversation } from './history';
 import { LaunchSplash } from './LaunchSplash';
@@ -58,7 +58,9 @@ export function Companion({ session, request, apiBase, Avatar = Character }) {
   const gesture = useRef(null), suppressClick = useRef(false);
   const input = useRef(null), list = useRef(null), controller = useRef(null), sequence = useRef(0), opened = useRef(open), settle = useRef(null), menuElement = useRef(null), launcher = useRef(null), menuTrigger = useRef(null);
   const copy = COPY[context.language];
-  useEffect(() => {
+  const currentVisual = useRef({ enabled, activeResults });
+  currentVisual.current = { enabled, activeResults };
+  useLayoutEffect(() => {
     opened.current = open;
     try { if (session?.uid) sessionStorage.setItem('sentient.pet.open.' + session.uid, String(open)); } catch { /* optional persistence */ }
     postHost({ type: 'layout', state: !session || (launchVisible && !contextReady) ? 'hidden' : launchVisible ? 'launch' : open ? 'open' : enabled ? 'closed' : 'compact', menu: { open: menu && !launchVisible, width: 244, height: busy ? 416 : 380, anchor: menuAnchor }, results: { visible: !launchVisible && !open && enabled && !menu && activeResults.length > 0, count: activeResults.length } });
@@ -88,7 +90,7 @@ export function Companion({ session, request, apiBase, Avatar = Character }) {
       if (next.type === 'dismiss-menu') { setMenu(false); return; }
       if (next.type === 'minimize') { minimize(); return; }
       if (next.type === 'geometry') {
-        if (['avatar', 'panel'].every(key => next[key] && ['x', 'y', 'w', 'h'].every(n => Number.isFinite(next[key][n]) && next[key][n] >= 0 && next[key][n] < 10000))) setGeometry(next);
+        if (['avatar', 'panel'].every(key => next[key] && ['x', 'y', 'w', 'h'].every(n => Number.isFinite(next[key][n]) && next[key][n] >= 0 && next[key][n] < 10000))) setGeometry(previous => JSON.stringify(previous) === JSON.stringify(next) ? previous : next);
         return;
       }
       if (next.type === 'docked') {
@@ -98,17 +100,18 @@ export function Companion({ session, request, apiBase, Avatar = Character }) {
       const variables = { surface: '--surface', raised: '--raised', line: '--line', muted: '--muted', text: '--text', accent: '--accent', accentInk: '--accent-ink' };
       for (const [name, variable] of Object.entries(variables)) {
         const value = next.tokens?.[name];
-        if (typeof value === 'string' && value.length < 150 && window.CSS?.supports('color', value)) document.documentElement.style.setProperty(variable, value);
+        if (typeof value === 'string' && value.length < 150 && window.CSS?.supports('color', value) && document.documentElement.style.getPropertyValue(variable) !== value) document.documentElement.style.setProperty(variable, value);
       }
-      if (typeof next.font === 'string' && next.font.length < 180 && window.CSS?.supports('font-family', next.font)) document.documentElement.style.fontFamily = next.font;
-      if (typeof next.radius === 'string' && window.CSS?.supports('border-radius', next.radius)) document.documentElement.style.setProperty('--chat-radius', next.radius);
-      setContext({ page: typeof next.page === 'string' ? next.page.slice(0, 100) : '/', pageUrl: typeof next.pageUrl === 'string' ? next.pageUrl.slice(0, 8000) : '', language: next.language === 'en' ? 'en' : 'es', theme: next.theme === 'light' ? 'light' : 'dark' });
+      if (typeof next.font === 'string' && next.font.length < 180 && window.CSS?.supports('font-family', next.font) && document.documentElement.style.fontFamily !== next.font) document.documentElement.style.fontFamily = next.font;
+      if (typeof next.radius === 'string' && window.CSS?.supports('border-radius', next.radius) && document.documentElement.style.getPropertyValue('--chat-radius') !== next.radius) document.documentElement.style.setProperty('--chat-radius', next.radius);
+      const nextContext = { page: typeof next.page === 'string' ? next.page.slice(0, 100) : '/', pageUrl: typeof next.pageUrl === 'string' ? next.pageUrl.slice(0, 8000) : '', language: next.language === 'en' ? 'en' : 'es', theme: next.theme === 'light' ? 'light' : 'dark' };
+      setContext(previous => Object.keys(nextContext).every(key => previous[key] === nextContext[key]) ? previous : nextContext);
       setContextReady(true);
     };
     window.addEventListener('message', receive);
     return () => { window.removeEventListener('message', receive); sequence.current++; controller.current?.abort(); clearTimeout(settle.current); };
   }, []);
-  useEffect(() => { document.documentElement.dataset.theme = context.theme; document.documentElement.lang = context.language; }, [context]);
+  useEffect(() => { document.documentElement.dataset.theme = context.theme; document.documentElement.lang = context.language; }, [context.theme, context.language]);
   useEffect(() => {
     if (!session?.uid) return;
     saveConversation(session.uid, { id: conversation.id, messages });
@@ -117,18 +120,21 @@ export function Companion({ session, request, apiBase, Avatar = Character }) {
   }, [messages, session, conversation.id]);
   useEffect(() => { if (busy) list.current?.scrollTo?.({ top: list.current.scrollHeight, behavior: 'smooth' }); }, [busy]);
 
-  function minimize() {
+  function minimize(resultSet) {
+    const visual = currentVisual.current;
+    const results = Array.isArray(resultSet) ? resultSet : visual.activeResults;
     setMenu(false); setOpen(false); opened.current = false;
     try { sessionStorage.setItem('sentient.pet.open.' + session?.uid, 'false'); } catch { /* persistence optional */ }
-    postHost({ type: 'layout', state: enabled ? 'closed' : 'compact', menu: { open: false }, results: { visible: enabled && activeResults.length > 0, count: activeResults.length } });
+    postHost({ type: 'layout', state: visual.enabled ? 'closed' : 'compact', menu: { open: false }, results: { visible: visual.enabled && results.length > 0, count: results.length } });
   }
   function navigate(event, resultSet) {
     if (event.type === 'auxclick' && event.button !== 1) return;
-    if (Array.isArray(resultSet) && resultSet.length) { saveResults(session.uid, resultSet); setActiveResults(resultSet); }
+    const nextResults = Array.isArray(resultSet) && resultSet.length ? saveResults(session.uid, resultSet) : currentVisual.current.activeResults;
+    if (nextResults !== currentVisual.current.activeResults) setActiveResults(nextResults);
     const sameTab = event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
     const savedMessages = sameTab ? cancelledMessages() : messages;
     if (sameTab && busy) { stopPending(); setMessages(savedMessages); }
-    minimize();
+    minimize(nextResults);
     saveConversation(session.uid, { id: conversation.id, messages: savedMessages });
     // Other same-origin dashboard pages retain native navigation after the
     // minimized state is saved; the host only routes its supported tools.
@@ -255,8 +261,8 @@ export function Companion({ session, request, apiBase, Avatar = Character }) {
   }
   if (!session) return null;
   if (launchVisible) return contextReady ? <LaunchSplash locale={context.language} onStart={startFromLaunch} onDismiss={dismissLaunch} Avatar={Avatar}/> : null;
-  return <div className={`companion ${open ? 'is-open' : ''} ${enabled ? '' : 'is-compact'}`} onKeyDown={event => { if (event.key === 'Escape' && open && !menu) { event.stopPropagation(); minimize(); launcher.current?.focus(); } }} onPointerDown={event => { if (event.target === event.currentTarget) { if (open) minimize(); else setMenu(false); } }}>
-    {open ? <section className="companion-chat" style={boxStyle(geometry?.panel)} role="dialog" aria-modal="false" aria-label={view === 'history' ? copy.history : copy.open} onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); minimize(); launcher.current?.focus(); } }}>
+  return <div className={`companion ${open ? 'is-open' : ''} ${enabled ? '' : 'is-compact'}`} data-dock={geometry?.dock} onKeyDown={event => { if (event.key === 'Escape' && open && !menu) { event.stopPropagation(); minimize(); launcher.current?.focus(); } }} onPointerDown={event => { if (event.target === event.currentTarget) { if (open) minimize(); else setMenu(false); } }}>
+    {open ? <section className="companion-chat" style={{ ...boxStyle(geometry?.panel), visibility: parent === window || (geometry?.panel?.w > 0 && geometry?.panel?.h > 0 && (!geometry.state || geometry.state === 'open')) ? undefined : 'hidden' }} role="dialog" aria-modal="false" aria-label={view === 'history' ? copy.history : copy.open} onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); minimize(); launcher.current?.focus(); } }}>
       <header className="chat-header"><div className="chat-identity"><span className="chat-status-dot"/><div><strong>{view === 'history' ? copy.history : copy.title}</strong><small>{copy.subtitle}</small></div></div><div className="chat-header-actions"><button type="button" aria-label={copy.newChat} title={copy.newChat} onClick={clear}><Icon kind="new"/></button><button type="button" aria-label={copy.menu} title={copy.menu} aria-haspopup="menu" aria-expanded={menu} onClick={event => openMenu(event, 'chat')}><Icon kind="menu"/></button><button type="button" aria-label={copy.close} title={copy.close} onClick={minimize}><Icon kind="close"/></button></div></header>
       {view === 'history' ? <div className="chat-history">
         <button className="history-back" type="button" onClick={() => setView('chat')}><Icon kind="back"/>{copy.back}</button>
@@ -283,7 +289,7 @@ export function Companion({ session, request, apiBase, Avatar = Character }) {
       <Avatar reaction={open && enabled ? reaction : 'idle'} unread={enabled ? unread : 0} paused={!enabled}/>
       {!enabled && unread ? <span className="compact-count">{unread > 99 ? '99+' : unread}</span> : null}
     </button>
-    {!open && enabled && !menu && activeResults.length ? <div className="pet-results-floating" style={boxStyle(geometry?.results)}><ResultPills results={activeResults} locale={context.language} currentUrl={context.pageUrl} onNavigate={event => navigate(event, activeResults)} onDismiss={dismissResults}/></div> : null}
+    {!open && enabled && !menu && activeResults.length ? <div className="pet-results-floating" style={{ ...boxStyle(geometry?.results), visibility: parent === window || geometry?.results ? undefined : 'hidden' }}><ResultPills results={activeResults} locale={context.language} currentUrl={context.pageUrl} onNavigate={event => navigate(event, activeResults)} onDismiss={dismissResults}/></div> : null}
     {menu ? <div className="pet-menu" ref={menuElement} style={menuStyle} data-positioned={Boolean(geometry?.menu)} role="menu" aria-label={copy.menu} onKeyDown={menuKeys}>
       <div className="pet-menu-title" aria-hidden="true">Sentient</div>
       <button type="button" role="menuitem" onClick={() => { setMenu(false); if (open) minimize(); else { enable(); setOpen(true); setView('chat'); } }}><Icon kind={open ? 'close' : 'chat'}/>{open ? copy.close : copy.open}</button>

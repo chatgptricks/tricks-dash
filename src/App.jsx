@@ -211,7 +211,10 @@ function writeUrlState(state) {
   const next = `${window.location.pathname}${search ? `?${search}` : ''}`;
   // replaceState, not pushState: filters change on every keystroke and slider
   // tick, and pushing each one would make the back button useless.
-  window.history.replaceState(null, '', next);
+  if (next !== `${window.location.pathname}${window.location.search}`) {
+    window.history.replaceState(null, '', next);
+    window.dispatchEvent(new Event('sentient:page-context'));
+  }
 }
 
 const MEDIA_OPTIONS = [
@@ -2119,6 +2122,22 @@ function Dashboard({ userEmail, userPhoto, initialAccess = {}, sessionVersion, s
       setIsSidebarOpen(true);
     });
   }, []);
+  useEffect(() => {
+    const openCompanionPost = (event) => {
+      const key = event.detail?.postKey;
+      if (typeof key !== 'string' || !/^[a-z\d_.]{1,64}:[A-Za-z\d_-]{1,128}$/i.test(key)) return;
+      // A result may be outside the visible filters, but it must exist in the
+      // signed-in user's loaded catalogue. Reuse the inspector and library.
+      const post = resolveResearchPost(posts, [], key);
+      if (!post && !loading) return;
+      event.preventDefault(); // The host keeps this page instead of reloading.
+      // During the initial read, preserve its progress and resolve the queued
+      // selection when the catalogue arrives, just like an initial deep link.
+      selectPost(post?.postKey || key);
+    };
+    window.addEventListener('sentient:open-post', openCompanionPost);
+    return () => window.removeEventListener('sentient:open-post', openCompanionPost);
+  }, [loading, posts, selectPost]);
   // Research only becomes interactive after a single, complete catalogue
   // revision has been verified. A full-screen state prevents the cached cards
   // from being mistaken for a live, actionable result while that happens.

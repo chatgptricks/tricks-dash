@@ -627,18 +627,19 @@ export function PostDetailPanel({ post, captionExtra = null }) {
   const { t } = usePrefs();
   const [copyState, setCopyState] = useState('');
   const [fullDetail, setFullDetail] = useState(null);
+  const detailPostKey = `${post?.account || ''}:${post?.shortcode || ''}`;
   useEffect(() => {
     let active = true;
     setFullDetail(null);
     if (!post?.captionTruncated || !post?.account || !post?.shortcode) return () => { active = false; };
     apiFetch(`${API_BASE}/api/dashboard/posts/${encodeURIComponent(post.account)}/${encodeURIComponent(post.shortcode)}/detail`)
       .then(async (response) => (response.ok ? response.json() : null))
-      .then((detail) => { if (active && detail) setFullDetail(detail); })
+      .then((detail) => { if (active && detail) setFullDetail({ postKey: detailPostKey, detail }); })
       .catch(() => {});
     return () => { active = false; };
-  }, [post?.account, post?.shortcode, post?.captionTruncated]);
+  }, [post?.account, post?.shortcode, post?.captionTruncated, detailPostKey]);
   if (!post) return null;
-  const caption = fullDetail?.caption || post.caption || '';
+  const caption = (fullDetail?.postKey === detailPostKey ? fullDetail.detail?.caption : '') || post.caption || '';
   const copyCaption = async () => {
     try {
       await navigator.clipboard.writeText(caption);

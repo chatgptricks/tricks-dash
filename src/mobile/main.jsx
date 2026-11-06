@@ -2,6 +2,7 @@ import TopicStack from '../TopicStack';
 import StackIdentity from '../StackIdentity';
 import { useTopicGroups } from '../useTopicGroups';
 import { editorialStates } from '../topicGroups';
+import { resolveResearchPost, stackPostKey } from '../stackOperations';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { mountApp } from '../mountApp';
 import {
@@ -408,6 +409,42 @@ function DashboardView({ viewer }) {
   const [payload, setPayload] = useState(null); const [accounts, setAccounts] = useState([]); const [error, setError] = useState('');
   const [search, setSearch] = useState(''); const [group, setGroup] = useState('all'); const [account, setAccount] = useState(''); const [type, setType] = useState(''); const [media, setMedia] = useState('all'); const [period, setPeriod] = useState('all'); const [dateFrom, setDateFrom] = useState(''); const [dateTo, setDateTo] = useState(''); const [minLikes, setMinLikes] = useState(''); const [minComments, setMinComments] = useState(''); const [promoOnly, setPromoOnly] = useState(false); const [showHidden, setShowHidden] = useState(false); const [sort, setSort] = useState('newest');
   const [filtersOpen, setFiltersOpen] = useState(false); const [selected, setSelected] = useState(null);
+  const pendingCompanionPost = useRef(null);
+  const selectPost = useCallback((post) => {
+    deepLinkOpened.current = true;
+    pendingCompanionPost.current = null;
+    setSelected(post);
+    const url = new URL(location.href);
+    const route = { ...decodeRouteState(url.searchParams.get('r')) };
+    if (post) route.post = stackPostKey(post);
+    else delete route.post;
+    url.searchParams.delete('post');
+    if (Object.keys(route).length) url.searchParams.set('r', encodeRouteState(route));
+    else url.searchParams.delete('r');
+    if (url.href !== location.href) {
+      history.replaceState(null, '', url);
+      window.dispatchEvent(new Event('sentient:page-context'));
+    }
+  }, []);
+  useEffect(() => {
+    const openCompanionPost = (event) => {
+      const key = event.detail?.postKey;
+      if (typeof key !== 'string' || !/^[a-z\d_.]{1,64}:[A-Za-z\d_-]{1,128}$/i.test(key)) return;
+      const post = resolveResearchPost(payload?.posts || [], [], key);
+      if (!post && payload) return;
+      event.preventDefault();
+      if (post) selectPost(post);
+      else pendingCompanionPost.current = key;
+    };
+    window.addEventListener('sentient:open-post', openCompanionPost);
+    return () => window.removeEventListener('sentient:open-post', openCompanionPost);
+  }, [payload, selectPost]);
+  useEffect(() => {
+    if (!payload || !pendingCompanionPost.current) return;
+    const post = resolveResearchPost(payload.posts, [], pendingCompanionPost.current);
+    pendingCompanionPost.current = null;
+    if (post) selectPost(post);
+  }, [payload, selectPost]);
   const [collabOnly, setCollabOnly] = useState(() => {
     const params = new URLSearchParams(location.search);
     return (params.get('collab') ?? decodeRouteState(params.get('r'))?.collab) === '1';
@@ -558,16 +595,17 @@ function DashboardView({ viewer }) {
     <div className="m-result-count"><span>{fmt(filtered.length)} {t('results')}</span>{(filterActive || search) ? <button onClick={() => { setAccount(''); setType(''); setMedia('all'); setPeriod('all'); setDateFrom(''); setDateTo(''); setMinLikes(''); setMinComments(''); setPromoOnly(false); setCollabOnly(false); setCount(60); setShowHidden(false); setSort('newest'); setSearch(''); }}>{t('clear')}</button> : null}</div>
     {error ? <Notice type="error">{error}</Notice> : null}
     {grouping ? <p role="status">{t("Grouping similar posts…")}</p> : null}
-    <div className="m-post-grid">{topics.slice(0, count).map((group) => <TopicStack key={group.id} stackId={group.id} posts={group.posts} visiblePosts={group.visiblePosts} total={group.total} renderCard={(post, expand) => (<button className="m-post-card" key={`${post.account}:${post.shortcode}`} data-context-type="post" data-context-title={post.title || post.caption || post.account} data-context-account={post.account || ''} data-context-shortcode={post.shortcode || ''} data-context-permalink={post.permalink || ''} onClick={expand || (() => setSelected(post))}><div className="m-post-cover"><Cover src={post.coverUrl} alt="" />{post.isHot ? <span className="m-hot"><Flame size={11} />{Number(post.hotMultiplier || 0).toFixed(1)}{t("x")}</span> : null}{post.queueState ? <span className="m-queued">{editorialStates[post.queueState] || post.queueState}</span> : null}</div><div><b>@{post.account}</b><span><Heart size={11} />{fmt(post.likes)}</span></div></button>)} />)}</div>
+    <div className="m-post-grid">{topics.slice(0, count).map((group) => <TopicStack key={group.id} stackId={group.id} posts={group.posts} visiblePosts={group.visiblePosts} total={group.total} renderCard={(post, expand) => (<button className="m-post-card" key={`${post.account}:${post.shortcode}`} data-context-type="post" data-context-title={post.title || post.caption || post.account} data-context-account={post.account || ''} data-context-shortcode={post.shortcode || ''} data-context-permalink={post.permalink || ''} onClick={expand || (() => selectPost(post))}><div className="m-post-cover"><Cover src={post.coverUrl} alt="" />{post.isHot ? <span className="m-hot"><Flame size={11} />{Number(post.hotMultiplier || 0).toFixed(1)}{t("x")}</span> : null}{post.queueState ? <span className="m-queued">{editorialStates[post.queueState] || post.queueState}</span> : null}</div><div><b>@{post.account}</b><span><Heart size={11} />{fmt(post.likes)}</span></div></button>)} />)}</div>
     {count < topics.length ? <button className="m-secondary" onClick={() => setCount((value) => value + 60)}>{t("Load more")}</button> : null}
     {filtersOpen ? <Sheet title={t('filters')} onClose={() => setFiltersOpen(false)}><div className="m-form"><label>{t('account')}<select value={account} onChange={(event) => setAccount(event.target.value)}><option value="">{t('all')}</option>{accounts.map((item) => <option key={item.handle} value={item.handle}>@{item.handle}</option>)}</select></label><div className="m-form-pair"><label>{t('format')}<select value={type} onChange={(event) => setType(event.target.value)}><option value="">{t('all')}</option><option value="image">{t("Image")}</option><option value="video">{t("Video")}</option><option value="carousel">{t("Carousel")}</option></select></label><label>{t('media')}<select value={media} onChange={(event) => setMedia(event.target.value)}><option value="all">{t('anyMedia')}</option><option value="static">{t('staticOnly')}</option><option value="video">{t('videoOnly')}</option></select></label></div><label>{t('period')}<select value={period} onChange={(event) => setPeriod(event.target.value)}><option value="all">{t('anyTime')}</option><option value="1">{t('last24')}</option><option value="3">{t('last3')}</option><option value="7">{t('last7')}</option><option value="30">{t('last30')}</option><option value="90">{t('last90')}</option><option value="custom">{t('customRange')}</option></select></label>{period === 'custom' ? <div className="m-form-pair"><label>{t('from')}<input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} /></label><label>{t('to')}<input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} /></label></div> : null}<div className="m-form-pair"><label>{t('minLikes')}<input type="number" inputMode="numeric" min="0" value={minLikes} onChange={(event) => setMinLikes(event.target.value)} /></label><label>{t('minComments')}<input type="number" inputMode="numeric" min="0" value={minComments} onChange={(event) => setMinComments(event.target.value)} /></label></div><label>{t('order')}<select value={sort} onChange={(event) => setSort(event.target.value)}><option value="newest">{t('newest')}</option><option value="oldest">{t('oldest')}</option><option value="likes">{t('mostLiked')}</option><option value="comments">{t('mostCommented')}</option><option value="hot">{t('hottest')}</option></select></label><label className="m-toggle"><input type="checkbox" checked={promoOnly} onChange={(event) => setPromoOnly(event.target.checked)} /><span>{t('promoOnly')}</span></label><label className="m-toggle"><input type="checkbox" checked={collabOnly} onChange={(event) => { setCollabOnly(event.target.checked); setCount(60); }} /><span>{t('collabsOnly')}</span></label><label className="m-toggle"><input type="checkbox" checked={showHidden} onChange={(event) => setShowHidden(event.target.checked)} /><span>{t('showHidden')}</span></label><button className="m-primary" onClick={() => setFiltersOpen(false)}>{fmt(filtered.length)} {t('results')}</button></div></Sheet> : null}
-    {selected ? <PostSheet post={selected} canSuggest={viewer.operating_roles?.includes('pd')} onClose={() => setSelected(null)} /> : null}
+    {selected ? <PostSheet post={selected} canSuggest={viewer.operating_roles?.includes('pd')} onClose={() => selectPost(null)} /> : null}
   </div>;
 }
 
 function PostSheet({ post, canSuggest, onClose }) {
   const { t, language } = usePrefs(); const [busy, setBusy] = useState(false); const [notice, setNotice] = useState('');
-  const [videoPoster, setVideoPoster] = useState('');
+  const [videoPoster, setVideoPoster] = useState(null);
+  const postKey = stackPostKey(post);
   const downloadController = useRef(null);
   useEffect(() => {
     setBusy(false);
@@ -581,10 +619,10 @@ function PostSheet({ post, canSuggest, onClose }) {
     if (!(post.video === 'Yes' || String(post.type || '').toLowerCase().startsWith('video')) || !post.shortcode) return undefined;
     let active = true;
     apiJson(`/api/dashboard/posts/media?account=${encodeURIComponent(post.account)}&shortcode=${encodeURIComponent(post.shortcode)}&list=1`)
-      .then((result) => { const poster = (result.items || []).find((item) => item.poster)?.poster || ''; if (active) setVideoPoster(poster); })
-      .catch(() => { if (active) setVideoPoster(''); });
+      .then((result) => { const poster = (result.items || []).find((item) => item.poster)?.poster || ''; if (active) setVideoPoster({ postKey, url: poster }); })
+      .catch(() => { if (active) setVideoPoster({ postKey, url: '' }); });
     return () => { active = false; };
-  }, [post.account, post.shortcode, post.type, post.video]);
+  }, [post.account, post.shortcode, post.type, post.video, postKey]);
   const download = async () => {
     if (downloadController.current) return;
     const controller = new AbortController();
@@ -601,7 +639,7 @@ function PostSheet({ post, canSuggest, onClose }) {
       }
     }
   };
-  return <Sheet title={`@${post.account}`} onClose={onClose} wide><article className="m-post-detail"><Cover src={post.coverUrl} fallbackSrc={videoPoster} /><div className="m-detail-kicker"><span>{post.type}</span><span>{dateLabel(post.postDate, language)}</span></div><PostCollaboration post={post} t={t} /><StackIdentity stackId={post.stackId} /><div className="m-detail-metrics"><span><Heart size={16} />{fmt(post.likes)} {t('likes')}</span><span><MessageCircle size={16} />{fmt(post.comments)} {t('comments')}</span></div>{post.title ? <h3>{post.title}</h3> : null}<p>{post.caption}</p>{post.queueState ? <Notice>{t('queue')}: {editorialStates[post.queueState] || post.queueState}</Notice> : null}<Notice>{t('researchMobileSupport')}</Notice><Notice type="error">{notice}</Notice><div className="m-action-grid"><a className="m-secondary" href={post.permalink} target="_blank" rel="noreferrer"><ExternalLink size={16} />{t('viewPost')}</a><button className="m-secondary" onClick={download} disabled={busy}><Download size={16} />{t('downloadMedia')}</button><a className="m-primary" href="/?desktop=1"><ExternalLink size={16} />{t('desktop')}</a>{canSuggest ? <a className="m-primary" href={`/mobile/?r=${encodeRouteState({ tab: 'queue', suggest: post.permalink, sourceAccount: post.account, sourceShortcode: post.shortcode })}`}><Send size={16} />{t('suggestPost')}</a> : null}</div></article></Sheet>;
+  return <Sheet title={`@${post.account}`} onClose={onClose} wide><article className="m-post-detail"><Cover key={postKey} src={post.coverUrl} fallbackSrc={videoPoster?.postKey === postKey ? videoPoster.url : ''} /><div className="m-detail-kicker"><span>{post.type}</span><span>{dateLabel(post.postDate, language)}</span></div><PostCollaboration post={post} t={t} /><StackIdentity stackId={post.stackId} /><div className="m-detail-metrics"><span><Heart size={16} />{fmt(post.likes)} {t('likes')}</span><span><MessageCircle size={16} />{fmt(post.comments)} {t('comments')}</span></div>{post.title ? <h3>{post.title}</h3> : null}<p>{post.caption}</p>{post.queueState ? <Notice>{t('queue')}: {editorialStates[post.queueState] || post.queueState}</Notice> : null}<Notice>{t('researchMobileSupport')}</Notice><Notice type="error">{notice}</Notice><div className="m-action-grid"><a className="m-secondary" href={post.permalink} target="_blank" rel="noreferrer"><ExternalLink size={16} />{t('viewPost')}</a><button className="m-secondary" onClick={download} disabled={busy}><Download size={16} />{t('downloadMedia')}</button><a className="m-primary" href="/?desktop=1"><ExternalLink size={16} />{t('desktop')}</a>{canSuggest ? <a className="m-primary" href={`/mobile/?r=${encodeRouteState({ tab: 'queue', suggest: post.permalink, sourceAccount: post.account, sourceShortcode: post.shortcode })}`}><Send size={16} />{t('suggestPost')}</a> : null}</div></article></Sheet>;
 }
 
 function QueueView({ viewer }) {
