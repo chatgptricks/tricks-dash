@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { readVoiceSettings } from './voicePreference';
+import { audioRootMeanSquare, createEndOfSpeechDetector } from './endOfSpeech';
 
 export const MAX_VOICE_SECONDS = 60;
 export const MAX_VOICE_BYTES = 10 * 1024 * 1024;
@@ -8,19 +9,32 @@ const stopTracks = stream => stream?.getTracks().forEach(track => track.stop());
 
 // The microphone is acquired only by start(), called from a user click. Audio
 // and raw recordings never enter conversation storage or cross the host bridge.
-export function useVoice({ request, apiBase, uid, language, onTranscript }) {
+export function useVoice({ request, apiBase, uid, onTranscript }) {
   const [phase, setPhase] = useState('idle'), [seconds, setSeconds] = useState(0);
+  const [autoSend, setAutoSend] = useState(false);
   const [speech, setSpeech] = useState({ id: null, status: 'idle' }), [error, setError] = useState('');
   const active = useRef(true), recording = useRef(null), recordVersion = useRef(0);
   const audio = useRef(null), audioUrl = useRef(null), playback = useRef(null), speechVersion = useRef(0);
-  const callbacks = useRef({ request, apiBase, language, onTranscript, uid });
-  callbacks.current = { request, apiBase, language, onTranscript, uid };
+  const callbacks = useRef({ request, apiBase, onTranscript, uid });
+  callbacks.current = { request, apiBase, onTranscript, uid };
   const supported = typeof MediaRecorder !== 'undefined' && Boolean(navigator.mediaDevices?.getUserMedia);
   const updateSpeech = value => { if (active.current) setSpeech(value); };
   const fail = code => { if (active.current) setError(code); };
 
+  function releaseDetector(current) {
+    clearInterval(current?.activityTimer);
+    current?.detector?.cancel();
+    for (const node of current?.audioNodes || []) try { node.disconnect(); } catch { /* Already disconnected. */ }
+    if (current) current.audioNodes = [];
+    const context = current?.audioContext;
+    if (current) current.audioContext = null;
+    if (context) context.onstatechange = null;
+    if (active.current && recording.current === current) setAutoSend(false);
+    if (context && context.state !== 'closed') try { context.close()?.catch(() => {}); } catch { /* Already closed. */ }
+  }
   function releaseRecording(current) {
     clearInterval(current?.interval); clearTimeout(current?.timeout); clearTimeout(current?.maxTimer);
+    releaseDetector(current);
     stopTracks(current?.stream);
   }
   function cancelRecording() {
@@ -30,7 +44,7 @@ export function useVoice({ request, apiBase, uid, language, onTranscript }) {
       current.cancelled = true; current.controller?.abort(); releaseRecording(current);
       if (current.recorder?.state !== 'inactive') try { current.recorder?.stop(); } catch { /* Already stopped. */ }
     }
-    if (active.current) { setPhase('idle'); setSeconds(0); }
+    if (active.current) { setPhase('idle'); setSeconds(0); setAutoSend(false); }
   }
   function stopSpeech() {
     speechVersion.current++;
@@ -59,6 +73,7 @@ export function useVoice({ request, apiBase, uid, language, onTranscript }) {
     if (!current?.recorder || current.recorder.state !== 'recording') return;
     current.send = true;
     clearInterval(current.interval); clearTimeout(current.maxTimer);
+    releaseDetector(current);
     current.recorder.stop();
     stopTracks(current.stream);
   }
@@ -67,11 +82,18 @@ export function useVoice({ request, apiBase, uid, language, onTranscript }) {
     cancelAll(); unlock(); setError('');
     if (!supported) { fail('voiceUnsupported'); return; }
     const version = ++recordVersion.current;
-    const current = { version, chunks: [], bytes: 0, language: callbacks.current.language, meta };
+    const current = { version, chunks: [], bytes: 0, meta };
     recording.current = current; setPhase('requesting'); setSeconds(0);
     const valid = () => active.current && recording.current === current && recordVersion.current === version && !current.cancelled;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Start/resume inside the click gesture, before the permission round trip.
+      // If WebAudio is unavailable, recording still has a manual send button.
+      const Context = window.AudioContext || window.webkitAudioContext;
+      if (Context) try {
+        current.audioContext = new Context();
+        current.audioContext.resume()?.catch(() => {});
+      } catch { /* Manual recording remains available. */ }
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
       if (!valid()) { stopTracks(stream); return; }
       current.stream = stream;
       const mimeType = ['audio/webm;codecs=opus', 'audio/mp4', 'audio/webm'].find(type => MediaRecorder.isTypeSupported?.(type));
@@ -96,7 +118,6 @@ export function useVoice({ request, apiBase, uid, language, onTranscript }) {
         current.timeout = setTimeout(() => current.controller.abort('timeout'), 60_000);
         const body = new FormData();
         body.append('file', blob, /mp4|m4a/i.test(blob.type) ? 'voice.m4a' : 'voice.webm');
-        body.append('language', current.language);
         try {
           const response = await callbacks.current.request(callbacks.current.apiBase + '/api/dashboard/assistant/transcribe', { method: 'POST', body, signal: current.controller.signal });
           if (!valid()) return;
@@ -119,11 +140,40 @@ export function useVoice({ request, apiBase, uid, language, onTranscript }) {
         }
       };
       recorder.start(250); current.started = Date.now(); setPhase('recording');
-      current.maxTimer = setTimeout(stopAndSend, MAX_VOICE_SECONDS * 1000);
+      try {
+        const context = current.audioContext;
+        if (context) {
+          const source = context.createMediaStreamSource(stream), highpass = context.createBiquadFilter();
+          const lowpass = context.createBiquadFilter(), analyser = context.createAnalyser();
+          current.audioNodes = [source, highpass, lowpass, analyser];
+          highpass.type = 'highpass'; highpass.frequency.value = 100;
+          lowpass.type = 'lowpass'; lowpass.frequency.value = 4500;
+          analyser.fftSize = 2048;
+          source.connect(highpass); highpass.connect(lowpass); lowpass.connect(analyser);
+          // Never connect the mic to speakers, which would create feedback.
+          const samples = new Float32Array(analyser.fftSize);
+          const detector = current.detector = createEndOfSpeechDetector(current.started);
+          const updateMonitoring = () => { if (valid()) setAutoSend(context.state === 'running'); };
+          context.onstatechange = updateMonitoring; updateMonitoring();
+          current.activityTimer = setInterval(() => {
+            if (!valid() || recorder.state !== 'recording' || context.state !== 'running') return;
+            analyser.getFloatTimeDomainData(samples);
+            const outcome = detector.observe(audioRootMeanSquare(samples), Date.now());
+            if (outcome === 'send') stopAndSend();
+            else if (outcome === 'empty') { cancelRecording(); fail('voiceEmpty'); }
+          }, 40);
+        }
+      } catch { releaseDetector(current); current.detector = null; /* Manual send works without analysis. */ }
+      const finishAtLimit = () => {
+        if (!valid() || recorder.state !== 'recording') return;
+        if (!current.detector?.heardSpeech) { cancelRecording(); fail('voiceEmpty'); }
+        else stopAndSend();
+      };
+      current.maxTimer = setTimeout(finishAtLimit, MAX_VOICE_SECONDS * 1000);
       current.interval = setInterval(() => {
         const elapsed = Math.floor((Date.now() - current.started) / 1000);
         if (valid()) setSeconds(Math.min(MAX_VOICE_SECONDS, elapsed));
-        if (elapsed >= MAX_VOICE_SECONDS) stopAndSend();
+        if (elapsed >= MAX_VOICE_SECONDS) finishAtLimit();
       }, 250);
     } catch (reason) {
       if (!valid()) return;
@@ -177,7 +227,7 @@ export function useVoice({ request, apiBase, uid, language, onTranscript }) {
     active.current = true;
     return () => { active.current = false; cancelAll(); };
   }, [uid]);
-  return { phase, seconds, speech, error, supported, start, stopAndSend, cancelRecording, stopSpeech, cancelAll, unlock, speak,
+  return { phase, seconds, autoSend, speech, error, supported, start, stopAndSend, cancelRecording, stopSpeech, cancelAll, unlock, speak,
     resumeSpeech: () => { if (playback.current && audioUrl.current) void speak(playback.current.message); },
     permit: () => speechVersion.current, clearError: () => setError('') };
 }

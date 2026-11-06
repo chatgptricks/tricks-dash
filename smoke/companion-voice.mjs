@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import './companion-end-of-speech.mjs';
 import { build } from 'esbuild';
 import { JSDOM } from 'jsdom';
 
@@ -7,7 +8,17 @@ for (const key of ['window', 'document', 'navigator', 'HTMLElement', 'Element', 
 const hostMessages = [];
 globalThis.parent = { postMessage(value) { hostMessages.push(value); } };
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
-const streams = [], recorders = [], players = [], revoked = [];
+const streams = [], recorders = [], players = [], revoked = [], contexts = [];
+let micLevel = 0.035;
+window.AudioContext = class {
+  constructor() { this.state = 'running'; this.nodes = []; contexts.push(this); }
+  resume() { this.state = 'running'; return Promise.resolve(); }
+  close() { this.state = 'closed'; return Promise.resolve(); }
+  node() { const node = { connected: false, disconnected: false, frequency: { value: 0 }, connect() { this.connected = true; }, disconnect() { this.disconnected = true; }, getFloatTimeDomainData(samples) { this.frames = (this.frames || 0) + 1; samples.fill(micLevel * (this.frames % 3 === 0 ? 0.55 : 1)); } }; this.nodes.push(node); return node; }
+  createMediaStreamSource() { return this.node(); }
+  createBiquadFilter() { return this.node(); }
+  createAnalyser() { return this.node(); }
+};
 let permission = 'ok', resolvePermission, blockPlayback = false, blobNumber = 0;
 const stream = () => { const tracks = [{ stopped: false, stop() { this.stopped = true; } }]; const value = { getTracks: () => tracks }; streams.push(value); return value; };
 Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia: async () => {
@@ -45,7 +56,7 @@ const click = label => run(() => { const node = typeof label === 'string' ? butt
 const type = value => run(() => { const node = document.querySelector('textarea'); Object.getOwnPropertyDescriptor(dom.window.HTMLTextAreaElement.prototype, 'value').set.call(node, value); node.dispatchEvent(new Event('input', { bubbles: true })); });
 const calls = [];
 let transcript = 'most liked reel', holdTranscription = false, releaseTranscription, holdChat = false, releaseChat;
-let answer = { answer: '[View post](https://sentientdash.app/index.html?post=test%3AVOICE) · 500 likes', sources: [] };
+let answer = { answer: '[View post](https://sentientdash.app/index.html?post=test%3AVOICE) · 500 likes', sources: [], language: 'en' };
 const request = async (url, options) => {
   calls.push({ url, options, body: options.body instanceof FormData ? options.body : JSON.parse(options.body) });
   if (url.endsWith('/transcribe')) return holdTranscription ? new Promise(resolve => { releaseTranscription = () => resolve(Response.json({ text: transcript })); }) : Response.json({ text: transcript });
@@ -53,7 +64,10 @@ const request = async (url, options) => {
   return holdChat ? new Promise(resolve => { releaseChat = () => resolve(Response.json(answer)); }) : Response.json(answer);
 };
 const callsTo = name => calls.filter(call => call.url.endsWith('/' + name));
-const allStopped = () => assert.ok(streams.every(value => value.getTracks().every(track => track.stopped)), 'Every acquired microphone track is stopped');
+const allStopped = () => {
+  assert.ok(streams.every(value => value.getTracks().every(track => track.stopped)), 'Every acquired microphone track is stopped');
+  assert.ok(contexts.every(context => context.state === 'closed' && context.nodes.every(node => node.disconnected)), 'Every analyser and audio context is released');
+};
 try {
   app.setLaunchSuppressed('voice', true);
   await run(() => app.mount({ session: { uid: 'voice', configured: true }, request, apiBase: 'https://api.test' }));
@@ -74,14 +88,14 @@ try {
 
   await click('Usar /research');
   await click('Hablar por voz'); await click('Terminar y enviar audio');
-  assert.equal(callsTo('transcribe').at(-1).body.get('language'), 'es');
+  assert.equal(callsTo('transcribe').at(-1).body.has('language'), false, 'The dashboard language never biases transcription');
   assert.equal(callsTo('transcribe').at(-1).body.get('file').name, 'voice.webm');
   assert.equal(callsTo('chat').at(-1).body.mode, 'research');
   assert.equal(callsTo('chat').at(-1).body.message, '/research most liked reel');
   assert.equal(callsTo('speech').at(-1).body.question, '/research most liked reel');
-  assert.equal(callsTo('speech').at(-1).body.text, answer.answer, 'Speech receives the verified answer for server-side narration, not a separate generated answer');
+  assert.equal(callsTo('speech').at(-1).body.text, answer.answer, 'Speech receives the same answer displayed in chat');
   assert.equal(callsTo('speech').at(-1).body.mode, 'research');
-  assert.equal(callsTo('speech').at(-1).body.language, 'es');
+  assert.equal(callsTo('speech').at(-1).body.language, 'en', 'The English spoken query receives an English answer even with the Spanish dashboard');
   assert.equal(document.querySelectorAll('.from-assistant .pet-result-pill').length, 1, 'Voice preserves the same inline post pills');
   assert.equal(document.querySelector('[data-reaction]').dataset.reaction, 'greeting');
   assert.ok(players.at(-1).played[0].startsWith('data:audio/wav'), 'User click unlocks the reusable audio element before the API round trips');
@@ -100,15 +114,15 @@ try {
   await run(() => window.dispatchEvent(new MessageEvent('message', { origin: location.origin, source: parent, data: { source: 'sentient-host', type: 'context', language: 'en', theme: 'light', page: '/index.html' } })));
   answer = { answer: 'For which account?', pending_next: { post_format: 'reel', target_account: null } };
   await type('/next reel'); await click('Send question');
-  answer = { answer: '[Recreate this](https://sentientdash.app/index.html?post=rival%3ANEXT) · 8,000 likes' };
+  answer = { answer: '[Recrear este](https://sentientdash.app/index.html?post=rival%3ANEXT) · 8,000 likes', language: 'es' };
   transcript = 'chatgptricks'; blockPlayback = true;
   await click('Ask by voice'); await click('Finish and send audio');
   assert.equal(callsTo('chat').at(-1).body.message, 'chatgptricks', 'A pending /next reply is not rewritten into a fresh slash command');
   assert.equal(callsTo('chat').at(-1).body.mode, 'next');
   assert.deepEqual(callsTo('chat').at(-1).body.next_context, { post_format: 'reel', target_account: null });
   assert.equal(callsTo('chat').at(-1).body.history.at(-1).content, 'For which account?');
-  assert.equal(callsTo('transcribe').at(-1).body.get('language'), 'en');
-  assert.equal(callsTo('speech').at(-1).body.language, 'en');
+  assert.equal(callsTo('transcribe').at(-1).body.has('language'), false);
+  assert.equal(callsTo('speech').at(-1).body.language, 'es', 'The answer language also overrides an English dashboard');
   assert.match(document.querySelector('.chat-transcript').textContent, /Tap to listen/);
   const beforeReplay = callsTo('speech').length;
   await click(document.querySelectorAll('.chat-audio-reply button')[1]);
@@ -146,6 +160,7 @@ try {
   // Exercise the actual automatic stop with the recording clock advanced.
   const originalNow = Date.now;
   await click('Ask by voice');
+  await app.act(async () => { await new Promise(resolve => setTimeout(resolve, 360)); });
   Date.now = () => originalNow() + 61_000;
   try { await app.act(async () => { await new Promise(resolve => setTimeout(resolve, 300)); }); }
   finally { Date.now = originalNow; }
@@ -160,6 +175,26 @@ try {
   await click('Hablar por voz'); await click('Terminar y enviar audio');
   assert.equal(callsTo('transcribe').at(-1).body.get('file').name, 'voice.m4a', 'Safari MP4 recordings use an accepted filename and MIME type');
   assert.equal(callsTo('transcribe').at(-1).body.get('file').type, 'audio/mp4'); allStopped();
+  // Exercise the real hook's timer and one-shot upload without waiting out a turn.
+  await click('Nueva conversación');
+  const beforeAutomatic = callsTo('transcribe').length;
+  micLevel = 0.035; await click('Hablar por voz');
+  await app.act(async () => { await new Promise(resolve => setTimeout(resolve, 360)); });
+  micLevel = 0;
+  Date.now = () => originalNow() + 1500;
+  try { await app.act(async () => { await new Promise(resolve => setTimeout(resolve, 100)); }); }
+  finally { Date.now = originalNow; }
+  assert.equal(callsTo('transcribe').length, beforeAutomatic + 1, 'A completed spoken turn automatically uploads once');
+  allStopped();
+  await click('Nueva conversación');
+  const beforeSilence = callsTo('transcribe').length;
+  await click('Hablar por voz');
+  Date.now = () => originalNow() + 12_100;
+  try { await app.act(async () => { await new Promise(resolve => setTimeout(resolve, 80)); }); }
+  finally { Date.now = originalNow; }
+  assert.equal(callsTo('transcribe').length, beforeSilence, 'An empty recording times out without uploading silence');
+  assert.match(document.querySelector('[role="alert"]').textContent, /No detecté palabras/);
+  allStopped(); micLevel = 0.035;
   await click('Nueva conversación');
   await run(() => window.dispatchEvent(new MessageEvent('message', { origin: location.origin, source: parent, data: { source: 'sentient-host', type: 'context', language: 'en', theme: 'light', page: '/queue.html', pageUrl: 'https://sentientdash.app/queue.html' } })));
   const filters = { query: 'Elon Musk', min_likes: 5001, min_comments: null, accounts: [], from_date: null, to_date: null, sort: 'newest', post_type: 'All posts', promos_only: false, collabs_only: false };

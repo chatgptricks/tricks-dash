@@ -26,6 +26,7 @@ function sanitizeMessages(values) {
   return values.filter(item => item && ['user', 'assistant'].includes(item.role) && typeof item.content === 'string').slice(-MAX_MESSAGES).map((item, index) => {
     const clean = { id: validId(item.id) ? item.id : 'message-' + index, role: item.role, content: item.content.slice(0, MAX_CONTENT) };
     if (item.failed === true) clean.failed = true;
+    if (item.role === 'assistant' && ['en', 'es'].includes(item.language)) clean.language = item.language;
     const pendingNext = item.role === 'assistant' ? sanitizeNextContext(item.pending_next) : null;
     if (pendingNext) clean.pending_next = pendingNext;
     if (item.role === 'assistant' && Array.isArray(item.sources)) {

@@ -23,8 +23,8 @@ COPY.es.aboutBot = 'Conocé a Sentient Bot';
 COPY.en.aboutBot = 'Meet Sentient Bot';
 Object.assign(COPY.es, { commands: 'Comandos', useCommand: 'Usar', filterCommand: 'Aplicar filtros en el dashboard', researchCommand: 'Buscar datos y responder en el chat', nextCommand: 'Recomendar qué post recrear', commandRequired: 'Escribí una consulta después del comando.' });
 Object.assign(COPY.en, { commands: 'Commands', useCommand: 'Use', filterCommand: 'Apply dashboard filters', researchCommand: 'Search data and answer in chat', nextCommand: 'Recommend the next post to recreate', commandRequired: 'Write a query after the command.' });
-Object.assign(COPY.es, { voiceStart: 'Hablar por voz', voiceSend: 'Terminar y enviar audio', voiceCancel: 'Cancelar audio', voiceRequesting: 'Esperando permiso del micrófono…', voiceRecording: 'Te escucho', voiceTranscribing: 'Transcribiendo…', voiceRead: 'Leer respuestas de texto en voz alta', voicePlay: 'Escuchar respuesta', voiceStop: 'Detener audio', voiceLoading: 'Preparando audio…', voiceBlocked: 'Tocá para escuchar', voiceDisclosure: 'Voz generada por IA.', voicePermission: 'Permití el micrófono en tu navegador para hablar. También podés escribir.', voiceUnsupported: 'Este navegador no permite grabar audio. Podés escribir tu pregunta.', voiceRecordError: 'No pude grabar el audio. Revisá el micrófono e intentá de nuevo.', voiceTranscribeError: 'No pude transcribir el audio. Intentá de nuevo o escribí tu pregunta.', voiceEmpty: 'No detecté palabras. Intentá hablar de nuevo.', voiceTooLarge: 'El audio supera 10 MB. Grabá un mensaje más corto.', voicePlaybackError: 'No pude reproducir el audio. Podés volver a escucharlo con el botón de la respuesta.' });
-Object.assign(COPY.en, { voiceStart: 'Ask by voice', voiceSend: 'Finish and send audio', voiceCancel: 'Cancel audio', voiceRequesting: 'Waiting for microphone permission…', voiceRecording: 'Listening', voiceTranscribing: 'Transcribing…', voiceRead: 'Read text replies aloud', voicePlay: 'Listen to reply', voiceStop: 'Stop audio', voiceLoading: 'Preparing audio…', voiceBlocked: 'Tap to listen', voiceDisclosure: 'AI-generated voice.', voicePermission: 'Allow microphone access in your browser to speak. You can also type.', voiceUnsupported: 'This browser cannot record audio. You can type your question.', voiceRecordError: 'I couldn’t record audio. Check your microphone and try again.', voiceTranscribeError: 'I couldn’t transcribe this audio. Try again or type your question.', voiceEmpty: 'No words were detected. Please try speaking again.', voiceTooLarge: 'The audio exceeds 10 MB. Record a shorter message.', voicePlaybackError: 'I couldn’t play this audio. Try the reply’s play button again.' });
+Object.assign(COPY.es, { voiceStart: 'Hablar por voz', voiceSend: 'Terminar y enviar audio', voiceCancel: 'Cancelar audio', voiceRequesting: 'Esperando permiso del micrófono…', voiceRecording: 'Te escucho', voiceAutoSend: 'Se envía cuando terminás de hablar', voiceTranscribing: 'Transcribiendo…', voiceRead: 'Leer respuestas de texto en voz alta', voicePlay: 'Escuchar respuesta', voiceStop: 'Detener audio', voiceLoading: 'Preparando audio…', voiceBlocked: 'Tocá para escuchar', voiceDisclosure: 'Voz generada por IA.', voicePermission: 'Permití el micrófono en tu navegador para hablar. También podés escribir.', voiceUnsupported: 'Este navegador no permite grabar audio. Podés escribir tu pregunta.', voiceRecordError: 'No pude grabar el audio. Revisá el micrófono e intentá de nuevo.', voiceTranscribeError: 'No pude transcribir el audio. Intentá de nuevo o escribí tu pregunta.', voiceEmpty: 'No detecté palabras. Intentá hablar de nuevo.', voiceTooLarge: 'El audio supera 10 MB. Grabá un mensaje más corto.', voicePlaybackError: 'No pude reproducir el audio. Podés volver a escucharlo con el botón de la respuesta.' });
+Object.assign(COPY.en, { voiceStart: 'Ask by voice', voiceSend: 'Finish and send audio', voiceCancel: 'Cancel audio', voiceRequesting: 'Waiting for microphone permission…', voiceRecording: 'Listening', voiceAutoSend: 'Sends when you finish speaking', voiceTranscribing: 'Transcribing…', voiceRead: 'Read text replies aloud', voicePlay: 'Listen to reply', voiceStop: 'Stop audio', voiceLoading: 'Preparing audio…', voiceBlocked: 'Tap to listen', voiceDisclosure: 'AI-generated voice.', voicePermission: 'Allow microphone access in your browser to speak. You can also type.', voiceUnsupported: 'This browser cannot record audio. You can type your question.', voiceRecordError: 'I couldn’t record audio. Check your microphone and try again.', voiceTranscribeError: 'I couldn’t transcribe this audio. Try again or type your question.', voiceEmpty: 'No words were detected. Please try speaking again.', voiceTooLarge: 'The audio exceeds 10 MB. Record a shorter message.', voicePlaybackError: 'I couldn’t play this audio. Try the reply’s play button again.' });
 function safeSource(url) {
   try { const target = new URL(url); return target.origin === 'https://sentientdash.app' && !target.username && !target.password ? target.href : null; } catch { return null; }
 }
@@ -91,7 +91,7 @@ export function Companion({ session, request, apiBase, Avatar = Character }) {
   const gesture = useRef(null), suppressClick = useRef(false);
   const input = useRef(null), list = useRef(null), controller = useRef(null), sequence = useRef(0), opened = useRef(open), settle = useRef(null), menuElement = useRef(null), launcher = useRef(null), menuTrigger = useRef(null);
   const copy = COPY[context.language];
-  const voice = useVoice({ request, apiBase, uid: session?.uid, language: context.language, onTranscript: (text, meta) => {
+  const voice = useVoice({ request, apiBase, uid: session?.uid, onTranscript: (text, meta) => {
     const mode = parseCommand(text).mode === 'auto' ? meta.mode : 'auto';
     ask((mode && mode !== 'auto' ? `/${mode} ${text}` : text).slice(0, 4000), { spoken: true });
   } });
@@ -321,7 +321,7 @@ export function Companion({ session, request, apiBase, Avatar = Character }) {
     const userId = crypto.randomUUID();
     setMessages(items => [...items, { id: userId, role: 'user', content: message }]);
     try {
-      const response = await request(apiBase + '/api/dashboard/assistant/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: abort.signal, body: JSON.stringify({ message, history, language: context.language, page: context.page, ...(mode !== 'auto' ? { mode } : {}), ...(nextContext ? { next_context: nextContext } : {}) }) });
+      const response = await request(apiBase + '/api/dashboard/assistant/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: abort.signal, body: JSON.stringify({ message, history, language: context.language, input_mode: spoken ? 'voice' : 'text', page: context.page, ...(mode !== 'auto' ? { mode } : {}), ...(nextContext ? { next_context: nextContext } : {}) }) });
       if (current !== sequence.current) return;
       if (!response.ok) throw new Error(response.status === 504 ? 'timeout' : response.status === 429 ? 'limited' : 'unavailable');
       const result = await response.json();
@@ -329,21 +329,22 @@ export function Companion({ session, request, apiBase, Avatar = Character }) {
       if (!result.answer || typeof result.answer !== 'string') throw new Error('unavailable');
       const action = Array.isArray(result.ui_actions) ? result.ui_actions.find(item => item.type === 'research_filters') : null;
       if (action && (['research', 'next'].includes(mode) || !validResearchFilters(action.filters))) throw new Error('unsupported');
-      const assistantMessage = { id: crypto.randomUUID(), role: 'assistant', content: result.answer, sources: Array.isArray(result.sources) ? result.sources : [] };
+      const replyLanguage = ['en', 'es'].includes(result.language) ? result.language : context.language;
+      const assistantMessage = { id: crypto.randomUUID(), role: 'assistant', content: result.answer, language: replyLanguage, sources: Array.isArray(result.sources) ? result.sources : [] };
       const pendingNext = mode === 'next' ? sanitizeNextContext(result.pending_next) : null;
       if (pendingNext) assistantMessage.pending_next = pendingNext;
       setMessages(items => [...items, assistantMessage]);
       const wantsSpeech = (spoken || readAloud) && voice.permit() === speechPermit;
-      const narration = { id: assistantMessage.id, text: result.answer.slice(0, 12000), question: message, language: context.language, mode };
+      const spokenReply = { id: assistantMessage.id, text: result.answer.slice(0, 12000), question: message, language: replyLanguage, mode };
       if (action) {
         dismissResults();
         minimize(undefined, { preserveVoice: true }); setUnread(0);
         // Persist before navigation so both the request and answer survive it.
         saveConversation(session.uid, { id: conversation.id, messages: [...messages, { id: userId, role: 'user', content: message }, assistantMessage] });
-        postHost({ type: 'research_filters', filters: action.filters, ...(wantsSpeech ? { voiceHandoff: { ...narration, owner: session.uid } } : {}) });
+        postHost({ type: 'research_filters', filters: action.filters, ...(wantsSpeech ? { voiceHandoff: { ...spokenReply, owner: session.uid } } : {}) });
       }
       setReaction('celebrate'); settle.current = setTimeout(() => setReaction('idle'), 2500);
-      if (wantsSpeech && (!action || /^\/(?:index\.html)?$/.test(context.page))) void voice.speak(narration, { permit: speechPermit });
+      if (wantsSpeech && (!action || /^\/(?:index\.html)?$/.test(context.page))) void voice.speak(spokenReply, { permit: speechPermit });
       if (!opened.current && !action) setUnread(number => number + 1);
     } catch (reason) {
       if (current !== sequence.current) return;
@@ -362,7 +363,7 @@ export function Companion({ session, request, apiBase, Avatar = Character }) {
     const question = messages.slice(0, index).findLast(message => message.role === 'user')?.content || '';
     const command = parseCommand(question);
     const mode = command.mode === 'auto' && pendingNextContext(messages.slice(0, index - 1), question) ? 'next' : command.mode;
-    void voice.speak({ id: item.id, text: item.content, question, language: context.language, mode });
+    void voice.speak({ id: item.id, text: item.content, question, language: item.language || context.language, mode });
   }
   if (!session) return null;
   if (launchVisible) return contextReady ? <LaunchSplash locale={context.language} dontShowAgain={launchSuppressed} onDontShowAgainChange={changeLaunchPreference} onStart={startFromLaunch} onDismiss={dismissLaunch} Avatar={Avatar}/> : null;
@@ -396,7 +397,7 @@ export function Companion({ session, request, apiBase, Avatar = Character }) {
         </div>
         {commandSuggestions.length && !voiceBusy ? <div className="chat-command-menu" id="chat-commands" role="listbox" aria-label={copy.commands}>{commandSuggestions.map((mode, index) => <button type="button" role="option" tabIndex={-1} id={`chat-command-${mode}`} aria-selected={index === commandIndex} key={mode} onMouseEnter={() => setCommandIndex(index)} onMouseDown={event => event.preventDefault()} onClick={() => chooseCommand(mode)}><strong>/{mode}</strong><span>{copy[mode + 'Command']}</span><kbd aria-hidden="true">↵</kbd></button>)}</div> : null}
         <div className="chat-input-row">{voiceBusy ? <>
-          <div className="chat-voice-status" role="status"><span className={voice.phase === 'recording' ? 'voice-record-dot' : ''}/><div><strong>{copy[voice.phase === 'recording' ? 'voiceRecording' : voice.phase === 'requesting' ? 'voiceRequesting' : 'voiceTranscribing']}</strong>{voice.phase === 'recording' ? <small>{Math.floor(voice.seconds / 60)}:{String(voice.seconds % 60).padStart(2, '0')} / 1:00</small> : null}</div></div>
+          <div className="chat-voice-status" role="status"><span className={voice.phase === 'recording' ? 'voice-record-dot' : ''}/><div><strong>{copy[voice.phase === 'recording' ? 'voiceRecording' : voice.phase === 'requesting' ? 'voiceRequesting' : 'voiceTranscribing']}</strong>{voice.phase === 'recording' ? <small>{Math.floor(voice.seconds / 60)}:{String(voice.seconds % 60).padStart(2, '0')} / 1:00{voice.autoSend ? ` · ${copy.voiceAutoSend}` : ''}</small> : null}</div></div>
           <button className="chat-voice-button" type="button" aria-label={copy.voiceCancel} title={copy.voiceCancel} onClick={voice.cancelRecording}><Icon kind="cancel"/></button>
           {voice.phase === 'recording' ? <button className="chat-submit" type="button" aria-label={copy.voiceSend} title={copy.voiceSend} onClick={voice.stopAndSend}><Icon kind="send"/></button> : null}
         </> : <><textarea ref={input} aria-label={copy.placeholder} placeholder={copy.placeholder} aria-controls={commandSuggestions.length ? 'chat-commands' : undefined} aria-activedescendant={commandSuggestions.length ? `chat-command-${commandSuggestions[commandIndex] || commandSuggestions[0]}` : undefined} maxLength={4000} rows={2} value={draft} disabled={!session.configured} onChange={event => { setDraft(event.target.value); setCommandIndex(0); setCommandMenuDismissed(false); }} onKeyDown={composerKeys}/><button className="chat-voice-button" type="button" aria-label={copy.voiceStart} title={voice.supported ? copy.voiceStart : copy.voiceUnsupported} disabled={busy || !session.configured} onClick={() => voice.start({ mode: draftCommand.mode })}><Icon kind="mic"/></button>{busy ? <button className="chat-submit" type="button" aria-label={copy.stop} onClick={cancel}><Icon kind="stop"/></button> : <button className="chat-submit" type="submit" aria-label={copy.send} disabled={(!draftCommand.query && draftCommand.mode !== 'next') || !session.configured}><Icon kind="send"/></button>}</>}</div>
