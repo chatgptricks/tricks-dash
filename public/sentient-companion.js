@@ -56,18 +56,20 @@
     send({ type: 'geometry', dock, avatar: { x: ax - x, y: ay - y, w: aw, h: ah }, panel: { x: px - x, y: py - y, w: pw, h: ph } });
   };
   function showResearch(filters) {
-    if (!filters || typeof filters !== 'object') return;
+    const fields = ['query', 'min_likes', 'min_comments', 'accounts', 'from_date', 'to_date', 'sort', 'post_type', 'promos_only', 'collabs_only'];
+    if (!filters || typeof filters !== 'object' || Object.keys(filters).some(key => !fields.includes(key))) return;
+    if (!['All posts', 'Carousel', 'Video', 'Image'].includes(filters.post_type) || !['newest', 'oldest', 'likes-desc', 'comments-desc', 'hot-rate'].includes(filters.sort)) return;
     const params = new URLSearchParams();
     if (typeof filters.query === 'string') params.set('q', filters.query.slice(0, 200));
-    if (filters.text_scope === 'caption') params.set('scope', 'caption');
     for (const [field, param] of [['min_likes', 'likes'], ['min_comments', 'comments']]) {
       if (Number.isSafeInteger(filters[field]) && filters[field] >= 0 && filters[field] <= 1e12) params.set(param, filters[field]);
     }
     if (Array.isArray(filters.accounts)) params.set('acc', filters.accounts.slice(0, 100).filter(a => typeof a === 'string' && /^[a-z\d_.]{1,64}$/i.test(a)).join(','));
     for (const [field, param] of [['from_date', 'from'], ['to_date', 'to']]) if (/^\d{4}-\d{2}-\d{2}$/.test(filters[field] || '')) params.set(param, filters[field]);
-    if (['newest', 'oldest', 'likes-desc', 'comments-desc'].includes(filters.sort)) params.set('sort', filters.sort);
+    params.set('sort', filters.sort);
+    params.set('type', filters.post_type);
     if (filters.promos_only === true) params.set('promo', '1');
-    if (['video', 'static'].includes(filters.media)) params.set('media', filters.media);
+    if (filters.collabs_only === true) params.set('collab', '1');
     // The Research page already restores all its real controls from shared URLs.
     location.assign('/index.html?' + params.toString());
   }

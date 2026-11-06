@@ -16,6 +16,7 @@ function hashCompanion(directory) {
 }
 hashCompanion(resolve(__dirname, 'src/companion'));
 companionHash.update(readFileSync(resolve(__dirname, 'public/sentient-companion.js')));
+companionHash.update(readFileSync(resolve(__dirname, 'src/researchFilterOptions.js')));
 const companionScript = '/sentient-companion-' + companionHash.digest('hex').slice(0, 12) + '.js';
 
 export default defineConfig(({ command }) => ({

@@ -58,7 +58,7 @@ The frame shares Firebase persistence without sending credentials through
 postMessage. Three.js loads separately from the main dashboard bundle. UI
 copy follows the host language and theme; reduced motion and a non-WebGL
 fallback are supported. `npm run test:companion` covers chat, cancellation,
-safe links, unread replies, visibility preferences, six-position docking, session isolation and visible Research filters. Requests to show filtered posts apply the page controls and preserve the conversation. Caption-only searches use complete server captions rather than truncated card previews. Cortex supports catalogue discovery and full-response analysis across product areas, plus complete stored-metric rankings for exact rolling publication windows.
+safe links, unread replies, visibility preferences, six-position docking, session isolation and visible Research filters. Requests to show filtered posts apply the page controls and preserve the conversation. UI actions are restricted to real Research controls and validated against the same format/sort options used by those controls. Caption-only, audio-ID and reel-only filters are data queries rather than invented page controls. Cortex supports catalogue discovery and full-response analysis across product areas, plus complete stored-metric rankings for exact rolling publication windows.
 
 Research stacks expose their persisted **Stack ID** in the expanded stack and
 each member's details, with a copy button. Pasting that ID into Research search

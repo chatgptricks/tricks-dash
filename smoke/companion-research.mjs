@@ -1,3 +1,4 @@
+import { validResearchFilters, RESEARCH_POST_TYPES } from '../src/researchFilterOptions.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -21,7 +22,7 @@ window.caches = {
 };
 
 const posts = Array.from({ length: 8 }, (_, index) => ({
-  account: 'chatgptricks', shortcode: `STARTUP${index}`, caption: `Independent research fixture ${index}`,
+  account: 'chatgptricks', shortcode: `STARTUP${index}`, caption: index === 0 || index === 7 ? 'Elon Musk research fixture' : `Independent research fixture ${index}`,
   type: 'Image', postDate: `2026-10-${String(index + 1).padStart(2, '0')}T12:00:00Z`,
   likes: index === 0 ? 5000 : 6000, comments: 1, group: 'sentient', isCollab: null, collaborators: [],
 }));
@@ -80,18 +81,22 @@ const settle = () => new Promise((resolve) => setTimeout(resolve, 30));
 const run = (action) => act(async () => { action(); await settle(); });
 const calls = (endpoint) => requests.filter(({ url }) => url.pathname.endsWith(`/${endpoint}`));
 
-history.replaceState(null, '', '/index.html?q=Elon+Musk&scope=caption&likes=5001');
+history.replaceState(null, '', '/index.html?q=Elon+Musk&likes=5001');
 const root = createRoot(document.getElementById('root'));
 try {
   await run(() => root.render(React.createElement(App)));
   for (let i = 0; i < 50 && !document.querySelector('.gallery-grid .post-card'); i++) await act(async () => { await settle(); });
   assert.deepEqual([...document.querySelectorAll('.gallery-grid .post-card[data-context-shortcode]')].map(p => p.dataset.contextShortcode), ['STARTUP7']);
-  assert.match(document.body.textContent, /Caption only/);
-  assert.match(document.body.textContent, /5,001/);
-  assert.equal(calls('search').length, 1);
+  assert.equal(calls('search').length, 0, 'Use the existing general search, not an invented caption-only control');
+  await run(() => [...document.querySelectorAll('button')].find(b => b.textContent.startsWith('Engagement')).click());
+  assert.equal(document.querySelector('input[type=number][aria-label="Minimum likes"]').value, '5001', 'The exact threshold exists in a real numeric control');
+  const filters = { query: 'Elon Musk', min_likes: 5001, min_comments: null, accounts: [], from_date: null, to_date: null, sort: 'newest', post_type: 'Carousel', promos_only: false, collabs_only: false };
+  assert.ok(validResearchFilters(filters));
+  assert.ok(RESEARCH_POST_TYPES.includes(filters.post_type));
+  for (const extra of [{ text_scope: 'caption' }, { media: 'static' }, { post_type: 'Reel' }, { sort: 'most-views' }, { audio_id: '1234' }]) assert.equal(validResearchFilters({ ...filters, ...extra }), false);
   await run(() => document.querySelector('.search-clear').click());
-  assert.equal(document.querySelectorAll('.gallery-grid .post-card[data-context-shortcode]').length, 7, 'Clearing caption scope preserves the independent likes filter');
+  assert.equal(document.querySelectorAll('.gallery-grid .post-card[data-context-shortcode]').length, 7, 'Clearing search preserves the independent likes filter');
   await run(() => root.unmount());
-  console.log('PASS Companion Research: shared URL drives visible caption-only and exact engagement filters; complete server matches work beyond preview text.');
+  console.log('PASS Companion Research: shared URL drives visible keyword and exact engagement filters; only real controls and their actual options are accepted.');
 } finally { dom.window.close(); }
 process.exit(0);

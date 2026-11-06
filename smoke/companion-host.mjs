@@ -35,11 +35,14 @@ send({ type: 'drag-start' }); send({ type: 'drag-end', dx: 1100, dy: -700 });
 assert.equal(frame.dataset.dock, 'top-right');
 assert.equal(frame.style.zIndex, '2147483647');
 assert.equal(frame.style.colorScheme, 'light');
-send({ type: 'research_filters', filters: { query: 'Elon Musk', text_scope: 'caption', min_likes: 5001, accounts: [], sort: 'newest' } }, w);
+send({ type: 'research_filters', filters: { query: 'Elon Musk', min_likes: 5001, accounts: [], sort: 'newest', post_type: 'Carousel' } }, w);
 assert.equal(navigation, undefined, 'Untrusted frames cannot navigate the dashboard');
-send({ type: 'research_filters', filters: { query: 'Elon Musk', text_scope: 'caption', min_likes: 5001, accounts: [], sort: 'newest' } });
+send({ type: 'research_filters', filters: { query: 'Elon Musk', min_likes: 5001, accounts: [], sort: 'newest', post_type: 'Carousel' } });
 const url = new URL(navigation, w.location.origin);
-assert.equal(url.pathname, '/index.html'); assert.equal(url.searchParams.get('likes'), '5001'); assert.equal(url.searchParams.get('scope'), 'caption'); assert.equal(url.searchParams.get('q'), 'Elon Musk');
+assert.equal(url.pathname, '/index.html'); assert.equal(url.searchParams.get('likes'), '5001'); assert.equal(url.searchParams.get('scope'), null); assert.equal(url.searchParams.get('type'), 'Carousel'); assert.equal(url.searchParams.get('q'), 'Elon Musk');
+navigation = undefined;
+send({ type: 'research_filters', filters: { query: '', text_scope: 'caption', post_type: 'All posts', sort: 'newest' } });
+assert.equal(navigation, undefined, 'Unsupported page controls must not be silently dropped or applied');
 Object.defineProperty(w, 'innerWidth', { value: 390 }); Object.defineProperty(w, 'innerHeight', { value: 844 });
 for (const dock of corners) { send({ type: 'ready', dock }); send({ type: 'layout', state: 'open' }); assert.ok(parseFloat(frame.style.left) >= 0 && parseFloat(frame.style.left) + parseFloat(frame.style.width) <= 390); }
 dom.window.close();
