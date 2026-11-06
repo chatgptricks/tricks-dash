@@ -37,3 +37,8 @@
 @media(prefers-reduced-motion:reduce){.sentient-launch-dialog{animation:none}.sentient-launch-start svg{transition:none}}
 html[data-theme="light"] .sentient-launch-badge{color:var(--text)}
 @media(max-width:680px){html[lang="es"] .sentient-launch-copy h1>span{display:block;margin:0 0 5px;font-size:24px}}
+
+.sentient-launch-preference{display:inline-flex;align-items:center;gap:8px;min-height:28px;margin-top:10px;font-size:11px;line-height:1.4;color:var(--muted);cursor:pointer}
+.sentient-launch-preference input{width:15px;height:15px;margin:0;accent-color:var(--accent);cursor:pointer}
+.sentient-launch-preference:hover{color:var(--text)}
+.sentient-launch-preference input:focus-visible{outline:2px solid var(--accent);outline-offset:3px}

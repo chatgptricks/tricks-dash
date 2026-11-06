@@ -7,7 +7,7 @@ const COPY = {
     badge: 'New in your dashboard', lead: 'Meet', name: 'Sentient Bot.',
     description: 'Ask about your posts and accounts, find what matters, and apply filters directly in your dashboard.',
     features: ['Find posts', 'Get answers', 'Apply filters'],
-    start: 'Try Sentient Bot', later: 'Not now', close: 'Close introduction',
+    start: 'Try Sentient Bot', later: 'Not now', close: 'Close introduction', dontShowAgain: 'Don’t show again',
     hint: 'Click the character whenever you need a hand.',
     greeting: 'Your dashboard. Let’s talk.', question: 'Which reel performed best?',
     image: 'Sentient Bot, your animated dashboard companion',
@@ -16,7 +16,7 @@ const COPY = {
     badge: 'Nuevo en tu dashboard', lead: 'Conocé a', name: 'Sentient Bot.',
     description: 'Preguntá por tus posts y cuentas, encontrá lo que buscás y aplicá filtros directamente en tu dashboard.',
     features: ['Encontrá posts', 'Hacé preguntas', 'Aplicá filtros'],
-    start: 'Probar Sentient Bot', later: 'Ahora no', close: 'Cerrar presentación',
+    start: 'Probar Sentient Bot', later: 'Ahora no', close: 'Cerrar presentación', dontShowAgain: 'No mostrar más',
     hint: 'Cuando me necesités, hacé clic en el personaje.',
     greeting: 'Tu dashboard. Conversemos.', question: '¿Cuál fue el mejor reel?',
     image: 'Sentient Bot, tu compañero animado del dashboard',
@@ -35,7 +35,7 @@ function LaunchIcon({ kind }) {
   return <svg className="sentient-launch-icon" viewBox="0 0 24 24" aria-hidden="true"><path d={paths[kind]}/></svg>;
 }
 
-export function LaunchSplash({ locale = 'en', onStart, onDismiss, Avatar = Character }) {
+export function LaunchSplash({ locale = 'en', onStart, onDismiss, dontShowAgain = false, onDontShowAgainChange, Avatar = Character }) {
   const copy = COPY[locale === 'es' ? 'es' : 'en'];
   const dialog = useRef(null), primary = useRef(null);
 
@@ -50,7 +50,7 @@ export function LaunchSplash({ locale = 'en', onStart, onDismiss, Avatar = Chara
       event.preventDefault(); event.stopPropagation(); onDismiss(); return;
     }
     if (event.key !== 'Tab') return;
-    const controls = [...dialog.current.querySelectorAll('button:not(:disabled), a[href], [tabindex="0"]')];
+    const controls = [...dialog.current.querySelectorAll('button:not(:disabled), input:not(:disabled), a[href], [tabindex="0"]')];
     const first = controls[0], last = controls.at(-1), active = document.activeElement;
     if (!dialog.current.contains(active) || (event.shiftKey && active === first)) {
       event.preventDefault(); (event.shiftKey ? last : first)?.focus();
@@ -72,6 +72,7 @@ export function LaunchSplash({ locale = 'en', onStart, onDismiss, Avatar = Chara
           <button className="sentient-launch-later" type="button" onClick={onDismiss}>{copy.later}</button>
         </div>
         <p className="sentient-launch-hint">{copy.hint}</p>
+        <label className="sentient-launch-preference"><input type="checkbox" checked={dontShowAgain} onChange={event => onDontShowAgainChange?.(event.target.checked)}/><span>{copy.dontShowAgain}</span></label>
       </div>
       <figure className="sentient-launch-art" role="img" aria-label={copy.image}>
         <div className="sentient-launch-orbit orbit-outer" aria-hidden="true"/>

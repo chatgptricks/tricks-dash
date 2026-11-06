@@ -3,7 +3,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Character } from './Character';
 import { loadConversation, saveConversation, listConversations, newConversation, deleteConversation } from './history';
 import { LaunchSplash } from './LaunchSplash';
-import { isLaunchSeen, markLaunchSeen, launchStorageKey } from './launch';
+import { isLaunchSuppressed, setLaunchSuppressed, launchStorageKey } from './launch';
 import { ResultPills } from './ResultPills';
 import { extractPostResults, stripPostResultLinks, loadResults, saveResults, clearResults } from './results';
 import './position.css';
@@ -44,7 +44,8 @@ function Icon({ kind }) {
 export function Companion({ session, request, apiBase, Avatar = Character }) {
   const [context, setContext] = useState({ page: '/', pageUrl: '', language: 'es', theme: 'dark' });
   const [contextReady, setContextReady] = useState(parent === window);
-  const [launchVisible, setLaunchVisible] = useState(() => Boolean(session?.uid && session.configured && !isLaunchSeen(session.uid)));
+  const [launchVisible, setLaunchVisible] = useState(() => Boolean(session?.uid && session.configured && !isLaunchSuppressed(session.uid)));
+  const [launchSuppressed, setLaunchSuppressedState] = useState(() => isLaunchSuppressed(session?.uid));
   const [activeResults, setActiveResults] = useState(() => loadResults(session?.uid));
   const [open, setOpen] = useState(() => { try { return sessionStorage.getItem('sentient.pet.open.' + session?.uid) === 'true' && localStorage.getItem('sentient.pet.enabled.' + session?.uid) !== 'false'; } catch { return false; } });
   const [geometry, setGeometry] = useState(null);
@@ -68,9 +69,14 @@ export function Companion({ session, request, apiBase, Avatar = Character }) {
   }, [open, enabled, session, menu, menuAnchor, busy, launchVisible, contextReady, activeResults.length]);
   useEffect(() => { if (open && view === 'chat' && !menu && !launchVisible && document.activeElement !== menuTrigger.current) input.current?.focus(); }, [open, view, menu, launchVisible]);
   useEffect(() => {
-    const seenElsewhere = event => { if (event.key === launchStorageKey(session?.uid) && isLaunchSeen(session?.uid)) setLaunchVisible(false); };
-    window.addEventListener('storage', seenElsewhere);
-    return () => window.removeEventListener('storage', seenElsewhere);
+    const preferenceChanged = event => {
+      if (event.key !== launchStorageKey(session?.uid)) return;
+      const hidden = isLaunchSuppressed(session?.uid);
+      setLaunchSuppressedState(hidden);
+      if (hidden) setLaunchVisible(false);
+    };
+    window.addEventListener('storage', preferenceChanged);
+    return () => window.removeEventListener('storage', preferenceChanged);
   }, [session?.uid]);
   useEffect(() => {
     if (!menu) return;
@@ -145,7 +151,11 @@ export function Companion({ session, request, apiBase, Avatar = Character }) {
   }
   function enable() { setEnabled(true); try { localStorage.setItem('sentient.pet.enabled.' + session.uid, 'true'); } catch { /* preference optional */ } }
   function dismissResults() { clearResults(session.uid); setActiveResults([]); }
-  function dismissLaunch() { markLaunchSeen(session.uid); setLaunchVisible(false); }
+  function dismissLaunch() { setLaunchVisible(false); }
+  function changeLaunchPreference(hidden) {
+    setLaunchSuppressed(session.uid, hidden);
+    setLaunchSuppressedState(hidden);
+  }
   function startFromLaunch() { dismissLaunch(); enable(); setMenu(false); setView('chat'); setOpen(true); setReaction('attentive'); }
   function togglePet() { minimize(); setEnabled(false); try { localStorage.setItem('sentient.pet.enabled.' + session.uid, 'false'); } catch { /* preference optional */ } }
   function launch() {
@@ -260,7 +270,7 @@ export function Companion({ session, request, apiBase, Avatar = Character }) {
     } finally { clearTimeout(timer); if (current === sequence.current) { setBusy(false); controller.current = null; } }
   }
   if (!session) return null;
-  if (launchVisible) return contextReady ? <LaunchSplash locale={context.language} onStart={startFromLaunch} onDismiss={dismissLaunch} Avatar={Avatar}/> : null;
+  if (launchVisible) return contextReady ? <LaunchSplash locale={context.language} dontShowAgain={launchSuppressed} onDontShowAgainChange={changeLaunchPreference} onStart={startFromLaunch} onDismiss={dismissLaunch} Avatar={Avatar}/> : null;
   return <div className={`companion ${open ? 'is-open' : ''} ${enabled ? '' : 'is-compact'}`} data-dock={geometry?.dock} onKeyDown={event => { if (event.key === 'Escape' && open && !menu) { event.stopPropagation(); minimize(); launcher.current?.focus(); } }} onPointerDown={event => { if (event.target === event.currentTarget) { if (open) minimize(); else setMenu(false); } }}>
     {open ? <section className="companion-chat" style={{ ...boxStyle(geometry?.panel), visibility: parent === window || (geometry?.panel?.w > 0 && geometry?.panel?.h > 0 && (!geometry.state || geometry.state === 'open')) ? undefined : 'hidden' }} role="dialog" aria-modal="false" aria-label={view === 'history' ? copy.history : copy.open} onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); minimize(); launcher.current?.focus(); } }}>
       <header className="chat-header"><div className="chat-identity"><span className="chat-status-dot"/><div><strong>{view === 'history' ? copy.history : copy.title}</strong><small>{copy.subtitle}</small></div></div><div className="chat-header-actions"><button type="button" aria-label={copy.newChat} title={copy.newChat} onClick={clear}><Icon kind="new"/></button><button type="button" aria-label={copy.menu} title={copy.menu} aria-haspopup="menu" aria-expanded={menu} onClick={event => openMenu(event, 'chat')}><Icon kind="menu"/></button><button type="button" aria-label={copy.close} title={copy.close} onClick={minimize}><Icon kind="close"/></button></div></header>

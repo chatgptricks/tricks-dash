@@ -7,8 +7,8 @@ for (const key of ['window', 'document', 'navigator', 'HTMLElement', 'Element', 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 const hostMessages = [];
 globalThis.parent = { postMessage: value => hostMessages.push(value) };
-const bundle = await build({ stdin: { contents: `import {act} from 'react'; import {createRoot} from 'react-dom/client'; import {Companion} from './src/companion/Companion.jsx'; import {markLaunchSeen} from './src/companion/launch.js';
-export {act,markLaunchSeen}; let root; const Avatar=({reaction,unread,paused})=><span data-reaction={reaction} data-unread={unread} data-paused={String(paused)}/>;
+const bundle = await build({ stdin: { contents: `import {act} from 'react'; import {createRoot} from 'react-dom/client'; import {Companion} from './src/companion/Companion.jsx'; import {setLaunchSuppressed} from './src/companion/launch.js';
+export {act,setLaunchSuppressed}; let root; const Avatar=({reaction,unread,paused})=><span data-reaction={reaction} data-unread={unread} data-paused={String(paused)}/>;
 export function mount(props){root=createRoot(document.getElementById('root'));root.render(<Companion {...props} Avatar={Avatar}/>)}
 export function unmount(){root.unmount()}`, loader: 'jsx', resolveDir: process.cwd() }, bundle: true, write: false, format: 'esm', platform: 'browser', jsx: 'automatic', target: 'es2022', loader: { '.css': 'empty' } });
 const app = await import('data:text/javascript;base64,' + Buffer.from(bundle.outputFiles[0].text).toString('base64'));
@@ -22,7 +22,7 @@ const request = (_url, options) => new Promise((resolve, reject) => {
   options.signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')));
 });
 try {
-  app.markLaunchSeen('one'); app.markLaunchSeen('two');
+  app.setLaunchSuppressed('one', true); app.setLaunchSuppressed('two', true);
   await app.act(async () => app.mount({ session: { uid: 'one', configured: true }, request, apiBase: 'https://api.example.test' }));
   assert.ok(button('Hablar con Sentient'));
   assert.equal(document.querySelector('[data-paused]').dataset.paused, 'false');
