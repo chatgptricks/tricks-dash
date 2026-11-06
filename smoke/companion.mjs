@@ -23,7 +23,7 @@ try {
   assert.ok(button('Hablar con Sentient'));
   assert.equal(document.querySelector('[data-paused]').dataset.paused, 'false');
   await click(button('Hablar con Sentient'));
-  await click(button('¿Qué tengo pendiente hoy?'));
+  await click(button('Carrusel con más likes · 24 h'));
   assert.equal(calls.length, 1); assert.equal(calls[0].language, 'es');
   assert.equal(document.querySelector('[data-reaction]').dataset.reaction, 'thinking');
   assert.equal(document.querySelector('[data-paused]').dataset.paused, 'false');
@@ -46,13 +46,15 @@ try {
   assert.equal(localStorage.getItem('sentient.pet.enabled.one'), 'true');
   assert.equal(document.querySelector('[data-paused]').dataset.paused, 'false');
   await click(button('Nueva conversación'));
-  await click(button('¿Cómo uso esta pantalla?'));
+  await click(button('Reel con más likes · 24 h'));
   await click(button('Detener respuesta'));
   assert.match(document.querySelector('[role="alert"]').textContent, /detenida/);
   await click(button('Nueva conversación'));
   await app.act(async () => window.dispatchEvent(new MessageEvent('message', { origin: location.origin, source: parent, data: { source: 'sentient-host', type: 'context', language: 'en', theme: 'light', page: '/tracker.html' } })));
-  assert.ok(button('How do I use this screen?'));
-  await click(button('How do I use this screen?'));
+  assert.ok(button('Most liked reel · 24h'));
+  await click(button('Top 3 reels ever from a page…'));
+  assert.equal(document.querySelector('textarea').value, 'What are the 3 most liked reels ever from @');
+  await click(button('Most liked reel · 24h'));
   assert.equal(calls.at(-1).page, '/tracker.html');
   await app.act(async () => pending(new Response('{}', { status: 503 })));
   assert.match(document.querySelector('[role="alert"]').textContent, /couldn’t finish/);

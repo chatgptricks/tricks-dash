@@ -16,9 +16,11 @@ const geometry = () => messages.findLast(m => m.type === 'geometry');
 const corners = ['top-left', 'middle-left', 'bottom-left', 'top-right', 'middle-right', 'bottom-right'];
 for (const dock of corners) {
   send({ type: 'ready', dock }); send({ type: 'layout', state: 'closed' });
+  assert.equal(w.document.getElementById('sentient-companion-backdrop').style.display, 'none');
   const before = geometry();
   const ax = parseFloat(frame.style.left) + before.avatar.x, ay = parseFloat(frame.style.top) + before.avatar.y;
   send({ type: 'layout', state: 'open' });
+  assert.equal(w.document.getElementById('sentient-companion-backdrop').style.display, 'block');
   const after = geometry();
   assert.deepEqual([after.avatar.w, after.avatar.h], [136, 146]);
   assert.equal(parseFloat(frame.style.left) + after.avatar.x, ax);
