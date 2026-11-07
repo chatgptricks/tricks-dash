@@ -307,9 +307,9 @@ export function Companion({ session, request, apiBase, Avatar = Character }) {
     const command = parseCommand(message);
     if (!command.query && command.mode !== 'next') { setError(copy.commandRequired); return; }
     const nextContext = command.mode === 'auto' ? pendingNextContext(messages, message) : null;
-    // Voice can answer the pending question or start a different request.
+    // Typed and spoken replies can answer the pending question or start a different request.
     // Let the server resolve that intent while retaining the bounded slots.
-    const mode = nextContext && !spoken ? 'next' : command.mode;
+    const mode = command.mode;
     if (!session.configured) { setError(copy.unavailable); return; }
     voice.cancelRecording(); voice.stopSpeech(); voice.clearError();
     clearVoiceHandoff(session.uid);

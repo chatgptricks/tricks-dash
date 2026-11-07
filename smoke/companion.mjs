@@ -219,16 +219,17 @@ try {
   assert.ok(document.querySelector('.companion-chat'));
   assert.equal(button('Use /next').getAttribute('aria-pressed'), 'true');
   await typeDraft('carousel'); await pressDraft('Enter');
-  assert.equal(calls.at(-1).mode, 'next');
+  assert.equal(Object.hasOwn(calls.at(-1), 'mode'), false, 'A typed clarification lets the server resolve its intent');
+  assert.equal(calls.at(-1).message, 'carousel', 'The user text stays intact for intent resolution');
   assert.deepEqual(calls.at(-1).next_context, { post_format: null, target_account: null });
-  await app.act(async () => pending(Response.json({ answer: 'For which account?', pending_next: { post_format: 'carousel', target_account: null }, ui_actions: [] })));
+  await app.act(async () => pending(Response.json({ answer: 'For which account?', mode: 'next', pending_next: { post_format: 'carousel', target_account: null }, ui_actions: [] })));
   await typeDraft('@chatgptricks'); await pressDraft('Enter');
   assert.deepEqual(calls.at(-1).next_context, { post_format: 'carousel', target_account: null });
   await app.act(async () => pending(new Response('{}', { status: 503 })));
   await pressDraft('Enter');
-  assert.equal(calls.at(-1).mode, 'next', 'Retry keeps the latest clarification');
+  assert.equal(Object.hasOwn(calls.at(-1), 'mode'), false, 'Retry keeps automatic intent resolution');
   assert.deepEqual(calls.at(-1).next_context, { post_format: 'carousel', target_account: null });
-  await app.act(async () => pending(Response.json({ answer: '[View post](https://sentientdash.app/index.html?post=evolving.ai%3ANEXT_CAROUSEL) — strong recent engagement.', ui_actions: [] })));
+  await app.act(async () => pending(Response.json({ answer: '[View post](https://sentientdash.app/index.html?post=evolving.ai%3ANEXT_CAROUSEL) — strong recent engagement.', mode: 'next', ui_actions: [] })));
   assert.ok(document.querySelector('.pet-result-pill'), 'Recommendation uses the existing result pill');
   await typeDraft('What is the newest post?'); await pressDraft('Enter');
   assert.equal(Object.hasOwn(calls.at(-1), 'mode'), false);
@@ -243,6 +244,37 @@ try {
   assert.equal(calls.at(-1).mode, 'research');
   assert.equal(Object.hasOwn(calls.at(-1), 'next_context'), false, 'Another slash command leaves the clarification flow');
   await app.act(async () => pending(Response.json({ answer: 'Latest post found.', ui_actions: [] })));
+
+  // An unanswered /next question must not force a new typed query into recommendations.
+  for (const scenario of [
+    { message: 'What are the three newest posts from evolving.ai?', mode: 'research', answer: '[View post](https://sentientdash.app/index.html?post=evolving.ai%3ASMART_RESEARCH)', ui_actions: [] },
+    { message: 'Show all posts about Elon Musk', mode: 'filter', answer: 'Showing posts about Elon Musk.', ui_actions: [{ type: 'research_filters', filters: shortcutFilters }] },
+  ]) {
+    await typeDraft('/next for @chatgptricks'); await pressDraft('Enter');
+    assert.equal(calls.at(-1).mode, 'next', 'Explicit /next remains authoritative');
+    await app.act(async () => pending(Response.json({ answer: 'Reel, image or carousel?', mode: 'next', pending_next: { post_format: null, target_account: 'chatgptricks' }, ui_actions: [] })));
+    await typeDraft(scenario.message); await pressDraft('Enter');
+    assert.equal(Object.hasOwn(calls.at(-1), 'mode'), false, 'Pending /next context does not lock an ordinary query mode');
+    assert.equal(calls.at(-1).message, scenario.message);
+    assert.deepEqual(calls.at(-1).next_context, { post_format: null, target_account: 'chatgptricks' }, 'The server still receives the pending slots to recognize actual continuations');
+    const actionsBefore = hostMessages.filter(item => item.type === 'research_filters').length;
+    await app.act(async () => pending(Response.json(scenario)));
+    assert.equal(document.querySelector('.chat-error'), null, 'The server may resolve the new request to research or filters');
+    if (scenario.mode === 'filter') {
+      assert.equal(hostMessages.filter(item => item.type === 'research_filters').length, actionsBefore + 1);
+      assert.deepEqual(hostMessages.findLast(item => item.type === 'research_filters').filters, shortcutFilters);
+      assert.equal(document.querySelector('.companion-chat'), null, 'Resolved filters apply and minimize the chat');
+      await click(button('Chat with Sentient'));
+    } else {
+      assert.equal(hostMessages.filter(item => item.type === 'research_filters').length, actionsBefore);
+      assert.ok(document.querySelector('.companion-chat'));
+      assert.ok(document.querySelector('a[href$="post=evolving.ai%3ASMART_RESEARCH"]'), 'Resolved research keeps its post result in the chat');
+    }
+    await typeDraft('What is the newest post?'); await pressDraft('Enter');
+    assert.equal(Object.hasOwn(calls.at(-1), 'mode'), false);
+    assert.equal(Object.hasOwn(calls.at(-1), 'next_context'), false, 'Changing subject clears the pending recommendation');
+    await app.act(async () => pending(Response.json({ answer: 'Latest post found.', mode: 'research', ui_actions: [] })));
+  }
   await typeDraft('/next reel for chatgptricks'); await pressDraft('Enter');
   const actionsBeforeNext = hostMessages.filter(item => item.type === 'research_filters').length;
   await app.act(async () => pending(Response.json({ answer: 'Filters applied.', ui_actions: [{ type: 'research_filters', filters: shortcutFilters }] })));
