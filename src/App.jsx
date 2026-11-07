@@ -8,6 +8,7 @@ import { applyStackMembershipResult, resolveResearchPost } from './stackOperatio
 import { reconcileDashboardPosts } from './dashboardReconcile';
 import { useTopicGroups } from './useTopicGroups';
 import ProductHeader from './ProductHeader';
+import { VoiceSettingsLink } from './VoiceSettingsLink';
 import GenerateCaptionModal from './GenerateCaptionModal';
 import { Fragment, startTransition, useCallback, useDeferredValue, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -381,6 +382,7 @@ export function SettingsMenu({ email, avatarUrl, isAdmin, isDev, onSignOut, show
               ))}
             </div>
           </div>
+          <VoiceSettingsLink language={lang} />
           {(isAdmin || isDev) && showSettingsLink ? (
             <div className="settings-menu-section settings-menu-admin">
               <span>{t('Command center')}</span>

@@ -246,6 +246,9 @@
 .product-header .settings-menu-link { display: flex; align-items: center; gap: 10px; align-self: stretch; width: 100%; min-height: 56px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 9px; background: rgba(var(--ink), .025); color: var(--text-strong); font: 750 12px Inter, sans-serif; text-align: left; text-decoration: none; transition: background 150ms ease, border-color 150ms ease; }
 .product-header .settings-menu-link:hover { background: rgba(var(--accent-rgb), .08); border-color: rgba(var(--accent-rgb), .32); }
 .product-header .settings-menu-link-copy { flex: 1; text-align: left; }
+.product-header .settings-menu-voice .settings-menu-link-copy { display: grid; min-width: 0; gap: 4px; }
+.product-header .settings-menu-voice .settings-menu-link-copy strong { font-size: 12px; font-weight: 750; line-height: 1.25; }
+.product-header .settings-menu-voice .settings-menu-link-copy small { color: var(--muted-strong); font-size: 10px; font-weight: 500; line-height: 1.35; }
 .product-header .settings-menu-footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 2px; padding: 10px 8px 6px; border-top: 1px solid var(--line); }
 .product-header .settings-menu-footer small { overflow: hidden; color: var(--muted-strong); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .product-header .settings-menu-signout { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 5px; min-height: 28px; padding: 0 8px; border: 1px solid rgba(255,107,107,.32); border-radius: 7px; background: rgba(255,107,107,.08); color: #ff9b9b; font: 750 10px Inter, sans-serif; }

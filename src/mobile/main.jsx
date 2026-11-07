@@ -10,7 +10,7 @@ import {
   ChevronLeft, ChevronRight, Clock3, Download, ExternalLink, Filter, Flame, Heart, Home,
   Inbox, Languages, LayoutGrid, LineChart, Link2, LoaderCircle, LogOut, MessageCircle, Moon,
   ImagePlus, Megaphone, MoreHorizontal, Palette, Play, Plus, RefreshCw, Search, Send, Settings,
-  Shield, Sparkles, Star, Sun, TimerReset, UserRound, Users, Wifi, WifiOff, X,
+  Shield, Sparkles, Star, Sun, TimerReset, UserRound, Users, Wifi, WifiOff, X, Mic,
 } from 'lucide-react';
 import { browserPopupRedirectResolver, getRedirectResult, onAuthStateChanged, signOut } from 'firebase/auth';
 import { API_BASE, apiFetch } from '../api';
@@ -52,6 +52,7 @@ const queueMinutes = (value = new Date()) => {
 const I18N = {
   en: {
     home: 'Home', dashboard: 'Research', queue: 'Queue', tracker: 'Tracker', insights: 'Insights', settings: 'Settings',
+    botVoice: 'Bot voice', voiceHint: 'Preview and choose your voice',
     greeting: 'Good to see you', today: 'Today', myDay: 'My production day', teamPulse: 'Team pulse',
     assigned: 'Assigned', inProgress: 'In progress', completed: 'Completed', pool: 'Pool', approvals: 'Approvals', normal: 'Normal',
     openQueue: 'Open Queue', openDashboard: 'Explore posts', noWork: 'Nothing assigned right now.',
@@ -101,6 +102,7 @@ const I18N = {
   },
   es: {
     home: 'Inicio', dashboard: 'Research', queue: 'Queue', tracker: 'Tracker', insights: 'Insights', settings: 'Ajustes',
+    botVoice: 'Voz del bot', voiceHint: 'Probá y elegí tu voz',
     greeting: 'Qué bueno verte', today: 'Hoy', myDay: 'Mi día de producción', teamPulse: 'Pulso del equipo',
     assigned: 'Asignados', inProgress: 'En progreso', completed: 'Completados', pool: 'Pool', approvals: 'Aprobaciones', normal: 'Normal',
     openQueue: 'Abrir Queue', openDashboard: 'Explorar posts', noWork: 'No tienes nada asignado ahora.',
@@ -370,6 +372,7 @@ function ProfileSheet({ user, viewer, installPrompt, onInstall, onSettings, onSi
     <section className="m-pref-section"><label>{t('language')}</label><div className="m-segment"><button className={prefs.language === 'en' ? 'is-on' : ''} onClick={() => prefs.setLanguage('en')}>{t("EN")}</button><button className={prefs.language === 'es' ? 'is-on' : ''} onClick={() => prefs.setLanguage('es')}>{t("ES")}</button></div></section>
     <section className="m-pref-section"><label>{t('theme')}</label><div className="m-segment"><button className={prefs.theme === 'dark' ? 'is-on' : ''} onClick={() => prefs.setTheme('dark')}><Moon size={14} />{t('dark')}</button><button className={prefs.theme === 'light' ? 'is-on' : ''} onClick={() => prefs.setTheme('light')}><Sun size={14} />{t('light')}</button></div></section>
     <section className="m-pref-section"><label>{t('accent')}</label><div className="m-colors">{['green', 'lime', 'blue', 'coral'].map((color) => <button key={color} className={`is-${color}${prefs.accent === color ? ' is-on' : ''}`} onClick={() => prefs.setAccent(color)} aria-label={color === 'green' ? t('greenAccent') : color === 'lime' ? t('neonAccent') : color} />)}<label className={String(prefs.accent).startsWith('#') ? 'is-on' : ''}><Palette size={14} /><input type="color" value={prefs.customAccent} onChange={(event) => prefs.setCustomAccent(event.target.value)} /></label></div></section>
+    <a className="m-menu-row" href="/voice-lab.html" target="sentient-voice-lab"><Mic size={18} /><span>{t('botVoice')}<small className="m-menu-row-hint">{t('voiceHint')}</small></span><ChevronRight size={17} /></a>
     <a className="m-menu-row" href={desktop}><ExternalLink size={18} /><span>{t('desktop')}</span><ChevronRight size={17} /></a>
     <button className="m-menu-row is-danger" onClick={onSignOut}><LogOut size={18} /><span>{t('signOut')}</span></button>
   </Sheet>;
