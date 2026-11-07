@@ -72,6 +72,19 @@ const nextChat = newConversation('next');
 saveConversation('next', { ...nextChat, messages: [message('/next'), { ...message('Reel, image or carousel?', 'assistant'), pending_next: { post_format: null, target_account: 'ChatGPT Tricks', ignored: 'not retained' } }] });
 assert.deepEqual(loadConversation('next').messages.at(-1).pending_next, { post_format: null, target_account: 'ChatGPT Tricks' });
 assert.deepEqual(listConversations('next')[0].messages.at(-1).pending_next, { post_format: null, target_account: 'ChatGPT Tricks' });
+const fiveOptions = { post_format: 'reel', target_account: null, option_count: 5 };
+saveConversation('next', { ...nextChat, messages: [message('/next give me five reel options'), { ...message('For which account?', 'assistant'), pending_next: { ...fiveOptions, ignored: 'not retained' } }] });
+assert.deepEqual(loadConversation('next').messages.at(-1).pending_next, fiveOptions, 'Navigation preserves five requested recommendations');
+const savedNext = listConversations('next').find(entry => entry.id === nextChat.id);
+assert.deepEqual(savedNext.messages.at(-1).pending_next, fiveOptions);
+newConversation('next');
+saveConversation('next', savedNext);
+assert.deepEqual(loadConversation('next').messages.at(-1).pending_next, fiveOptions, 'Resuming a saved conversation restores its requested count');
+for (const option_count of [undefined, null, true, '5', 0, 11, 1.5]) {
+  saveConversation('next', { ...nextChat, messages: [{ ...message('Invalid count', 'assistant'), pending_next: { ...fiveOptions, option_count } }] });
+  assert.equal(Object.hasOwn(loadConversation('next').messages.at(-1), 'pending_next'), false, 'Invalid counts cannot survive navigation');
+  assert.equal(Object.hasOwn(listConversations('next')[0].messages.at(-1), 'pending_next'), false, 'Invalid counts are removed from saved history');
+}
 saveConversation('next', { ...nextChat, messages: [{ ...message('Wrong slots', 'assistant'), pending_next: { post_format: 'video', target_account: null } }, { ...message('User cannot set slots'), pending_next: { post_format: 'reel', target_account: null } }] });
 assert.ok(loadConversation('next').messages.every(item => !Object.hasOwn(item, 'pending_next')));
 

@@ -18,15 +18,18 @@ export function suggestCommands(value) {
   return COMMANDS.filter(command => command.startsWith(partial[1].toLowerCase()));
 }
 
-// Keep only the two bounded clarification slots returned by the assistant.
+// Keep the bounded clarification slots and optional recommendation count.
 // This also validates saved conversations before a continuation is sent.
 export function sanitizeNextContext(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)
       || !Object.hasOwn(value, 'post_format') || !Object.hasOwn(value, 'target_account')
       || ![null, 'reel', 'image', 'carousel'].includes(value.post_format)
       || (value.target_account !== null && (typeof value.target_account !== 'string'
-        || !value.target_account.trim() || value.target_account.length > 64))) return null;
-  return { post_format: value.post_format, target_account: value.target_account?.trim() ?? null };
+        || !value.target_account.trim() || value.target_account.length > 64))
+      || (Object.hasOwn(value, 'option_count') && (!Number.isInteger(value.option_count)
+        || value.option_count < 1 || value.option_count > 10))) return null;
+  return { post_format: value.post_format, target_account: value.target_account?.trim() ?? null,
+    ...(Object.hasOwn(value, 'option_count') ? { option_count: value.option_count } : {}) };
 }
 
 export function pendingNextContext(messages, value = '') {

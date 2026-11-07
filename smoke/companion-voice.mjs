@@ -134,26 +134,26 @@ try {
   // Natural spoken commands preserve the transcript and use the mode resolved
   // by the server. Pending recommendation slots are metadata, not a sticky mode.
   await click('New conversation');
-  transcript = 'el próximo post';
-  answer = { answer: '¿Reel, imagen o carrusel, y para qué cuenta?', language: 'es', mode: 'next', pending_next: { post_format: null, target_account: null } };
+  transcript = 'el próximo post, dame cinco opciones';
+  answer = { answer: '¿Reel, imagen o carrusel, y para qué cuenta?', language: 'es', mode: 'next', pending_next: { post_format: null, target_account: null, option_count: 5 } };
   await click('Ask by voice'); await click('Finish and send audio');
   assert.equal(callsTo('chat').at(-1).body.message, transcript, 'Natural speech is not rewritten into a slash command');
   assert.equal(callsTo('chat').at(-1).body.mode, undefined);
   assert.equal(callsTo('chat').at(-1).body.input_mode, 'voice');
   assert.equal(document.querySelector('.from-user .chat-message-text').textContent, transcript);
-  assert.deepEqual(JSON.parse(sessionStorage.getItem('sentient.pet.chat.voice')).at(-1).pending_next, { post_format: null, target_account: null }, 'Natural next persists its clarification slots');
+  assert.deepEqual(JSON.parse(sessionStorage.getItem('sentient.pet.chat.voice')).at(-1).pending_next, { post_format: null, target_account: null, option_count: 5 }, 'Natural next persists its clarification slots and requested count');
   assert.equal(callsTo('speech').at(-1).body.mode, 'next');
   transcript = 'a reel';
-  answer = { answer: 'For which account?', language: 'en', mode: 'next', pending_next: { post_format: 'reel', target_account: null } };
+  answer = { answer: 'For which account?', language: 'en', mode: 'next', pending_next: { post_format: 'reel', target_account: null, option_count: 5 } };
   await click('Ask by voice'); await click('Finish and send audio');
   assert.equal(callsTo('chat').at(-1).body.mode, undefined);
-  assert.deepEqual(callsTo('chat').at(-1).body.next_context, { post_format: null, target_account: null });
+  assert.deepEqual(callsTo('chat').at(-1).body.next_context, { post_format: null, target_account: null, option_count: 5 }, 'Spoken clarification keeps all five requested options');
   transcript = 'investiga posts sobre Elon Musk';
   answer = { answer: '[Matching post](https://sentientdash.app/index.html?post=rival%3ARESEARCH)', language: 'es', mode: 'research' };
   const beforeNaturalResearch = hostMessages.filter(item => item.type === 'research_filters').length;
   await click('Ask by voice'); await click('Finish and send audio');
   assert.equal(callsTo('chat').at(-1).body.mode, undefined, 'A natural search can leave an unfinished recommendation');
-  assert.deepEqual(callsTo('chat').at(-1).body.next_context, { post_format: 'reel', target_account: null });
+  assert.deepEqual(callsTo('chat').at(-1).body.next_context, { post_format: 'reel', target_account: null, option_count: 5 });
   assert.equal(callsTo('speech').at(-1).body.mode, 'research');
   assert.equal(hostMessages.filter(item => item.type === 'research_filters').length, beforeNaturalResearch);
   assert.ok(document.querySelector('.companion-chat'), 'Research results stay in chat');

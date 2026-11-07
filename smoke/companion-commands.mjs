@@ -57,9 +57,21 @@ const clarification = { post_format: null, target_account: 'ChatGPT Tricks' };
 const nextMessages = [{ role: 'user', content: '/next' }, { role: 'assistant', content: 'Which format?', pending_next: clarification }];
 assert.deepEqual(sanitizeNextContext(clarification), clarification);
 assert.deepEqual(sanitizeNextContext({ ...clarification, extra: 'ignored' }), clarification);
+for (const option_count of [1, 5, 10]) {
+  const counted = { ...clarification, option_count };
+  assert.deepEqual(sanitizeNextContext({ ...counted, extra: 'ignored' }), counted, 'Supported counts survive without arbitrary metadata');
+}
+for (const option_count of [undefined, null, true, false, '5', 0, -1, 11, 1.5, NaN, Infinity]) {
+  assert.equal(sanitizeNextContext({ ...clarification, option_count }), null, 'Counts must be integers from 1 through 10');
+}
 for (const invalid of [null, [], {}, { post_format: 'video', target_account: null }, { post_format: null, target_account: 'x'.repeat(65) }, { post_format: 'image', target_account: 5 }, { post_format: null, target_account: '' }]) assert.equal(sanitizeNextContext(invalid), null);
 assert.deepEqual(pendingNextContext(nextMessages, 'reel'), clarification);
 assert.deepEqual(pendingNextContext([...nextMessages, { role: 'user', content: 'reel', failed: true }], 'reel'), clarification, 'Failed replies can retry');
+const fiveOptions = { ...clarification, option_count: 5 };
+const fiveMessages = [{ role: 'user', content: '/next give me five options' }, { role: 'assistant', content: 'Which format?', pending_next: fiveOptions }];
+assert.deepEqual(pendingNextContext(fiveMessages, 'reel'), fiveOptions, 'Answering a clarification preserves the requested number of options');
+assert.deepEqual(pendingNextContext([...fiveMessages, { role: 'user', content: 'reel', failed: true }], 'reel'), fiveOptions, 'Retry preserves the requested number of options');
+assert.equal(pendingNextContext(fiveMessages, '/next'), null, 'A fresh explicit request does not inherit a previous count');
 assert.equal(pendingNextContext(nextMessages, '/research newest post'), null);
 assert.equal(pendingNextContext(nextMessages, '/unknown'), null);
 assert.equal(pendingNextContext(nextMessages, '/next'), null, 'Explicit next starts fresh');
