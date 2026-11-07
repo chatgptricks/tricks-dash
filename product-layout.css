@@ -251,6 +251,11 @@
 .product-header .settings-menu-signout { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 5px; min-height: 28px; padding: 0 8px; border: 1px solid rgba(255,107,107,.32); border-radius: 7px; background: rgba(255,107,107,.08); color: #ff9b9b; font: 750 10px Inter, sans-serif; }
 :root[data-theme='light'] .product-header .settings-menu-signout { color: #9b1c1c; }
 .product-header :is(button, a, input):focus-visible { outline: 2px solid var(--accent-text); outline-offset: 3px; }
+/* The rounded search wrapper owns the focus indicator. */
+.product-header .topbar-search input:focus-visible { outline: none; }
+@media (forced-colors: active) {
+  .product-header .topbar-search:focus-within { outline: 1px solid Highlight; outline-offset: 2px; }
+}
 
 @media (min-width: 1400px) {
   .product-page .product-header { grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 20px; }
