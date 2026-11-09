@@ -60,6 +60,7 @@ let holdInitialQueueFetch = true;
 const initialQueueFetch = new Promise((resolve) => { releaseInitialQueueFetch = resolve; });
 const schedulerPreferenceWrites = [];
 let holdSchedulerPreferenceSaves = false;
+const requestEditWrites = [];
 
 let submitted = null;
 let drafted = null;
@@ -152,6 +153,26 @@ const stubFetch = async (url, options = {}) => {
       return response({ ok: true, submitted: submitted.length, notifications: { sent: 0, failed: 0 } });
     }
     return response({ ok: true, submitted: submitted.length, notifications: { sent: 1, failed: 0 } });
+  }
+  if (/\/api\/dashboard\/queue\/v2\/requests\/\d+\/edit/.test(value)) {
+    const id = Number(value.match(/requests\/(\d+)\/edit/)[1]);
+    const fields = Object.fromEntries(options.body);
+    requestEditWrites.push({ id, fields });
+    const source = payload.planningRequests.find(task => task.id === id);
+    const updated = {
+      ...source,
+      productionPoints: Number(fields.production_points),
+      durationMinutes: Number(fields.production_points) * source.minutesPerPP,
+      priority: fields.priority,
+      tags: fields.tags ? fields.tags.split(',') : [],
+      brief: fields.brief,
+      notes: fields.notes,
+      references: JSON.parse(fields.references),
+      recommendedAccounts: JSON.parse(fields.recommended_accounts),
+      ...(fields.scheduled_date ? { scheduledDate: fields.scheduled_date } : {}),
+    };
+    for (const key of ['requests', 'planningRequests', 'assignedRequests']) payload[key] = payload[key].map(task => task.id === id ? updated : task);
+    return response({ ok: true, request: updated });
   }
   if (value.includes('/api/dashboard/queue/v2/requests/3/start')) {
     if (allowStart) {
@@ -672,6 +693,58 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     await click(document.querySelector('.queue-pick-modal .scheduler-primary'));
     await act(async () => { releasePick(); await new Promise(resolve => setTimeout(resolve, 50)); });
     checks['Successful Pick closes the modal and schedules the confirmed request'] = !document.querySelector('.queue-pick-modal') && !document.querySelector('.queue-pool-card') && Boolean(document.querySelector('.scheduler-block.state-scheduled')) && payload.assignedRequests.some(task => task.id === 1 && task.status === 'scheduled');
+
+    // Colombia's calendar day differs from Queue's Costa Rica day for this
+    // late slot. Changing only its date must retain the original clock time.
+    const lateRequest = { ...base, id: 4, post: post('chatgptricks', 'DATE_EDIT'), productionPoints: 1, durationMinutes: 10, status: 'scheduled', designerEmail: 'developer@example.test', scheduledDate: day, scheduledStartMinutes: 1410 };
+    for (const key of ['requests', 'planningRequests', 'assignedRequests']) payload[key] = [...payload[key], lateRequest];
+    await click(document.querySelector('[aria-label="Next day"]'));
+    await click(document.querySelector('[aria-label="Previous day"]'));
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 50)); });
+    const dateAtOffset = offset => {
+      const value = new Date(`${day}T12:00:00Z`);
+      value.setUTCDate(value.getUTCDate() + offset);
+      return value.toISOString().slice(0, 10);
+    };
+    const openLateRequest = () => click(document.querySelector('.queue-admin-assignment-row[data-context-request-id="4"]'));
+    const openRequestEditor = () => click(document.querySelector('.queue-request-rail [title="Edit request"], .queue-request-rail [title="Editar request"]'));
+    const requestDateInput = () => document.querySelector('.queue-detail-editor input[type="date"]');
+    await openLateRequest();
+    await openRequestEditor();
+    checks['Edit request shows the scheduled date in the viewer time zone'] = requestDateInput()?.value === dateAtOffset(1)
+      && requestDateInput()?.closest('label')?.textContent.includes('Scheduled date');
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(requestDateInput(), '');
+      requestDateInput().dispatchEvent(new window.Event('input', { bubbles: true }));
+      requestDateInput().dispatchEvent(new window.Event('change', { bubbles: true }));
+    });
+    checks['Scheduled date cannot be cleared while saving an assigned request'] = document.querySelector('.queue-detail-actions .scheduler-primary')?.disabled;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(requestDateInput(), dateAtOffset(2));
+      requestDateInput().dispatchEvent(new window.Event('input', { bubbles: true }));
+      requestDateInput().dispatchEvent(new window.Event('change', { bubbles: true }));
+    });
+    await click(document.querySelector('.queue-detail-actions .scheduler-primary'));
+    const savedLateRequest = payload.planningRequests.find(task => task.id === lateRequest.id);
+    checks['Saving a new date converts back to Queue time and preserves the assignee and start'] = requestEditWrites.at(-1)?.fields.scheduled_date === dateAtOffset(1)
+      && savedLateRequest?.scheduledDate === dateAtOffset(1)
+      && savedLateRequest?.scheduledStartMinutes === 1410
+      && savedLateRequest?.designerEmail === lateRequest.designerEmail
+      && !document.querySelector('.queue-detail-editor');
+    await click(document.querySelector('.queue-request-rail .rail-close-button'));
+    await openLateRequest();
+    await openRequestEditor();
+    checks['Reopening the request retains its saved viewer date'] = requestDateInput()?.value === dateAtOffset(2);
+    await click(document.querySelector('.queue-detail-actions .scheduler-primary'));
+    checks['Saving other request fields does not resend an unchanged date'] = requestEditWrites.length === 2
+      && !Object.hasOwn(requestEditWrites.at(-1).fields, 'scheduled_date');
+    await click(document.querySelector('.queue-request-rail .rail-close-button'));
+    await click(document.querySelector('.queue-settings-trigger'));
+    await chooseQueueLanguage('es');
+    if (document.querySelector('.queue-overlay-backdrop')) await click(document.querySelector('.queue-overlay-backdrop'));
+    await openLateRequest();
+    await openRequestEditor();
+    checks['Scheduled date editor follows Spanish preferences'] = requestDateInput()?.closest('label')?.textContent.includes('Fecha programada');
     checks['No render or console errors'] = errors.length === 0;
 
     console.log('\n=== QUEUE SMOKE ===');
