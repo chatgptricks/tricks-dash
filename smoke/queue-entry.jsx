@@ -61,6 +61,7 @@ const initialQueueFetch = new Promise((resolve) => { releaseInitialQueueFetch = 
 const schedulerPreferenceWrites = [];
 let holdSchedulerPreferenceSaves = false;
 const requestEditWrites = [];
+let nextAvailableEditPlacement = null;
 
 let submitted = null;
 let drafted = null;
@@ -158,7 +159,7 @@ const stubFetch = async (url, options = {}) => {
     const id = Number(value.match(/requests\/(\d+)\/edit/)[1]);
     const fields = Object.fromEntries(options.body);
     requestEditWrites.push({ id, fields });
-    const source = payload.planningRequests.find(task => task.id === id);
+    const source = [...payload.planningRequests, ...payload.requests].find(task => task.id === id);
     const updated = {
       ...source,
       productionPoints: Number(fields.production_points),
@@ -170,8 +171,18 @@ const stubFetch = async (url, options = {}) => {
       references: JSON.parse(fields.references),
       recommendedAccounts: JSON.parse(fields.recommended_accounts),
       ...(fields.scheduled_date ? { scheduledDate: fields.scheduled_date } : {}),
+      ...(fields.scheduled_start_minutes !== undefined ? { scheduledStartMinutes: Number(fields.scheduled_start_minutes) } : {}),
+      ...(fields.move_to_next_available === 'true' ? {
+        ...nextAvailableEditPlacement,
+        status: 'scheduled',
+        designerEmail: source.designerEmail || fields.designer_email,
+      } : {}),
     };
-    for (const key of ['requests', 'planningRequests', 'assignedRequests']) payload[key] = payload[key].map(task => task.id === id ? updated : task);
+    for (const key of ['requests', 'planningRequests', 'assignedRequests']) {
+      payload[key] = payload[key].map(task => task.id === id ? updated : task);
+      if (fields.move_to_next_available === 'true' && !payload[key].some(task => task.id === id)) payload[key].push(updated);
+    }
+    if (fields.move_to_next_available === 'true') payload.pickRequests = payload.pickRequests.filter(task => task.id !== id);
     return response({ ok: true, request: updated });
   }
   if (value.includes('/api/dashboard/queue/v2/requests/3/start')) {
@@ -709,21 +720,21 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     const openLateRequest = () => click(document.querySelector('.queue-admin-assignment-row[data-context-request-id="4"]'));
     const openRequestEditor = () => click(document.querySelector('.queue-request-rail [title="Edit request"], .queue-request-rail [title="Editar request"]'));
     const requestDateInput = () => document.querySelector('.queue-detail-editor input[type="date"]');
+    const requestTimeInput = () => document.querySelector('.queue-detail-editor input[type="time"]');
+    const setEditorInput = (input, value) => act(async () => {
+      Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(input, value);
+      input.dispatchEvent(new window.Event('input', { bubbles: true }));
+      input.dispatchEvent(new window.Event('change', { bubbles: true }));
+    });
     await openLateRequest();
     await openRequestEditor();
     checks['Edit request shows the scheduled date in the viewer time zone'] = requestDateInput()?.value === dateAtOffset(1)
       && requestDateInput()?.closest('label')?.textContent.includes('Scheduled date');
-    await act(async () => {
-      Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(requestDateInput(), '');
-      requestDateInput().dispatchEvent(new window.Event('input', { bubbles: true }));
-      requestDateInput().dispatchEvent(new window.Event('change', { bubbles: true }));
-    });
+    checks['Edit request shows the scheduled time in the viewer time zone'] = requestTimeInput()?.value === '00:30'
+      && requestTimeInput()?.closest('label')?.textContent.includes('Scheduled time');
+    await setEditorInput(requestDateInput(), '');
     checks['Scheduled date cannot be cleared while saving an assigned request'] = document.querySelector('.queue-detail-actions .scheduler-primary')?.disabled;
-    await act(async () => {
-      Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(requestDateInput(), dateAtOffset(2));
-      requestDateInput().dispatchEvent(new window.Event('input', { bubbles: true }));
-      requestDateInput().dispatchEvent(new window.Event('change', { bubbles: true }));
-    });
+    await setEditorInput(requestDateInput(), dateAtOffset(2));
     await click(document.querySelector('.queue-detail-actions .scheduler-primary'));
     const savedLateRequest = payload.planningRequests.find(task => task.id === lateRequest.id);
     checks['Saving a new date converts back to Queue time and preserves the assignee and start'] = requestEditWrites.at(-1)?.fields.scheduled_date === dateAtOffset(1)
@@ -734,10 +745,48 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     await click(document.querySelector('.queue-request-rail .rail-close-button'));
     await openLateRequest();
     await openRequestEditor();
-    checks['Reopening the request retains its saved viewer date'] = requestDateInput()?.value === dateAtOffset(2);
+    checks['Reopening the request retains its saved viewer date and time'] = requestDateInput()?.value === dateAtOffset(2)
+      && requestTimeInput()?.value === '00:30';
+    await setEditorInput(requestTimeInput(), '');
+    checks['Scheduled time cannot be cleared while saving an assigned request'] = document.querySelector('.queue-detail-actions .scheduler-primary')?.disabled;
+    await setEditorInput(requestTimeInput(), '01:25');
+    checks['Scheduled time requires a valid ten-minute slot'] = document.querySelector('.queue-detail-actions .scheduler-primary')?.disabled;
+    await setEditorInput(requestTimeInput(), '23:55');
+    checks['Late off-grid time remains invalid instead of clamping to the last slot'] = document.querySelector('.queue-detail-actions .scheduler-primary')?.disabled;
+    await setEditorInput(requestTimeInput(), '01:20');
     await click(document.querySelector('.queue-detail-actions .scheduler-primary'));
-    checks['Saving other request fields does not resend an unchanged date'] = requestEditWrites.length === 2
-      && !Object.hasOwn(requestEditWrites.at(-1).fields, 'scheduled_date');
+    const timeOnlyRequest = payload.planningRequests.find(task => task.id === lateRequest.id);
+    checks['Changing only viewer time also updates the canonical date when crossing midnight'] = requestEditWrites.at(-1)?.fields.scheduled_date === dateAtOffset(2)
+      && requestEditWrites.at(-1)?.fields.scheduled_start_minutes === '20'
+      && timeOnlyRequest?.scheduledDate === dateAtOffset(2)
+      && timeOnlyRequest?.scheduledStartMinutes === 20;
+    await click(document.querySelector('.queue-request-rail .rail-close-button'));
+    await openLateRequest();
+    await openRequestEditor();
+    await setEditorInput(requestDateInput(), dateAtOffset(4));
+    await setEditorInput(requestTimeInput(), '00:40');
+    await click(document.querySelector('.queue-detail-actions .scheduler-primary'));
+    const dateAndTimeRequest = payload.planningRequests.find(task => task.id === lateRequest.id);
+    checks['Saving a new date and time sends their combined canonical placement'] = requestEditWrites.at(-1)?.fields.scheduled_date === dateAtOffset(3)
+      && requestEditWrites.at(-1)?.fields.scheduled_start_minutes === '1420'
+      && dateAndTimeRequest?.scheduledDate === dateAtOffset(3)
+      && dateAndTimeRequest?.scheduledStartMinutes === 1420
+      && dateAndTimeRequest?.designerEmail === lateRequest.designerEmail;
+    await click(document.querySelector('.queue-request-rail .rail-close-button'));
+    await openLateRequest();
+    await openRequestEditor();
+    checks['Reopening retains the changed viewer date and time'] = requestDateInput()?.value === dateAtOffset(4)
+      && requestTimeInput()?.value === '00:40';
+    await click(document.querySelector('.queue-detail-actions .scheduler-primary'));
+    checks['Saving other request fields does not resend an unchanged date or time'] = requestEditWrites.length === 4
+      && !Object.hasOwn(requestEditWrites.at(-1).fields, 'scheduled_date')
+      && !Object.hasOwn(requestEditWrites.at(-1).fields, 'scheduled_start_minutes');
+    await openRequestEditor();
+    await setEditorInput(requestTimeInput(), '01:00');
+    await click(document.querySelector('.queue-detail-actions .scheduler-primary'));
+    checks['Midnight canonical time is saved as zero minutes'] = requestEditWrites.at(-1)?.fields.scheduled_start_minutes === '0'
+      && requestEditWrites.at(-1)?.fields.scheduled_date === dateAtOffset(4)
+      && payload.planningRequests.find(task => task.id === lateRequest.id)?.scheduledStartMinutes === 0;
     await click(document.querySelector('.queue-request-rail .rail-close-button'));
     await click(document.querySelector('.queue-settings-trigger'));
     await chooseQueueLanguage('es');
@@ -745,6 +794,71 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     await openLateRequest();
     await openRequestEditor();
     checks['Scheduled date editor follows Spanish preferences'] = requestDateInput()?.closest('label')?.textContent.includes('Fecha programada');
+    checks['Scheduled time editor follows Spanish preferences'] = requestTimeInput()?.closest('label')?.textContent.includes('Hora programada');
+    const nextAvailableInput = () => [...document.querySelectorAll('.queue-detail-editor label')]
+      .find(label => /Move to next available slot|Mover al siguiente espacio disponible/.test(label.textContent || ''))
+      ?.querySelector('input[type="checkbox"]');
+    checks['Next available placement checkbox follows Spanish preferences'] = nextAvailableInput()?.closest('label')?.textContent.includes('Mover al siguiente espacio disponible');
+    await setEditorInput(requestTimeInput(), '23:55');
+    await click(nextAvailableInput());
+    checks['Next available placement disables manual date and time and permits saving'] = nextAvailableInput()?.checked
+      && requestDateInput()?.disabled && requestTimeInput()?.disabled
+      && !document.querySelector('.queue-detail-actions .scheduler-primary')?.disabled
+      && !document.querySelector('.queue-detail-editor select');
+    nextAvailableEditPlacement = { scheduledDate: dateAtOffset(6), scheduledStartMinutes: 660 };
+    await click(document.querySelector('.queue-detail-actions .scheduler-primary'));
+    const automaticAssignedWrite = requestEditWrites.at(-1);
+    checks['Assigned next available save requests automatic placement without manual fields or reassignment'] = automaticAssignedWrite?.fields.move_to_next_available === 'true'
+      && !Object.hasOwn(automaticAssignedWrite.fields, 'scheduled_date')
+      && !Object.hasOwn(automaticAssignedWrite.fields, 'scheduled_start_minutes')
+      && !Object.hasOwn(automaticAssignedWrite.fields, 'designer_email')
+      && payload.planningRequests.find(task => task.id === lateRequest.id)?.designerEmail === lateRequest.designerEmail;
+    await click(document.querySelector('.queue-request-rail .rail-close-button'));
+    await openLateRequest();
+    await openRequestEditor();
+    checks['Reopening shows the server placement and resets next available selection'] = !nextAvailableInput()?.checked
+      && requestDateInput()?.value === dateAtOffset(6)
+      && requestTimeInput()?.value === '12:00'
+      && !requestDateInput()?.disabled && !requestTimeInput()?.disabled;
+    await click(document.querySelector('.queue-request-rail .rail-close-button'));
+
+    const automaticPoolRequest = { ...pool, id: 5, post: post('chatgptricks', 'POOL_AUTO_EDIT') };
+    payload.requests.push(automaticPoolRequest);
+    payload.pickRequests.push(automaticPoolRequest);
+    await click(document.querySelector('[aria-label="Día siguiente"], [aria-label="Next day"]'));
+    await click(document.querySelector('[aria-label="Día anterior"], [aria-label="Previous day"]'));
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 50)); });
+    const openAutomaticPoolRequest = () => click(document.querySelector('.queue-pool-card[data-context-request-id="5"] > button'));
+    const automaticDesignerInput = () => document.querySelector('.queue-detail-editor select');
+    await openAutomaticPoolRequest();
+    await openRequestEditor();
+    await click(nextAvailableInput());
+    checks['Pool next available placement requires a designer when no scheduler user is selected'] = automaticDesignerInput()?.value === ''
+      && document.querySelector('.queue-detail-actions .scheduler-primary')?.disabled;
+    await act(async () => {
+      automaticDesignerInput().value = 'staff-6@example.test';
+      automaticDesignerInput().dispatchEvent(new window.Event('change', { bubbles: true }));
+    });
+    checks['Choosing a designer enables pool next available save'] = !document.querySelector('.queue-detail-actions .scheduler-primary')?.disabled;
+    await click(document.querySelector('.queue-request-rail .rail-close-button'));
+    await selectRosterScope('trainee@example.test');
+    await openAutomaticPoolRequest();
+    await openRequestEditor();
+    await click(nextAvailableInput());
+    checks['Pool editor defaults next available placement to the selected eligible scheduler user'] = automaticDesignerInput()?.value === 'trainee@example.test';
+    nextAvailableEditPlacement = { scheduledDate: dateAtOffset(7), scheduledStartMinutes: 800, minutesPerPP: 16, durationMinutes: 48 };
+    await click(document.querySelector('.queue-detail-actions .scheduler-primary'));
+    const automaticPoolWrite = requestEditWrites.at(-1);
+    const assignedPoolRequest = payload.planningRequests.find(task => task.id === automaticPoolRequest.id);
+    checks['Pool next available save submits its selected designer and accepts the canonical scheduled request'] = automaticPoolWrite?.id === automaticPoolRequest.id
+      && automaticPoolWrite?.fields.move_to_next_available === 'true'
+      && automaticPoolWrite?.fields.designer_email === 'trainee@example.test'
+      && !Object.hasOwn(automaticPoolWrite.fields, 'scheduled_date')
+      && !Object.hasOwn(automaticPoolWrite.fields, 'scheduled_start_minutes')
+      && assignedPoolRequest?.status === 'scheduled'
+      && assignedPoolRequest?.scheduledDate === dateAtOffset(7)
+      && assignedPoolRequest?.scheduledStartMinutes === 800
+      && !document.querySelector('.queue-pool-card[data-context-request-id="5"]');
     checks['No render or console errors'] = errors.length === 0;
 
     console.log('\n=== QUEUE SMOKE ===');
