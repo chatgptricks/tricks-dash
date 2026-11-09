@@ -78,6 +78,7 @@ let tickets = [
   { id: 68, type: 'time_block', status: 'approved', requesterEmail: 'developer@example.test', category: 'meeting', title: 'Team sync', scheduledDate: day, scheduledStartMinutes: 720, durationMinutes: 30, reason: '', reviewerEmail: 'role-switcher@example.test', reviewedAt: new Date().toISOString(), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
 ];
 const response = (body) => ({ ok: true, status: 200, json: async () => body, text: async () => JSON.stringify(body) });
+const queuedReadPlans = [];
 const stubFetch = async (url, options = {}) => {
   const value = String(url);
   if (value.includes('/api/admin/users')) return response({ users: [{ email: 'developer@example.test', role: 'admin', operating_role: 'vc', is_admin: true }] });
@@ -226,6 +227,8 @@ const stubFetch = async (url, options = {}) => {
   if (value.includes('/history')) return response({ events: [] });
   if (value.includes('/api/dashboard/me')) return response({ email: 'developer@example.test', is_dev: true });
   if (value.includes('/api/dashboard/queue/v2')) {
+    const plan = queuedReadPlans.shift();
+    if (plan) return plan;
     if (failQueueRefresh) return { ok: false, status: 400, json: async () => ({ detail: 'Schedule is temporarily unavailable.' }) };
     if (holdInitialQueueFetch) {
       await initialQueueFetch;
@@ -282,6 +285,25 @@ const click = async (node) => { await act(async () => { node.dispatchEvent(new w
     await click(document.querySelector('.queue-account-setup-modal .scheduler-primary'));
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 50)); });
     checks['Account setup persists selection'] = payload.accountOnboarding.completed && payload.accountOnboarding.selectedAccounts.includes('chatgptricks') && !document.querySelector('.queue-account-setup-modal');
+    const botPool = { ...pool, id: 98, post: post('chatgptricks', 'BOT_ADDED') };
+    let releaseStaleQueueRead;
+    queuedReadPlans.push(new Promise((resolve) => { releaseStaleQueueRead = resolve; }));
+    const staleBeforeBot = structuredClone(payload);
+    await act(async () => { window.dispatchEvent(new window.CustomEvent('sentient:queue-updated')); await new Promise(resolve => setTimeout(resolve, 20)); });
+    payload.requests.push(botPool);
+    queuedReadPlans.push(response(structuredClone(payload)));
+    await act(async () => {
+      window.dispatchEvent(new window.CustomEvent('sentient:queue-updated'));
+      releaseStaleQueueRead(response(staleBeforeBot));
+      await new Promise(resolve => setTimeout(resolve, 60));
+    });
+    checks['Bot updates reject an in-flight old schedule and render the canonical Queue'] = Boolean(document.querySelector('.queue-pool-card[data-context-request-id="98"]'))
+      && !document.querySelector('.queue-state') && !document.querySelector('.queue-refresh-progress');
+    const botSnapshot = JSON.parse(window.sessionStorage.getItem('sentient.queueSnapshot.v1:developer@example.test') || 'null');
+    checks['Bot updates replace stale reload snapshots'] = botSnapshot?.data?.requests?.some(task => task.id === 98);
+    payload.requests = payload.requests.filter(task => task.id !== 98);
+    queuedReadPlans.push(response(structuredClone(payload)));
+    await act(async () => { window.dispatchEvent(new window.CustomEvent('sentient:queue-updated')); await new Promise(resolve => setTimeout(resolve, 50)); });
     rejectPick = true;
     await click(document.querySelector('.queue-pick-button'));
     await click(document.querySelector('.queue-pick-modal .scheduler-primary'));

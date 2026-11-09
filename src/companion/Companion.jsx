@@ -319,11 +319,16 @@ export function Companion({ session, request, apiBase, Avatar = Character }) {
     const abort = new AbortController(); controller.current = abort;
     const timer = setTimeout(() => abort.abort('timeout'), 125_000);
     clearTimeout(settle.current); setDraft(''); setCommandMenuDismissed(false); setCommandIndex(0); setError(''); setBusy(true); setReaction('thinking');
-    const history = messages.filter(item => !item.failed).slice(-10).map(({ role, content }) => ({ role, content: content.slice(0, 8000) }));
-    const userId = crypto.randomUUID();
-    setMessages(items => [...items, { id: userId, role: 'user', content: message }]);
+    const lastMessage = messages.at(-1);
+    const retryMessage = lastMessage?.role === 'user' && lastMessage.failed && lastMessage.content === message ? lastMessage : null;
+    const priorMessages = retryMessage ? messages.slice(0, -1) : messages;
+    const history = priorMessages.filter(item => !item.failed).slice(-10).map(({ role, content }) => ({ role, content: content.slice(0, 8000) }));
+    const requestId = retryMessage?.request_id || crypto.randomUUID();
+    const userId = retryMessage?.id || requestId;
+    const userMessage = { id: userId, role: 'user', content: message, request_id: requestId };
+    setMessages(items => retryMessage ? items.map(item => item.id === userId ? userMessage : item) : [...items, userMessage]);
     try {
-      const response = await request(apiBase + '/api/dashboard/assistant/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: abort.signal, body: JSON.stringify({ message, history, language: context.language, input_mode: spoken ? 'voice' : 'text', page: context.page, ...(mode !== 'auto' ? { mode } : {}), ...(nextContext ? { next_context: nextContext } : {}) }) });
+      const response = await request(apiBase + '/api/dashboard/assistant/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: abort.signal, body: JSON.stringify({ request_id: requestId, message, history, language: context.language, input_mode: spoken ? 'voice' : 'text', page: context.page, ...(mode !== 'auto' ? { mode } : {}), ...(nextContext ? { next_context: nextContext } : {}) }) });
       if (current !== sequence.current) return;
       if (!response.ok) throw new Error(response.status === 504 ? 'timeout' : response.status === 429 ? 'limited' : 'unavailable');
       const result = await response.json();
@@ -331,20 +336,25 @@ export function Companion({ session, request, apiBase, Avatar = Character }) {
       if (!result.answer || typeof result.answer !== 'string') throw new Error('unavailable');
       const replyMode = result.mode === undefined ? mode : result.mode;
       if (!['auto', ...COMMANDS].includes(replyMode) || (mode !== 'auto' && replyMode !== mode)) throw new Error('unsupported');
-      const action = Array.isArray(result.ui_actions) ? result.ui_actions.find(item => item.type === 'research_filters') : null;
+      const actions = Array.isArray(result.ui_actions) ? result.ui_actions : [];
+      const action = actions.find(item => item?.type === 'research_filters');
+      const queueUpdated = actions.some(item => item?.type === 'queue_updated');
       if (action && (['research', 'next'].includes(replyMode) || !validResearchFilters(action.filters))) throw new Error('unsupported');
       const replyLanguage = ['en', 'es'].includes(result.language) ? result.language : context.language;
       const assistantMessage = { id: crypto.randomUUID(), role: 'assistant', content: result.answer, language: replyLanguage, mode: replyMode, sources: Array.isArray(result.sources) ? result.sources : [] };
       const pendingNext = replyMode === 'next' ? sanitizeNextContext(result.pending_next) : null;
       if (pendingNext) assistantMessage.pending_next = pendingNext;
       setMessages(items => [...items, assistantMessage]);
+      // Successful Queue mutations refresh the mounted schedule while the
+      // conversation remains open; the server owns the actual write result.
+      if (queueUpdated) postHost({ type: 'queue_updated' });
       const wantsSpeech = (spoken || readAloud) && voice.permit() === speechPermit;
       const spokenReply = { id: assistantMessage.id, text: result.answer.slice(0, 12000), question: message, language: replyLanguage, mode: replyMode };
       if (action) {
         dismissResults();
         minimize(undefined, { preserveVoice: true }); setUnread(0);
         // Persist before navigation so both the request and answer survive it.
-        saveConversation(session.uid, { id: conversation.id, messages: [...messages, { id: userId, role: 'user', content: message }, assistantMessage] });
+        saveConversation(session.uid, { id: conversation.id, messages: [...priorMessages, userMessage, assistantMessage] });
         postHost({ type: 'research_filters', filters: action.filters, ...(wantsSpeech ? { voiceHandoff: { ...spokenReply, owner: session.uid } } : {}) });
       }
       setReaction('celebrate'); settle.current = setTimeout(() => setReaction('idle'), 2500);

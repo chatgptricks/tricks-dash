@@ -17,6 +17,16 @@ frame.contentWindow.postMessage = message => messages.push(message);
 function send(data, source = frame.contentWindow, origin = w.location.origin) { w.dispatchEvent(new w.MessageEvent('message', { origin, source, data: { source: 'sentient-companion', ...data } })); }
 const geometry = () => messages.findLast(m => m.type === 'geometry');
 const corners = ['top-left', 'middle-left', 'bottom-left', 'top-right', 'middle-right', 'bottom-right'];
+let queueUpdates = 0;
+w.addEventListener('sentient:queue-updated', () => queueUpdates++);
+send({ type: 'layout', state: 'open' });
+send({ type: 'queue_updated' }, w);
+send({ type: 'queue_updated' }, frame.contentWindow, 'https://other.example');
+assert.equal(queueUpdates, 0, 'Only the same-origin companion frame can announce a completed Queue mutation');
+send({ type: 'queue_updated' });
+assert.equal(queueUpdates, 1, 'Successful Queue changes refresh the mounted page');
+assert.equal(frame.dataset.state, 'open', 'Queue updates preserve the open conversation');
+assert.equal(navigation, undefined, 'Queue refreshes never navigate or reload the host');
 for (const dock of corners) {
   send({ type: 'ready', dock }); send({ type: 'layout', state: 'closed' });
   assert.equal(w.document.getElementById('sentient-companion-backdrop').style.display, 'none');

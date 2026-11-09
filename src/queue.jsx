@@ -2055,13 +2055,14 @@ function QueueApp({ user }) {
   const loadOverview = useCallback(async () => {
     setOverviewLoading(true);
     setOverviewError('');
+    const generation = mutationGenerationRef.current;
     try {
       const result = await json('/api/dashboard/queue/v2/admin-report');
-      setOverview(result);
+      if (generation === mutationGenerationRef.current) setOverview(result);
     } catch (err) {
-      setOverviewError(err.message || 'Could not load Queue overview.');
+      if (generation === mutationGenerationRef.current) setOverviewError(err.message || 'Could not load Queue overview.');
     } finally {
-      setOverviewLoading(false);
+      if (generation === mutationGenerationRef.current) setOverviewLoading(false);
     }
   }, []);
   const toggleOverview = async () => {
@@ -2070,6 +2071,37 @@ function QueueApp({ user }) {
     setOverviewOpen(next);
     if (next && !overview) await loadOverview();
   };
+
+  useEffect(() => {
+    const refreshAfterCompanion = () => {
+      // An assistant write can reflow multiple blocks. Invalidate any read
+      // started before it, then replace the projection with canonical data.
+      mutationGenerationRef.current += 1;
+      try { window.sessionStorage.removeItem(queueSnapshotKey(authenticatedDraftOwnerRef.current)); } catch { /* Storage is optional. */ }
+      setOverview(null);
+      setOverviewError('');
+      setOverviewLoading(false);
+      if (draftSyncingRef.current) {
+        deferredLiveRefreshRef.current = true;
+      } else {
+        void reconcileSchedule({ refreshTickets: true }).then((refreshed) => {
+          if (!refreshed) notify(t('scheduleRefreshFailed'), 'error');
+        });
+      }
+      // These do not alter local drafts and can catch up independently.
+      if (draftSyncingRef.current) void loadTickets({ silent: true });
+      const inspectedId = openRef.current?.id;
+      const generation = mutationGenerationRef.current;
+      if (inspectedId) {
+        json(`/api/dashboard/queue/v2/requests/${inspectedId}/history`).then((result) => {
+          if (openRef.current?.id === inspectedId && generation === mutationGenerationRef.current) setHistory(result.events || []);
+        }).catch(() => {});
+      }
+      if (overviewOpen) void loadOverview();
+    };
+    window.addEventListener('sentient:queue-updated', refreshAfterCompanion);
+    return () => window.removeEventListener('sentient:queue-updated', refreshAfterCompanion);
+  }, [loadOverview, loadTickets, notify, overviewOpen, reconcileSchedule, t]);
 
   useEffect(() => {
     if (!data?.viewer?.email) return undefined;

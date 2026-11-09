@@ -100,6 +100,20 @@ assert.deepEqual(loadConversation('bilingual').messages.map(item => item.languag
 assert.deepEqual(listConversations('bilingual')[0].messages.map(item => item.language), ['en', 'es', undefined]);
 assert.deepEqual(loadConversation('bilingual').messages.map(item => item.mode), ['research', 'next', undefined], 'Only supported effective reply modes survive history/replay');
 
+const retryChat = newConversation('retry');
+const requestId = 'c47d4e8a-eedc-4a96-aad0-4b90271212c1';
+saveConversation('retry', { ...retryChat, messages: [
+  { ...message('Move my Queue after lunch'), failed: true, request_id: requestId },
+  { ...message('Reply', 'assistant'), request_id: 'not-a-user-request' },
+] });
+assert.equal(loadConversation('retry').messages[0].request_id, requestId, 'A failed action keeps its request ID across navigation');
+assert.equal(listConversations('retry')[0].messages[0].request_id, requestId, 'Restoring chat history keeps its request ID');
+assert.equal(Object.hasOwn(loadConversation('retry').messages[1], 'request_id'), false, 'Assistant metadata cannot impersonate a user request');
+for (const invalid of ['', null, true, 3, 'bad id', 'x'.repeat(101)]) {
+  saveConversation('retry', { ...retryChat, messages: [{ ...message('Invalid identity'), request_id: invalid }] });
+  assert.equal(Object.hasOwn(loadConversation('retry').messages[0], 'request_id'), false);
+}
+
 const persisted = localStorage;
 globalThis.localStorage = { getItem: persisted.getItem, setItem() { throw new Error('quota'); } };
 const quota = newConversation('quota');

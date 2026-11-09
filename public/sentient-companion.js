@@ -201,6 +201,7 @@
     if (data.type === 'ready') { if (positions.includes(data.dock)) dock = data.dock; resize(); preferences(); }
     if (data.type === 'navigate') navigate(data.url);
     if (data.type === 'research_filters') showResearch(data.filters, data.voiceHandoff);
+    if (data.type === 'queue_updated') window.dispatchEvent(new CustomEvent('sentient:queue-updated'));
     if (data.type === 'dock' && positions.includes(data.dock)) { dock = data.dock; drag = null; dismissMenu(); resize(); send({ type: 'docked', dock }); }
     if (data.type === 'drag-start' && geometry && !['hidden', 'launch'].includes(state)) { dismissMenu(); drag = { ...geometry }; }
     if (data.type === 'drag-cancel' && drag) { drag = null; resize(); }
